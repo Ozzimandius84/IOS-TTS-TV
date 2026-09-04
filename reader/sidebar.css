@@ -1,0 +1,130 @@
+/* reader/sidebar.css -- styles for reader/sidebar.js (the shared chapter
+   sidebar). Uses the palette variables both reader.html and studio.html
+   already define (--bg --fg --fg-dim --accent --border --panel-bg
+   --control-bg --ok); studio serves this file at /reader/sidebar.css.
+
+   THE SCROLLBAR IS NOT HERE AND MUST NOT BE. `reader/chrome.css` is the one
+   description of it for the whole application (Osca, 1 Sep: "just a slider
+   down the side, no bar, or a very faint one"), and this component is always
+   inside a page that links that file -- reader.html, library.html,
+   settings.html, studio/studio.html. `.sb-list` is a scroller like any other
+   and gets its thumb from there. A `::-webkit-scrollbar` rule written in
+   this file would be the second copy, which is the state chrome.css exists
+   to end. */
+.sb {
+  display: flex; flex-direction: column; min-height: 0;
+  background: var(--panel-bg); border-right: 1px solid var(--border);
+  font-family: inherit; color: var(--fg);
+}
+.sb-top { flex: 0 0 auto; padding: 10px 12px 6px; }
+.sb-mic {
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  width: 100%; min-height: 40px; border: none; border-radius: var(--r-1);
+  background: var(--accent); color: var(--panel-bg);
+  font: inherit; font-size: 0.9rem; font-weight: 600; cursor: pointer;
+}
+.sb-mic:hover { filter: brightness(1.07); }
+.sb-mic:active { filter: brightness(0.93); }
+.sb-mic[disabled] { opacity: 0.5; cursor: default; }
+.sb-mic-glyph { font-size: 1rem; }
+.sb-note { margin-top: 6px; font-size: 0.76rem; color: var(--fg-dim); line-height: 1.35; }
+.sb-note[hidden] { display: none; }
+
+.sb-list { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding-bottom: 12px; }
+
+.sb-head {
+  display: flex; align-items: center; gap: 6px;
+  padding: 8px 10px 4px 6px; cursor: pointer; user-select: none;
+  font-size: 0.72rem; font-weight: 600; letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--fg-dim);
+}
+.sb-head:hover { background: var(--control-bg); }
+.sb-head[data-selected="all"] { color: var(--accent); }
+.sb-head[data-selected="some"] { color: var(--fg); }
+.sb-disclosure {
+  border: none; background: transparent; color: var(--fg-dim);
+  font: inherit; font-size: 0.8rem; width: 18px; padding: 0; cursor: pointer;
+}
+.sb-section { flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sb-count { font-weight: 400; letter-spacing: 0; }
+.sb-group[data-collapsed="true"] > .sb-rows { display: none; }
+
+.sb-row {
+  display: flex; align-items: baseline; gap: 8px;
+  padding: 6px 12px 6px 14px; cursor: pointer; user-select: none;
+  border-left: 2px solid transparent; font-size: 0.88rem; line-height: 1.3;
+}
+.sb-group .sb-row { padding-left: 24px; }
+.sb-row:hover { background: var(--control-bg); }
+.sb-row[aria-selected="true"] { background: var(--control-bg); border-left-color: var(--accent); }
+.sb-row[aria-current="true"] .sb-title { font-weight: 600; }
+.sb-title { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* The state is a MARK, not words (Osca, 31 Aug -- sidebar.js `quiet`). The
+   span keeps its classes, so every rule ever keyed on `.sb-state-*` or on the
+   row's `data-state` still says what it said; it just carries no text, which
+   is why a failing step's log line has nowhere on the page to land. `text`
+   (and `dict`, which shares its class) are not news and show no mark at all. */
+.sb-state {
+  flex: 0 0 auto; align-self: center; width: 7px; height: 7px;
+  border-radius: 50%; background: currentColor; color: var(--fg-dim);
+}
+/* THREE STATES, AND ONLY THREE HAVE A MARK (Osca, 31 Aug, amended the same
+   evening -- the colours are this way round and not the other):
+
+     queued or rendering -> the ACCENT. It is the one that is alive, and the
+       app's one colour belongs to the thing that is happening. A dot that
+       moves is worth a look; that is what it is for.
+     audio on disk        -> GREY. Done, and quiet. The chapter is there
+       whenever you want it and has nothing left to tell you about itself.
+     everything else      -> nothing at all.
+
+   The green dot goes. Green said "good" about a step, and the reader's
+   question was never whether a step went well.
+
+   `failed` loses its mark with the rest. A chapter that failed and has no
+   audio is, to a reader, a chapter with no audio -- which is what no dot
+   says; and a chapter that failed a later step but plays is already `voiced`
+   before it gets here (sidebar.js `unitState`, "AUDIO BEATS failed"). The
+   red bad-colour rule that stood here could therefore only ever have marked
+   a chapter there is nothing to listen to, in a colour now spoken for by the
+   thing that is running.
+
+   Every class is still emitted and still on the row's `data-state`, so
+   anything keyed on them still says what it said; what changes is what the
+   reader is shown. */
+.sb-state-queued, .sb-state-rendering { color: var(--accent); }
+.sb-state-voiced { color: var(--fg-dim); opacity: 0.6; }
+.sb-state-none, .sb-state-text, .sb-state-failed { display: none; }
+
+/* ------------------------------------------------- A PICK LIST (1 Sep)
+   `TTSTVSidebar.create(el, { picks: true })` -- the reader's contents list,
+   where a shift-click chooses what studio renders next (PROMPTS/studio-sidebar.md
+   Part 2; the picture is PROMPTS/mock/studio-sidebar.html's left column).
+   ⌘-click was the other half of that gesture until 2 Sep, when it was removed
+   from the whole application (OSCA-1SEP-LIST C3); nothing in this file moved
+   with it, because the inset block draws a picked row and not a keystroke.
+
+   EVERY RULE HERE IS SCOPED, and that is the whole point. Studio's rail is
+   this same component and does not ask to be a pick list, so nothing above
+   this line moves and the studio front page is unchanged by this picture --
+   which is what the prompt says it must be.
+
+   The picture draws a picked row as an INSET BLOCK: 6 px radius, 8 px in from
+   both edges, and no accent edge. A run of them abuts into one block, which is
+   what a range is. The inset is paid back out of the row's own padding so the
+   title does not move as a row is picked -- 8 margin + 8 padding is the 2
+   border + 14 padding it had, to the pixel, and 8 + 18 is the grouped row's
+   26. The mock does the same arithmetic with its own numbers.
+
+   `--pick-bg` is the one colour taken from the picture (#e6e4df) rather than
+   from an existing token, because the palette had no token for the role: a
+   surface that is neither the panel nor a control. It is defined per theme in
+   reader.html, and the fallback here is `--control-bg`, so any page that
+   serves this file without defining it looks exactly as it did. */
+.sb-picks .sb-row { border-left-width: 0; padding-left: 16px; padding-right: 12px; }
+.sb-picks .sb-group .sb-row { padding-left: 26px; }
+.sb-picks .sb-row[aria-selected="true"] {
+  background: var(--pick-bg, var(--control-bg)); border-radius: 6px;
+  margin: 0 8px; padding-left: 8px; padding-right: 4px;
+}
+.sb-picks .sb-group .sb-row[aria-selected="true"] { padding-left: 18px; }

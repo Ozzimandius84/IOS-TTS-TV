@@ -1,0 +1,39 @@
+/* ===================== THE WHEEL — the collection barrel ==================
+   Linked by the collection bench and by the app. Geometry comes from
+   tokens.css; see wheel.js for why it turns rather than scrolls.  */
+
+.wheel{ position:fixed; top:0; height:100vh; z-index:20;
+        cursor:grab; touch-action:none;
+        perspective:900px; perspective-origin:0% var(--axis);
+        font-family:var(--serif); color:var(--dim); }
+.wheel:active{ cursor:grabbing; }
+.wheel .stack{ position:absolute; inset:0; transform-style:preserve-3d; }
+
+/* A ROW IS A WHOLE BAND, not just its glyphs -- at a 168px pitch a two-line
+   name leaves ~100px of dead air between hit areas. The bands tile the
+   barrel, so every name in view is clickable anywhere in its own slot. */
+.wheel .row{ position:absolute; top:var(--axis); left:0; width:100%;
+        height:var(--pitch); display:flex; flex-direction:column;
+        justify-content:center;
+        background:none; border:0; padding:0; margin:0; text-align:left;
+        font-family:inherit; color:var(--dim); cursor:pointer;
+        font-size:.86rem; line-height:1.25; letter-spacing:-.02em;
+        transform-origin:50% 50%;          /* the central horizontal axis */
+        transform-style:preserve-3d; backface-visibility:visible;
+        will-change:transform,opacity; }
+.wheel .row .rt{ display:block; position:relative; }
+.wheel .row .s{ display:block; margin-top:.5em; font-family:var(--ui);
+        font-size:.4rem; letter-spacing:.14em; text-transform:uppercase;
+        color:var(--dim); opacity:.75; }
+
+/* TWO MARKS, BECAUSE THEY ARE TWO DIFFERENT FACTS. .on is where the wheel is
+   pointing; .live is the page open on the right. They coincide until the
+   index is turned without opening anything, which is the ordinary case. */
+.wheel .row.on{ color:var(--ink); }
+.wheel .row.live{ color:var(--ink); font-weight:500; }
+.wheel .row.live .rt::before{ content:""; position:absolute; left:-1.15rem;
+        top:.52em; width:.3rem; height:.3rem; border-radius:50%;
+        background:var(--ink); }
+.wheel .centreline{ position:absolute; left:-1.5rem; top:var(--axis);
+        width:.86rem; height:1px; background:var(--ink); opacity:.4;
+        pointer-events:none; }

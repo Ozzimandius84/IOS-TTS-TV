@@ -1,0 +1,225 @@
+/* ============================ FRANK — THE READER'S FACE ===================
+   This REPLACES the reader's appearance and touches none of its machinery.
+
+   Everything is scoped under html[data-frank], and the rule that made it
+   possible is that the text DOM does not move: .word and .sentence keep
+   their spans, their data-ids and their document order, and the block
+   whitelist "p, h3, blockquote, .argument" is untouched. Word sync
+   (.word.now), marginalia (.hl-*, .margLayer, .bmTrack), find (.find-hit,
+   .find-current), lookup, one-word and two-book sync all hang off those and
+   go on working, because none of them is a style.
+
+   TWO THINGS THIS FILE DELIBERATELY DOES NOT DO:
+
+   1. IT NEVER SETS html{font-size}. The design's own tokens.css does, and
+      that is right on a page of its own -- but here the strip, the popovers,
+      the sidebar and the settings panels are all sized in rem off the app's
+      root, and moving it would resize the entire application. So the reading
+      size is its own variable, --fk, spent only inside the reading column,
+      and the two standard boxes are expressed as multiples of it.
+   2. IT INSERTS NO POSITIONED ANCESTOR between .paneReading and the
+      paragraphs. marginalia.js computes every note and bookmark from
+      offsetTop against .paneReading; a wrapper with position:relative would
+      silently put every mark in the wrong place. The measure is applied to
+      the existing children, exactly where reader.css already applied 70ch.
+
+   Numbers are the Archive's, measured at 699 / 1000 / 1440 / 2000 and
+   confirmed at each: 14.5px + 0.75vw, 145px + 50vw, line-height 1.5. */
+
+html[data-frank]{
+  --fk-optical: 1.06;
+  --fk: calc((14.5px + 0.75vw) * var(--fk-optical));   /* the reading size */
+  --fk-measure: calc(145px + 50vw);
+  --fk-lyric: calc(22 * var(--fk));       /* ~47ch  short lyric verse      */
+  --fk-verse: calc(28 * var(--fk));       /* ~60ch  pentameter, a speech   */
+  --fk-warm: 0;
+  --fk-ground: hsl(48 calc(14% + var(--fk-warm) * 9%) calc(98.5% - var(--fk-warm) * .6%));
+  --fk-ink:    hsl(42 calc(18% + var(--fk-warm) * 6%) calc(7%  + var(--fk-warm) * 1%));
+  --fk-dim:    #7a776d;
+  --fk-rule:   #dedcd4;
+  --fk-serif:  "Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
+  --fk-ui: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+html[data-frank][data-theme="dark"], html[data-frank].dark{
+  --fk-ground:#131316; --fk-ink:#e8e7e6; --fk-dim:#8c8a83; --fk-rule:#2e2e33;
+}
+
+html[data-frank] #panes,
+html[data-frank] .pane,
+html[data-frank] .paneReading{ background:var(--fk-ground); }
+
+html[data-frank] .paneReading{
+  color:var(--fk-ink);
+  font-family:var(--fk-serif);
+  font-size:var(--fk);
+  line-height:1.5;                        /* 1.5 exactly, not the app's 1.75 */
+  padding:0 0 22vh;
+  scrollbar-width:none;
+}
+html[data-frank] .paneReading::-webkit-scrollbar{ display:none; }
+
+/* THE MEASURE, AND THE PER-CHAPTER BOX. frank.js sets --fk-w on .paneReading
+   after classifying the chapter's 90th-percentile line into the narrowest
+   standard box that holds it; with no class the measure is the box. The
+   selector is the one reader.css already used, so nothing new is introduced
+   into the cascade -- and .margLayer is excepted, exactly as reader.css
+   excepts it, because it is a child of .paneReading too. */
+html[data-frank] .paneReading > *:not(.margLayer){
+  width:min(var(--fk-w, var(--fk-measure)), var(--fk-measure));
+  max-width:calc(100% - 3rem);
+  margin-left:auto; margin-right:auto;
+}
+html[data-frank] .paneReading > .margLayer{ width:auto; max-width:none; }
+/* the run needs air above it: the reference opens a chapter a fifth down */
+html[data-frank] .paneReading > *:first-child{ margin-top:20vh; }
+
+/* THE VERTICAL RHYTHM. The reference's 1.5 is the leading INSIDE a wrapped
+   paragraph; its 1em gap is BETWEEN paragraphs. A line of verse is a LINE,
+   not a paragraph -- given each one a 1em margin they sit 55px apart where
+   the reference sits at 33. So verse runs at leading alone and the gap opens
+   only at a real break. The app's own class names, unchanged. */
+html[data-frank] p.body,
+html[data-frank] p.verse-line,
+html[data-frank] h3.heading,
+html[data-frank] blockquote.quote,
+html[data-frank] p.note,
+html[data-frank] p.caption{ margin:0; font-size:1em; }
+html[data-frank] p.body + p.body{ margin-top:1em; }
+html[data-frank] p.verse-line{ margin-bottom:0; }
+html[data-frank] p.verse-line + p.verse-line{ margin-top:0; }
+html[data-frank] p.verse-line[data-stanza] + p.verse-line[data-stanza]{ margin-top:0; }
+html[data-frank] p.verse-line + p.body,
+html[data-frank] p.body + p.verse-line{ margin-top:1em; }
+
+/* a speaker turn is a sub-chapter: the label is a standfirst, not a column */
+html[data-frank] .turn{ display:block; }
+html[data-frank] .turn > p.speaker,
+html[data-frank] p.speaker{
+  display:block; text-align:left; width:auto; margin:1.6em 0 .55em;
+  font-family:var(--fk-ui); font-size:.58em; letter-spacing:.17em;
+  text-transform:uppercase; color:var(--fk-dim); font-weight:400; }
+html[data-frank] .turn > .turn-body{ display:block; }
+html[data-frank] .paneReading > p.direction,
+html[data-frank] p.direction{
+  padding-left:0; color:var(--fk-dim); font-style:italic; margin-top:.4em; }
+html[data-frank] h3.heading{
+  font-size:1.25em; line-height:1.5; font-weight:500; margin-top:3em; }
+html[data-frank] .argument{ border:0; padding:0; }
+html[data-frank] .argument .sentence + .sentence{ margin-left:0; }
+
+/* THE FURNITURE THE FACE DOES NOT HAVE. Hidden, never removed: renderChapter
+   writes into .paneHeader's children and would throw if they were gone. */
+html[data-frank] .paneStatus{ display:none; }
+html[data-frank] .paneControls{ opacity:0; transition:opacity .3s ease; }
+html[data-frank] .paneControls:hover,
+html[data-frank] .pane:focus-within .paneControls{ opacity:1; }
+
+/* THE MARKS STAY EXACTLY AS THEY WERE. Word sync, highlights, find hits and
+   the bookmark track are behaviour, not decoration, and this file must not
+   quietly restyle them into invisibility -- it only fits them to the paper. */
+html[data-frank] .word.now{ background:color-mix(in oklab, var(--fk-ink) 10%, transparent); }
+html[data-frank] .sentence.now{ color:var(--fk-ink); }
+
+/* ------------------------- THE COLUMN, as the sidebar ---------------------
+   The old list is hidden, never unmounted: it still holds the render dots,
+   the picks and the groups, and everything that reads or writes it goes on
+   working untouched. Turn Frank off and it is simply visible again. */
+html[data-frank] .fkColumn{ position:relative; width:100%; height:100%;
+  --pitch:118px; --radius:2.6; --axis:46%;
+  --ground:var(--fk-ground); --ink:var(--fk-ink); --dim:var(--fk-dim);
+  --serif:var(--fk-serif); --ui:var(--fk-ui); }
+html[data-frank] .fkColumn.wheel{ position:absolute; inset:0; height:100%; }
+html[data-frank] .fkColumn .row{ font-size:calc(.62 * var(--fk)); }
+html[data-frank] .fkColumn .row .s{ font-size:calc(.3 * var(--fk)); }
+html[data-frank] .fkColumn .centreline{ left:.6rem; }
+/* the real containers: sidebarEl() returns #sidebar / #sidebarRight, and
+   sidebar.js fills them with .sb-row / .sb-group. Hidden, still mounted. */
+html[data-frank] #sidebar > *,
+html[data-frank] #sidebarRight > *{ display:none; }
+html[data-frank] #sidebar, html[data-frank] #sidebarRight{
+  position:relative; background:var(--fk-ground); border-right-color:var(--fk-rule); }
+
+/* ==================== THE TWO STATIONS, AND THE AXIS ======================
+   RIGHT IS FURTHER INTO THE BOOK; LEFT IS FURTHER OUT. Up and down is
+   reading. `.shell` already held #sidebar beside .main in a flex row, so it
+   becomes the track and the two get a snap point each: the contents at rest
+   on the left, the reading filling the glass on the right.
+
+   The track is 100% + the Column's width, so at the contents stop the text
+   is not gone -- it is still there, most of it, just pushed right. That is
+   the same relationship the design's collection page has, arrived at by
+   scrolling rather than by opening a panel.
+
+   ONLY X SCROLLS HERE. .paneReading keeps its own vertical scroller inside,
+   and the Column takes vertical gestures for itself, so the two axes never
+   argue: up and down turns or reads, left and right changes depth. */
+html[data-frank] .shell{
+  overflow-x:auto; overflow-y:hidden;
+  scroll-snap-type:x mandatory; overscroll-behavior-x:contain;
+  scroll-behavior:smooth; scrollbar-width:none; }
+html[data-frank] .shell::-webkit-scrollbar{ display:none; }
+
+/* THE CONTENTS ARE A STATION, NOT A PANEL. The app's own toggle adds
+   .hidden; under Frank the sidebar is always present and the ☰ tool scrolls
+   to it instead, so nothing has to be summoned or dismissed. */
+html[data-frank] #sidebar,
+html[data-frank] #sidebar.hidden{
+  display:block; flex:0 0 var(--fk-col, 34%); width:auto;
+  scroll-snap-align:start; scroll-snap-stop:always;
+  border-right:0; }
+html[data-frank] #sidebarScrim{ display:none; }
+html[data-frank] .shell > .main{
+  flex:0 0 100%; min-width:0; scroll-snap-align:start; scroll-snap-stop:always; }
+
+/* AT REST ON THE READING, the contents are still on the axis behind you --
+   dimmed rather than hidden, so it reads as a place you can go back to
+   rather than a thing that closed. */
+html[data-frank] #sidebar{ transition:opacity .3s ease; }
+html[data-frank][data-station="reading"] #sidebar{ opacity:.55; }
+@media (max-width: 860px){
+  html[data-frank] #sidebar, html[data-frank] #sidebar.hidden{ flex:0 0 78%; }
+}
+
+/* while the middle button is panning the axis, nothing under the cursor
+   should look interactive or catch a selection */
+html[data-fk-panning]{ cursor:grabbing; user-select:none; }
+html[data-fk-panning] *{ cursor:grabbing !important; }
+
+/* ================= THE BOOK IN ONE SCROLL, AND ITS SLIDES =================
+   Every chapter opens on a slide -- a whole screen, the title alone on it --
+   so a chapter announces itself before you are in it, and turning a chapter
+   becomes a scroll rather than a repaint.
+
+   A SNAP TARGET IS AN INVISIBLE MARKER, NEVER THE CONTENT. <fksnap> is one
+   pixel, absolutely positioned at the top of the thing it marks. Two of them
+   are hard stops: the slide, so a swipe halts on it, and the first line of
+   the text after it, so scrolling UP from mid-chapter lands on the text
+   rather than back on the divider. scroll-snap-stop:always forbids SKIPPING
+   a target, not stopping at a nearer one -- which is what makes two hard
+   stops in a row safe. */
+html[data-frank] .paneReading{ scroll-snap-type:y proximity; }
+html[data-frank][data-nosnap] .paneReading{ scroll-snap-type:none; }
+html[data-frank] .fkCh{ position:relative; padding-bottom:22vh; }
+html[data-frank] .fkUnit{ position:relative; padding-top:20vh; }
+html[data-frank] fksnap{ position:absolute; top:0; width:1px; height:1px;
+  scroll-snap-align:start; }
+html[data-frank] .fkOpener > fksnap,
+html[data-frank] .fkUnit > fksnap{ scroll-snap-stop:always; }
+html[data-frank] .fkOpener{ height:100vh; display:flex; flex-direction:column;
+  justify-content:center; position:relative; text-align:left; }
+html[data-frank] .fkOpener h1{ font-size:1.25em; line-height:1.5; font-weight:500;
+  margin:0; color:var(--fk-ink); }
+html[data-frank] .fkOpener h1 small{ display:block; font-size:.48em;
+  letter-spacing:.18em; text-transform:uppercase; color:var(--fk-dim);
+  font-weight:600; margin-bottom:1.4em; }
+html[data-frank] .fkBookTitle{ font-size:2.1em; line-height:1.2; font-weight:400;
+  margin:0; color:var(--fk-ink); }
+html[data-frank] .fkByline{ margin-top:1.2em; font-size:.62em; letter-spacing:.18em;
+  text-transform:uppercase; color:var(--fk-dim); }
+/* the measure applies to a chapter's own children now, not the run's */
+html[data-frank] .paneReading > .fkCh{ width:auto; max-width:none; }
+html[data-frank] .fkCh > .fkOpener,
+html[data-frank] .fkUnit > *{
+  width:min(var(--fk-w, var(--fk-measure)), var(--fk-measure));
+  max-width:calc(100% - 3rem); margin-left:auto; margin-right:auto; }
+html[data-frank] .fkUnit > *:first-child{ margin-top:0; }

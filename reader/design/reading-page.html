@@ -1,0 +1,177 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Frank — the reading page</title>
+<link rel="stylesheet" href="../reader.css">
+<link rel="stylesheet" href="tokens.css">
+<link rel="stylesheet" href="page.css">
+<link rel="stylesheet" href="bar.css">
+<style>
+/* ================== THE READING BENCH — now only the bench ================
+   The column, its rhythm, the boxes, the snap markers, the running head and
+   the scrub have all left this file for page.css / page.js; every measured
+   constant is in tokens.css; the picker is in book.js; the bar is in
+   bar.css / bar.js. The APP LINKS THE SAME FILES, so there is one
+   implementation rather than a bench and a copy of it -- which is the trap
+   PLAN.md names: "the mock is a COPY, and that is why it keeps drifting".
+
+   What is left below is genuinely only the bench: three measure overrides to
+   compare against, the snap and dark switches, and the controls' own look.
+   None of it ships.                                                       */
+html,body{ margin:0; height:100%; }
+body{ background:var(--ground); color:var(--ink); font-family:var(--serif); }
+
+/* bench-only: two alternative measures to judge the measured one against */
+html[data-measure="wide"]{   --measure: calc(70ch); }
+html[data-measure="narrow"]{ --measure: calc(100px + 36vw); }
+
+/* #4a -- WARMTH IS A BIG SLIDER, not a row of picks: the whole point is to
+   run it all the way to both ends and see the paper actually go white or go
+   warm, which four buttons hide. The track's own gradient is painted from
+   the SAME --ground formula the page uses (see the script below) -- never a
+   decorative fake, the same rule #4b holds the cover palette to. */
+.warmth{ position:fixed; top:22px; left:50%; transform:translateX(-50%); z-index:41;
+  display:flex; align-items:center; gap:14px; width:min(520px,50vw);
+  padding:11px 20px; background:var(--ground); border:1px solid var(--rule);
+  border-radius:999px; box-shadow:0 10px 28px rgba(0,0,0,.10); }
+.warmth .end{ font:11px/1 var(--ui); color:var(--dim); letter-spacing:.08em;
+  text-transform:uppercase; flex:0 0 auto; }
+.warmth input[type=range]{ flex:1 1 auto; -webkit-appearance:none; appearance:none;
+  height:14px; border-radius:7px; background:var(--track-grad,var(--rule));
+  border:1px solid var(--rule); cursor:pointer; }
+.warmth input[type=range]::-webkit-slider-thumb{ -webkit-appearance:none;
+  width:26px; height:26px; border-radius:50%; background:var(--ink);
+  border:3px solid var(--ground); box-shadow:0 1px 3px rgba(0,0,0,.35); cursor:pointer; }
+.warmth input[type=range]::-moz-range-thumb{ width:20px; height:20px; border-radius:50%;
+  background:var(--ink); border:3px solid var(--ground);
+  box-shadow:0 1px 3px rgba(0,0,0,.35); cursor:pointer; }
+.warmth input[type=range]::-moz-range-track{ height:14px; border-radius:7px;
+  background:var(--track-grad,var(--rule)); border:1px solid var(--rule); }
+
+.bench{ position:fixed; left:14px; bottom:12px; z-index:40; display:flex; gap:6px;
+  font:11px/1 var(--ui); opacity:.25; transition:opacity .2s; }
+.bench:hover{ opacity:1; }
+.bench button{ font:inherit; padding:6px 9px; border:1px solid var(--rule);
+  background:var(--ground); color:var(--dim); border-radius:6px; cursor:pointer; }
+.bench button[aria-pressed="true"]{ color:var(--ink); border-color:var(--dim); }
+.bench .r{ color:var(--dim); padding:6px 3px; }
+.bench a{ color:var(--dim); text-decoration:none; padding:6px 3px; }
+</style>
+
+<div class="pane" id="pane"><div class="column" id="col"></div></div>
+<div class="runhead" id="runhead"></div>
+<div class="scrub" id="scrub"><div class="track"></div><div class="fill" id="fill"></div></div>
+
+<div class="warmth">
+  <span class="end">white</span>
+  <input type="range" id="warm" min="-2" max="18" step="0.1" value="0"
+    aria-label="warmth: white to warm">
+  <span class="end">warm</span>
+</div>
+
+<div class="bench">
+  <span class="r">measure</span>
+  <button data-m="" aria-pressed="true">measured</button>
+  <button data-m="wide">70ch</button>
+  <button data-m="narrow">narrow</button>
+  <span class="r">·</span>
+  <button id="snap" aria-pressed="true">snap</button>
+  <button id="dark">dark</button>
+  <span class="r">·</span>
+  <button id="open">open book…</button>
+  <span class="r">·</span>
+  <a href="collection-page.html">collection view →</a>
+  <span class="r">·</span>
+  <a href="branch-map.html">branch map →</a>
+  <a href="shell.html">the shell →</a>
+  <span class="r" id="loaded"></span>
+  <input type="file" id="file" accept=".json,application/json" hidden>
+</div>
+
+<script src="book-data.js"></script>
+
+<script src="book.js"></script>
+<script src="page.js"></script>
+<script src="../keys.js"></script>
+<script src="bar.js"></script>
+<script>
+const $ = id => document.getElementById(id);
+const pane = $("pane");
+
+/* THE BOOK IS THE REAL ONE, all of it: build.py writes book-data.js straight
+   out of books/<slug>/book.json. Nothing is fetched -- this page opens over
+   file://, where fetch() is blocked, so a book travels as a script or is
+   picked by hand. THE CAP LIVES IN book.js and this page no longer holds one
+   of its own; the note beside the button says how much was drawn. */
+const page = Page.mount({ pane, column:$("col"), scrub:$("scrub"),
+                          fill:$("fill"), runhead:$("runhead") });
+
+function show(book){
+  pane.scrollTop = 0;
+  page.render(book);
+  document.title = (book.title||"a book") + " — the reading page";
+  page.wake();
+}
+show(window.BOOK || {title:"(no book-data.js)", chapters:[]});
+
+const note = $("loaded"), fileEl = $("file");
+$("open").onclick = () => fileEl.click();
+function openFile(f){
+  if(!f) return;
+  note.textContent = "reading…";
+  Book.open(f).then(b=>{
+    if(!b.chapters.length){ note.textContent="no chapters in that file"; return; }
+    show(b);
+    note.textContent = Book.summary(b, "chapters");
+    if(b.dropped.length) console.log("front matter skipped:", b.dropped);
+  }).catch(e=>{ note.textContent = "not a book.json ("+String(e.message).slice(0,40)+")"; });
+}
+fileEl.onchange = () => openFile(fileEl.files && fileEl.files[0]);
+
+document.querySelectorAll(".bench [data-m]").forEach(b => b.onclick = () => {
+  document.querySelectorAll(".bench [data-m]").forEach(x =>
+    x.setAttribute("aria-pressed", x===b));
+  if(b.dataset.m) document.documentElement.setAttribute("data-measure", b.dataset.m);
+  else document.documentElement.removeAttribute("data-measure");
+  page.relayout();
+});
+$("snap").onclick = e => {
+  const off = document.documentElement.toggleAttribute("data-nosnap");
+  e.target.setAttribute("aria-pressed", !off);
+};
+$("dark").onclick = e => {
+  const on = document.documentElement.toggleAttribute("data-dark");
+  e.target.setAttribute("aria-pressed", on);
+};
+/* #4a -- WARMTH IS ONE NUMBER (tokens.css): raising --warm on <html> pulls
+   ground and ink warmer together, so paper and ink never drift apart in
+   temperature. 0 is the Archive's own near-neutral, -2 clamps to plain white
+   (saturation can't go below 0%), 18 is candlelight pushed hard. One
+   continuous slider, not four picks -- Osca, 3 Sep: "a BIG SLIDER ... go
+   WHITE WHITE and WARM WARM". */
+function hslToHex(h,s,l){
+  s = Math.max(0, Math.min(100, s)) / 100;
+  l = Math.max(0, Math.min(100, l)) / 100;
+  const k = n => (n + h/30) % 12;
+  const a = s * Math.min(l, 1-l);
+  const f = n => l - a * Math.max(-1, Math.min(k(n)-3, Math.min(9-k(n), 1)));
+  const toHex = x => Math.round(x*255).toString(16).padStart(2,"0");
+  return "#" + toHex(f(0)) + toHex(f(8)) + toHex(f(4));
+}
+// the EXACT --ground formula from tokens.css, read off it rather than
+// retyped, so the track can never quietly drift from what dragging it does.
+function groundHex(w){
+  return hslToHex(48, 14 + 9*w, 98.5 - 0.6*w);
+}
+const warmEl = $("warm");
+(function paintTrack(){
+  const lo = +warmEl.min, hi = +warmEl.max, stops = [];
+  for(let i=0;i<=12;i++){
+    const w = lo + (hi-lo)*i/12;
+    stops.push(groundHex(w) + " " + (i*100/12).toFixed(1) + "%");
+  }
+  warmEl.style.setProperty("--track-grad", "linear-gradient(to right,"+stops.join(",")+")");
+})();
+warmEl.oninput = () => document.documentElement.style.setProperty("--warm", warmEl.value);
+
+Bar.mount({ placeholder:"Look up in this book", readingPane:pane, onDrop:openFile });
+</script>

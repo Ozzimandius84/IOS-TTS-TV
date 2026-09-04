@@ -1,0 +1,173 @@
+  /* The Library's palette, its header and its 44 px phone targets: this is a
+     page of the same app, reached from the Library's gear and from the app's
+     Settings menu item, and it must not look like somebody's dialog. */
+  :root {
+    --bg: #fcfcfb;
+  /* ---- THE RADIUS SCALE (Osca, 30 Aug: "all boxes across all pages are just
+     the wrong shape, wrong curve, not modern enough").
+     Four files had grown ten different radii between them -- 3, 4, 6, 7, 8,
+     10, 12, 14, 50% and 999px -- assigned per element as each was written, so
+     no two boxes on a screen agreed and none of them agreed with the next
+     screen. These four steps are the whole vocabulary now, and they are one
+     step larger at every level than what they replace, which is most of what
+     "modern" means here. A box picks the step for its ROLE, not its size:
+       --r-0  a mark on running text (the word, the sentence highlight)
+       --r-1  a control you press (button, input, select, small chip)
+       --r-2  a surface that holds things (card, section, panel, header button)
+       --r-3  a surface that floats over another (sheet, popup, menu)
+     Anything outside these four is a deliberate exception and says why. ---- */
+  --r-0: 5px;
+  --r-1: 11px;
+  --r-2: 15px;
+  --r-3: 22px;
+  --r-pill: 999px;
+  /* The chrome's font, not the book's -- see reader.html's own note. */
+  --ui-font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI Variable Text",
+             "Segoe UI", Inter, system-ui, "Helvetica Neue", Arial, sans-serif;
+ --fg: #0b0b0b; --fg-dim: #52514f; --accent: #832f2b;
+    --border: #e4e3e0; --panel-bg: #ffffff; --link: #832f2b; --control-bg: #f5f5f3;
+    --ok: #3f7a45; --bad: #a03328;
+    --safe-top: env(safe-area-inset-top, 0px);
+    --safe-bottom: env(safe-area-inset-bottom, 0px);
+    --safe-left: env(safe-area-inset-left, 0px);
+    --safe-right: env(safe-area-inset-right, 0px);
+  }
+  [data-theme="dark"] {
+    --bg: #131316; --fg: #e8e7e6; --fg-dim: #98979b; --accent: #c9c4bb;
+    --border: #2c2c32; --panel-bg: #1a1a1f; --link: #c9c4bb; --control-bg: #1a1a1f;
+    --ok: #7fc08a; --bad: #d98a7a;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #131316; --fg: #e8e7e6; --fg-dim: #98979b; --accent: #c9c4bb;
+      --border: #2c2c32; --panel-bg: #1a1a1f; --link: #c9c4bb; --control-bg: #1a1a1f;
+      --ok: #7fc08a; --bad: #d98a7a;
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: var(--bg); color: var(--fg);
+    font-family: var(--ui-font); height: 100%; }
+  body { height: 100vh; height: 100dvh; display: flex; flex-direction: column; overflow: hidden; }
+
+  /* THE TAB ROW *IS* THE TITLE BAR (Osca, 31 Aug: "Can we make the tab
+     section headless? ... like Safari"). Not a bar beneath a bar: the
+     traffic lights and the six icon tabs share one row, and there is no
+     heading -- the window's own title says Settings, and saying it twice
+     three centimetres apart was the page repeating its own chrome.
+
+     THE LIGHTS' 80 px AT EACH END BELONG TO THE WINDOW, NOT THE PAGE. The
+     left 80 px is where macOS draws the close/minimise/zoom buttons over an
+     overlay title bar; the same 80 px is reserved on the right so the strip
+     stays centred in the WHOLE window, which is where the picture puts it
+     (the mock's dots are absolutely positioned and take the row's centre
+     from nothing). Six tabs are 62 px each with a 2 px gap = 382 px, so at
+     560 the strip runs 89..471 and never reaches either reservation.
+
+     The lights themselves are NOT drawn here: they are the native window's,
+     and until `settingswin.rs` opens this window with an overlay title bar
+     (report §6) the row simply sits under the ordinary bar. A page that
+     painted three coloured circles would be a picture of a title bar that
+     does not close the window. */
+  header { padding: 6px 80px; border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; gap: 8px; flex: 0 0 auto;
+    background: var(--control-bg); position: relative; min-height: 52px; }
+  /* A hairline box around every icon in the bar is the single most dated
+     thing on these pages: five outlined squares in a row read as a toolbar
+     from 2012. The button is the icon; the surface only appears under the
+     pointer, which is also the only moment it means anything. */
+  header button, header .headerLink {
+    min-height: 40px; min-width: 40px;
+    border-radius: var(--r-1); border: 1px solid transparent;
+    background: transparent; color: var(--fg-dim);
+    font-size: 1rem; cursor: pointer;
+    display: inline-flex; align-items: center; justify-content: center;
+    text-decoration: none;
+    transition: background 0.14s, color 0.14s;
+  }
+  header button:hover, header .headerLink:hover {
+    background: var(--control-bg); color: var(--fg);
+  }
+  header button:active, header .headerLink:active { transform: scale(0.96); }
+  header button svg { display: block; }
+  header button:focus-visible, header .headerLink:focus-visible {
+    outline: 2px solid var(--accent); outline-offset: 1px;
+  }
+
+  /* 22px all round, the mock's, and NO card around the whole form: every
+     setting now sits in a card of its own (settings.js's `.set-card`) and a
+     card inside a card is the wall of boxes the redraw was for.
+
+     THE COLUMN IS 560 AND IT IS CENTRED (Osca, 1 Sep): *"The window opens far
+     wider than the 560 the mock is drawn at, and the settings content has no
+     max-width, so every card spans the whole pane and the controls strand at
+     the right edge -- that's why it looks nothing like `mock/settings.html`."*
+
+     It had a cap, and the cap was 640 -- near enough to be invisible at 560
+     and useless at 900, where a card ran the width of a laptop screen with a
+     segmented toggle marooned at the far end of it. 560 is the number the
+     mock is drawn at, so at any window width the cards and their right-hand
+     controls keep the proportions of the picture; at the window's own 560 the
+     padding takes it in to 516 and the cap never binds, which is the case the
+     mock actually shows.
+
+     The other half of this is not ours: `settingswin.rs` opens the window at
+     `DEFAULT_W = 560` already, but the remembered geometry restores whatever
+     width the window was last dragged to. Report §6 asks for that to be
+     clamped, so a window stretched once does not reopen stretched. */
+  main { flex: 1 1 auto; min-height: 0; overflow-y: auto;
+    padding: 20px calc(22px + var(--safe-right)) calc(26px + var(--safe-bottom)) calc(22px + var(--safe-left)); }
+  main > * { max-width: 560px; margin-left: auto; margin-right: auto; }
+
+  /* The preview is the setting: the same rules the reader's own .paneReading
+     has, reading the same three custom properties, so what is drawn here is
+     what a Reader tab will draw. */
+  /* ONE LIVE PREVIEW CARD, not a rule across the panel: the mock draws it as
+     a card of its own under Size & spacing, which is where a person reading
+     down the Reading tab meets it. */
+  /* The picture's card, to its own numbers (job 6): a 10px corner like every
+     other card on the window, 16px of the reading face at 1.75, and 16/18 of
+     padding. It was on the application's 15px radius and a `rem` size, which
+     made it both rounder and larger than the one drawn -- and it is the one
+     card on the tab a person looks at rather than reads past. */
+  .preview {
+    margin-top: 10px; border: 1px solid var(--border); border-radius: 10px;
+    background: var(--panel-bg); padding: 16px 18px;
+    font-family: var(--read-family, "Tiempos Text", Charter, "Iowan Old Style", "Source Serif 4", "Palatino Linotype", Georgia, serif);
+    font-size: calc(16px * var(--read-scale, 1));
+    line-height: var(--read-line, 1.75);
+  }
+  .preview p { margin: 0 0 0.7em; }
+  .preview p:last-child { margin-bottom: 0; }
+  .preview .word { border-radius: var(--r-0); padding: 1px 1px; }
+  /* NO SENTENCE HIGHLIGHT HERE. It is the reader's "now" mark, and it means
+     "this is the sentence being spoken" -- which is a lie in a preview that
+     is not playing, and the picture draws plain text. The `.word` rule stays:
+     it is what a person changing the size is judging. */
+
+  #status { font-size: 0.8rem; color: var(--fg-dim); min-height: 1.4em; margin-top: 10px; }
+  #status.bad { color: var(--bad); }
+
+
+  /* THE RESERVATION SURVIVES THIS BLOCK, and that is the fix that took a
+     failing check to find: the window is 560 wide, so it matches
+     `max-width: 640px` -- the phone breakpoint -- and a `padding: ... 10px`
+     here quietly gave the traffic lights' 80 px back to the tab strip on the
+     very window the reservation exists for. Only the safe-area insets and
+     the touch targets belong in a width test this wide. */
+  @media (max-width: 640px), (max-height: 500px) {
+    header { padding: calc(8px + var(--safe-top)) calc(80px + var(--safe-right)) 8px calc(80px + var(--safe-left)); gap: 6px; }
+    header button, header .headerLink { min-height: 44px; min-width: 44px; border-radius: var(--r-2); }
+    .opts button { min-height: 44px; padding: 0 14px; }
+    /* the preview reads at the phone's own base size, like the reader does */
+    .preview { font-size: calc(18px * var(--read-scale, 1)); line-height: var(--read-line, 1.7); }
+  }
+
+  /* A PHONE HAS NO TRAFFIC LIGHTS, so it reserves no room for them and the
+     six tabs share the whole width. 480 px is under every window this app
+     opens and over every phone it runs on, which is the only thing the
+     breakpoint has to be right about. */
+  @media (max-width: 480px) {
+    header { padding: calc(8px + var(--safe-top)) calc(10px + var(--safe-right)) 8px calc(10px + var(--safe-left)); }
+    header .set-tabs { width: 100%; }
+    header .set-tab { flex: 1 1 0; width: auto; }
+  }

@@ -1,0 +1,26 @@
+{
+  "name": "Frank",
+  "short_name": "Frank",
+  "description": "Side-by-side bilingual reader with word-level highlighting, offline.",
+  "id": "./reader.html",
+  "start_url": "./reader.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#fffbf9",
+  "theme_color": "#c8102e",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ],
+  "share_target": {
+    "action": "./library.html",
+    "method": "POST",
+    "enctype": "multipart/form-data",
+    "params": {
+      "files": [
+        { "name": "bundle", "accept": ["application/zip", "application/x-zip-compressed", ".zip"] }
+      ]
+    }
+  }
+}

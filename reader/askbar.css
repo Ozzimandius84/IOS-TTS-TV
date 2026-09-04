@@ -1,0 +1,81 @@
+/* THE LIST UNDER THE BAR (reader/askbar.js).
+ *
+ * The field is in the title-bar strip and this hangs beneath it, in the page's
+ * own webview -- the strip is 46px tall and would clip it, and a list the page
+ * draws is the same list the browser and the phone get, where there is no
+ * strip at all.
+ *
+ * IT TAKES THE CHROME'S SCALE, NOT THE BOOK'S (reader/design/bar.css's rule):
+ * every measure here is fixed, because it belongs to the window and not to
+ * what is being read. Nothing in it scales with the column.
+ *
+ * The palette is the page's own tokens where the page has them, with a
+ * literal fallback for the pages that do not -- this file is linked by three
+ * surfaces (library, reader, studio) that do not share a variable set.
+ */
+.askList {
+  position: fixed;
+  z-index: 9000;
+  max-height: min(60vh, 460px);
+  overflow: auto;
+  box-sizing: border-box;
+  padding: 5px;
+  border-radius: 10px;
+  background: var(--paper, #fcfcfb);
+  color: var(--ink, #17150f);
+  border: 1px solid rgba(0, 0, 0, .09);
+  box-shadow: 0 10px 34px rgba(0, 0, 0, .17), 0 2px 6px rgba(0, 0, 0, .07);
+  font: 13px/1.35 -apple-system, "Helvetica Neue", sans-serif;
+  -webkit-user-select: none;
+  user-select: none;
+}
+.askList[hidden] { display: none !important; }
+
+.askHead {
+  padding: 8px 9px 3px;
+  font-size: 10.5px;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  color: var(--dim, #9c988c);
+}
+.askHead:first-child { padding-top: 4px; }
+
+.askRow {
+  display: block;
+  padding: 6px 9px;
+  border-radius: 6px;
+  cursor: default;
+}
+/* Hover and the keyboard's selection are ONE state, deliberately: there is
+   one caret in this list, and it should not be possible to see two. */
+.askRow:hover, .askRow.on { background: rgba(128, 128, 128, .16); }
+.askRow .t {
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.askRow .m {
+  display: block;
+  margin-top: 1px;
+  font-size: 11.5px;
+  color: var(--dim, #9c988c);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .askList {
+    background: #17171a;
+    color: #e8e7e6;
+    border-color: #2a2a2e;
+    box-shadow: 0 10px 34px rgba(0, 0, 0, .5), 0 2px 6px rgba(0, 0, 0, .35);
+  }
+}
+:root[data-theme="dark"] .askList {
+  background: #17171a;
+  color: #e8e7e6;
+  border-color: #2a2a2e;
+  box-shadow: 0 10px 34px rgba(0, 0, 0, .5), 0 2px 6px rgba(0, 0, 0, .35);
+}

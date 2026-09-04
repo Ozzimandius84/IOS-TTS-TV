@@ -1,0 +1,119 @@
+/* ====================== THE READING PAGE — the column =====================
+   Linked by the reading bench and by the app. Every measured constant is in
+   tokens.css; this file is only how they are spent.
+
+   Measured off book.stevejobsarchive.com at 699 / 1000 / 1440, all confirmed:
+     root font-size  14.5px + 0.75vw    19.74 @699 · 22 @1000 · 25.3 @1440
+     column width    145px + 50vw        645 @1000 · 865 @1440
+     line-height     1.5 exactly, everywhere
+     paragraph gap   1em in a run · 1.2em after a heading · 3em before a
+                     standfirst, and margin-bottom is 0 throughout
+     scrollbar       hidden -- their gutter measures 0                     */
+
+.pane{ position:relative; height:100vh; overflow-y:auto; overscroll-behavior:contain;
+  scroll-snap-type: y proximity; scrollbar-width:none; }
+.pane::-webkit-scrollbar{ display:none; }
+html[data-nosnap]   .pane{ scroll-snap-type:none; }
+html[data-hardsnap] .pane{ scroll-snap-type:y mandatory; }
+.column{ width:100%; }
+
+/* THE AXIS NEVER MOVES; THE WIDTH DOES, PER CHAPTER.
+   At 1440 the reference puts 1085 of its 1085 paragraphs in ONE box --
+   L288 W865, text-align:start, text-indent:0 -- and its only two break-out
+   pull-quotes (W1147, W1339) are centred on that same axis:
+   288+865/2 = 147+1147/2 = 51+1339/2 = 720.5, the middle of the viewport.
+   So the axis is the viewport centre and nothing may move it; what varies is
+   the WIDTH standing on it. Inside the block every line is flush left and a
+   short one hangs -- the reference never centres a line, and lets "Steve"
+   sit at 288 under a full-width paragraph. --w is set per section by
+   Page's classifier. */
+.chapter{ width:min(var(--w, var(--measure)), var(--measure));
+          max-width:calc(100% - 3rem);
+          margin-inline:auto; position:relative;
+          padding-bottom:22vh; }
+
+/* A SNAP TARGET IS AN INVISIBLE MARKER, NEVER THE CONTENT. */
+.unit{ position:relative; }
+.unit > snap{ position:absolute; top:0; height:1px; width:1px;
+  scroll-snap-align:start; }                    /* normal: a flick may pass */
+/* scroll-snap-stop:always forbids SKIPPING a target, not stopping at a nearer
+   one -- which is what makes two hard stops safe. The opener halts a swipe so
+   a chapter announces itself; the text start is the strong stop so scrolling
+   UP from mid-chapter lands there and not back on the divider. */
+.opener > snap{ position:absolute; top:0; height:1px; width:1px;
+  scroll-snap-align:start; scroll-snap-stop:always; }
+.opener + .unit > snap{ scroll-snap-stop:always; }
+/* the reference declares BOTH ends. With starts only, coming off a long
+   chapter at speed you end far from the next opener and proximity finds
+   nothing to catch. */
+.chapter > snapend{ position:absolute; bottom:22vh; height:1px; width:1px;
+  scroll-snap-align:end; }
+
+/* THE VERTICAL RHYTHM. The reference's 1.5 is the leading INSIDE a wrapped
+   paragraph; its 1em gap is BETWEEN paragraphs. A line of verse is a LINE,
+   not a paragraph -- setting each as a <p> with a 1em margin put them 55px
+   apart where the reference sits at 33. So lines run at leading alone and
+   the 1em opens only at a real break. */
+p{ margin:0; font-size:1rem; line-height:1.5; }
+p + p{ margin-top:0; }
+p.line + p.line{ margin-top:0; }
+p.line.stanza{ margin-top:1em; }
+.prose p + p{ margin-top:1em; }
+.sp{ margin-top:1.6em; margin-bottom:.55em; color:var(--dim); font-size:.58rem;
+     letter-spacing:.17em; text-transform:uppercase; }
+p:first-child, .sp:first-child{ margin-top:0; }
+.dir{ color:var(--dim); font-style:italic; margin-top:.4em; }
+
+/* THE OPENER IS A SLIDE: a whole screen, the title alone on it. */
+.opener{ height:100vh; display:flex; flex-direction:column; justify-content:center;
+  position:relative; text-align:left; transition:background-color .25s ease,color .25s ease; }
+
+/* #4b -- the book's own colours, cycled onto the slides only. Set by
+   page.js's tintOpeners() from book.palette (reader/design/palette.py);
+   BODY TEXT GROUND NEVER CHANGES -- this rule reaches .opener and nothing
+   else. small/byline take the tint's own ink at reduced opacity rather than
+   --dim, which is tuned for the paper and can lose contrast on a tint. */
+.opener.tinted{ background:var(--slide-ground); color:var(--slide-ink); }
+.opener.tinted h1 small,
+.opener.tinted .byline{ color:inherit; opacity:.7; }
+.opener + .unit{ padding-top:20vh; margin-top:0; }
+.opener + *{ margin-top:0; }
+h1{ font-size:1.25rem; line-height:1.5; font-weight:500; margin:0; }
+h1.booktitle{ font-size:2.1rem; line-height:1.2; }
+h1 small{ display:block; font-size:.48rem; letter-spacing:.18em;
+  text-transform:uppercase; color:var(--dim); font-weight:600; margin-bottom:1.4em; }
+.byline{ margin-top:1.2em; font-size:.62rem; letter-spacing:.18em;
+  text-transform:uppercase; color:var(--dim); }
+
+/* THE RUNNING HEAD floats; the column does not inset for it, and it never
+   times out -- you should always be able to see which book you are in. */
+.runhead{ position:fixed; top:10px; right:37px; width:var(--head-w); height:var(--head-h);
+  pointer-events:none; z-index:20; display:flex; flex-direction:column;
+  align-items:flex-end; justify-content:center;     /* ink centred in the box */
+  text-align:right; font-family:var(--ui); font-size:14.5px; line-height:1.5;
+  color:var(--dim); }
+.runhead b{ font-weight:600; color:var(--ink); }
+
+/* THE SCRUB: right edge, hidden at rest, and its marks are GAPS in the line
+   rather than dots on it. A mark sits where its chapter ACTUALLY is --
+   spacing them evenly while the fill tracks real scroll is why the bar ran
+   ahead of the dots and then caught up. */
+.scrub{ position:fixed; top:0; right:0; width:var(--scrub-w); height:100%; z-index:15;
+  opacity:0; transition:opacity .45s ease; }
+.scrub.awake{ opacity:1; }
+.scrub:hover{ opacity:1; transition-duration:.12s; }
+.track,.fill{ position:absolute; right:26px; top:14vh; width:1px; }
+.track{ bottom:14vh; background:var(--rule); }
+.fill{ height:0; background:var(--dim); }
+.scrub .g{ position:absolute; right:0; width:100%; cursor:pointer; }
+.scrub .m{ position:absolute; right:23px; width:7px; height:11px;
+  background:var(--ground); transform:translateY(-5px); }
+.scrub .g.on .m::after{ content:""; position:absolute; right:3px; top:4px;
+  width:1px; height:3px; background:var(--ink); }
+.scrub .l{ position:absolute; right:42px; width:var(--label-w); height:var(--label-h);
+  transform:translateY(-15px); text-align:right; white-space:nowrap; overflow:hidden;
+  text-overflow:ellipsis; color:var(--dim); opacity:0; transition:opacity .2s;
+  font:var(--label-fs)/var(--label-h) var(--ui); }
+.scrub .g.on .l, .scrub:hover .l{ opacity:1; }
+.scrub .g.on .l{ color:var(--ink); }
+.scrub .g.title .m{ height:15px; }

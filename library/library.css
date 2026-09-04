@@ -1,0 +1,687 @@
+  :root {
+    --bg: #fcfcfb;
+  /* ---- THE RADIUS SCALE (Osca, 30 Aug: "all boxes across all pages are just
+     the wrong shape, wrong curve, not modern enough").
+     Four files had grown ten different radii between them -- 3, 4, 6, 7, 8,
+     10, 12, 14, 50% and 999px -- assigned per element as each was written, so
+     no two boxes on a screen agreed and none of them agreed with the next
+     screen. These four steps are the whole vocabulary now, and they are one
+     step larger at every level than what they replace, which is most of what
+     "modern" means here. A box picks the step for its ROLE, not its size:
+       --r-0  a mark on running text (the word, the sentence highlight)
+       --r-1  a control you press (button, input, select, small chip)
+       --r-2  a surface that holds things (card, section, panel, header button)
+       --r-3  a surface that floats over another (sheet, popup, menu)
+     Anything outside these four is a deliberate exception and says why. ---- */
+  --r-0: 5px;
+  --r-1: 11px;
+  --r-2: 15px;
+  --r-3: 22px;
+  --r-pill: 999px;
+  /* The chrome's font, not the book's -- see reader.html's own note. */
+  --ui-font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI Variable Text",
+             "Segoe UI", Inter, system-ui, "Helvetica Neue", Arial, sans-serif;
+ --fg: #0b0b0b; --fg-dim: #52514f; --accent: #832f2b;
+    --border: #e4e3e0; --panel-bg: #ffffff; --link: #832f2b; --control-bg: #f5f5f3;
+    --ok: #3f7a45; --bad: #a03328;
+  }
+  [data-theme="dark"] {
+    --bg: #131316; --fg: #e8e7e6; --fg-dim: #98979b; --accent: #c9c4bb;
+    --border: #2c2c32; --panel-bg: #1a1a1f; --link: #c9c4bb; --control-bg: #1a1a1f;
+    --ok: #7fc08a; --bad: #d98a7a;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #131316; --fg: #e8e7e6; --fg-dim: #98979b; --accent: #c9c4bb;
+      --border: #2c2c32; --panel-bg: #1a1a1f; --link: #c9c4bb; --control-bg: #1a1a1f;
+      --ok: #7fc08a; --bad: #d98a7a;
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: var(--bg); color: var(--fg);
+    font-family: var(--ui-font); height: 100%; }
+  body { height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+  header { padding: 10px 16px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 10px; flex: 0 0 auto; }
+  /* THE STRIP IS THE HEADER, and only in the app (desktop/README.md
+     `## Status`'s desktop-headless-chrome entry §6). Written out because the
+     UA's own `[hidden] { display: none }` loses to the `display: flex` on the
+     line above. In a plain browser and on the phone nothing sets it. */
+  header[hidden] { display: none !important; }
+  .headerspace { flex: 1; }
+  /* A hairline box around every icon in the bar is the single most dated
+     thing on these pages: five outlined squares in a row read as a toolbar
+     from 2012. The button is the icon; the surface only appears under the
+     pointer, which is also the only moment it means anything. */
+  header button, header .headerLink {
+    min-height: 40px; min-width: 40px;
+    border-radius: var(--r-1); border: 1px solid transparent;
+    background: transparent; color: var(--fg-dim);
+    font-size: 1rem; cursor: pointer;
+    display: inline-flex; align-items: center; justify-content: center;
+    text-decoration: none;
+    transition: background 0.14s, color 0.14s;
+  }
+  header button:hover, header .headerLink:hover {
+    background: var(--control-bg); color: var(--fg);
+  }
+  header button:active, header .headerLink:active { transform: scale(0.96); }
+  header button svg { display: block; }
+  header button:focus-visible, header .headerLink:focus-visible {
+    outline: 2px solid var(--accent); outline-offset: 1px;
+  }
+  /* The way out of the Library (Osca, 28 Aug: "Open library means I pretty much
+     have to close the app"). Top-left in BOTH layouts, before the sources toggle. */
+
+  /* ---- the shelf = the library rail. SHARED CONTRACT with studio/studio.html:
+     every rule from .rail to .railrow-status below must stay byte-identical
+     in both files (reader/tests/test_library_rail.py). The bench may only
+     ADD (.railmore); this page adds only .ingest-* to a row still being
+     ingested (further down). Spec: PROMPTS/library-sidebar.md.
+     Moved here from reader.html on 28 Aug (READER_FIRST.md: the reader's
+     sidebar is this book's chapters; the Library page holds the shelf). ---- */
+  .rail {
+    width:236px; flex:0 0 236px; border-right:1px solid var(--border);
+    background:var(--panel-bg); overflow:auto; padding:14px 0;
+  }
+  .rail.hidden { display:none; }
+  .rail h2 {
+    margin:0 0 8px; padding:0 16px; font-size:0.72rem; font-weight:600;
+    letter-spacing:0.09em; text-transform:uppercase; color:var(--fg-dim);
+  }
+  .railrow {
+    display:block; width:100%; text-align:left; font:inherit; color:inherit;
+    background:transparent; border:none; border-left:2px solid transparent;
+    padding:9px 16px; cursor:pointer;
+  }
+  .railrow:hover { background:var(--control-bg); }
+  .railrow[aria-selected="true"] { border-left-color:var(--accent); background:var(--control-bg); }
+  .railrow-title { display:block; font-weight:600; font-size:0.9rem;
+    overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .railrow-by { display:block; color:var(--fg-dim); font-size:0.8rem;
+    overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .railrow-status { display:block; margin-top:3px; color:var(--fg-dim); font-size:0.76rem; }
+  .railrow-status b { color:var(--ok); font-weight:600; }
+
+  /* library-page layout: the shelf is the main pane, so it grows */
+  .shell { flex: 1 1 auto; display: flex; min-height: 0; }
+  #shelf.rail { flex: 1 1 auto; width: auto; border-right: none; background: var(--bg);
+    padding: 22px 34px; }
+  /* a device row ("On this device", the phone's own books) is still a row:
+     it is not in the picture, and nothing here turns it into a tile */
+  #shelf .railrow:not(.tile) { max-width: 560px; }
+  .empty { padding: 16px; color: var(--fg-dim); font-size: 0.9rem; }
+
+  /* ---- THE SHELF IS COVER TILES (PROMPTS/mock/library.html, 1 Sep).
+     The shared `.rail` block above is studio's half of a contract this page
+     may not restyle (reader/tests/test_library_rail.py), so every rule that
+     turns a row into a tile is HERE, after it, and scoped to `.tile`. The
+     row keeps its `.railrow` class and its `data-slug`, which is why
+     selection, Enter, double-click, drag, the ⋯ menu and the ingest veil all
+     go on working without a single handler being re-keyed. ---- */
+  /* EVERY TILE THE SAME SIZE, EVERY PART ON THE SAME LINE (Osca, 1 Sep:
+     "and all aligned, the same size"). The tile is a three-row grid --
+     120px cover, a 34px title block that is exactly two 17px lines whether
+     the title fills them or not, and an 18px line under it -- so a
+     one-word title and a title that wraps twice put their covers, their
+     captions and their grey lines on the same three baselines across the
+     whole shelf. It is the mock's rule, row for row; the old `margin-bottom`
+     under the cover is now the grid's `row-gap`. */
+  .shelfgrid { display: grid; grid-template-columns: repeat(auto-fill, 120px);
+    gap: 24px 20px; margin-top: 4px; }
+  #shelf .railrow.tile {
+    width: 120px; max-width: none; padding: 0;
+    display: grid; grid-template-rows: 120px 34px 18px; row-gap: 6px;
+    border-left: 0; background: transparent; text-align: left;
+  }
+  #shelf .railrow.tile:hover { background: transparent; }
+  .tilecov {
+    display: block; position: relative; overflow: hidden;
+    width: 88px; height: 120px; margin: 0;
+    border-radius: var(--r-0); box-shadow: 0 1px 2px rgba(0,0,0,0.15);
+    background: var(--paper); color: var(--ink);
+    font-family: Charter, Georgia, "Times New Roman", serif;
+  }
+
+  /* ---- THE COVER IS TYPESET, ALWAYS (Osca, 1 Sep: "I much prefer the plan --
+     rather than importing the front page every time, look how it's turned
+     out"). The book's own `cover.jpg` is NOT drawn: not on the shelf, not in
+     the phone column, not anywhere, whether or not the file exists. The
+     typeset cover IS the cover. There is no `.covimg` rule and no `<img>`
+     any more; the `coverUrl()` that built the src is gone with them.
+
+     TWO DIALS, HASHED SEPARATELY (Osca, 1 Sep, on the first build of this:
+     "mostly beige; use multiple colours; 4-5 different layouts so books look
+     different, as they are; and all aligned, the same size").
+       * TWENTY PAPER/INK PAIRINGS, `.p1`-`.p20`, pairing = hash(title) mod 20;
+       * FIVE LAYOUTS, `.l1`-`.l5`, layout = hash(author + title) mod 5.
+     Twenty by five is a hundred covers, and the two hashes are taken over
+     different strings so two books that collide on one rarely collide on the
+     other. **A tile never takes the pairing of the tile before it on the same
+     shelf** -- it steps to the next one -- which is a render-order rule and
+     therefore not in `coverPairing()`; see `assignPairings()`.
+
+     The rules below are the mock's, declaration for declaration. `.verse` is
+     gone: the layout is the hash's, not the book's form. `form` is still read
+     off book.json (it is one key of a fetch that has to happen anyway for
+     `first_words`) and is no longer what centres a title. ---- */
+  .tilecov .t { position: absolute; left: 9px; right: 9px; font-size: 11.5px; line-height: 1.2; }
+  .tilecov .a { position: absolute; left: 9px; right: 9px; font-size: 8px;
+    letter-spacing: 0.06em; text-transform: uppercase; opacity: 0.75;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .tilecov .fw { position: absolute; left: 9px; right: 9px; bottom: 8px; font-size: 6px;
+    opacity: 0.45; font-style: italic; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .tilecov .ini { position: absolute; font-weight: 400; line-height: 1;
+    color: var(--ink); opacity: 0.09; letter-spacing: -0.04em; }
+  /* L1 -- ranged left, initial bleeding top-right */
+  .l1 .t { top: 14px; } .l1 .a { bottom: 22px; }
+  .l1 .ini { right: -6px; top: -14px; font-size: 92px; }
+  /* L2 -- centred, initial behind the middle */
+  .l2 .t, .l2 .a { text-align: center; } .l2 .t { top: 22px; } .l2 .a { bottom: 22px; }
+  .l2 .ini { left: 50%; transform: translateX(-50%); top: 30px; font-size: 70px; }
+  /* L3 -- a band: the title reversed out across the middle, no initial */
+  .l3 .t { left: 0; right: 0; top: 34px; text-align: center; padding: 8px 9px;
+    background: var(--ink); color: var(--paper); font-size: 10.5px; }
+  .l3 .a { bottom: 14px; text-align: center; }
+  .l3 .ini { display: none; }
+  /* L4 -- the initial IS the cover: huge, solid, the title small at the foot */
+  .l4 .ini { left: 50%; transform: translateX(-50%); top: 6px; font-size: 118px; opacity: 0.85; }
+  .l4 .t { bottom: 24px; font-size: 9.5px; text-align: center; }
+  .l4 .a { bottom: 11px; text-align: center; font-size: 6.5px; }
+  .l4 .fw { display: none; }
+  /* L5 -- spine: the title runs up the left edge, the author small top-right */
+  .l5 .t { left: 12px; top: auto; bottom: 10px; width: 100px; transform: rotate(-90deg);
+    transform-origin: left bottom; white-space: nowrap; overflow: hidden;
+    text-overflow: ellipsis; font-size: 12px; }
+  .l5 .a { left: auto; right: 9px; top: 10px; width: 48px; text-align: right; font-size: 7px; }
+  .l5 .ini { right: -4px; bottom: -18px; font-size: 80px; }
+  .l5 .fw { left: 34px; }
+  /* THE ONE THING THE FIVE LAYOUTS DO NOT SAY, and the plainest answer to it
+     (mock/README rule 5). The mock draws each layout with a title that fits;
+     none of its rules says what a title does when it does not. Unclamped,
+     `The Collected Poems of Wallace Stevens` wraps to three lines inside L4
+     and lands across the initial, and `The Singapore Story: Memoirs of Lee
+     Kuan Yew, Vol. 1` runs down into the author in L1 -- which is a broken
+     tile, not a variant. So each layout's title is clamped to the lines its
+     own arrangement leaves room for and ellipsises past that. Nothing else is
+     added and no number of the mock's is changed; §6 gives Osca these five
+     declarations to paste into the picture if he wants the two to agree
+     literally. (L5's title is `nowrap` in the mock already.) */
+  .tilecov .t { display: -webkit-box; -webkit-box-orient: vertical; overflow: hidden; }
+  .l1 .t { -webkit-line-clamp: 4; }
+  .l2 .t { -webkit-line-clamp: 4; }
+  .l3 .t { -webkit-line-clamp: 3; }
+  .l4 .t { -webkit-line-clamp: 2; }
+  /* the twenty pairings, value for value from PROMPTS/mock/library.html */
+  .p1 { --paper: #efe7d6; --ink: #2a2521; }
+  .p2 { --paper: #2f3a45; --ink: #e9e4d8; }
+  .p3 { --paper: #7b2d26; --ink: #f2e8dc; }
+  .p4 { --paper: #4f6152; --ink: #eef0e6; }
+  .p5 { --paper: #c9a44a; --ink: #2b2418; }
+  .p6 { --paper: #1e1e1c; --ink: #e6e1d6; }
+  .p7 { --paper: #243f6b; --ink: #e9ecf3; }
+  .p8 { --paper: #5a3557; --ink: #f1e8f0; }
+  .p9 { --paper: #b84a3a; --ink: #fbeee6; }
+  .p10 { --paper: #2f5d5a; --ink: #e6f0ee; }
+  .p11 { --paper: #8a6f3c; --ink: #f6efe0; }
+  .p12 { --paper: #d9c7a3; --ink: #2b2418; }
+  .p13 { --paper: #3b3b6b; --ink: #ecebf5; }
+  .p14 { --paper: #6b7b3b; --ink: #f1f3e4; }
+  .p15 { --paper: #a3564e; --ink: #f7ebe8; }
+  .p16 { --paper: #1f3a2e; --ink: #e4efe8; }
+  .p17 { --paper: #e3d5c0; --ink: #3a2f24; }
+  .p18 { --paper: #4a4a4a; --ink: #f0ede8; }
+  .p19 { --paper: #c76b3b; --ink: #fdf1e6; }
+  .p20 { --paper: #6a5a8c; --ink: #f1eef7; }
+  /* the ring is the selection mark on a tile -- `.railrow[aria-selected]`'s
+     own background would only tint the caption */
+  #shelf .railrow.tile[aria-selected="true"] { background: transparent; }
+  #shelf .railrow.tile[aria-selected="true"] .tilecov { box-shadow: 0 0 0 2px var(--fg); }
+  #shelf .railrow.tile:hover .tilecov { box-shadow: 0 2px 6px rgba(0,0,0,0.22); }
+  #shelf .railrow.tile[aria-selected="true"]:hover .tilecov { box-shadow: 0 0 0 2px var(--fg); }
+  /* the caption's type is the mock's, to the tenth of a pixel: `.tile b` is
+     12.5px/1.3 and `.tile small` is 11.5px there, and the rem sizes this page
+     had (0.8rem = 12.8px, 0.74rem = 11.84px) were a third of a pixel out on
+     both. Written in px for the same reason the mock writes px -- a tile is a
+     fixed 120px object and its type does not scale with the root. */
+  .tile .railrow-title { white-space: normal; font-size: 12.5px; line-height: 17px; height: 34px;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+  .tile .railrow-by { font-size: 11.5px; line-height: 18px; margin: 0;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  /* the order mark rides the cover, not the caption */
+  .railrow.tile[data-sel-order]::after { top: 6px; right: 26px; }
+  .railrow.tile[data-sel-order="1"]:not(.selFirst)::after { top: 10px; right: 30px; }
+  /* a book still being ingested: faded, and its line reads `parsing…` */
+  #shelf .railrow.tile.loading { overflow: visible; opacity: 1; }
+  #shelf .railrow.tile.loading .tilecov { opacity: 0.35; }
+  #shelf .railrow.tile.loading .railrow-title,
+  #shelf .railrow.tile.loading .railrow-by { color: var(--fg-dim); opacity: 1; }
+  /* the veil (and its progress edge) is the COVER's, so the caption stays
+     readable while the bar crosses the picture */
+  .tile .ingest-veil { inset: auto; position: absolute; top: 0; left: 0;
+    width: 88px; height: 120px; border-radius: var(--r-0); }
+  .tile .ingest-step { display: none; }
+  .tile .ingest-veil.failed { position: absolute; top: 0; height: 120px; padding: 6px; }
+  .tile .ingest-fail-title, .tile .ingest-fail-line { font-size: 0.66rem; }
+  .tile .ingest-retry { font-size: 0.7rem; min-height: 22px; padding: 1px 8px; }
+
+  /* ---- SOURCES IS THE FOLDER YOU OPENED (PROMPTS/reader-library-mock.md §3).
+     The card at the top is the folder itself -- its name, where it is, and a
+     ⌄ to open another; under it the files in it, and the only thing a file
+     carries besides its name is a dot: grey = already on the shelf, red =
+     being parsed, none = not yet. The kind and the megabytes are gone; they
+     were two columns of noise beside a list of titles, and the picture draws
+     neither. ---- */
+  .srcbar { width: 250px; flex: 0 0 250px; border-right: 1px solid var(--border); background: var(--panel-bg);
+    overflow: auto; padding: 14px 0; display: flex; flex-direction: column; }
+  .srcbar h2 { margin: 0 0 8px; padding: 0 16px; font-size: 0.72rem; font-weight: 600; letter-spacing: 0.09em;
+    text-transform: uppercase; color: var(--fg-dim); }
+  .srcfolder { margin: 0 12px 12px; padding: 9px 10px; background: var(--bg);
+    border: 1px solid var(--border); border-radius: var(--r-1);
+    display: flex; align-items: center; gap: 9px; width: calc(100% - 24px);
+    font: inherit; color: inherit; text-align: left; cursor: pointer; }
+  .srcfolder:hover { background: var(--control-bg); }
+  .srcfolder:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .srcfolder .ic { flex: 0 0 18px; width: 18px; height: 14px; border: 1.5px solid var(--fg-dim);
+    border-radius: 3px; position: relative; }
+  .srcfolder .ic::before { content: ""; position: absolute; left: -1.5px; top: -5px; width: 8px; height: 5px;
+    border: 1.5px solid var(--fg-dim); border-bottom: 0; border-radius: 2px 2px 0 0; background: var(--bg); }
+  .srcfolder .nm { min-width: 0; }
+  .srcfolder b { display: block; font-weight: 600; font-size: 0.78rem; }
+  .srcfolder small { display: block; color: var(--fg-dim); font-size: 0.7rem;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .srcfolder .ch { margin-left: auto; color: var(--fg-dim); font-size: 0.7rem; }
+  .src { display: flex; align-items: center; gap: 8px; padding: 5px 16px; cursor: default; user-select: none;
+    color: var(--fg-dim); }
+  .src:hover { background: var(--control-bg); }
+  .src[aria-selected="true"] { background: var(--control-bg); color: var(--fg); }
+  /* the picture's three states, and the dot is the whole of the difference */
+  .src[data-state="grey"] { color: var(--fg-dim); opacity: 0.72; }
+  .src[data-state="filled"] { color: var(--fg-dim); opacity: 1; }
+  .src[data-state="busy"] { color: var(--fg); opacity: 1; }
+  .src-dot { flex: none; margin-left: auto; width: 5px; height: 5px; border-radius: 50%; background: transparent; }
+  .src[data-state="filled"] .src-dot { background: var(--fg-dim); opacity: 0.7; }
+  .src[data-state="busy"] .src-dot { background: var(--accent); }
+  .src-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.82rem; }
+  .src-empty, .src-note { padding: 8px 16px; font-size: 0.8rem; color: var(--fg-dim); }
+  .src-note { padding-top: 14px; }
+  #shelf.dropping { outline: 2px dashed var(--accent); outline-offset: -8px; }
+  .shelfcount { color: var(--fg-dim); font-weight: 400; }
+
+  /* ---- selection, named shelves, merged entries (PROMPTS/library-shelf.md).
+     Every rule here is AFTER the shared .rail block above and adds nothing to
+     it: reader/tests/test_library_rail.py holds `.rail` .. `.railrow-status b`
+     byte-identical with studio/studio.html, and a selection mark is the
+     reader's own idea. `.railrow[aria-selected="true"]` is the shared rule and
+     is reused as-is -- what is new is only the ORDER MARK, because two
+     identically outlined rows cannot say which of them is first. ---- */
+  .railrow { position: relative; }
+  .railrow[data-sel-order]::after {
+    content: attr(data-sel-order);
+    position: absolute; top: 8px; right: 10px;
+    min-width: 17px; height: 17px; padding: 0 4px; border-radius: var(--r-pill);
+    background: var(--accent); color: var(--panel-bg);
+    font-size: 0.66rem; font-weight: 700; line-height: 17px; text-align: center;
+  }
+  /* one selected row needs no number -- there is no order to tell */
+  .railrow[data-sel-order="1"]:not(.selFirst)::after { content: ""; min-width: 8px; padding: 0; height: 8px; top: 12px; }
+  .railrow.merged .railrow-title::before {
+    content: "pair"; display: inline-block; margin-right: 6px; padding: 0 5px;
+    border: 1px solid var(--border); border-radius: var(--r-0);
+    font-size: 0.62rem; font-weight: 600; letter-spacing: 0.06em;
+    text-transform: uppercase; color: var(--fg-dim); vertical-align: 1px;
+  }
+  .railrow.merged.stale .railrow-status { color: var(--bad); }
+  .shelfgrp { display: block; }
+  .shelfhead { display: flex; align-items: center; gap: 2px; padding: 0 8px 0 4px; }
+  .shelftoggle {
+    flex: 1 1 auto; min-width: 0; display: flex; align-items: baseline; gap: 7px;
+    padding: 7px 8px; border: 0; border-radius: var(--r-1); background: transparent;
+    font: inherit; font-size: 0.72rem; font-weight: 600; letter-spacing: 0.09em;
+    text-transform: uppercase; color: var(--fg-dim); cursor: pointer; text-align: left;
+  }
+  .shelftoggle:hover { background: var(--control-bg); color: var(--fg); }
+  .shelfcaret { font-size: 0.85rem; line-height: 1; letter-spacing: 0;
+    opacity: 0; transition: opacity 0.12s; }
+  .shelfhead:hover .shelfcaret, .shelftoggle:focus-visible .shelfcaret,
+  .shelfgrp[data-collapsed="1"] .shelfcaret { opacity: 1; }
+  .shelfname { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .shelfmenu {
+    flex: 0 0 auto; min-width: 28px; min-height: 28px; border: 0; border-radius: var(--r-1);
+    background: transparent; color: var(--fg-dim); font: inherit; cursor: pointer;
+  }
+  .shelfmenu { opacity: 0; transition: opacity 0.12s; }
+  .shelfhead:hover .shelfmenu, .shelfmenu:focus-visible { opacity: 1; }
+  .shelfmenu:hover { background: var(--control-bg); color: var(--fg); }
+  .shelfempty { padding: 4px 16px 10px; font-size: 0.78rem; color: var(--fg-dim); }
+  .shelfgrp.dropping { background: var(--control-bg); }
+  .libline { padding: 6px 16px 10px; font-size: 0.74rem; color: var(--fg-dim); }
+
+  /* ---- right-click menu ---- */
+  .menuhead { padding: 6px 14px 4px; font-size: 0.68rem; font-weight: 600;
+    letter-spacing: 0.09em; text-transform: uppercase; color: var(--fg-dim); }
+  .menu button.off { opacity: 0.55; cursor: default; }
+  .menu button .menuwhy { display: block; font-size: 0.72rem; color: var(--fg-dim);
+    white-space: normal; margin-top: 1px; }
+  .menu { position: fixed; z-index: 40; min-width: 200px; padding: 6px 0; border-radius: var(--r-1);
+    background: var(--panel-bg); border: 1px solid var(--border); box-shadow: 0 6px 20px rgba(0,0,0,0.18); }
+  .menu[hidden] { display: none; }
+  .menu button { display: block; width: 100%; text-align: left; font: inherit; font-size: 0.9rem; color: var(--fg);
+    background: transparent; border: none; padding: 7px 14px; cursor: pointer; }
+  .menu button:hover, .menu button:focus { background: var(--control-bg); outline: none; }
+  .menu button.danger { color: var(--bad); }
+  .menu hr { border: none; border-top: 1px solid var(--border); margin: 4px 0; }
+  /* paintContext() hides what needs studio by setting `hidden`, and three of
+     those elements have a `display` of their own further down (the sources
+     sheet is `display: flex` under the phone breakpoint, the toggle
+     `inline-flex`, the scrim `block`) -- a rule beats the `hidden`
+     attribute's UA style, so it has to be said here, once, for all three. */
+  .srcbar[hidden], #sourcesToggle[hidden], #sourcesScrim[hidden] { display: none !important; }
+  /* `,` collapses the Sources rail on a desktop. Gated on a width so it can
+     never collide with the phone rules below, where the same rail is a sheet
+     and `,` opens and closes THAT instead -- one key, the shape of the answer
+     decided by the screen rather than by a second binding. */
+  @media (min-width: 641px) and (min-height: 501px) {
+    .srcbar.srcCollapsed { display: none; }
+  }
+
+  /* ---- the phone shelf: the Library's right sidebar (READER_FIRST.md
+     "Osca's app decisions -- 30 Aug"). Its own block, after the shared .rail
+     one, which it never touches. ---- */
+  .phonebar { width: 250px; flex: 0 0 250px; border-left: 1px solid var(--border); background: var(--panel-bg);
+    overflow: auto; padding: 14px 0 18px; display: flex; flex-direction: column; }
+  .phonebar[hidden] { display: none; }
+  .phonebar.dropping { outline: 2px dashed var(--accent); outline-offset: -6px; }
+  .phonehead { padding: 0 16px 2px; }
+  .phonehead.onphone { margin-top: 22px; }
+  .phonehead h2 { margin: 0; font-size: 0.72rem; font-weight: 600; letter-spacing: 0.09em;
+    text-transform: uppercase; color: var(--fg-dim); }
+  /* Sync is the dark button in the picture, and the line beside it says what
+     pressing it will do -- how many books, and where they land. */
+  .phonesync { display: flex; align-items: center; gap: 10px; margin: 10px 16px 18px; }
+  #syncPhone { font: inherit; font-size: 0.78rem; font-weight: 600; min-height: 30px; padding: 4px 12px;
+    border-radius: var(--r-1); border: 0; background: var(--fg); color: var(--bg); cursor: pointer; flex: none; }
+  #syncPhone:hover:not([disabled]) { opacity: 0.88; }
+  #syncPhone[disabled] { opacity: 0.35; cursor: default; }
+  .phonesync small { color: var(--fg-dim); font-size: 0.72rem; min-width: 0;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .phonedrop { margin: 0 12px; padding: 16px 10px; border: 1px dashed var(--border); border-radius: var(--r-1);
+    text-align: center; color: var(--fg-dim); font-size: 0.74rem; }
+  .phonebar.dropping .phonedrop { border-color: var(--accent); color: var(--fg); }
+  .phonerow { position: relative; display: grid; grid-template-columns: 20px 1fr; column-gap: 10px;
+    align-items: center; padding: 6px 12px 6px 16px; }
+  .phonerow:hover { background: var(--control-bg); }
+  .phonerow.busy { opacity: 0.6; }
+  /* the row's cover: the same typeset cover as the tile, at a thumbnail's
+     size -- one function draws both, so a book is never two different books */
+  .phonerow .tilecov { grid-column: 1; grid-row: 1 / span 2; width: 20px; height: 27px;
+    margin: 0; border-radius: 2px; box-shadow: none; }
+  .phonerow .tilecov .t, .phonerow .tilecov .a, .phonerow .tilecov .fw { display: none; }
+  .phonerow .tilecov .ini { position: absolute; inset: 0; right: auto; left: 0; top: 0;
+    display: grid; place-items: center; font-size: 11px; opacity: 0.85; transform: none; }
+  .phonerow-title { grid-column: 2; font-size: 0.8rem; font-weight: 600;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .phonerow-meta { grid-column: 2; grid-row: 2; font-size: 0.7rem; color: var(--fg-dim); }
+  /* Remove, and Reveal, are the picture's silence about hover (mock README
+     rule 5): the page at rest is exactly the picture, and the two things a
+     person can do to a row are under the pointer when they want them. */
+  .phonebtn { position: absolute; top: 50%; transform: translateY(-50%);
+    font: inherit; font-size: 0.7rem; min-height: 24px; padding: 1px 8px; border-radius: var(--r-1);
+    border: 1px solid var(--border); background: var(--bg); color: var(--fg); cursor: pointer;
+    opacity: 0; transition: opacity 0.12s; }
+  .phonerow:hover .phonebtn, .phonebtn:focus-visible { opacity: 1; }
+  .phonebtn:hover { background: var(--control-bg); }
+  .phonebtn.reveal { right: 40px; }
+  .phonebtn.x { right: 10px; min-width: 26px; padding: 1px 6px; border-color: transparent; color: var(--fg-dim); }
+  .phonebtn.x:hover { border-color: var(--border); color: var(--bad); }
+  .phone-empty { padding: 4px 16px 8px; font-size: 0.8rem; color: var(--fg-dim); }
+  .phoneline { margin-top: auto; padding: 12px 16px 0; font-size: 0.72rem; color: var(--fg-dim); }
+
+  #note { padding: 6px 16px; font-size: 0.82rem; color: var(--fg-dim); flex: 0 0 auto; }
+  #note:empty { display: none; }
+
+  /* ---- the panels (a re-parse, and this book's parses). A sibling of
+     `.shell` for `.searchbar`'s reason: `#shelf` is rewritten wholesale on
+     every poll, and a report a person is halfway through reading must not be
+     blown away by an unrelated repaint. */
+  .panel { flex: 0 0 auto; margin: 0 16px 8px; padding: 8px 12px 10px;
+    border: 1px solid var(--border); border-radius: var(--r-1); font-size: 0.82rem; }
+  .panel[hidden] { display: none; }
+  .panel .pnl-head { display: flex; align-items: baseline; gap: 8px; }
+  .panel .pnl-head b { font-size: 0.9rem; }
+  .panel .pnl-head.warn .pnl-sub { color: var(--warn, #a86b1d); }
+  .panel .pnl-head.bad .pnl-sub { color: var(--bad, #b3382c); }
+  .panel .pnl-sub { color: var(--fg-dim); }
+  .panel .pnl-x { margin-left: auto; font: inherit; font-size: 1rem; line-height: 1;
+    padding: 0 4px; border: none; background: none; color: var(--fg-dim); cursor: pointer; }
+  .panel .pnl-x:hover { color: var(--fg); }
+  /* INDETERMINATE ON PURPOSE: studio counts no steps for a re-parse yet, so
+     the bar travels and returns rather than filling to a made-up fraction. */
+  .panel .pnl-bar { height: 3px; margin: 8px 0 6px; border-radius: 2px;
+    background: var(--border); overflow: hidden; position: relative; }
+  .panel .pnl-bar.pulse::after { content: ""; position: absolute; inset: 0 auto 0 0;
+    width: 30%; border-radius: 2px; background: var(--accent);
+    animation: pnl-sweep 1.4s ease-in-out infinite; }
+  @keyframes pnl-sweep { 0% { left: -30%; } 100% { left: 100%; } }
+  .panel .pnl-why { margin: 4px 0 0; color: var(--fg-dim); font-size: 0.78rem; }
+  .panel .pnl-line { margin: 4px 0 0; font-size: 0.75rem; color: var(--fg-dim);
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .panel .pnl-sum { margin: 6px 0 0; padding: 0; list-style: none; }
+  .panel .pnl-sum li { padding: 2px 0; border-top: 1px solid var(--border); font-size: 0.8rem; }
+  .panel .pnl-sum li:first-child { border-top: none; }
+  /* the parses: two headed sections, never one list -- the live parse of a
+     book must never read as one of that book's own kept copies. */
+  .panel .prs-head { margin-top: 8px; font-size: 0.72rem; letter-spacing: 0.04em;
+    text-transform: uppercase; color: var(--fg-dim); }
+  .panel .prs-live li { color: var(--fg); }
+  .panel .prs li { display: flex; align-items: baseline; gap: 8px; }
+  .panel .prs-facts { color: var(--fg-dim); font-size: 0.78rem; }
+  .panel .prs-stamp { margin-left: auto; color: var(--fg-dim); font-size: 0.72rem; }
+
+  /* ---- the search bar (Osca, 3 Sep: "in the app itself... just placement
+     of the search bar and the drop down"): a strip's own tool toggles this,
+     the same way `toggleSources()` toggles `#sources` -- a sibling of
+     `.shell`, never inside `#shelf`, which this page rewrites wholesale on
+     every ingest/shelf change and would blow away whatever was typed. */
+  .searchbar { position: relative; flex: 0 0 auto; padding: 8px 16px;
+    border-bottom: 1px solid var(--border); display: flex; gap: 8px; align-items: center; }
+  .searchbar[hidden] { display: none; }
+  .searchbar input[type=text] { flex: 1 1 auto; min-width: 0; font: inherit; font-size: 0.88rem;
+    padding: 5px 8px; border: 1px solid var(--border); border-radius: var(--r-2, 6px);
+    background: var(--bg, #fff); color: var(--fg); }
+  .searchbar input.author { flex: 0 1 12rem; }
+  .searchbar button { font: inherit; font-size: 0.85rem; padding: 5px 10px;
+    border: 1px solid var(--border); border-radius: var(--r-2, 6px);
+    background: var(--panel-bg); color: var(--fg); cursor: pointer; }
+  .searchbar button:hover { border-color: var(--accent); }
+  .searchresults { position: absolute; left: 16px; right: 16px; top: 100%;
+    margin-top: 2px; max-height: 60vh; overflow: auto; background: var(--panel-bg);
+    border: 1px solid var(--border); border-radius: var(--r-2, 6px);
+    box-shadow: 0 6px 18px rgba(0,0,0,0.16); z-index: 30; }
+  .searchresults[hidden] { display: none; }
+  .searchresults .srow { display: flex; align-items: center; gap: 6px;
+    border-top: 1px solid var(--border); padding: 2px 6px 2px 0; }
+  .searchresults .srow:first-child { border-top: none; }
+  .searchresults .srow:hover { background: var(--control-bg, var(--border)); }
+  .searchresults .srowmain { display: block; flex: 1 1 auto; min-width: 0; text-align: left;
+    font: inherit; background: transparent; border: none; padding: 6px 6px 6px 12px;
+    cursor: pointer; color: var(--fg); }
+  /* a text result's click IS parse-straight-away now (4 Sep) -- the
+     "Parsing..." state shows on this same button, not a second one */
+  .searchresults .srowmain:disabled { opacity: 0.6; cursor: default; }
+  .searchresults .stitle { font-weight: 600; }
+  .searchresults .smeta { display: block; font-size: 0.78rem; color: var(--fg-dim); margin-top: 2px; }
+  .searchresults .sempty, .searchresults .serror { padding: 10px 12px; font-size: 0.85rem; color: var(--fg-dim); }
+  .searchresults .serror { color: var(--bad, #b3382c); }
+  .searchresults .snote { padding: 6px 12px; font-size: 0.78rem; color: var(--fg-dim); border-top: 1px solid var(--border); }
+
+  /* The file picker a multi-file archive.org item opens IN PLACE, so
+     "search it, parse it" never has to leave the Library (Osca, 4 Sep:
+     "I want to search and just add to library (parse it) without the
+     audio"). It lives inside a .snote, so it inherits its padding and
+     rule-off-the-top; these only lay the three parts out on one line. */
+  .searchresults .schoose { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .searchresults .schooselabel { flex: 0 0 auto; }
+  .searchresults .schoosesel { flex: 1 1 12rem; min-width: 0; font: inherit; font-size: 0.78rem;
+    padding: 3px 6px; background: var(--control-bg, var(--bg)); color: var(--fg);
+    border: 1px solid var(--border); border-radius: 4px; }
+  .searchresults .schoosego { flex: 0 0 auto; font: inherit; font-size: 0.78rem; padding: 3px 10px;
+    background: var(--control-bg, var(--border)); color: var(--fg);
+    border: 1px solid var(--border); border-radius: 4px; cursor: pointer; }
+  .searchresults .schoosego:hover:not(:disabled) { background: var(--border); }
+  .searchresults .schoosego:disabled { opacity: 0.6; cursor: default; }
+
+  /* ---- ingest progress (PROMPTS/reader-ingest-progress.md, READER_FIRST.md
+     "Library"): a book on the shelf from the moment its ingest starts. The
+     whole entry is greyed over by a veil; --ingest (0..100%) is how far the
+     loading bar has come, and the veil is clipped away left -> right by
+     exactly that much, so the un-greyed region IS the progress. The step
+     label sits under the title. Failed: the veil turns red-ish, shows the
+     last log line and a Retry. All of it is appended AFTER the shared base
+     row (test_library_rail.py compares only `const base`). ---- */
+  #shelf .railrow.loading { position: relative; overflow: hidden; cursor: default; --ingest: 0%; }
+  #shelf .railrow.loading:hover { background: transparent; }
+  #shelf .railrow.loading .railrow-title, #shelf .railrow.loading .railrow-by { opacity: 0.95; }
+  .ingest-step { display: block; margin-top: 3px; font-size: 0.76rem; color: var(--accent); font-weight: 600;
+    letter-spacing: 0.02em; }
+  .ingest-veil { position: absolute; inset: 0; pointer-events: none;
+    background: color-mix(in srgb, var(--fg-dim) 22%, var(--panel-bg)); opacity: 0.82;
+    backdrop-filter: grayscale(1); -webkit-backdrop-filter: grayscale(1);
+    clip-path: inset(0 0 0 var(--ingest)); transition: clip-path 0.9s linear; }
+  /* the bar's leading edge: a 3-px accent line at the boundary */
+  .ingest-veil::before { content: ""; position: absolute; top: 0; bottom: 0; left: var(--ingest); width: 3px;
+    background: var(--accent); opacity: 0.9; transition: left 0.9s linear; }
+  .ingest-veil.pulse::before { animation: ingestpulse 1.6s ease-in-out infinite; }
+  @keyframes ingestpulse { 0%, 100% { opacity: 0.9; } 50% { opacity: 0.35; } }
+  /* failed: the veil stops moving, tints, and becomes interactive (Retry) */
+  #shelf .railrow.loading.failed { --ingest: 0%; }
+  .ingest-veil.failed { pointer-events: auto; opacity: 1; clip-path: none; backdrop-filter: none; -webkit-backdrop-filter: none;
+    background: color-mix(in srgb, var(--bad) 14%, var(--panel-bg)); display: flex; flex-direction: column;
+    justify-content: center; gap: 6px; padding: 8px 12px; transition: none; }
+  .ingest-veil.failed::before { display: none; }
+  .ingest-fail-title { font-size: 0.8rem; font-weight: 600; color: var(--bad); }
+  .ingest-fail-line { font-size: 0.74rem; color: var(--fg-dim); font-family: ui-monospace, Menlo, monospace;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ingest-retry { align-self: flex-start; font: inherit; font-size: 0.8rem; min-height: 28px; padding: 3px 12px;
+    border-radius: var(--r-1); border: 1px solid var(--bad); color: var(--bad); background: var(--panel-bg); cursor: pointer; }
+  .ingest-retry:hover { background: var(--control-bg); }
+  /* the sidebar while it runs: no spinner. The shelf shows the bar, and the
+     file's own dot turns red the moment studio picks it up -- which is what
+     the picture draws and all it draws. */
+
+  /* ---- on this device (PROMPTS/phone-book-import.md): the books imported
+     from a bundle .zip and held in the Cache API. These ARE shelf rows -- the
+     same .railrow, in their own section above the bench's shelf -- so nothing
+     in the shared .rail block (byte-identical with studio's,
+     test_library_rail.py) is touched; what is added is the import control, a
+     per-book remove, and the line that says how much room is left. ---- */
+  .devicehead { grid-column: 1 / -1; display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap;
+    padding: 0 16px 8px; }
+  .devicehead h2 { margin: 0; padding: 0; flex: 1 1 auto; font-size: 0.72rem; font-weight: 600;
+    letter-spacing: 0.09em; text-transform: uppercase; color: var(--fg-dim); }
+  #importBtn { font: inherit; font-size: 0.85rem; min-height: 36px; padding: 4px 14px; border-radius: var(--r-1);
+    border: 1px solid var(--border); background: var(--panel-bg); color: var(--fg); cursor: pointer; }
+  #importBtn:hover { background: var(--control-bg); }
+  #importBtn[disabled] { opacity: 0.5; cursor: default; }
+  .storageline { grid-column: 1 / -1; padding: 0 16px 10px; font-size: 0.76rem; color: var(--fg-dim); }
+  .railrow.device { position: relative; }
+  .rmbook { position: absolute; top: 6px; right: 6px; min-width: 30px; min-height: 30px; border-radius: var(--r-1);
+    border: 1px solid transparent; background: transparent; color: var(--fg-dim); font: inherit;
+    font-size: 0.95rem; line-height: 1; cursor: pointer; }
+  .rmbook:hover, .rmbook:focus { border-color: var(--border); background: var(--bg); color: var(--bad); outline: none; }
+  .importerr { grid-column: 1 / -1; margin: 0 16px 10px; padding: 8px 12px; border-radius: var(--r-1);
+    border: 1px solid var(--bad); color: var(--bad); font-size: 0.8rem; background: var(--panel-bg); }
+  .importerr b { display: block; margin-bottom: 3px; }
+  .importerr ul { margin: 4px 0 0; padding-left: 18px; }
+
+  /* ---- the phone (PROMPTS/reader-mobile.md step 3): the shelf as a grid of
+     covers, the sources sidebar as a sheet, the menu as a bottom sheet from a
+     long-press. Same 640 px breakpoint as reader.html; nothing above this
+     line changes, and the shared .rail block stays byte-identical with
+     studio's (test_library_rail.py) -- these are overrides under the media
+     query, not edits to it. ---- */
+  :root {
+    --safe-top: env(safe-area-inset-top, 0px);
+    --safe-bottom: env(safe-area-inset-bottom, 0px);
+    --safe-left: env(safe-area-inset-left, 0px);
+    --safe-right: env(safe-area-inset-right, 0px);
+  }
+  body { height: 100dvh; }
+  #sourcesToggle { display: none; }
+  #sourcesScrim { display: none; }
+  @media (max-width: 640px), (max-height: 500px) {
+    header {
+      padding: calc(8px + var(--safe-top)) calc(10px + var(--safe-right)) 8px calc(10px + var(--safe-left));
+      gap: 6px;
+    }
+    header h1 { font-size: 1rem; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    header button, header .headerLink { min-height: 44px; min-width: 44px; border-radius: var(--r-2); }
+    #sourcesToggle { display: inline-flex; }
+
+    /* the sources sidebar as a sheet from the left */
+    .srcbar, .srcbar.hidden {
+      display: flex; position: fixed; z-index: 50; top: 0; bottom: 0; left: 0;
+      width: min(85vw, 320px); flex: none;
+      padding-top: calc(14px + var(--safe-top)); padding-bottom: var(--safe-bottom); padding-left: var(--safe-left);
+      box-shadow: 0 0 24px rgba(0,0,0,0.25);
+      transform: translateX(-105%); transition: transform 0.2s ease-out;
+    }
+    .srcbar.sheet-open { transform: translateX(0); }
+    .src { min-height: 44px; padding: 8px 16px; }
+    .src-name { font-size: 1rem; }
+    .srcfolder { min-height: 44px; }
+    #sourcesScrim {
+      display: block; position: fixed; inset: 0; z-index: 49;
+      background: rgba(0,0,0,0.35); opacity: 0; pointer-events: none; transition: opacity 0.2s ease-out;
+    }
+    #sourcesScrim.on { opacity: 1; pointer-events: auto; }
+
+    /* the shelf as a grid of covers */
+    #shelf.rail {
+      display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 14px;
+      align-content: start;
+      padding: 12px calc(14px + var(--safe-right)) calc(20px + var(--safe-bottom)) calc(14px + var(--safe-left));
+      -webkit-overflow-scrolling: touch;
+    }
+    #shelf.rail h2, #shelf .empty { grid-column: 1 / -1; padding: 0 2px; }
+    #shelf .railrow {
+      max-width: none; aspect-ratio: 2 / 3; min-height: 44px;
+      display: flex; flex-direction: column; justify-content: flex-end; gap: 2px;
+      padding: 12px 12px 12px 14px;
+      border: 1px solid var(--border); border-left: 6px solid var(--accent); border-radius: var(--r-2);
+      background: var(--panel-bg); box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+      -webkit-touch-callout: none; user-select: none; -webkit-user-select: none;
+    }
+    #shelf .railrow-title { white-space: normal; font-size: 1rem; line-height: 1.25;
+      display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; }
+    #shelf .railrow-by { white-space: normal; }
+    #shelf .railrow-status { margin-top: 6px; }
+
+    /* the long-press menu as a bottom sheet */
+    .menu {
+      left: calc(12px + var(--safe-left)) !important; right: calc(12px + var(--safe-right)) !important;
+      top: auto !important; bottom: calc(12px + var(--safe-bottom)) !important;
+      min-width: 0; padding: 8px; border-radius: var(--r-3); box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+    }
+    .menu button { min-height: 48px; font-size: 1.05rem; text-align: center; border-radius: var(--r-2); }
+    .menu hr { margin: 6px 0; }
+    #note { padding-left: calc(16px + var(--safe-left)); padding-right: calc(16px + var(--safe-right)); }
+
+    /* Retry is a thumb target */
+    .ingest-step { margin-top: 6px; font-size: 0.86rem; }
+    .ingest-veil.failed { justify-content: flex-end; padding: 12px; }
+    .ingest-fail-line { white-space: normal; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; }
+    .ingest-retry { min-height: 44px; min-width: 44px; padding: 8px 18px; font-size: 1rem; border-radius: var(--r-2); }
+
+    /* the phone shelf is the bench's own control -- there is no bench on a
+       phone, and paintContext() has already hidden it; this is the belt to
+       that braces, for a narrow window on the Mac */
+    .phonebar { display: none; }
+
+    /* on this device: thumb-sized import and remove */
+    .devicehead, .storageline { padding-left: calc(2px + var(--safe-left)); padding-right: calc(2px + var(--safe-right)); }
+    #importBtn { min-height: 44px; font-size: 1rem; padding: 8px 18px; border-radius: var(--r-2); }
+    .rmbook { min-width: 44px; min-height: 44px; font-size: 1.1rem; top: 4px; right: 4px;
+      border-color: var(--border); background: var(--bg); }
+    .importerr { margin-left: 2px; margin-right: 2px; font-size: 0.85rem; }
+  }

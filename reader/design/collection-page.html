@@ -1,0 +1,199 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Frank — the collection page</title>
+<link rel="stylesheet" href="tokens.css">
+<link rel="stylesheet" href="wheel.css">
+<link rel="stylesheet" href="bar.css">
+<style>
+/* ================= THE COLLECTION PAGE — now only the PANE =================
+   The barrel, the ribbon, the detent and the bar have all left this file for
+   wheel.css / wheel.js / bar.css / bar.js, and every measured constant for
+   tokens.css. What is left here is what is genuinely this pane's: two columns,
+   which one scrolls, and where the reading line sits. The app links the same
+   four files, so there is one implementation rather than a bench and a copy
+   of it -- which is the trap PLAN.md already names.
+
+   Measured off letters.stevejobsarchive.com at 1440 and 2000, both confirmed:
+     text column   left 50.6vw, width calc(71px + 31.4vw)  728/524 · 1009/700
+     line-height   1.481, tracking -0.02em
+     paragraph gap exactly one line
+     the frame does not scroll: ONE scroller, and it is the text
+   Two deliberate departures, both asked for: the type is the reading page's
+   size rather than Letters' smaller one, since a reader should not shrink
+   because you changed how you navigate; and the wheel stays beside the text
+   rather than living on its own landing.                                  */
+:root{
+  --whl-l: 20vw; --whl-w: 17vw;
+  --rgap: 13vw;                             /* Letters' own right margin   */
+  --col-w: min(24rem, calc(100vw - var(--whl-l) - var(--whl-w) - var(--rgap) - 3rem));
+  --col-l: calc(100vw - var(--rgap) - var(--col-w));
+}
+html,body{ height:100%; overflow:hidden; }  /* THE FRAME NEVER SCROLLS */
+body{ margin:0; background:var(--ground); color:var(--ink);
+      font-family:var(--serif); font-size:1rem; }
+.wheel{ left:var(--whl-l); width:var(--whl-w); clip-path:inset(0 0 0 0); }
+
+/* the piece: THE ONLY SCROLLER IN THE DOCUMENT */
+.scroll{ position:fixed; inset:0; overflow-y:scroll; overscroll-behavior:contain;
+         scrollbar-width:none; z-index:10; }
+.scroll::-webkit-scrollbar{ display:none; }
+.piece{ margin-left:var(--col-l); width:var(--col-w);
+        padding-top:var(--start); padding-bottom:60vh; }
+.piece .sec + .sec{ margin-top:30vh; }
+.piece .sec .head{ font-family:var(--ui); font-size:.42rem; letter-spacing:.14em;
+        text-transform:uppercase; color:var(--dim); margin:0 0 1.6em; }
+.piece p{ font-size:1rem; line-height:1.481; letter-spacing:-.02em;
+          margin:0; text-align:start; text-indent:0; }
+.piece p + p{ margin-top:1.481em; }          /* exactly one line, as theirs */
+.piece p.line + p.line{ margin-top:0; }      /* a run of verse is lines     */
+.piece p.line.stanza{ margin-top:1.481em; }
+.piece p.sp{ font-family:var(--ui); font-size:.5rem; letter-spacing:.07em;
+        text-transform:uppercase; color:var(--dim);
+        margin-top:2.4em; margin-bottom:.55em; }
+.piece p.dir{ color:var(--dim); font-style:italic; }
+.piece .booktitle{ font-size:1.9rem; line-height:1.12; font-weight:400;
+        letter-spacing:-.022em; margin:0; }
+.piece .byline{ margin-top:1.1em; color:var(--dim); font-size:1rem; }
+
+.rail{ position:fixed; left:1.04vw; bottom:6.7vh; z-index:40;
+       font-family:var(--ui); font-size:.44rem; letter-spacing:.06em; }
+.rail a{ display:block; color:var(--dim); text-decoration:none; margin-top:.6em; }
+.rail a:hover{ color:var(--ink); }
+.rail .book{ display:block; color:var(--dim); margin-bottom:1.2em;
+        font-size:.42rem; letter-spacing:.14em; text-transform:uppercase; }
+.bench{ position:fixed; left:14px; top:40px; z-index:50; display:flex; gap:6px;
+  flex-wrap:wrap; max-width:calc(100vw - 28px);
+  align-items:center; font-family:var(--ui); font-size:11px; color:#b7b3a8; }
+.bench button{ font:inherit; color:#6f6b61; background:#fff; border:1px solid #e4e1d8;
+  border-radius:11px; padding:3px 9px; cursor:pointer; }
+.bench button[aria-pressed="true"]{ background:#17150f; color:#fff; border-color:#17150f; }
+.bench .sep{ color:#cbc7bc; }
+@media (max-width: 860px){
+  :root{ --col-l:6vw; --col-w:88vw; --whl-l:6vw; --whl-w:88vw; --start:26vh; }
+}
+</style>
+
+<div class="scroll" id="scroll"><article class="piece" id="piece"></article></div>
+<div id="wheel"></div>
+
+<div class="rail">
+  <span class="book" id="bookmark"></span>
+  <a href="reading-page.html">← the reading page</a>
+  <a href="branch-map.html">branch map →</a>
+  <a href="shell.html">the shell →</a>
+</div>
+
+<div class="bench">
+  <span>collection view</span>
+  <button id="open">open book…</button>
+  <span id="loaded"></span>
+  <span class="sep">· turn ·</span>
+  <button data-turn="silk">silk</button><button data-turn="ribbon">ribbon</button
+  ><button data-turn="paper">paper</button><button data-turn="leaf">leaf</button
+  ><button data-turn="none">none</button>
+  <span class="sep">· force ·</span>
+  <button data-amp="0">light</button><button data-amp="1">medium</button
+  ><button data-amp="2">strong</button>
+  <span class="sep">S to shove it</span>
+</div>
+<input type="file" id="file" accept=".json,application/json" hidden>
+
+<script src="book-data.js"></script>
+<script src="book.js"></script>
+<script src="wheel.js"></script>
+<script src="../keys.js"></script>
+<script src="bar.js"></script>
+<script>
+const $=id=>document.getElementById(id),
+      esc=s=>String(s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+const scroll=$("scroll"), piece=$("piece");
+let CUR=null, SECS=[], TOPS=[];
+
+/* THE ONE PLACE THE WHEEL MOVES THE TEXT, and still only on a click. */
+const wheel = Wheel.mount({ el: $("wheel"), onOpen: i=>{
+  if(!SECS[i]) return;
+  scroll.scrollTo({ top: SECS[i].offsetTop - readingLine(), behavior:"smooth" });
+}});
+
+const readingLine = () => parseFloat(getComputedStyle(piece).paddingTop);
+
+function blocksHTML(ch){
+  if(ch.titlepage)
+    return '<h1 class="booktitle">'+esc(ch.t)+'</h1>'
+         + (ch.n?'<p class="byline">'+esc(ch.n)+'</p>':'');
+  let h='', lastStanza=null;
+  (ch.blocks||[]).forEach(b=>{
+    if(b.r==="sp"){ h+='<p class="sp">'+esc(b.t)+'</p>'; lastStanza=null; return; }
+    if(b.r==="dir"){ h+='<p class="dir">'+esc(b.t)+'</p>'; return; }
+    const isLine = b.st!==undefined && b.st!==null;
+    const brk = isLine && lastStanza!==null && b.st!==lastStanza;
+    h+='<p class="'+(isLine?"line":"prose")+(brk?" stanza":"")+'">'+esc(b.t)+'</p>';
+    lastStanza = isLine ? b.st : null;
+  });
+  return h;
+}
+
+function render(BOOK){
+  const items=[{titlepage:true, t:BOOK.title||"", n:BOOK.author||""}].concat(BOOK.chapters);
+  CUR = Object.assign({}, BOOK, {items});
+  $("bookmark").textContent = (BOOK.title||"") + (BOOK.author? " · "+BOOK.author : "");
+  wheel.setItems(items.map(ch=>({ t: ch.t || ch.n || "—",
+                                  s: (ch.n && ch.t) ? ch.n : "" })));
+  piece.innerHTML = items.map((ch,i)=>
+    '<section class="sec" data-i="'+i+'">'
+    + (ch.titlepage ? '' : '<p class="head">'+esc([ch.n,ch.t].filter(Boolean).join(" · "))+'</p>')
+    + blocksHTML(ch) + '</section>').join("");
+  SECS=[...piece.querySelectorAll(".sec")];
+  scroll.scrollTop=0;
+  requestAnimationFrame(()=>{ measure(); track(); });
+  document.title=(BOOK.title||"a book")+" — the collection page";
+}
+function measure(){ TOPS = SECS.map(el=>el.offsetTop); }
+
+/* WHERE THE READING IS, AS A FRACTION -- and it is the fraction, not the
+   index, that makes the wheel glide: it is between two names exactly when
+   the text is between two chapters. */
+function track(){
+  if(!SECS.length) return;
+  const line = scroll.scrollTop + readingLine();
+  let i=0; while(i+1<TOPS.length && TOPS[i+1]<=line) i++;
+  const a=TOPS[i], b=(i+1<TOPS.length)?TOPS[i+1]:a+SECS[i].offsetHeight;
+  const f=b>a ? Math.min(1,Math.max(0,(line-a)/(b-a))) : 0;
+  wheel.follow(i+f);
+}
+scroll.addEventListener("scroll", track, {passive:true});
+addEventListener("resize", ()=>{ measure(); track(); });
+
+function paint(){
+  document.querySelectorAll(".bench [data-turn]").forEach(x=>
+    x.setAttribute("aria-pressed", x.dataset.turn===wheel.mode()));
+  document.querySelectorAll(".bench [data-amp]").forEach(x=>
+    x.setAttribute("aria-pressed", +x.dataset.amp===wheel.amp()));
+}
+document.querySelectorAll(".bench [data-turn]").forEach(b=>
+  b.onclick=()=>{ wheel.mode(b.dataset.turn); paint(); });
+document.querySelectorAll(".bench [data-amp]").forEach(b=>
+  b.onclick=()=>{ wheel.amp(+b.dataset.amp); paint(); });
+paint();
+
+/* the picker is book.js now, and so is the cap -- the two benches had
+   drifted to different caps without either knowing, which is the whole
+   argument for one file. */
+const note=$("loaded"), fileEl=$("file");
+$("open").onclick=()=>fileEl.click();
+function openFile(f){
+  if(!f) return;
+  note.textContent="reading…";
+  Book.open(f).then(b=>{
+    if(!b.chapters.length){ note.textContent="no chapters in that file"; return; }
+    render(b);
+    note.textContent = Book.summary(b, "pieces");
+  }).catch(e=>{ note.textContent="not a book.json ("+String(e.message).slice(0,40)+")"; });
+}
+fileEl.onchange=()=>openFile(fileEl.files&&fileEl.files[0]);
+
+Bar.mount({ placeholder:"Search your library", readingPane:scroll, onDrop:openFile });
+
+render(window.BOOK || {title:"(no book-data.js)", chapters:[]});
+note.textContent=((window.BOOK&&window.BOOK.chapters)||[]).length+" pieces from book-data.js";
+</script>

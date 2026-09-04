@@ -1,0 +1,130 @@
+/* reader/chrome.css -- THE SCROLLBAR, AND SO FAR NOTHING ELSE.
+ *
+ * Osca, 1 Sep: *"they look imported, not clean, minimal or natural -- I don't
+ * even need to see it always; just a slider down the side, no bar, or a very
+ * faint one."*
+ *
+ * ONE RULE IN ONE PLACE, AND IT IS THREE PAGES, NOT FOUR (corrected 4 Sep).
+ * `reader.html`, `library.html` and `settings.html` link this file -- the
+ * last is where the sidebar component's own scrollers live too -- so there
+ * is one description of what a scrollbar is here and none of the three can
+ * drift from it. It is deliberately a stylesheet of its own rather than
+ * three copies in three <style> blocks: copies are exactly the state the
+ * radius scale and the theme were rescued from.
+ *
+ * `studio/studio.html` DOES NOT LINK IT, and this file said it did from the
+ * day it was written (1 Sep) until now (module-split Stage 1,
+ * `PROMPTS/module-split-manifest.md` F.2:
+ * the same false sentence was copied into all three pages' <head>s). The
+ * page links exactly four things off this server -- `/reader/icon-192.png`,
+ * `/reader/settings.js`, `/reader/sidebar.css`, `/reader/sidebar.js` -- and
+ * carries no `::-webkit-scrollbar` rule of its own, so studio's
+ * scrollbars are the operating system's fat grey ones while every other
+ * surface has Osca's 3 px thumb. That is a real drift, not a comment bug,
+ * and it is studio's to close: one <link> plus the list in
+ * `studio/tests/test_ui.py` that pins the page's stylesheets. Until it does,
+ * this file says three and means three. `reader/tests/test_chrome_css.py`
+ * has only ever asserted the three (`PAGES`), which is why nothing was red.
+ *
+ * WHAT IT IS:
+ *   - no track, no trough, no gutter, no arrows, no border, no shadow;
+ *   - a thumb, 3 px wide, `--fg` at 15 %, fully rounded, 4 px in from the
+ *     edge of the box it belongs to;
+ *   - 5 px and 30 % while the pointer is on it;
+ *   - drawn ONLY while that box is being scrolled, and gone ~600 ms after
+ *     the last scroll (the reading column holds its thumb ~1.4 s, because
+ *     there the thumb is the book's position and not a hint about a list);
+ *   - NOTHING AT REST. A box that fits its content has no scrollbar at all,
+ *     `scrollbar-gutter: auto`, no reserved space, no ghost line down the
+ *     side of a short list.
+ *
+ * HOW "only while scrolling" IS DONE. CSS cannot see a scroll, so the one
+ * piece of behaviour lives in `settings.js` (`liveScrollbars`, beside
+ * `suppressNativeMenu`, which is there for the same reason: it is chrome for
+ * every page and settings.js is the file every page already loads). It puts
+ * `.sb-live` on the element that is scrolling and takes it off when the hand
+ * stops. Everything else on this page is cascade.
+ *
+ * WHY THE WEBKIT PSEUDO-ELEMENTS AND NOT `scrollbar-width`. Setting
+ * `scrollbar-width` makes Chromium ignore `::-webkit-scrollbar` entirely, so
+ * the two cannot both be written for the same engine: the standard
+ * properties are inside an `@supports not selector(::-webkit-scrollbar)` so
+ * an engine that has the pseudo-elements never sees them. macOS and the
+ * app's own WebView are both WebKit, so the pseudo-element branch is the one
+ * that runs here; the other exists so a Firefox is not left with a fat grey
+ * bar.
+ *
+ * THE ONE COST, said plainly: a styled `::-webkit-scrollbar` is not an
+ * overlay scrollbar, so a box that IS scrollable spends 11 px of its width
+ * on the (entirely transparent) scrollbar area. Nothing is drawn in it and a
+ * box that does not scroll spends nothing, but a box that becomes scrollable
+ * loses 11 px rather than having the thumb float over its text. The only way
+ * round that is a thumb we draw ourselves in JS over the content -- which is
+ * what the reader's bookmark track already does, and is a build rather than
+ * a stylesheet. reader/README.md §6 asks.
+ */
+
+:root {
+  /* `--fg` at 15 % and at 30 %. The fallback pair on the line above each
+     `color-mix` is for an engine without it, and is the light theme's `--fg`
+     (#0b0b0b). No dark override is written here and none is needed: `--fg`
+     is redeclared on `:root` by the dark theme, so the mix is recomputed
+     with it and the thumb is 15 % of whatever the text is. */
+  --sb-thumb: rgba(11, 11, 11, 0.15);
+  --sb-thumb: color-mix(in srgb, var(--fg, #0b0b0b) 15%, transparent);
+  --sb-thumb-hot: rgba(11, 11, 11, 0.30);
+  --sb-thumb-hot: color-mix(in srgb, var(--fg, #0b0b0b) 30%, transparent);
+  /* how long the thumb stays after the hand stops */
+  --sb-linger: 600ms;
+}
+
+/* No reserved space, anywhere, ever. Written out because a later page that
+   wants `stable` has to mean it. */
+* { scrollbar-gutter: auto; }
+
+/* ---------------------------------------------------------------- WebKit */
+
+/* the area itself: 4 px + 3 px + 4 px. Transparent, and that is the whole
+   "no bar" -- there is no track element left with a colour in it. */
+::-webkit-scrollbar { width: 11px; height: 11px; background: transparent; }
+::-webkit-scrollbar-track,
+::-webkit-scrollbar-track-piece,
+::-webkit-scrollbar-corner {
+  background: transparent; border: 0; box-shadow: none;
+}
+/* no arrows. `display: none` alone leaves some builds a 1 px stub */
+::-webkit-scrollbar-button { display: none; width: 0; height: 0; }
+
+/* THE THUMB. The 4 px inset is a transparent border with the background
+   clipped to the padding box, which is the only way a webkit thumb can be
+   narrower than its area. Transparent at rest: the element is there, so a
+   drag still works the moment the pointer finds it, and nothing is painted. */
+::-webkit-scrollbar-thumb {
+  background-color: transparent;
+  border: 4px solid transparent;
+  background-clip: padding-box;
+  border-radius: var(--r-pill, 999px);
+  transition: background-color 220ms linear;
+}
+/* while the box is being scrolled -- and for `--sb-linger` after it, which is
+   how long settings.js leaves the class on */
+.sb-live::-webkit-scrollbar-thumb { background-color: var(--sb-thumb); }
+/* under the pointer: 5 px and 30 %, whether or not anything is scrolling */
+::-webkit-scrollbar-thumb:hover,
+::-webkit-scrollbar-thumb:active {
+  background-color: var(--sb-thumb-hot);
+  border-width: 3px;
+}
+
+/* THE READING COLUMN KEEPS IT A BEAT LONGER. It is the book's position, not
+   a hint that a list is longer than its box, so it is allowed to be there
+   while the eye comes back to it. The number is settings.js's; this is the
+   fade, which is slower to match. */
+.paneReading.sb-live::-webkit-scrollbar-thumb,
+#panes.sb-live::-webkit-scrollbar-thumb { transition-duration: 400ms; }
+
+/* ------------------------------------------- the engines without the above */
+@supports not selector(::-webkit-scrollbar) {
+  * { scrollbar-width: thin; scrollbar-color: transparent transparent; }
+  .sb-live { scrollbar-color: var(--sb-thumb) transparent; }
+}

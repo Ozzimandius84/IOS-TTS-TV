@@ -1,0 +1,1525 @@
+  :root {
+    --bg: #fcfcfb;
+  /* ---- THE RADIUS SCALE (Osca, 30 Aug: "all boxes across all pages are just
+     the wrong shape, wrong curve, not modern enough").
+     Four files had grown ten different radii between them -- 3, 4, 6, 7, 8,
+     10, 12, 14, 50% and 999px -- assigned per element as each was written, so
+     no two boxes on a screen agreed and none of them agreed with the next
+     screen. These four steps are the whole vocabulary now, and they are one
+     step larger at every level than what they replace, which is most of what
+     "modern" means here. A box picks the step for its ROLE, not its size:
+       --r-0  a mark on running text (the word, the sentence highlight)
+       --r-1  a control you press (button, input, select, small chip)
+       --r-2  a surface that holds things (card, section, panel, header button)
+       --r-3  a surface that floats over another (sheet, popup, menu)
+     Anything outside these four is a deliberate exception and says why. ---- */
+  --r-0: 5px;
+  --r-1: 11px;
+  --r-2: 15px;
+  --r-3: 22px;
+  --r-pill: 999px;
+
+  /* ---- THE UI FONT (Osca, 30 Aug: "this one is old and ugly ... I mean UI
+     font, universally"). Everything on these pages was Georgia, because the
+     BOOK is Georgia and the body rule was written once for both. But the
+     furniture is not the book: a serif on a 12px button label is what makes
+     an app look like a 2009 CMS. The reading text keeps its serif -- it sets
+     `--read-family` explicitly on `.paneReading`, `.ow-word` and `#owContext`
+     and is unaffected by this -- and the reader's own font setting still
+     governs it. This token is the chrome only: header, bars, buttons, the
+     sidebar, popups, the library, settings.
+     System-first, because the point is to look like the Mac it runs on. ---- */
+  --ui-font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI Variable Text",
+             "Segoe UI", Inter, system-ui, "Helvetica Neue", Arial, sans-serif;
+
+    --fg: #0b0b0b;
+    --fg-dim: #52514f;
+    --accent: #832f2b;
+    /* The pivot letter in one-word mode, and nothing else. It is red because
+       it is the fixation point: the eye is told where to land before it can
+       read anything, and no other ink on the stage is allowed that job. It is
+       NOT --accent -- the accent is a brown, it sits four percent away from
+       the body text, and the letter simply disappeared into the word. */
+    --pivot: #c1121f;
+    /* One-word mode's ledges. --border is tuned for a panel edge against a
+       panel: on the open stage, one hairline in the middle of an empty field,
+       it reads as nothing at all. */
+    --ow-rule: #8c8a81;
+    --sentence-bg: #f2f1ed;
+    /* THE SPOKEN WORD IS A BOX, AND THE BOX IS THE APP'S DARK (Osca, 31 Aug).
+       Never yellow: the cream fill that was here read as a highlighter pen
+       over the page. It is the tab strip's own selected-tab colour --
+       `desktop/src/tabs.html`'s `--sel: var(--ink)` / `--sel-ink: var(--tab)`
+       -- which is why the two surfaces agree without either importing the
+       other: dark block, white word in light; white block, dark word in dark.
+       ONE WORD, never the sentence: `.sentence.now` keeps its faint tint and
+       gains no box. */
+    --word-bg: #0b0b0b;
+    --word-fg: #fcfcfb;
+    --border: #e4e3e0;
+    --panel-bg: #ffffff;
+    --link: #832f2b;
+    --control-bg: #f5f5f3;
+    /* THE PICKED CHAPTER'S BLOCK (studio-sidebar Part 2; the picture's own
+       #e6e4df). A surface the palette had no token for -- not the panel, not
+       a control -- so it gets one rather than borrowing a colour that means
+       something else. `reader/sidebar.css` falls back to --control-bg, which
+       in this theme is a tint too faint to say "three chapters are chosen",
+       and in dark is the panel itself. */
+    --pick-bg: #e6e4df;
+    --ok: #3f7a45;
+    --find-edge: #4a7fb5;
+    --find-current-bg: #cfe2f5;
+  }
+  [data-theme="dark"] {
+    --bg: #131316;
+    --fg: #e8e7e6;
+    --fg-dim: #98979b;
+    --accent: #c9c4bb;
+    --pivot: #ff6b5b;
+    --ow-rule: #6b6b76;
+    --sentence-bg: #212127;
+    --word-bg: #e8e7e6;
+    --word-fg: #131316;
+    --border: #2c2c32;
+    --panel-bg: #1a1a1f;
+    --link: #c9c4bb;
+    --control-bg: #1a1a1f;
+    /* the same role, this theme's own: a block that lifts off the panel.
+       Dark's --control-bg IS --panel-bg, so a pick painted in it would be
+       invisible -- the defect this token exists to make impossible. */
+    --pick-bg: #2c2c32;
+    --ok: #7fc08a;
+    --find-edge: #6d9fc9;
+    --find-current-bg: #33506e;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #131316;
+      --fg: #e8e7e6;
+      --fg-dim: #98979b;
+      --accent: #c9c4bb;
+      --pivot: #ff6b5b;
+      --ow-rule: #6b6b76;
+      --sentence-bg: #212127;
+      --word-bg: #e8e7e6;
+      --word-fg: #131316;
+      --border: #2c2c32;
+      --panel-bg: #1a1a1f;
+      --link: #c9c4bb;
+      --control-bg: #1a1a1f;
+      --pick-bg: #2c2c32;
+      --ok: #7fc08a;
+    --find-edge: #6d9fc9;
+    --find-current-bg: #33506e;
+    }
+  }
+
+  /* The phone's notch / home indicator (PROMPTS/reader-mobile.md step 1):
+     env() read once into variables so the header and the bottom bar consume
+     the same numbers -- and so a headless check can set them (env() itself
+     cannot be emulated; these can). 0 everywhere but a full-screen phone. */
+  :root {
+    --safe-top: env(safe-area-inset-top, 0px);
+    --safe-bottom: env(safe-area-inset-bottom, 0px);
+    --safe-left: env(safe-area-inset-left, 0px);
+    --safe-right: env(safe-area-inset-right, 0px);
+  }
+
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0;
+    background: var(--bg); color: var(--fg);
+    font-family: var(--ui-font);
+    height: 100%;
+  }
+  body {
+    height: 100vh;
+    height: 100dvh;   /* the visible height on a phone with Safari's bars in play; falls back to 100vh above */
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  header {
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; gap: 10px;
+    flex: 0 0 auto;
+  }
+  /* THE STRIP IS THE HEADER, and only in the app (desktop/README.md
+     `## Status`'s desktop-headless-chrome entry §6). The attribute is set by
+     one line of script, behind the METHOD guard, and written out here because
+     the UA's own `[hidden] { display: none }` loses to the `display: flex`
+     directly above it. In a plain browser and on the phone nothing ever sets
+     it and this header is exactly what it always was. */
+  header[hidden] { display: none !important; }
+
+  /* THE TEXT-SIZE POPOVER -- the strip's `a` tool, and the only surface this
+     page has ever had for a setting that already existed (Settings > Reading
+     owns the same `size` field). Not a new setting: one value, two doors. */
+  .sizeRow { display: flex; gap: 6px; align-items: stretch; }
+  .sizeRow button {
+    flex: 1 1 0; min-width: 40px; padding: 7px 4px;
+    border: 1px solid var(--border); border-radius: var(--r-2);
+    background: var(--panel-bg); color: var(--fg); font: inherit;
+    font-size: 0.82rem; cursor: pointer;
+  }
+  .sizeRow button:hover { background: var(--control-bg); }
+  .sizeRow button[aria-pressed="true"] {
+    background: var(--accent); color: var(--panel-bg); border-color: var(--accent);
+  }
+  header h1 {
+    margin: 0; font-size: 1.05rem; font-weight: 600; color: var(--fg);
+    flex: 1;
+  }
+  /* Two halves of the bar, each over the pane it names. `data-layout` is the
+     whole switch:
+       one     one half, the book and its chapter
+       synced  one half, both titles and ONE chapter -- the books are on the
+               same chapter, which is what synced means
+       split   both halves, each with its own title AND its own chapter,
+               laid out over its side. This is the case the item exists for:
+               when the sides have come apart is exactly when you need to be
+               told where each one is.
+     A title truncates from the end; THE CHAPTER NEVER DOES -- it is the half
+     that changes, and a bar that says "Eclogue I…" says nothing. So the title
+     is `flex: 0 1 auto` with an ellipsis and the chapter is `flex: 0 0 auto`
+     with none, and the room comes out of the title. */
+  .bookBar { display: flex; align-items: baseline; gap: 0; min-width: 0; }
+  .bookBar .bb-side {
+    display: flex; align-items: baseline; gap: 0.5em; min-width: 0;
+    flex: 1 1 0; overflow: hidden;
+  }
+  .bookBar[data-layout="split"] .bb-side + .bb-side { padding-left: 12px; }
+  .bookBar .bb-titles {
+    flex: 0 1 auto; min-width: 0;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .bookBar .bb-chapter {
+    flex: 0 0 auto; white-space: nowrap;
+    font-weight: 400; font-size: 0.92em; color: var(--fg-dim);
+  }
+  /* the separator Osca wrote the line with -- "title · author · chapter" --
+     and it belongs to the chapter's box so it cannot be left hanging when the
+     title is truncated away or the chapter is not there yet */
+  .bookBar .bb-side.sep .bb-chapter::before { content: "· "; opacity: 0.55; }
+  .bookBar .bb-chapter:empty { display: none; }
+  .bookBar .bb-side[hidden] { display: none; }
+  /* A hairline box around every icon in the bar is the single most dated
+     thing on these pages: five outlined squares in a row read as a toolbar
+     from 2012. The button is the icon; the surface only appears under the
+     pointer, which is also the only moment it means anything. */
+  header button, header .headerLink {
+    min-height: 40px; min-width: 40px;
+    border-radius: var(--r-1); border: 1px solid transparent;
+    background: transparent; color: var(--fg-dim);
+    font-size: 1rem; cursor: pointer;
+    display: inline-flex; align-items: center; justify-content: center;
+    text-decoration: none;
+    transition: background 0.14s, color 0.14s;
+  }
+  header button:hover, header .headerLink:hover {
+    background: var(--control-bg); color: var(--fg);
+  }
+  header button:active, header .headerLink:active { transform: scale(0.96); }
+  header button:focus-visible, header .headerLink:focus-visible {
+    outline: 2px solid var(--accent); outline-offset: 1px;
+  }
+  header button svg { display: block; }
+  /* The one-word button is the only red thing in the furniture, and it is red
+     for the same reason the pivot letter is: this is the mode where the eye
+     stops moving, and the door to it should be findable without reading. It
+     goes quiet (and becomes lines of text) once you are inside, because then
+     it is the way OUT and no longer the thing being offered. */
+  #viewToggle { color: var(--pivot); }
+  .ow-a {
+    font-family: var(--read-family, "Tiempos Text", Charter, "Iowan Old Style", "Source Serif 4", "Palatino Linotype", Georgia, serif);
+    font-size: 21px; line-height: 1; display: block;
+    /* a lowercase serif `a` sits on its baseline, so the optical centre of
+       the button is a couple of pixels below its box centre */
+    transform: translateY(-1px);
+  }
+  #viewToggle:hover { background: var(--control-bg); color: var(--pivot); }
+  #viewToggle[aria-pressed="true"] { color: var(--fg-dim); }
+  #viewToggle[aria-pressed="true"]:hover { color: var(--fg); }
+
+  /* ---- the chapter sidebar: reader/sidebar.js + sidebar.css (the component
+     studio embeds by URL). This file only sizes and hides it; the library
+     rail that used to live here moved to library.html (READER_FIRST.md:
+     "Reader -- one book"). ---- */
+  #sidebar { width: 236px; flex: 0 0 236px; }
+  #sidebar.hidden { display: none; }
+  #sidebarRight { width: 236px; flex: 0 0 236px; }
+  #sidebarRight.hidden, #sidebarRight[hidden] { display: none; }
+  /* the component draws its own edge on the left; on the right it needs the
+     other one, or the list floats away from the column it belongs to */
+  #sidebarRight .sb { border-right: none; border-left: 1px solid var(--border); }
+  .shell { flex: 1 1 auto; display: flex; min-height: 0; }
+  /* `position: relative` is the watermark's frame and nothing else's: `.main`
+     is the one box on this page that spans the text and does not scroll --
+     `.paneReading` inside it is the scroller -- so a child absolutely
+     positioned here is pinned to the top-left of the reading area for ever,
+     whatever the text does under it. */
+  .shell > .main { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; min-height: 0;
+    position: relative; }
+
+  /* ---- THE WATERMARK (Osca, 31 Aug evening: "What I actually want is a
+     watermark in the top left of the page, which appears WHEN the sidebar is
+     hidden -- the book, and the chapter below. I don't want it to move at all
+     as you scroll, it floats. Then remove it from the main top bar -- no info
+     there outside of tabs and buttons." And: "don't change the font -- same as
+     the text; the chapter name slightly lower, and in italics.")
+
+     It is INK, NOT A CONTROL. `pointer-events: none` so a click on it reaches
+     the text underneath, `user-select: none` so a drag across the page never
+     picks it up with the prose, and `aria-hidden` in the markup so a screen
+     reader is not told the book twice -- the chapter list and the document
+     title already say it.
+
+     THE BOOK'S OWN READING FACE, not the chrome's. Same `--read-family`
+     declaration as `.paneReading`, fallback stack included, so a book that
+     changes its reading font changes this with it and no second mechanism
+     exists to drift.
+
+     `PROMPTS/mock/chrome.html`'s sizes exactly (14px / 13px, a 7px gap); its
+     two greys are placeholders per `PROMPTS/mock/README.md` rule 4 and are
+     taken here from this page's own `--fg-dim`, the chapter one step fainter,
+     so the mark is right in the dark theme too -- named in the report as the
+     one permitted difference. ---- */
+  .watermark {
+    position: absolute; top: 18px; left: 34px; z-index: 3;
+    pointer-events: none; user-select: none; -webkit-user-select: none;
+    max-width: 16em;
+    color: var(--fg-dim);
+    font-family: var(--read-family, "Tiempos Text", Charter, "Iowan Old Style", "Source Serif 4", "Palatino Linotype", Georgia, serif);
+  }
+  /* the UA rule loses to nothing here, but say it anyway: every other hidden
+     box on this page had to */
+  .watermark[hidden] { display: none !important; }
+  .wm-title { font-size: 14px; line-height: 1.3; }
+  /* "the chapter name slightly lower, and in italics" */
+  .wm-chapter { font-size: 13px; line-height: 1.3; font-style: italic; margin-top: 7px; opacity: 0.72; }
+  /* a book whose chapter has no title says the book alone -- an empty box
+     would still pay the 7px */
+  .wm-chapter:empty { display: none; }
+  /* THE RIGHT PAGE'S MARK IS THE LEFT ONE MIRRORED, and nothing else about
+     it differs: same top, same face, same two sizes, same greys, the same
+     34px in from its own edge. `text-align: right` rather than a second set
+     of margins, so the two lines rag toward the spine the way a verso and a
+     recto running head do in a printed book. */
+  .watermark.right { left: auto; right: 34px; text-align: right; }
+
+  .badge {
+    display: inline-block; padding: 2px 8px; border-radius: var(--r-pill);
+    background: var(--control-bg); border: 1px solid var(--border);
+    margin: 2px 4px 2px 0; font-size: 0.8rem; color: var(--fg-dim);
+  }
+  .err {
+    color: var(--fg); background: var(--sentence-bg);
+    display: block; padding: 8px 10px; border-radius: var(--r-1);
+    border: 1px solid var(--border); margin: 4px 0; font-size: 0.82rem;
+  }
+  #dropNote {
+    padding: 6px 16px; flex: 0 0 auto; font-size: 0.85rem; color: var(--fg-dim);
+  }
+  #dropNote:empty { display: none; }
+
+  /* NOTHING ABOVE THE PANES (Osca, 1 Sep, third time: "REMOVE THAT BANNER
+     COMPLETELY"). The align banner's whole block used to live here -- a
+     button on every pair naming the two books and printing one of two
+     verdicts on their alignment, with a longer sentence one tap behind it
+     (the verdict words themselves are deliberately not written again
+     anywhere in this file, so a test can say "nowhere" and mean it). It is
+     gone, and so is `#globalStatus`, the box it was drawn into. The strip's
+     `⧉` tool is the only sync control there is, and sync state is shown
+     nowhere else on the page: not above the panes, not between them, not as
+     a chip inside one. What is over the text is the watermark, and only the
+     watermark. */
+  #installBar {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 16px; flex: 0 0 auto;
+    background: var(--panel-bg); border-bottom: 1px solid var(--border);
+    font-size: 0.85rem; color: var(--fg);
+  }
+  #installBar:empty { display: none; }
+  #installBar span { flex: 1; }
+  #installBar button {
+    min-height: 32px; padding: 0 12px; border-radius: var(--r-1);
+    border: 1px solid var(--border); background: var(--control-bg);
+    color: var(--fg); font-size: 0.82rem; cursor: pointer;
+  }
+  #installBar .dismiss { background: transparent; border-color: transparent; color: var(--fg-dim); }
+  .paneStatus { font-size: 0.8rem; padding: 4px 14px; flex: 0 0 auto; }
+  .paneStatus:empty { display: none; }
+
+  #panes {
+    flex: 1 1 auto;
+    display: flex;
+    min-height: 0;
+  }
+  @media (max-width: 760px) {
+    #panes { flex-direction: column; }
+  }
+
+  .pane {
+    flex: 1 1 0;
+    min-width: 0;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    border-right: 1px solid var(--border);
+  }
+  .pane:last-child { border-right: none; }
+  #panes.count-1 .pane { border-right: none; }
+  @media (max-width: 760px) {
+    .pane { border-right: none; border-bottom: 1px solid var(--border); }
+    .pane:last-child { border-bottom: none; }
+  }
+
+  .paneHeader { padding: 10px 14px 4px; flex: 0 0 auto; }
+  .paneHeader .bookTitle {
+    margin: 0; font-size: 0.95rem; font-weight: 600; color: var(--fg);
+  }
+  .paneHeader .chapterTitle {
+    margin-top: 2px; font-size: 0.82rem; color: var(--fg-dim);
+  }
+
+  /* The three reading settings (reader/settings.js, reader/settings.html).
+     Each is a custom property with the value this page has always used as
+     its fallback, and settings.js *removes* the property for a default
+     choice -- so an untouched reader paints exactly what it painted before,
+     on the desktop and on the phone, where two of the three differ. Size is
+     a multiplier of whichever base the layout is using, never an absolute
+     rem, so one choice is right on both. */
+  .paneReading {
+    flex: 1 1 auto; min-height: 0; overflow-y: auto;
+    padding: 6px 16px 20px;
+    font-family: var(--read-family, "Tiempos Text", Charter, "Iowan Old Style", "Source Serif 4", "Palatino Linotype", Georgia, serif);
+    line-height: var(--read-line, 1.75);
+    font-size: calc(1.02rem * var(--read-scale, 1));
+  }
+  .paneReading > * { max-width: 70ch; margin-left: auto; margin-right: auto; }
+  /* ONE BOOK IS CENTRED -- Osca, 30 August: "The reader, if only one book, the
+     text should be central." It was not, and the line above is why it looked
+     as though it should have been: `margin-left/right: auto` on
+     `.paneReading > *` is (0,1,0), and `p.body { margin: 0 0 1em }` below is
+     (0,1,1), so the SHORTHAND won and reset both side margins to zero. With
+     two books each pane is ~520 px and the 70ch column overflows it, so
+     nothing showed; with one book the pane is the whole 1044 px, the column is
+     571 px, and it sat pinned to the left with the second book's space held
+     open beside it -- which is exactly the sentence Osca wrote.
+     One rule, not a one-book mode: `#panes` lifts it to (1,1,0) so it beats
+     the shorthand. At two books it is a no-op until a pane is wider than the
+     column itself, and above that it does the same right thing. */
+  #panes .paneReading > * { margin-left: auto; margin-right: auto; }
+
+  /* THE COLUMN, AND IT IS THE TEXT THAT CENTRES (PROMPTS/reader-layout.md
+     step 2, 2 Sep; PLAN.md "The pane is the page"). Under `?layout=2` only.
+     The two rules above centre a 70ch BOX, and the complaint came back
+     because the text inside it does not fill it: ragged verse fills perhaps
+     half the measure, so the ink sat 119 px left of the pane's centre on
+     Osca's own screen (pane 854: box edge at (854 - 555) / 2 = 150, verse
+     316 of the 555). Under the flag the whole run of a chapter is ONE
+     `.column` (clearReading(), below the CSS), and the column is
+     `fit-content`: as wide as its own content and no wider, so what the auto
+     margins centre is the text's real extent. Prose fills the measure, so
+     fit-content IS the measure; verse is a block the width of its longest
+     line, centred, lines still ranged left -- how verse is set on a page,
+     and not the same thing as centring each line. It wraps the WHOLE run on
+     purpose: per-paragraph fit-content would centre every line on its own
+     and turn flush verse into centred verse. The measure stays em-based
+     (`ch`), so enlarging the type widens the column until it meets the pane
+     -- `min(measure, 100%)` -- and the margins close by themselves; no
+     breakpoint. `.paneReading > *` still reaches the column (harmless: the
+     three declarations below win on specificity) and no longer reaches the
+     paragraphs, which is exactly the change. */
+  html[data-layout="2"] #panes .paneReading > .column {
+    width: fit-content;
+    max-width: min(var(--measure, 70ch), 100%);
+    margin-inline: auto;
+  }
+  /* a direction between turns keeps the speech column's left edge -- the
+     same rule as `.paneReading > p.direction` below, one level down, because
+     under the flag the direction is the column's child, not the scroller's.
+     On the phone both variables are 0px, so this is 0 there too. */
+  html[data-layout="2"] #panes .paneReading > .column > p.direction {
+    padding-left: calc(var(--speaker-col) + var(--speaker-gap));
+  }
+
+  /* THE RUNNING HEAD IS THE PANE'S, AND IT IS STICKY (PROMPTS/reader-layout.md
+     step 3, 2 Sep; PLAN.md "The pane is the page"). Under `?layout=2` only.
+     Today's `.watermark` (below) is `position: absolute; top: 18px; left:
+     34px` against `.main`, with nothing insetting the column for it, so it
+     prints over line 1 the moment the pane is narrow enough for the text to
+     reach it (A5/A7 -- Osca's Split View with the sidebar closed); and there
+     are exactly two of them, `#watermark` and `#watermarkRight`, so a third
+     pane could not have one and the phone gets none at all.
+     Under the flag each pane's scroller carries ONE `.runHead`, made by
+     clearReading() as a sibling BEFORE the column -- so it is as wide as the
+     pane and ranged to the pane's own left edge, not the text's -- and it is
+     `position: sticky; top: 0`. Sticky occupies its own flow space, so the
+     first line starts beneath it and overlap is structurally impossible at
+     every width and in every pane; it pins while the text runs under it; and
+     it exists once per pane by construction, so two panes are two heads with
+     no `#watermarkRight` and no resize listener. It is what the platform
+     already does for a list's section header.
+     ONE LINE, ranged left, title then chapter, ellipsised -- the mock's own
+     numbers (.68rem, 1.25, the bullet between). The scroller's top padding
+     moves INTO the head under the flag (0 on the scroller, 7px on the head:
+     the mock's 1px plus the 6px it replaces -- the same 7 on the phone, whose
+     scroller had 8, rather than a second copy of the phone query for 2px),
+     so the head sits flush at the scrollport's top edge from the first pixel
+     and its box does not move by so much as the padding when the pane
+     scrolls -- the number the test asserts. It is INK, as the mark was: no
+     pointer events, no selection,
+     aria-hidden in the markup. The face is inherited from `.paneReading`, so
+     a book that changes its reading font changes this with it. */
+  html[data-layout="2"] #panes .paneReading { padding-top: 0; }
+  html[data-layout="2"] #panes .paneReading > .runHead {
+    position: sticky; top: 0; z-index: 3;
+    max-width: none; margin: 0 0 .35em; padding: 7px 0 4px;
+    background: linear-gradient(var(--bg) 78%, transparent);
+    color: var(--fg-dim);
+    font-size: .68rem; line-height: 1.25; white-space: nowrap;
+    text-align: left;   /* a running head is ranged left even where the verse is centred */
+    overflow: hidden; text-overflow: ellipsis;
+    pointer-events: none; user-select: none; -webkit-user-select: none;
+  }
+  html[data-layout="2"] #panes .paneReading > .runHead .rh-chapter { font-style: italic; opacity: .8; }
+  html[data-layout="2"] #panes .paneReading > .runHead .rh-chapter::before { content: " \2022  "; font-style: normal; opacity: .45; }
+  /* a chapter with no title says the book alone -- no orphaned bullet */
+  html[data-layout="2"] #panes .paneReading > .runHead .rh-chapter:empty { display: none; }
+  /* no book, no head: the box is in the tree (clearReading makes it with
+     every render, whatever is rendered) and painted nowhere */
+  html[data-layout="2"] #panes .paneReading > .runHead[hidden] { display: none !important; }
+  /* THE OLD MARKS ARE NOT RENDERED UNDER THE FLAG. Their code and their
+     rules are untouched -- paintWatermark() still runs and still sets
+     `hidden` exactly as it did, which is what keeps the A/B honest -- and
+     this one rule, live only with the flag on, is the whole difference. */
+  html[data-layout="2"] .watermark { display: none !important; }
+
+  p.body, p.verse-line, h3.heading, blockquote.quote, p.note, p.caption, p.speaker {
+    margin: 0 0 1em;
+  }
+  p.verse-line { margin-bottom: 0.15em; }
+  p.verse-line + p.body, p.body + p.verse-line { margin-top: 0.9em; }
+  h3.heading { font-size: 1.1rem; color: var(--accent); }
+  /* THE QUOTE IS A QUOTE, NOT AN ITALIC (parser/README.md `## Status`'s
+     typography entry §6, rule 3). The rule is the block; the slant was the
+     reader's own decision about a book it had not read. An italic quote now
+     says so itself with `style="i"` and gets its italic from the rules below;
+     a quote the book set upright is drawn upright. And there is deliberately
+     NO `indent` padding here: core/README.md says a renderer styles the block
+     from `kind`, and a quote that now also arrives with `indent >= 1` would be
+     indented twice if the rule and the level were both paid for. */
+  blockquote.quote {
+    margin-left: 0; padding-left: 12px; border-left: 3px solid var(--border);
+  }
+  p.note { font-size: 0.85rem; color: var(--fg-dim); font-style: italic; }
+  /* THE ARGUMENT -- a chapter's synopsis, the dashed run McCarthy puts under
+     the chapter number ("The kid — His mother dead — …"). It is ONE BLOCK,
+     never a paragraph per clause: the parser hands it over as one or more
+     `kind: "argument"` paragraphs and the reader sets the consecutive run as
+     a single element (renderChapter, `groupArguments`). Smaller than the
+     body, spaced away from the text it announces, and the dashes are the
+     author's -- nothing here removes or replaces one. */
+  .argument {
+    margin: 0 0 1.8em; font-size: 0.86em; line-height: 1.6;
+    color: var(--fg-dim); letter-spacing: 0.01em;
+  }
+  .argument .sentence + .sentence { margin-left: 0; }
+
+  /* ---- THE BOOK'S OWN FORM (parser/README.md `## Status` -> the typography
+     entry's §6, the `reader/` block, rules 1, 2 and 4).
+
+     TWO CARRIERS, ONE LOOK. A styled WORD is wrapped in real elements --
+     `<em>` / `<strong>` / `<span class="sc">` -- because the emphasis has to
+     go AROUND the word span without moving it (rule 1), and those need no
+     class of the reader's own. A styled PARAGRAPH cannot be wrapped in an
+     inline element, so it carries `data-style` and is styled in place
+     (rule 2); `.paraStyle` is the same carrier for a paragraph folded into
+     the argument block, which has no element of its own.
+
+     `data-style` holds `parser.segment.style_tag()`'s canonical spelling --
+     one per combination, in the order `b`, `i`, `sc` -- so `b`, `i`, `sc`,
+     `bi`, `bsc`, `isc`, `bisc` and nothing else. On that closed set the
+     substring match below is exact: no spelling containing `b` is a spelling
+     that should not be bold, `i` never occurs inside `sc`, and `sc` never
+     occurs inside `b` or `i`. */
+  .sc, [data-style*="sc"] { font-variant-caps: small-caps; }
+  [data-style*="i"] { font-style: italic; }
+  [data-style*="b"] { font-weight: 600; }
+  .paraStyle { display: inline; }
+
+  /* ---- drama and dialogue: laid out on Paragraph.role, never on kind
+     (core/README.md "Drama and dialogue"; parser-plays step 2 SS7 -- one verse
+     speech still mixes kind "body" and kind "verse", so kind cannot say where
+     a speech starts). A turn is one cue and everything it says: the cue hangs
+     in the left margin, the speech sits in a column clear of it, and a
+     direction that interrupts the speech (104 do in Act 2 Scene 2) stays
+     inside the turn, so the hanging label survives it. A book the parser
+     found no drama in carries role null on every paragraph and never reaches
+     any of these rules -- p.speaker outside a turn is exactly what it was. ---- */
+  .paneReading { --speaker-col: 8.5em; --speaker-gap: 0.5em; }
+  .turn {
+    display: grid;
+    grid-template-columns: var(--speaker-col) 1fr;
+    column-gap: var(--speaker-gap);
+    margin: 0 0 1em;
+  }
+  .turn > p.speaker {
+    grid-column: 1; grid-row: 1; align-self: start;
+    margin: 0;
+    font-size: 0.82em; letter-spacing: 0.03em;
+    text-transform: lowercase; font-variant-caps: small-caps;
+    color: var(--fg-dim);
+    text-align: right;          /* the label hugs the speech it names */
+    overflow-wrap: break-word;
+  }
+  .turn > .turn-body { grid-column: 2; grid-row: 1; min-width: 0; }
+  .turn > .turn-body > :last-child { margin-bottom: 0; }
+  p.direction {
+    margin: 0.35em 0 0.7em;
+    font-style: italic; color: var(--fg-dim);
+  }
+  /* a direction between turns keeps the speech column's left edge */
+  .paneReading > p.direction { padding-left: calc(var(--speaker-col) + var(--speaker-gap)); }
+
+  .sentence { border-radius: var(--r-0); }
+  .sentence.now { background: var(--sentence-bg); }
+
+  .word {
+    cursor: text;
+    border-radius: var(--r-0);
+    padding: 0 1px;
+  }
+  .word.now {
+    background: var(--word-bg);
+    color: var(--word-fg);
+    /* A box needs a little room, and the margin gives back exactly what the
+       padding takes, so the line does not re-wrap as the word moves. */
+    padding: 0 3px;
+    margin: 0 -2px;
+  }
+  .word:hover { text-decoration: underline; text-decoration-color: var(--fg-dim); }
+
+  /* ---- THE PRINTED CONTENTS IS A DOOR (Osca, 31 Aug evening) -------------
+     A line on a contents chapter whose text IS a chapter's title. It is
+     still the book's own text set in the book's own face -- no colour, no
+     rule, no chevron -- and what marks it is that the pointer changes and
+     the line underlines when the hand is over it, which is what a printed
+     contents page does under a finger anyway. `tocMark` is the page number's
+     place in a printed one and is empty here; only the cursor and the
+     underline say "this goes somewhere". */
+  .tocLine { cursor: pointer; }
+  .tocLine:hover { text-decoration: underline; text-decoration-color: var(--fg-dim);
+                   text-underline-offset: 3px; }
+  .tocLine:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  /* ---- ⌘F find (the bar's own chrome is below, with #findBar) ----
+     A hit is a RING, not a fill, so a word that is both a find hit and the
+     word the audio is on keeps its audio colour and gains an outline; only
+     the *current* match takes the fill, because that is the one the reader
+     was sent to. */
+  .word.find-hit { box-shadow: inset 0 0 0 2px var(--find-edge); }
+  .word.find-current { background: var(--find-current-bg); box-shadow: inset 0 0 0 2px var(--find-edge); }
+
+  #findBar {
+    flex: 0 0 auto;
+    display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+    padding: 8px calc(16px + var(--safe-right)) 8px calc(16px + var(--safe-left));
+    border-bottom: 1px solid var(--border);
+    background: var(--control-bg);
+  }
+  #findBar[hidden] { display: none; }
+  #findBar input[type="search"] {
+    flex: 1 1 14em; min-width: 8em; max-width: 30em; min-height: 36px;
+    padding: 4px 10px; font: inherit; font-size: 0.95rem;
+    border-radius: var(--r-1); border: 1px solid var(--border);
+    background: var(--panel-bg); color: var(--fg);
+    -webkit-appearance: none; appearance: none;
+  }
+  #findBar button {
+    min-height: 36px; min-width: 36px;
+    border-radius: var(--r-1); border: 1px solid var(--border);
+    background: var(--panel-bg); color: var(--fg);
+    font-size: 1rem; cursor: pointer;
+  }
+  #findBar .findCount {
+    color: var(--fg-dim); font-size: 0.82rem;
+    min-width: 5em; white-space: nowrap;
+    overflow: hidden; text-overflow: ellipsis;
+  }
+  #findBar .findScope {
+    display: inline-flex; align-items: center; gap: 5px;
+    color: var(--fg-dim); font-size: 0.82rem; white-space: nowrap; cursor: pointer;
+  }
+
+  /* Three columns, the outer two equal, so the transport is centred on the
+     PANE and not on whatever happens to be left over after the volume bar. */
+  .paneControls {
+    position: sticky; bottom: 0;
+    flex: 0 0 auto;
+    display: grid; grid-template-columns: 1fr auto 1fr; align-items: center;
+    gap: 10px;
+    padding: 7px 12px calc(7px + env(safe-area-inset-bottom));
+    background: var(--control-bg);
+    border-top: 1px solid var(--border);
+  }
+  .pcLeft  { display: flex; align-items: center; gap: 8px; min-width: 0; }
+  .pcMid   { display: flex; align-items: center; gap: 4px; }
+  .pcRight { display: flex; align-items: center; gap: 10px; justify-content: flex-end; min-width: 0; }
+
+  /* No box. Every one of these was an outlined square, which is the same
+     1000-buttons-in-a-row problem the header had. */
+  .paneControls button {
+    min-height: 38px; min-width: 38px;
+    border: 0; border-radius: var(--r-1);
+    background: transparent; color: var(--fg-dim);
+    cursor: pointer; display: inline-flex; align-items: center; justify-content: center;
+    transition: background 0.14s, color 0.14s;
+  }
+  .paneControls button:hover { background: var(--panel-bg); color: var(--fg); }
+  .paneControls button:active { transform: scale(0.94); }
+  .paneControls button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .paneControls button svg { display: block; }
+  /* play is the one that carries the pane, so it is the one with weight */
+  .paneControls .playBtn { color: var(--fg); min-width: 46px; }
+  .paneControls .muteBtn.active { color: var(--fg-dim); opacity: 0.55; }
+
+  /* The volume bar. Native `range` on macOS is a blue capsule that belongs to
+     no design; this is the same control with the platform's paint scraped
+     off. The track is the reader's own border colour, the filled part is not
+     drawn at all -- a thumb on a line reads as a level without a second
+     colour having to mean anything. */
+  .paneControls .volume {
+    -webkit-appearance: none; appearance: none;
+    flex: 0 1 116px; min-width: 56px; height: 20px;
+    background: transparent; cursor: pointer; margin: 0;
+  }
+  .paneControls .volume::-webkit-slider-runnable-track {
+    height: 3px; border-radius: 2px; background: var(--border);
+  }
+  .paneControls .volume::-moz-range-track {
+    height: 3px; border-radius: 2px; background: var(--border);
+  }
+  .paneControls .volume::-webkit-slider-thumb {
+    -webkit-appearance: none; appearance: none;
+    width: 13px; height: 13px; border-radius: 50%; margin-top: -5px;
+    background: var(--fg-dim); border: 0;
+  }
+  .paneControls .volume::-moz-range-thumb {
+    width: 13px; height: 13px; border-radius: 50%;
+    background: var(--fg-dim); border: 0;
+  }
+  .paneControls .volume:hover::-webkit-slider-thumb { background: var(--fg); }
+  .paneControls .volume:hover::-moz-range-thumb { background: var(--fg); }
+  .paneControls .volume:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .paneControls .muteBtn.active + .volume { opacity: 0.4; }
+
+  .paneControls .timeLabel {
+    font-size: 0.76rem; color: var(--fg-dim); white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* voiceui's pill is voiceui's -- the reader may set where its own furniture
+     ends (`--voiceui-pill-bottom`, its documented hook) and nothing else. So
+     the "voice on the right" of the bar is a RESERVED SLOT plus a bottom
+     offset that lands the pill inside it, on the last pane, where the pill
+     actually is. No rule here names a voiceui class. */
+  /* The voice control is a mic icon now (voiceui/app.js), not a labelled
+     capsule, so the slot it needs is a button's width rather than a sentence's. */
+  :root { --voiceui-pill-bottom: 12px; }
+  .pane:last-child .paneControls .pcRight,
+  #masterControls .pcRight { padding-right: 50px; }
+
+  /* ---- SYNCED / SPLIT ----------------------------------------------------
+     `data-panes` is on <html>, so every rule that depends on it is one
+     selector and nothing has to be toggled element by element. Synced is the
+     default and the common case: one listener, one bar. */
+  /* ONE SCROLLER WHEN SYNCED (Osca, 30 Aug: "when I resync, it doesn't go
+     back to one scroll bar ... the scroll bar, when synced, should not be in
+     the middle, it should be to the far right, as any large page, because
+     AGAIN, they're synced").
+     The columns used to scroll independently and be dragged into line by
+     script. This is better and it is less: `#panes` becomes the scroller and
+     each column simply grows to its own height, so the two move together
+     because THEY ARE ONE SCROLLER -- there is nothing left to keep in step,
+     and the bar lands at the right edge of the window where a long page's
+     bar belongs. Split puts the two scrollers back, which is the whole
+     difference between the modes stated in two rules. */
+  html[data-panes="synced"] #panes { overflow-y: auto; }
+  html[data-panes="synced"] .paneReading { overflow-y: visible; flex: 0 0 auto; }
+
+  #masterControls { position: sticky; bottom: 0; }
+  #masterControls[hidden] { display: none; }
+  html[data-panes="synced"] .pane .paneControls { display: none; }
+  html[data-read-view="oneword"] #masterControls { display: none; }
+
+  /* The voice side, named rather than implied: with one bar for two books the
+     one thing the bar cannot show by position is WHICH book it is speaking. */
+  .voiceSide {
+    min-width: 34px; padding: 0 9px;
+    font-size: 0.7rem; letter-spacing: 0.1em; text-transform: uppercase;
+    color: var(--accent) !important;
+  }
+  .voiceSide:hover { background: var(--panel-bg); }
+
+  /* Split: `\` picks a side, and the side it picked has to be visible or
+     the key is a guess. The mark is on the BAR, because the bar is the half
+     of a pane that `\` actually changes the meaning of. */
+  html[data-panes="split"] .pane.focusedPane .paneControls {
+    box-shadow: inset 0 2px 0 var(--accent);
+  }
+  /* `\` focuses the reading column so the arrows and the scroll wheel land
+     there, but the browser's own ring around a whole column of poetry is a
+     black box the size of the page. The mark on the bar IS the answer to
+     "which side is selected", so the ring is suppressed rather than doubled.
+     `tabindex="-1"` means this element is never in the tab ORDER, so nothing
+     that a keyboard walks through loses its ring here -- and since 1 Sep Tab
+     is not a binding on this page at all, so what a keyboard walks through
+     is the application's own controls. */
+  .paneReading:focus, .paneReading:focus-visible { outline: none; }
+
+  /* ---- THE THREE LAYOUTS, AND THE KEY THAT CYCLES THEM -------------------
+     Osca, 31 Aug late (READER_FIRST.md): "<the pane key> cycles the selected
+     pane's layout -- equal, then promoted (the selected book takes most of
+     the width, the other a narrow column, still readable, still synced if
+     synced), then exclusive (the other hidden entirely), then equal."
+     The key is `z` since 1 Sep and was Shift-Tab before it; the shape it
+     draws did not change with the key."
+
+     `data-pane-layout` is on <html> beside `data-panes` for the same reason
+     that one is: the whole page's shape is one selector, and nothing has to
+     be toggled element by element. `.selectedPane` is the class
+     `applyPaneLayout()` puts on whichever pane `selectedPane()` names -- and
+     it is a SEPARATE class from `.focusedPane` deliberately: focus is a
+     split-only mark on the pane's bar, and the selection exists synced too
+     (synced, `\` moves the voice, and the voice IS the selection).
+
+     THE STATE IS LOCKED TO THE LAYOUT, NOT THE SELECTION. `\` moves
+     `.selectedPane` and these rules follow it; the layout does not reset.
+     So promoted + `\` is "promote the other one", which is what the picture
+     of two columns and two keys has to mean.
+
+     Only above the phone breakpoint. A phone already shows ONE pane at a
+     time (`#panes.count-2 .pane.active`, below) -- there is no second column
+     to make narrow, and a rule with a higher specificity than that one would
+     win inside the phone's own media query and break the switch. */
+  @media (min-width: 761px) {
+    html[data-pane-layout="promoted"] #panes.count-2 .pane { flex: 0 0 22%; }
+    html[data-pane-layout="promoted"] #panes.count-2 .pane.selectedPane { flex: 1 1 0; }
+    html[data-pane-layout="exclusive"] #panes.count-2 .pane { display: none; }
+    html[data-pane-layout="exclusive"] #panes.count-2 .pane.selectedPane { display: flex; }
+  }
+
+  #folderPicker { margin-top: 6px; }
+
+  /* The dictionary panel -- ONE PER PANE (PROMPTS/reader-grammar.md item 3).
+     It is a sibling of #panes rather than a child of .pane for one reason:
+     one-word mode hides #panes wholesale (html[data-read-view="oneword"]
+     #panes { display: none }) and a panel inside a hidden ancestor cannot be
+     shown, so hold-to-look-up would have had nowhere to draw. Living in
+     #popups it is positioned ONTO its pane's column instead -- positionPopup()
+     measures the pane and sets left/width, and falls back to the full window
+     when the pane is not on screen (one-word mode) or hides the panel when the
+     pane is a collapsed phone column. `right` is therefore not set here. */
+  .popup {
+    position: fixed; left: 0; width: 100%; bottom: 0;
+    background: var(--panel-bg);
+    border-top: 1px solid var(--border);
+    box-shadow: 0 -6px 20px rgba(0,0,0,0.2);
+    padding: 14px 16px calc(14px + env(safe-area-inset-bottom));
+    max-height: 40vh; overflow-y: auto;
+    transform: translateY(100%);
+    transition: transform 0.15s ease-out;
+    z-index: 30;
+  }
+  .popup.open { transform: translateY(0); }
+  /* the drag handle: iOS's grabber, and the header beside it. Only the phone
+     block gives it a bar and turns the touch gesture over to us (step 3). */
+  .popupHandle .grabber { display: none; }
+  .popup .row { display: flex; align-items: baseline; gap: 10px; }
+  /* THE TOP LINE. One line, wrapping to a second only when it must -- so the
+     four parts are inline and the container wraps, rather than each part
+     being given a box that forces a break. */
+  .popup .topline {
+    flex: 1 1 auto; min-width: 0; display: block;
+    line-height: 1.35; word-break: break-word;
+  }
+  .popup .word-text { font-size: 1.3rem; font-weight: 600; }
+  .popup .topline .sep { color: var(--fg-dim); }
+  /* No `text-transform` here: `topLineModel` uppercases the language, so the
+     line reads the same in the DOM as it does on screen and a test can quote
+     it. Two places deciding a letterform is two places to disagree. */
+  .popup .lang-tag { font-size: 0.85rem; color: var(--fg-dim); }
+  /* The part of speech is the answer to Osca's "doesn't say it's a noun,
+     anywhere", so it is the one part of the line after the word itself that
+     is not dimmed. */
+  .popup .pos-tag { font-size: 0.95rem; font-weight: 600; }
+  .popup .gram-tag { font-size: 0.95rem; color: var(--fg-dim); font-style: italic; }
+  .popup .word-text:empty, .popup .lang-tag:empty,
+  .popup .pos-tag:empty, .popup .gram-tag:empty { display: none; }
+  .popup .phon { color: var(--fg-dim); font-style: italic; font-size: 0.9rem; margin-top: 2px; }
+  .popup .phon:empty { display: none; }
+  .popup .close {
+    margin-left: auto; min-width: 40px; min-height: 40px;
+    border: none; background: transparent; font-size: 1.2rem; color: var(--fg-dim);
+    cursor: pointer;
+  }
+  /* ---- the definitions, and the etymology beside or below them ----
+     `data-cols="2"` is a single-book view: the panel is the width of the
+     window and there is room for a second column. `data-cols="1"` is a
+     parallel view -- two panels over half a window each -- where the
+     etymology goes underneath so nothing is squeezed. A phone is one column
+     whatever the pane count, because a half-window and a phone are the same
+     problem. */
+  .popup .body { margin-top: 8px; }
+  .popup[data-cols="2"] .body {
+    display: flex; align-items: flex-start; gap: 24px;
+  }
+  .popup[data-cols="2"] .body .gloss { flex: 1 1 58%; min-width: 0; }
+  .popup[data-cols="2"] .body .etym { flex: 1 1 42%; min-width: 0; margin-top: 0; }
+  .popup .gloss { font-size: 0.95rem; }
+  .popup .gloss ol { margin: 0; padding-left: 1.2em; }
+  /* Senses grouped by part of speech: `remote` is nine senses that are four
+     adjectives, three nouns and two verbs, and until now nothing said so.
+     Each group numbers from 1, which is what the <ol> does on its own. */
+  .popup .gloss .posgroup + .posgroup { margin-top: 10px; }
+  .popup .gloss .poshead {
+    font-size: 0.72rem; font-weight: 600; color: var(--fg-dim);
+    text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 3px;
+  }
+  .popup .etym { font-size: 0.9rem; margin-top: 10px; }
+  .popup .etym[hidden] { display: none; }
+  .popup .etym .etymhead {
+    font-size: 0.72rem; font-weight: 600; color: var(--fg-dim);
+    text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 3px;
+  }
+  .popup .etym p { margin: 0; color: var(--fg-dim); line-height: 1.5; }
+  /* A speaker cue is stated, not defined: no <ol>, no numeral, so it cannot
+     be read as definition 1 of a word. See the cue rule at lookup(). */
+  .popup .cast { margin-top: 8px; font-size: 0.95rem; }
+  .popup .context {
+    margin-top: 6px; font-size: 0.9rem; color: var(--fg-dim);
+  }
+  .popup .links {
+    margin-top: 10px; display: flex; flex-wrap: wrap; gap: 8px;
+  }
+  .popup .links a {
+    color: var(--link); text-decoration: none; border: 1px solid var(--border);
+    border-radius: var(--r-pill); padding: 6px 12px; font-size: 0.85rem;
+    min-height: 40px; display: inline-flex; align-items: center;
+  }
+  .popup .links a:hover { text-decoration: underline; }
+  .popup .none { font-size: 0.85rem; color: var(--fg-dim); margin-top: 8px; }
+
+  /* A pane's own panel is not painted while its pane is not on screen -- the
+     collapsed column on a phone. Nothing is discarded: the panel keeps its
+     word and its open state, and switching columns (or rotating back to two)
+     paints it again exactly as it was left. */
+  .popup.offstage { display: none; }
+
+  /* ---------------------------------------------------------------- grammar
+     What the word IS (books/<slug>/grammar.json, dictionary/grammar.py).
+     58.7 % of this book's Latin words have more than one reading, so the
+     ambiguous case is the NORMAL one and the layout is built for it: one
+     block per lemma, its headword line verbatim underneath, and the readings
+     grouped so that what they share is said once and only what differs is
+     repeated. */
+  .popup .grammar { margin-top: 10px; font-size: 0.95rem; }
+  .popup .grammar .gr-count {
+    font-size: 0.72rem; color: var(--fg-dim); text-transform: uppercase;
+    letter-spacing: 0.04em; margin-bottom: 6px;
+  }
+  .popup .grammar .gr-lemma { margin-top: 8px; }
+  .popup .grammar .gr-lemma:first-of-type { margin-top: 0; }
+  .popup .grammar .gr-lemma-name { font-weight: 600; }
+  .popup .grammar .gr-pos {
+    font-size: 0.72rem; color: var(--fg-dim); border: 1px solid var(--border);
+    border-radius: var(--r-pill); padding: 1px 8px; margin-left: 6px;
+  }
+  /* Wiktionary's own words, kept verbatim because they carry the principal
+     parts: "fagus f (genitive fagi); second declension". */
+  .popup .grammar .gr-head { margin-top: 2px; color: var(--fg-dim); font-size: 0.9rem; }
+  .popup .grammar .gr-shared { margin-top: 4px; font-size: 0.9rem; }
+  .popup .grammar ul.gr-readings { margin: 4px 0 0; padding-left: 1.2em; }
+  .popup .grammar ul.gr-readings li { margin: 1px 0; }
+  .popup .grammar .gr-one { margin-top: 4px; }
+  .popup .grammar .gr-marks {
+    font-size: 0.72rem; color: var(--fg-dim); border: 1px solid var(--border);
+    border-radius: var(--r-pill); padding: 0 7px; margin-left: 6px;
+  }
+  .popup .grammar .gr-other { font-size: 0.8rem; color: var(--fg-dim); margin-left: 6px; }
+  .popup .grammar .gr-marked { opacity: 0.85; }
+
+  /* ---- the honest no-book state on http(s) (step 2). The file:// folder
+     picker keeps its own .err markup; this one is a pane's whole reading
+     area. ---- */
+  .noBook { padding: 28px 16px; text-align: center; color: var(--fg-dim); }
+  .pane.noBookPane .paneControls { display: none; }   /* nothing to play */
+  .noBook h2 { margin: 0 0 8px; font-size: 1.15rem; font-weight: 600; color: var(--fg); }
+  .noBook p { margin: 0 0 14px; font-size: 0.95rem; line-height: 1.5; }
+  .noBook a, .noBook button {
+    display: inline-flex; align-items: center; justify-content: center;
+    min-height: 44px; padding: 0 18px; border-radius: var(--r-2);
+    border: 1px solid var(--border); background: var(--panel-bg); color: var(--link);
+    font: inherit; font-size: 1rem; text-decoration: none; cursor: pointer;
+  }
+
+  /* ---- the pane switch: which language is on screen when the phone shows
+     one pane at a time. Hidden on desktop (both panes are side by side);
+     the phone breakpoint below shows it, and only for a pair. ---- */
+  .paneSwitch { display: none; }
+  #sidebarScrim { display: none; }
+
+  /* ================================================================ phone
+     Two conditions, either one: 640 px wide, which is every iPhone in
+     portrait (320-430 px) and no laptop; or 500 px tall, which is the same
+     phone turned sideways (a 390x844 iPhone is 844x390 in landscape, wide
+     enough to miss the width test and far too short for the desktop
+     layout -- reader-mobile's known gap, closed here). A laptop is 800 px
+     tall or more, so the height arm can only catch a window deliberately
+     squashed. Everything above this line is the desktop layout, untouched;
+     the desktop screenshot at 1280x800 is byte-identical before and after
+     this block. Keep in step with PHONE_QUERY below -- one test pins them. */
+  @media (max-width: 640px), (max-height: 500px) {
+    /* A phone is one column whatever the pane count: the etymology goes
+       under the definitions, exactly as it does in a parallel view. */
+    .popup[data-cols="2"] .body { display: block; }
+    .popup[data-cols="2"] .body .etym { margin-top: 10px; }
+    header {
+      padding: calc(8px + var(--safe-top)) calc(10px + var(--safe-right)) 8px calc(10px + var(--safe-left));
+      gap: 6px;
+    }
+    header h1 { font-size: 1rem; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    header button, header .headerLink { min-height: 44px; min-width: 44px; border-radius: var(--r-2); }
+    #probeLink { display: none; }   /* the diagnostics page is a desktop concern; ⓘ is one tap the phone doesn't need */
+    .paneSwitch {
+      display: none; align-items: stretch; flex: 0 0 auto;
+      border: 1px solid var(--border); border-radius: var(--r-2); overflow: hidden; background: var(--panel-bg);
+    }
+    .paneSwitch[data-count="2"] { display: inline-flex; }
+    .paneSwitch button {
+      min-width: 44px; min-height: 44px; padding: 0 12px;
+      border: none; border-radius: 0; background: transparent; color: var(--fg-dim);
+      font: inherit; font-size: 0.9rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em;
+      cursor: pointer;
+    }
+    .paneSwitch button[aria-pressed="true"] { background: var(--accent); color: var(--panel-bg); }
+    /* a title is not a two-letter code: no uppercase, no tracking, and it
+       truncates rather than pushing the header's other buttons off the edge
+       (step 4). The full title is on the button's title= either way. */
+    .paneSwitch[data-labels="title"] button {
+      text-transform: none; letter-spacing: 0; font-size: 0.85rem;
+      max-width: 9.5em; padding: 0 10px;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: block;
+    }
+    /* and where the room comes from: on a phone the switch already carries
+       the two book titles, so the bar drops ITS titles and keeps the chapter
+       -- which the switch does not say and which is the half that changes.
+       Before the bar named the book this hid the h1 outright; that would now
+       throw away the only place the chapter appears. Only on a phone, and
+       only while the switch is carrying titles -- a single book, or a real
+       LA | EN pair, keeps the whole bar. */
+    header[data-pane-labels="title"] .bookBar .bb-titles { display: none; }
+    #installBar { padding-left: calc(12px + var(--safe-left)); padding-right: calc(12px + var(--safe-right)); }
+
+    /* one pane: the active side fills the screen; the other keeps its DOM
+       (the follower still syncs) but is not displayed */
+    #panes { flex-direction: column; }
+    #panes.count-2 .pane { display: none; border-bottom: none; }
+    #panes.count-2 .pane.active { display: flex; }
+    .pane { border-right: none; border-bottom: none; }
+
+    .paneHeader { padding: 8px calc(16px + var(--safe-right)) 2px calc(16px + var(--safe-left)); }
+    .paneHeader .bookTitle { font-size: 0.9rem; }
+    .paneHeader .chapterTitle { font-size: 0.8rem; }
+    .paneStatus { padding: 2px calc(16px + var(--safe-left)); }
+
+    /* reading at arm's length */
+    .paneReading {
+      padding: 8px calc(18px + var(--safe-right)) 28px calc(18px + var(--safe-left));
+      font-size: calc(1.15rem * var(--read-scale, 1)); line-height: var(--read-line, 1.7);
+      -webkit-overflow-scrolling: touch;
+    }
+    .word { padding: 1px 1px; }
+    .word:hover { text-decoration: none; }   /* no hover on a phone; a tap is the look-up */
+
+    /* NO WATERMARK ON A PHONE. It floats in the margin beside the column, and
+       a phone has no margin -- the text runs edge to edge, so the mark would
+       be laid over the first two lines of the chapter. The model still
+       answers `shown` (the sheet is the sidebar there and `paintWatermark`
+       keeps writing the words); only the paint is withheld, which is the
+       plainest thing the picture does not draw. */
+    .watermark { display: none; }
+
+    /* the find bar on a phone: the box takes its own row (flex-basis 100 %
+       forces the wrap), the controls sit under it at 44 px like every other
+       phone control here. */
+    #findBar {
+      gap: 6px;
+      padding: 8px calc(12px + var(--safe-right)) 8px calc(12px + var(--safe-left));
+    }
+    #findBar input[type="search"] { flex: 1 1 100%; min-height: 44px; font-size: 1rem; }
+    #findBar button { min-height: 44px; min-width: 44px; }
+    #findBar .findScope { font-size: 0.9rem; min-height: 44px; }
+
+    /* a hanging label costs a phone a third of its measure, so on the phone
+       the turn collapses to one column and the cue sits above its speech --
+       same small caps, same muted colour, no indent to pay for. */
+    .paneReading { --speaker-col: 0px; --speaker-gap: 0px; }
+    .turn { display: block; }
+    .turn > p.speaker { margin: 0 0 0.1em; font-size: 0.8em; text-align: left; }
+    .paneReading > p.direction { padding-left: 0; }
+
+    /* the bottom bar: play, ‹ ›, speed, time -- thumb-sized, above the home
+       indicator. The chapter <select> and mute go: chapters are the sheet and
+       the swipe, and mute is the phone's own switch. */
+    .paneControls {
+      gap: 8px; flex-wrap: nowrap;
+      padding: 8px calc(12px + var(--safe-right)) calc(8px + var(--safe-bottom)) calc(12px + var(--safe-left));
+    }
+    .paneControls button, .paneControls select {
+      min-height: 48px; min-width: 48px; border-radius: var(--r-2); font-size: 1.15rem;
+    }
+    /* 390px is not 1280px: the pill does NOT get a slot in the bar here --
+       it goes ABOVE it (`--voiceui-pill-bottom` below), because reserving
+       120px of a 390px bar for another module's furniture pushed the whole
+       grid wider than the screen and clipped |< off the left of the
+       transport. The volume gives up its stretch for the same reason: on a
+       phone the transport is the bar, and everything else yields to it. */
+    .pane:last-child .paneControls .pcRight { padding-right: 0; }
+    .paneControls { gap: 6px; padding-left: 8px; padding-right: 8px; }
+    .paneControls .volume { flex: 0 1 78px; min-width: 40px; }
+    .paneControls .playBtn { min-width: 52px; }
+    .paneControls .timeLabel { font-size: 0.84rem; min-width: 38px; text-align: right; }
+
+    /* the sidebar as a sheet: the same component, in a drawer from the left */
+    #sidebar, #sidebar.hidden {
+      display: flex; position: fixed; z-index: 50;
+      top: 0; bottom: 0; left: 0;
+      width: min(85vw, 320px); flex: none;
+      padding-top: var(--safe-top); padding-bottom: var(--safe-bottom); padding-left: var(--safe-left);
+      box-shadow: 0 0 24px rgba(0,0,0,0.25);
+      transform: translateX(-105%);
+      transition: transform 0.2s ease-out;
+    }
+    #sidebar.sheet-open { transform: translateX(0); }
+    #sidebar .sb-top { padding: 12px 14px 8px; }
+    #sidebar .sb-mic { min-height: 48px; font-size: 1rem; border-radius: var(--r-2); }
+    #sidebar .sb-row { min-height: 44px; align-items: center; padding: 8px 14px 8px 16px; font-size: 1rem; }
+    #sidebar .sb-group .sb-row { padding-left: 26px; }
+    #sidebar .sb-head { min-height: 40px; align-items: center; }
+    #sidebar .sb-disclosure { width: 32px; min-height: 40px; }
+    #sidebarScrim {
+      display: block; position: fixed; inset: 0; z-index: 49;
+      background: rgba(0,0,0,0.35); opacity: 0; pointer-events: none;
+      transition: opacity 0.2s ease-out;
+    }
+    #sidebarScrim.on { opacity: 1; pointer-events: auto; }
+
+    .popup { max-height: 55vh; max-height: 55dvh; padding: 8px calc(16px + var(--safe-right)) calc(14px + var(--safe-bottom)) calc(16px + var(--safe-left)); }
+    /* drag-to-close, the iOS way (step 3). The dictionary sheet is dragged by
+       its grabber and header -- touch-action: none there, so the gesture is
+       ours and never the scroller's, while the gloss below still scrolls.
+       The sidebar sheet is dragged anywhere: pan-y leaves its chapter list
+       scrolling vertically and hands us everything sideways. */
+    .popupHandle { touch-action: none; cursor: grab; }
+    .popupHandle .grabber {
+      display: block; width: 36px; height: 5px; margin: 2px auto 8px;
+      border-radius: var(--r-0); background: var(--border);
+    }
+    #sidebar { touch-action: pan-y; }
+    .popup.dragging, #sidebar.dragging { transition: none; }
+    .popup .word-text { font-size: 1.4rem; }
+    .popup .close { min-width: 44px; min-height: 44px; }
+    .popup .links a { min-height: 44px; }
+
+    /* voiceui's on/off pill would sit over the thumb bar on a phone. It reads
+       --voiceui-pill-bottom (voiceui/app.js: bottom: var(--voiceui-pill-bottom, 12px)),
+       so the reader sets where its own furniture ends and voiceui puts the
+       pill there -- no styling of another module's class, no override. */
+    :root { --voiceui-pill-bottom: calc(76px + var(--safe-bottom)); }
+  }
+  /* ================================================================
+     ONE-WORD MODE — the stage (PROMPTS/reader-one-word.md step 2)
+
+     A view, not a page: everything here is inert unless
+     `settings.js` has put `data-read-view="oneword"` on <html>, which it
+     only does for a non-default choice. With no attribute not one rule
+     below matches, `#oneword` keeps its `hidden`, and the reader paints
+     exactly what it painted before.
+
+     GEOMETRY — every vertical number exists to keep the ledges off the
+     glyphs and the two lines off each other (a `g` above met the dot of an
+     `i` below in the first prototype). The two clearances are named, and
+     both are expressed in the FONT'S OWN EM, so the guarantee survives a
+     type-size change — including the reading-size setting, which multiplies
+     --ow-fontA and --ow-fontB and therefore multiplies the reserves with it:
+
+       --ow-rowA   the target's full em box INCLUDING its descender.
+                   1.24em is enough for a serif's g/y/j tail.
+       --ow-sep    optical air on top of that, so "enough" still looks
+                   like air rather than a near miss.
+
+     Change --ow-fontA or --ow-fontB and these hold. Change 1.24 or --ow-sep
+     and you are changing the guarantee itself — measure it again in
+     reader/tests/browser/oneword_pivot.py, which asserts the gap. */
+  #oneword {
+    display: none;
+    flex: 1 1 auto;
+    min-height: 0;
+    flex-direction: column;
+  }
+  html[data-read-view="oneword"] #panes { display: none; }
+  html[data-read-view="oneword"] #oneword { display: flex; }
+
+  #owStage {
+    flex: 1 1 auto;
+    display: flex; align-items: center; justify-content: center;
+    padding: 0 16px;
+    touch-action: pan-y;
+    cursor: default;
+    -webkit-user-select: none; user-select: none;
+  }
+  #owFrame {
+    width: 100%; max-width: 760px; position: relative;
+    --ow-ledge: 16px;
+    --ow-clear: 14px;
+    --ow-fontA: calc(52px * var(--read-scale, 1));
+    --ow-fontB: calc(20px * var(--read-scale, 1));
+    --ow-rowA: calc(var(--ow-fontA) * 1.24);
+    --ow-rowB: calc(var(--ow-fontB) * 1.25);
+    --ow-sep: 6px;
+    /* Every child of the frame is absolutely positioned, so the frame's own
+       height was 0 and #owStage's `align-items: center` was centring nothing:
+       the word hung BELOW the middle of the stage by half its own block, which
+       is why the stage read as bottom-heavy with a lake of air above it. The
+       height is the drawing's own extent, stated once, so the stage centres
+       the thing you can see. Anything added to the frame goes in here too. */
+    --ow-h: calc(var(--ow-ledge) + var(--ow-clear) + var(--ow-rowA) + var(--ow-sep)
+                 + var(--ow-rowB) + var(--ow-clear) + var(--ow-ledge));
+    height: var(--ow-h);
+  }
+
+  .ow-rule { position: absolute; left: 0; right: 0; height: 1px; background: var(--ow-rule); }
+  /* No translateX(-50%) here, deliberately: half of 3px is 1.5px, so
+     centring the bar on a rounded x put it back on a half pixel and undid the
+     rounding. `owPaintTicks` sets the LEFT EDGE, already whole, and the 1.5px
+     the bar then extends is the mark's own width rather than a position. */
+  .ow-tick {
+    position: absolute; width: 3px; height: var(--ow-ledge);
+    background: var(--fg-dim); border-radius: 1px;
+  }
+  #owRuleTop { top: 0; }
+  #owTickTop { top: 1px; }
+
+  /* the two word rows, stacked with nothing between them */
+  /* letter-spacing was -0.005em -- about a third of a pixel at this size, so
+     every glyph after the first landed on a fractional advance and the word
+     rasterised soft. The tightening was never visible; the softness was. */
+  .ow-word {
+    position: absolute; white-space: pre; line-height: 1;
+    font-family: var(--read-family, "Tiempos Text", Charter, "Iowan Old Style", "Source Serif 4", "Palatino Linotype", Georgia, serif);
+    font-synthesis: none;
+  }
+  #owA {
+    top: calc(var(--ow-ledge) + var(--ow-clear));
+    height: var(--ow-rowA); font-size: var(--ow-fontA);
+    color: var(--fg); display: flex; align-items: flex-start;
+  }
+  /* ROUNDED UP TO A WHOLE PIXEL, and this is the one rounding that matters:
+     --ow-rowA is 1.24 of the font's em, so this top is fractional (107.92px at
+     the default size) and a fractional top is a fractional BASELINE, which is
+     the thing a rasteriser genuinely cannot draw sharply. Rounding up rather
+     than to nearest so the clearance below the target's descender can only
+     grow -- the guarantee oneword_pivot.py asserts is never spent here. */
+  #owB {
+    top: calc(var(--ow-ledge) + var(--ow-clear) + var(--ow-rowA) + var(--ow-sep));
+    top: round(up, calc(var(--ow-ledge) + var(--ow-clear) + var(--ow-rowA) + var(--ow-sep)), 1px);
+    height: var(--ow-rowB); font-size: var(--ow-fontB);
+    color: var(--fg-dim); display: flex; align-items: flex-start;
+  }
+  .ow-word .pv { color: var(--pivot); }
+
+  /* the lower ledge belongs to the ground language and travels with it —
+     dragging it is the difficulty dial (step 5c) */
+  #owLower {
+    position: absolute; left: 0; right: 0;
+    top: calc(var(--ow-ledge) + var(--ow-clear) + var(--ow-rowA) + var(--ow-sep)
+              + var(--ow-rowB) + var(--ow-clear));
+    top: round(up, calc(var(--ow-ledge) + var(--ow-clear) + var(--ow-rowA) + var(--ow-sep)
+              + var(--ow-rowB) + var(--ow-clear)), 1px);
+    height: var(--ow-ledge); cursor: grab; touch-action: none;
+  }
+  #owLower.dragging { cursor: grabbing; }
+  #owTickBot { top: 0; }
+  #owRuleBot { top: var(--ow-ledge); }
+  /* a wider grip for a thumb; the hit area grows, the rule does not move */
+  @media (pointer: coarse) {
+    #owLower { height: calc(var(--ow-ledge) + 28px); padding-bottom: 28px; }
+  }
+
+  /* one language: one word between two ledges, and nothing else */
+  html[data-oneword-lanes="1"] #owB,
+  html[data-oneword-lanes="1"] #owTagB { display: none; }
+  html[data-oneword-lanes="1"] #owLower {
+    top: calc(var(--ow-ledge) + var(--ow-clear) + var(--ow-rowA) + var(--ow-clear));
+    top: round(up, calc(var(--ow-ledge) + var(--ow-clear) + var(--ow-rowA)
+                        + var(--ow-clear)), 1px);
+    cursor: default;
+  }
+  html[data-oneword-lanes="1"] #owA { align-items: center; }
+  html[data-oneword-lanes="1"] #owFrame {
+    --ow-fontA: calc(58px * var(--read-scale, 1));
+    /* one lane draws less, so it is a shorter block -- restated here rather
+       than left to the two-lane figure, which would centre a phantom row */
+    --ow-h: calc(var(--ow-ledge) + var(--ow-clear) + var(--ow-rowA)
+                 + var(--ow-clear) + var(--ow-ledge));
+  }
+
+  .ow-tag {
+    position: absolute; left: 0; font-size: 10.5px; letter-spacing: 0.16em;
+    text-transform: uppercase; color: var(--fg-dim); opacity: 1;
+  }
+  #owTagA { top: calc(var(--ow-ledge) + var(--ow-clear) + 4px); }
+  #owTagB {
+    top: calc(var(--ow-ledge) + var(--ow-clear) + var(--ow-rowA) + var(--ow-sep) + 2px);
+    top: round(up, calc(var(--ow-ledge) + var(--ow-clear) + var(--ow-rowA)
+                        + var(--ow-sep) + 2px), 1px);
+  }
+
+  #owGrip {
+    position: absolute; left: 50%; transform: translateX(-50%); top: 22px;
+    font-size: 9.5px; letter-spacing: 0.16em; text-transform: uppercase;
+    color: var(--fg-dim); opacity: 0; transition: opacity 0.18s;
+    pointer-events: none; white-space: nowrap;
+  }
+  #owLower:hover #owGrip, #owLower.dragging #owGrip { opacity: 0.8; }
+  @media (pointer: coarse) { #owLower:hover #owGrip { opacity: 0; } }
+
+  .ow-beat {
+    position: absolute; right: 0; font-size: 9.5px; letter-spacing: 0.18em;
+    text-transform: uppercase; color: var(--fg-dim); opacity: 0; transition: opacity 0.12s;
+    top: calc(var(--ow-ledge) + var(--ow-clear) + 4px);
+  }
+  .ow-beat.on { opacity: 0.9; }
+
+  /* THE ASIDE LINE. The book's reading face, like the watermark and like
+     `.paneReading` -- `--read-family` is declared here for the same reason
+     it is declared there (see the note at the top of this file): a book that
+     changes its reading font changes this with it. Grey, one line, and it
+     never wraps into the stage. */
+  #owAside {
+    flex: 0 0 auto; text-align: center;
+    padding: 10px 24px 0; min-height: 1.4em;
+    color: var(--fg-dim); font-size: 0.95rem; line-height: 1.4;
+    font-family: var(--read-family, "Tiempos Text", Charter, "Iowan Old Style", "Source Serif 4", "Palatino Linotype", Georgia, serif);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    pointer-events: none; user-select: none; -webkit-user-select: none;
+  }
+  #owAside[hidden] { display: none !important; }
+  /* a cue is the person, a direction is what happens: the second is the one
+     the printed book sets in italic, so it is the one set in italic here */
+  #owAside[data-role="direction"] { font-style: italic; }
+  #owContext {
+    max-width: 760px; width: 100%; margin: 0 auto; padding: 22px 16px 0;
+    font-family: var(--read-family, "Tiempos Text", Charter, "Iowan Old Style", "Source Serif 4", "Palatino Linotype", Georgia, serif);
+    font-size: calc(0.9rem * var(--read-scale, 1)); line-height: 1.7;
+    color: var(--fg-dim); opacity: 0.8; text-align: center; min-height: 52px;
+  }
+  #owContext b { color: var(--fg-dim); opacity: 1; font-weight: 400; }
+  #owContext:empty { min-height: 0; padding: 0; }
+
+  #owBar {
+    padding: 12px 16px calc(12px + var(--safe-bottom, 0px));
+    display: flex; flex-direction: column; gap: 10px; align-items: center;
+    border-top: 1px solid var(--border); background: var(--panel-bg);
+  }
+  #owProg { width: 100%; max-width: 760px; height: 2px; background: var(--border); position: relative; }
+  #owProg i { position: absolute; left: 0; top: 0; bottom: 0; background: var(--fg-dim); width: 0; }
+  .ow-row {
+    display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+    justify-content: center; max-width: 760px;
+  }
+  #owBar button {
+    font: inherit; font-size: 0.8rem; color: var(--fg); background: transparent;
+    border: 1px solid var(--border); border-radius: var(--r-pill); padding: 7px 14px;
+    cursor: pointer; min-height: 44px;
+  }
+  #owBar button.on { border-color: var(--accent); color: var(--accent); }
+  #owPlay { min-width: 84px; }
+  /* The voice row: the same pill language as the stepping row above it, set
+     apart by a hairline so the two groups cannot be read as one. */
+  .ow-voice {
+    border-top: 1px solid var(--border); padding-top: 10px; gap: 10px;
+    width: 100%; max-width: 760px;
+  }
+  #owVoicePlay { min-width: 84px; }
+  #owVoiceMute { min-width: 44px; padding: 7px 11px; line-height: 0; }
+  #owVoiceMute.active { color: var(--fg-dim); opacity: 0.55; }
+  #owVoiceMute.active + .ow-vol { opacity: 0.4; }
+  .ow-vol {
+    -webkit-appearance: none; appearance: none; background: transparent;
+    flex: 0 1 140px; min-width: 60px; height: 22px; cursor: pointer;
+  }
+  .ow-vol::-webkit-slider-runnable-track {
+    height: 2px; background: var(--border); border-radius: 2px;
+  }
+  .ow-vol::-moz-range-track { height: 2px; background: var(--border); border-radius: 2px; }
+  .ow-vol::-webkit-slider-thumb {
+    -webkit-appearance: none; appearance: none; width: 11px; height: 11px;
+    border-radius: 50%; background: var(--fg-dim); margin-top: -4.5px;
+  }
+  .ow-vol::-moz-range-thumb {
+    width: 11px; height: 11px; border: 0; border-radius: 50%; background: var(--fg-dim);
+  }
+  .ow-vol:hover::-webkit-slider-thumb { background: var(--fg); }
+  .ow-vol:hover::-moz-range-thumb { background: var(--fg); }
+  .ow-vol:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .ow-rate {
+    font-family: ui-monospace, Menlo, monospace; font-size: 0.78rem;
+    color: var(--fg-dim); min-width: 86px; text-align: center;
+  }
+
+
+  /* ================================================ MARGINALIA (31 Aug)
+     Highlights, notes in the margin, and bookmarks -- READER_FIRST.md
+     "Marginalia". The four colours are Osca's four, in his order, and they
+     are defined ONCE, with alpha, so one set is right in both themes: a
+     translucent wash over whatever `--bg` is takes the page's own light with
+     it, and the text on top keeps its own colour rather than being asked to
+     read against a fixed pastel in the dark. */
+  :root {
+    --hl-green:  rgba(104, 190, 118, 0.42);
+    --hl-yellow: rgba(238, 206, 84, 0.48);
+    --hl-red:    rgba(228, 112, 100, 0.38);
+    --hl-pink:   rgba(232, 130, 186, 0.36);
+    --marg-note: var(--panel-bg);
+  }
+  .word.hl { border-radius: var(--r-0); }
+  .word.hl-green  { background: var(--hl-green); }
+  .word.hl-yellow { background: var(--hl-yellow); }
+  .word.hl-red    { background: var(--hl-red); }
+  .word.hl-pink   { background: var(--hl-pink); }
+  /* The audio's own word still wins: the reader must always be able to see
+     where the voice is, and a highlight is a mark on the page, not a state. */
+  .word.now.hl { background: var(--word-bg); box-shadow: inset 0 -0.28em 0 0 var(--hl-now, transparent); }
+  .word.now.hl-green  { --hl-now: var(--hl-green); }
+  .word.now.hl-yellow { --hl-now: var(--hl-yellow); }
+  .word.now.hl-red    { --hl-now: var(--hl-red); }
+  .word.now.hl-pink   { --hl-now: var(--hl-pink); }
+  .word.bmLanded { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+  /* One-word mode: the word's UNDERLINE, because there is no page for a wash
+     to sit on -- Osca's own words for this view ("in one-word mode as the
+     word's underline colour"). */
+  .ow-word.hl-green  { box-shadow: inset 0 -0.09em 0 0 var(--hl-green); }
+  .ow-word.hl-yellow { box-shadow: inset 0 -0.09em 0 0 var(--hl-yellow); }
+  .ow-word.hl-red    { box-shadow: inset 0 -0.09em 0 0 var(--hl-red); }
+  .ow-word.hl-pink   { box-shadow: inset 0 -0.09em 0 0 var(--hl-pink); }
+
+  /* The margin layer sits INSIDE the scroller and is the scroller's own
+     height, so a note scrolls with the passage it belongs to rather than
+     being repositioned on every frame. It never takes a pointer event of its
+     own -- only the notes and glyphs in it do. */
+  .paneReading { position: relative; }
+  .pane { position: relative; }
+  /* `max-width` and the auto margins are undone deliberately: `#panes
+     .paneReading > *` centres a 70ch column, which is right for every child
+     of the reading pane EXCEPT this one -- the margin layer is the pane, not
+     the column, and left under that rule it was 571 px wide and centred, so
+     every note landed 300 px off the right edge of the window. */
+  .margLayer { position: absolute; inset: 0; max-width: none; margin: 0;
+    pointer-events: none; z-index: 2; }
+  .margLayer > * { pointer-events: auto; }
+
+  .margNote {
+    position: absolute;
+    font-family: var(--ui-font);
+    font-size: 0.78rem; line-height: 1.45;
+    color: var(--fg-dim);
+    border-left: 2px solid var(--border);
+    padding: 1px 0 1px 8px;
+    cursor: text;
+    white-space: pre-wrap; overflow-wrap: break-word;
+  }
+  .margNote:hover { color: var(--fg); border-left-color: var(--accent); }
+  .margNote.stale { border-left-style: dashed; }
+  /* Too narrow to write in -- a parallel view, a phone. The note folds to one
+     mark at the anchor and opens on tap; nothing is hidden. */
+  .margNote.collapsed {
+    border-left: none; padding: 0; width: 14px; text-align: center;
+    color: var(--accent); cursor: pointer; font-size: 0.86rem;
+  }
+  .margNote.editing { background: var(--marg-note); border-radius: var(--r-1);
+    border-left: 2px solid var(--accent); padding: 6px 8px; z-index: 3;
+    box-shadow: 0 6px 20px rgba(0,0,0,0.14); }
+  .margNoteInput {
+    display: block; width: 100%; box-sizing: border-box; resize: vertical;
+    font: inherit; color: var(--fg); background: transparent;
+    border: none; outline: none; padding: 0;
+  }
+  .margWhen { font-size: 0.68rem; color: var(--fg-dim); margin-top: 3px; font-style: italic; }
+  .margOff { position: absolute; left: 0; right: 0; font-family: var(--ui-font);
+    font-size: 0.72rem; color: var(--fg-dim); }
+  .margBm { position: absolute; color: var(--accent); cursor: pointer; line-height: 1; }
+  .margBm.stale { opacity: 0.55; }
+  .margBm svg { display: block; }
+
+  /* THE SCROLL BAR CARRIES A MARK FOR EACH BOOKMARK. Ours, beside the
+     native scrollbar rather than instead of it: a scrollbar cannot hold
+     children in any browser this app runs in, and one that is ours is the
+     same in the Mac app, in Safari and on the phone. */
+  .bmTrack {
+    position: absolute; top: 0; right: 0; bottom: 0; width: 10px;
+    pointer-events: none; z-index: 4;
+  }
+  .bmTrack[hidden] { display: none; }
+  .bmMark {
+    position: absolute; right: 1px; width: 8px; height: 3px; padding: 0;
+    transform: translateY(-1px);
+    border: none; border-radius: 2px; background: var(--accent); opacity: 0.72;
+    cursor: pointer; pointer-events: auto;
+  }
+  .bmMark:hover, .bmMark:focus-visible { opacity: 1; width: 10px; outline: none; }
+
+  #margWhy { padding: 4px 14px; font-family: var(--ui-font); font-size: 0.74rem; color: var(--fg-dim); }
+  #margWhy[hidden], #margWhy:empty { display: none; }
+
+  /* ---- the context menu: library.html's `#menu`, brought over unchanged in
+     shape so the two pages open the same object, plus the colour row. ---- */
+  .menu { position: fixed; z-index: 60; min-width: 210px; padding: 6px 0; border-radius: var(--r-3);
+    background: var(--panel-bg); border: 1px solid var(--border); box-shadow: 0 10px 34px rgba(0,0,0,0.24);
+    font-family: var(--ui-font); }
+  .menu[hidden] { display: none; }
+  .menu button { display: block; width: 100%; text-align: left; font: inherit; font-size: 0.9rem; color: var(--fg);
+    background: transparent; border: none; padding: 7px 14px; cursor: pointer; }
+  .menu button:hover, .menu button:focus { background: var(--control-bg); outline: none; }
+  .menu button.off { opacity: 0.55; cursor: default; }
+  .menu button.danger { color: var(--bad, #9c3b2e); }
+  .menu button .menuwhy { display: block; font-size: 0.72rem; color: var(--fg-dim);
+    white-space: normal; margin-top: 1px; }
+  .menu hr { border: none; border-top: 1px solid var(--border); margin: 4px 0; }
+  .menucolours { display: flex; align-items: center; gap: 10px; padding: 6px 14px; }
+  .menucolours .menulabel { font-size: 0.9rem; color: var(--fg); }
+  .menucolours .swatches { display: flex; gap: 6px; margin-left: auto; }
+  .menu .swatch { width: 18px; height: 18px; padding: 0; border-radius: 50%;
+    border: 1px solid var(--border); cursor: pointer; }
+  .menu .swatch:hover, .menu .swatch:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .menu .swatch.on { border-color: var(--accent); box-shadow: inset 0 0 0 2px var(--panel-bg); }
+  .menu .swatch.sw-green  { background: var(--hl-green); }
+  .menu .swatch.sw-yellow { background: var(--hl-yellow); }
+  .menu .swatch.sw-red    { background: var(--hl-red); }
+  .menu .swatch.sw-pink   { background: var(--hl-pink); }
+  @media (max-width: 640px), (max-height: 500px) {
+    /* the phone: a bottom sheet, exactly as the shelf's menu is */
+    .menu { left: 0 !important; right: 0; top: auto !important; bottom: 0;
+      border-radius: var(--r-3) var(--r-3) 0 0; padding-bottom: 18px; }
+    .menu button { padding: 12px 18px; font-size: 1rem; }
+    .menucolours { padding: 10px 18px; }
+    .menu .swatch { width: 26px; height: 26px; }
+  }
+

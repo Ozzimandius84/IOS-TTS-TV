@@ -1,0 +1,34 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Frank — the bar</title>
+<link rel="stylesheet" href="bar.css">
+<style>
+html,body{height:100%;margin:0;background:#fcfcfb;
+  font-family:"Iowan Old Style",Palatino,Georgia,serif;color:#17150f;}
+.page{max-width:38rem;margin:0 auto;padding:24vh 2rem 40vh;font-size:19px;line-height:1.55;}
+.page h1{font-weight:400;font-size:1.5em;margin:0 0 1em;}
+.page p+p{margin-top:1em;}
+.note{position:fixed;left:14px;bottom:12px;font-family:-apple-system,sans-serif;
+  font-size:11px;color:#9c988c;}
+</style>
+<div class="page" id="pane">
+  <h1>The bar, on its own</h1>
+  <p>Scroll this column and the bar goes, the way the traffic lights go in full
+  screen. Bring the cursor near the top edge and it comes back. Press ⌘F, or ⌘K,
+  and it comes back with the caret in it. Drag a file over the window and it
+  comes back to catch it.</p>
+  <p>It is the window's width exactly, and the first 72 points are left for the
+  buttons — in the app the real ones show through that gap rather than being
+  drawn.</p>
+  <p>Nothing here scales with the window. The book does; the chrome does not.</p>
+  <p style="height:120vh"></p>
+  <p>Still reading. The bar should be gone by now.</p>
+</div>
+<div class="note">the bar, alone · ⌘F to focus · drag a file anywhere</div>
+<script src="../keys.js"></script>
+<script src="bar.js"></script>
+<script>
+Bar.mount({ placeholder:"Search your library", readingPane:window,
+            onDrop:f=>{ document.querySelector(".note").textContent =
+              "dropped: "+f.name+"  ·  a .json is a book, audio is a voice"; } });
+</script>

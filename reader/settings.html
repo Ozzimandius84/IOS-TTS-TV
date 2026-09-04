@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>TTSTV Settings</title>
+<link rel="icon" href="icon-192.png">
+<meta name="theme-color" content="#832f2b">
+<link rel="manifest" href="manifest.webmanifest">
+<!-- BEFORE THE FIRST PAINT, and that is the whole reason it is up here.
+     settings.js owns the theme for the entire application (one stored value,
+     one owner, every surface subscribing) and applies it at load: a window
+     opened after someone chose dark opens dark, rather than opening light and
+     correcting itself once the body exists. A <head> script is synchronous,
+     so nothing has been painted when the attribute lands. It also carries the
+     reading font, which flashed for the same reason. -->
+<script src="settings.js"></script>
+<!-- THE APPLICATION'S CHROME, one file for every web surface: the
+     scrollbar, and so far nothing else. reader.html, library.html and
+     settings.html link this one. studio/studio.html does NOT, though this
+     comment said it did until 4 Sep (module-split Stage 2b step 2; the
+     manifest's F.2) -- see the head of reader/chrome.css for what that
+     costs and whose it is to close. -->
+<link rel="stylesheet" href="chrome.css">
+<link rel="stylesheet" href="settings.css">
+</head>
+<body>
+<!-- NO "< Library" (Osca, 31 Aug: "Inside Settings, I DO NOT need a Library
+     button to take me back to the Library. Get rid of that one.")  It was a
+     page-navigation control that survived the move from tab to window, and a
+     window has no back: this page is what the Settings WINDOW shows, and the
+     window's own title bar is its chrome.  Nothing replaces it -- the reader
+     closes the window, they do not navigate out of it. -->
+<!-- THE FIRST CHILD OF <body>, AND IT IS THE TITLE BAR. `data-tauri-drag-region`
+     is what makes the empty part of the row move the window: Tauri hit-tests the
+     event's own target, so the attribute on this element drags and the tabs,
+     which are <button>s inside it, still click. It is inert in a browser tab and
+     in the export, which is exactly right -- there is no window to drag there. -->
+<header class="set-titlebar" id="titlebar" data-tauri-drag-region>
+  <!-- settings.js's tab strip lands HERE (mount's `tabsInto`), not at the top
+       of the panel: the picture puts the six icons in the title bar. Nothing
+       else is in this row -- the moon went with the Theme setting (31 Aug). -->
+</header>
+
+<main>
+  <!-- NO SECTION AROUND THE FORM. Every setting is a row inside a grouped
+       card now (settings.js `.set-card`), with a small-caps heading above
+       each card, so one more box around all of them was the page drawing a
+       border it had nothing to separate. The tab strip is in the title bar;
+       what is left here is the panels, the preview and #status. -->
+  <div id="fields"></div>
+
+  <!-- The preview belongs to the Reading tab and is shown with it: it is a
+       paragraph of a book set in the reading font, and under General -- the
+       tab about the CHROME's font -- it would be the exact confusion the
+       two tabs exist to end. -->
+  <div class="preview" id="preview" aria-label="Preview" hidden>
+    <p><span class="sent"><span class="word">You,</span> <span class="word">Tityrus,</span>
+    <span class="word">&#8217;neath</span> <span class="word">a</span> <span class="word">broad</span>
+    <span class="word">beech-canopy</span> <span class="word">reclining,</span> <span class="word">on</span>
+    <span class="word">the</span> <span class="word">slender</span> <span class="word">oat</span>
+    <span class="word">rehearse</span> <span class="word">your</span> <span class="word">silvan</span>
+    <span class="word">ditties.</span></span></p>
+    <p>I from my sweet fields, and home&#8217;s familiar bounds, even now depart.</p>
+  </div>
+
+  <div id="status" role="status"></div>
+</main>
+
+<!-- settings.js is in the <head>, before the first paint (see the note there) -->
+<script>
+"use strict";
+const S = window.TTSTVSettings;
+let current = S.read();
+
+/* NO THEME CONTROL ON THIS PAGE (Osca, 31 Aug: "light/dark setting does not
+ * need to be present at all in the settings window"). Light/dark is the
+ * strip's toggle and Mod+Shift+L, and the moon that used to sit in this
+ * window's corner went with the row. `settings.js` still owns the theme for
+ * the whole app and `mountThemeButton` is still mounted by the pages that
+ * have that button -- this one simply is not one of them any more.
+ *
+ * What this page does still do is remember the WINDOW it is in -- its size
+ * and where it was put -- because nothing outside it can know: a popup's
+ * opener is told nothing about it. The guard is the window's own name, so
+ * settings.html opened as an ordinary tab records nothing. */
+if (window.TTSTVSettings) TTSTVSettings.rememberWindow();
+
+// The form itself is settings.js's -- and since the popovers went (30 Aug,
+// Settings became a window) this page is its ONE home, so "do not fork it"
+// costs nothing now. It builds the tab strip and every field into #fields,
+// writes into this page's own #status, and owns the same save path it always
+// did (localStorage + the /reader-settings mirror). `paint` stays a name here
+// because the mirror check below is this page's own.
+const previewEl = document.getElementById("preview");
+
+/* THE WINDOW'S HEIGHT FOLLOWS THIS TAB, and the measuring moved into
+ * `settings.js` on 1 Sep (`TTSTVSettings.tabHeight` / `reportHeight`, called
+ * from `mount` and from every `showTab`). The version that stood here asked
+ * `#status.getBoundingClientRect().bottom` -- a viewport coordinate, off an
+ * empty zero-height box -- so the figure it sent was not the height of
+ * anything and the window kept its opening 620. The route is unchanged:
+ * `TTSTVHost.settingsHeight(h)` -> `invoke("host_settings_height")`, and in
+ * a browser tab there is no host and nothing is sent.
+ *
+ * This page keeps one line of it, because the preview it moves into the
+ * Reading panel changes that tab's height AFTER mount has measured it. */
+const reportHeight = () => requestAnimationFrame(() => {
+  if (window.TTSTVSettings) TTSTVSettings.reportHeight(document.getElementById("fields"));
+});
+
+const form = S.mount(document.getElementById("fields"), {
+  status: document.getElementById("status"),
+  // the six icon tabs go in the window's own bar, not above the panel
+  tabsInto: document.getElementById("titlebar"),
+  // the preview is a paragraph of a BOOK, so it is shown with the tab about
+  // the book's type and with no other. The height is settings.js's now: it
+  // reports on mount and on every showTab, so this hook is furniture again.
+  onTab: id => { previewEl.hidden = id !== "reading"; },
+});
+const paint = s => { current = form.paint(s); return current; };
+
+/* THE PREVIEW SITS INSIDE THE READING PANEL, under Size & spacing and above
+ * One word -- where the picture puts it, and where a person changing the size
+ * is already looking. It stays this page's element (it is a paragraph of a
+ * BOOK, and settings.js styles no book), so it is moved rather than rebuilt:
+ * one insertion, after mount, before the panel's last heading. */
+(function placePreview() {
+  const panel = form.el.querySelector('.set-panel[data-tab="reading"]');
+  if (!panel) return;                       // no Reading tab: nothing to place
+  const heads = panel.querySelectorAll(".set-head");
+  const last = heads[heads.length - 1];
+  if (last) panel.insertBefore(previewEl, last);
+  else panel.appendChild(previewEl);
+  // Reading is that much taller for having it, and mount measured the tab
+  // before this ran -- so say so once, now the page is whole.
+  reportHeight();
+})();
+
+// Another page (a Reader tab, the Library) may change these too -- the
+// subscription is form's, made in mount(), so there is only ever one.
+
+// The mirror wins on load when it is newer than what this device holds --
+// the point of having one (the phone and the Mac share the choice).
+current = form.current;
+S.fetchMirror().then(m => {
+  if (!m) return;
+  let localSaved = 0;
+  try { localSaved = Number(JSON.parse(localStorage.getItem(S.KEY) || "{}").saved) || 0; } catch (e) {}
+  if (m.saved > localSaved) paint(m.settings);
+});
+
+// Internal debug hook for the load harness (not a documented API).
+window.__SETTINGS_DEBUG__ = { get current() { return form.current; }, paint, status: form.status, form };
+</script>
+</body>
+</html>
