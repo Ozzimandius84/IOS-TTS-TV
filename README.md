@@ -26,3 +26,43 @@ _to_delete/           this shell cannot delete files; Osca empties it
 of what arrived — see `tools/shell_manifest.py` for why a record is not a list.
 
 Everything else: **`PHONE.md`**.
+
+---
+
+## Status
+
+### 5 Sep — the phone app moves into its own repo (`d06e239`)
+
+**1. Built.** `src-tauri/` — TTSTV's `Frank/src-tauri` moved whole; `src/lib.rs`
+byte-identical to `83da179` below a header block that records the move
+(`frank://` handler, `unpack_shell`, the fingerprint stamp, the `cfg(dev)`
+fallback, 7 tests). `tauri.conf.json` `frontendDist: ../shell`, identifier
+`com.ttstv.frank`. `gen/apple/project.yml` + `frank_iOS/Info.plist` gain
+`NSMicrophoneUsageDescription` and `NSSpeechRecognitionUsageDescription`.
+`tools/import_shell.py` — the one command, calls TTSTV's own `build_shell`,
+restates no part of `SHELL_FILES`, refuses by name before it clears anything.
+`tools/shell_manifest.py` — the record of what arrived (`sha256` per file) plus
+`check()`. `tools/prebuild.py` — the before-build check (writes nothing).
+`tools/android_permissions.py` — idempotent `RECORD_AUDIO` patch for the
+generated Android manifest. `tests/` — 15 python tests. `PHONE.md` — the one
+page. The old published shell is untracked and sits in `_to_delete/`.
+
+**2. Verified.** *live*: the import refuses against the real TTSTV, naming the
+four files (`reader/reader.html`, `probe.html`, `icon-192.png`, `icon-512.png`)
+and writing nothing. *live*: the happy path, against a scratch TTSTV-shaped
+tree with those four restored from `3d2c7a9` — **47 files, 1 447 325 bytes
+(1413.4 KB)**, manifest written, `check()` clean. *unit*: 10 python pass, 5
+skip (they need `shell/`); 7 rust pass — `lib.rs` extracted **by line range**
+into a dependency-free crate, every extracted line proved present verbatim in
+the moved file. *not verified*: any phone. No cargo and no Xcode is reachable
+from Cowork, so `cargo test` on the real crate, the simulator run and the `.apk`
+are Osca's, in `PHONE.md` §3–5. Invariant: TTSTV untouched — `reader/sw.js`
+still `ttstv-shell-v32`, `languages/catalogue.json` `304915f7…` (= `HEAD`).
+
+**3. Blocked, and it is TTSTV's state, not this repo's.** `shell/` cannot be
+produced until job 15 lands. Everything else here is finished and does not
+depend on which `reader.html` it produces; the finishing move is one command.
+
+**4. Owed.** `bookload.js` over `frank://` (job 15 writes it) · `cap` under
+`narrow` in `design/reader/pane.js` (`PHONE.md` §6) · `gen/android/` ·
+a note in TTSTV's `Frank/FRANK.md` that `Frank/` stays the desktop client.
