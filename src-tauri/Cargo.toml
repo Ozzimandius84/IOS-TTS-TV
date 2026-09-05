@@ -1,0 +1,24 @@
+[package]
+name = "frank"
+version = "0.1.0"
+description = "Frank -- the thin client: the app shell, one window, no Python"
+authors = ["Osca"]
+edition = "2021"
+rust-version = "1.77.2"
+
+[lib]
+# `frank_lib`, not `app_lib`: two crates in one repo, and a name that says
+# which. `desktop/src-tauri` is `frank-desktop`/`app_lib` and stays so.
+name = "frank_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2.6.3", features = [] }
+
+[dependencies]
+# The same versions `desktop/src-tauri` builds with, so the two crates share a
+# registry cache and a rust-cache key shape. No `unstable` feature: that is
+# there for the desktop app's tear-off windows, and Frank has one window.
+tauri = { version = "2.11.3", features = [] }
+tauri-plugin-log = "2"
+log = "0.4"

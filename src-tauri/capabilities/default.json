@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "The one window, and only what a window needs. The shell calls no Tauri API -- it reaches its own files over frank://, the way the PWA reaches them over http -- so nothing beyond core:default is granted, and there is no remote origin to grant it to.",
+  "windows": ["main"],
+  "permissions": ["core:default"]
+}

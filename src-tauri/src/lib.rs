@@ -1,0 +1,601 @@
+// MOVED, NOT REWRITTEN. This file came here from TTSTV
+// `Frank/src-tauri/src/lib.rs` at commit `83da179` and is byte-identical to it
+// below this block -- the four fixes the phone needed (the stamp is a
+// fingerprint of what was embedded, the home page must be on disk before that
+// stamp is believed, an empty embed is an error with a sentence rather than a
+// silent 0, and the asset count is logged at Info) all landed in that commit,
+// on the evening of 5 Sep, and none of them is new here.
+//
+// One thing the prose below is no longer literally right about: it says
+// `Frank/dist/`, which was the staged tree in the old repo. Here the shell is
+// COMMITTED as `shell/` and `tools/prebuild.py` verifies it rather than
+// staging it, so `frontendDist` is `../shell`. Everything else -- the scheme,
+// the origin arithmetic, the unpack, the dev fallback -- is unchanged, and the
+// old spellings are left alone so a diff against TTSTV stays readable.
+//
+// `Frank/` in TTSTV stays the DESKTOP thin client. The phone is here.
+
+//! Frank, the thin client: one window, the app shell, and no Python anywhere.
+//!
+//! 5 Sep. `desktop/SHIPPING.md` 8b split one app into two. Studio (route A) is
+//! `desktop/`: a tab strip, a native menu bar, tear-off windows, and a
+//! `studio serve` child process it has to find a python3 for. Frank (route C)
+//! is this: the sold app, the phone, Windows -- a tightly wrapped shell that
+//! talks to the cloud and has no local door to close.
+//!
+//! It is `desktop/src-tauri/src/mobile.rs` made a desktop target too, not a new
+//! idea. `mobile.rs` (4 Sep) already proved the shape: do not reuse `lib::run`,
+//! start from nothing, ask for one window, and let `frontendDist` carry the
+//! reader *inside* the bundle. What is added here is the second half of the
+//! same sentence -- the origin the shell is served from.
+//!
+//! # Why a custom scheme and not `WebviewUrl::App`
+//!
+//! Tauri's own asset protocol would serve these files perfectly well, at
+//! `tauri://localhost/library/library.html`. The reason not to take it is that
+//! the shell is not Frank's; it is the PWA's, byte-for-byte, the same files
+//! `reader/sw.js` caches and `reader/tools/publish_shell.py` publishes. Those
+//! pages fetch each other by relative path and register a service worker by
+//! relative path, and the phone shell, the browser and this app have to be
+//! able to disagree about *nothing*. So Frank serves them from an origin of its
+//! own -- `frank://localhost/` -- whose paths are the site's paths:
+//!
+//! ```text
+//!   PWA     https://<host>/library/library.html   fetch("../reader/keys.js")
+//!   Frank   frank://localhost/library/library.html   ... the same request path
+//! ```
+//!
+//! A URL that is byte-identical below the origin is what lets one bug be found
+//! once. `tauri://localhost` would have been identical too -- but it is also
+//! the origin Tauri's own IPC lives on, and Frank grants the shell no IPC at
+//! all (`capabilities/default.json`). A scheme of our own says that in the
+//! address rather than in a comment.
+//!
+//! On Windows and Android a custom scheme is reached as
+//! `http://frank.localhost/...` (wry's rule, not ours -- see
+//! `shell_origin` below); the path half is unchanged, which is the half the
+//! pages care about.
+//!
+//! # Why the files are unpacked to the data dir first
+//!
+//! `frontendDist` embeds the staged shell in the binary, and the handler could
+//! read it back out of the embedded assets on every request. It writes them to
+//! the app's data directory once instead, and serves from there, because that
+//! directory is where the *books* are going: sync (not today) puts a
+//! `.frank/` object store beside this folder, and a reader that fetches
+//! `frank://localhost/books/<slug>/book.json` will want one handler, one root
+//! and one set of path rules -- not a second scheme bolted on later. Today
+//! nothing but the shell is under that root, so today the app opens empty,
+//! which is exactly what it is meant to do.
+//!
+//! The unpack is stamped with a fingerprint of what was embedded -- how many
+//! assets and a hash of their names and bytes -- so a launch after the first
+//! copies nothing, and a build carrying a different shell rewrites the tree.
+//! It used to be stamped with the app version, and that is the whole of the
+//! bug of 5 Sep: a launch that unpacked *nothing* wrote `0.1.0` and every
+//! launch after it believed the stamp.
+//!
+//! # `tauri dev` embeds no assets, and that is not a bug in Tauri
+//!
+//! `frontendDist` is a directory, so `tauri ios dev` starts its own static dev
+//! server and sets `devUrl` to it; `tauri-codegen` then embeds an EMPTY asset
+//! set (`context.rs`: `dev && config.build.dev_url.is_some()`), because
+//! re-embedding 55 files on every rebuild would be waste. Tauri's own
+//! `AssetResolver::get` covers itself for that case by reading `frontendDist`
+//! off disk instead -- but `iter()`, which is what an unpack needs, does not,
+//! and returns nothing. So in dev the handler falls back to `get()` for the
+//! same file (`#[cfg(dev)]`, below), which is the same second source Tauri
+//! uses; in release there is exactly one source, the data dir.
+
+use std::borrow::Cow;
+use std::fs;
+use std::path::{Component, Path, PathBuf};
+
+use tauri::{Manager, UriSchemeContext, WebviewUrl, WebviewWindowBuilder, Wry};
+
+/// The scheme. One word, and it is in three places that must agree: here, the
+/// window URL built by [`shell_url`], and `tauri.conf.json`'s CSP (which is
+/// `null` -- so, two).
+const SCHEME: &str = "frank";
+
+/// Where the served tree lives under the app's data directory. A folder and not
+/// the data dir itself, because sync's object store is going to want its own.
+const SHELL_DIR: &str = "shell";
+
+/// The page the one window opens on. The Library is the app -- there is no
+/// chrome to open first, and `index.html` (the redirect `tools/prebuild.py`
+/// writes) exists only so the bundle has a root.
+const HOME_PAGE: &str = "library/library.html";
+
+/// The stamp file, beside the unpacked tree. It was `.version` and held the app
+/// version; the name changed with the meaning, and the old file goes with the
+/// first re-unpack because that clears the root.
+const STAMP: &str = ".shell";
+
+/// The origin the shell is served from, spelled the way the platform's webview
+/// spells it. wry maps a custom scheme to `http://<scheme>.localhost` on
+/// Windows and Android and leaves it as `<scheme>://localhost` everywhere else;
+/// Tauri's own manager does the same arithmetic when it computes a window's
+/// origin (`tauri::manager::webview`). Getting this wrong does not fail loudly
+/// -- the window opens blank -- so it is one function with one caller.
+fn shell_origin() -> &'static str {
+    #[cfg(any(windows, target_os = "android"))]
+    {
+        "http://frank.localhost"
+    }
+    #[cfg(not(any(windows, target_os = "android")))]
+    {
+        "frank://localhost"
+    }
+}
+
+fn shell_url(path: &str) -> String {
+    format!("{}/{}", shell_origin(), path)
+}
+
+/// Turn a request path into a path under `root`, or `None` if it tries to leave.
+///
+/// The check is on the *components*, before any filesystem call: a `..` or a
+/// rooted component is refused outright rather than resolved and compared.
+/// `canonicalize` would be the other way to do it and is worse here -- it
+/// answers about symlinks on the user's disk, and it cannot answer at all for a
+/// path that does not exist, which is every 404.
+fn resolve(root: &Path, request_path: &str) -> Option<PathBuf> {
+    // One copy of the two defaults -- `/` means the index, and `%20` is a
+    // space -- shared with [`site_path`], which is the same request path spelt
+    // the way the asset keys spell it. Two copies drifting is how the handler
+    // and the dev fallback would come to disagree about which file was asked
+    // for, which is a bug that looks like a missing file.
+    let decoded = site_path(request_path);
+    let decoded = decoded.trim_start_matches('/');
+    let mut out = root.to_path_buf();
+    for c in Path::new(&decoded).components() {
+        match c {
+            Component::Normal(part) => out.push(part),
+            // `/a/./b` is fine and means `/a/b`.
+            Component::CurDir => {}
+            // Everything else -- `..`, a root, a Windows drive prefix -- is a
+            // request to leave the served tree, and there is no legitimate one.
+            _ => return None,
+        }
+    }
+    Some(out)
+}
+
+fn percent_decode(s: &str) -> String {
+    let bytes = s.as_bytes();
+    let mut out = Vec::with_capacity(bytes.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'%' && i + 2 < bytes.len() {
+            let hi = (bytes[i + 1] as char).to_digit(16);
+            let lo = (bytes[i + 2] as char).to_digit(16);
+            if let (Some(hi), Some(lo)) = (hi, lo) {
+                out.push((hi * 16 + lo) as u8);
+                i += 3;
+                continue;
+            }
+        }
+        out.push(bytes[i]);
+        i += 1;
+    }
+    String::from_utf8_lossy(&out).into_owned()
+}
+
+/// The content type for a file of the shell, by extension.
+///
+/// Every extension the app shell actually contains is named here, and
+/// `tests/test_frank_shell.py` holds this list equal to the extensions in
+/// `reader/sw.js`'s `SHELL_FILES` -- so a shell that gains a `.svg` or a
+/// `.woff2` fails a test rather than shipping as `application/octet-stream`,
+/// which a webview would refuse to execute and a reader would see as a blank
+/// page. That is the whole reason this is a match and not a fallback.
+fn content_type(path: &Path) -> &'static str {
+    match path.extension().and_then(|e| e.to_str()) {
+        Some("html") => "text/html; charset=utf-8",
+        Some("js") => "text/javascript; charset=utf-8",
+        Some("css") => "text/css; charset=utf-8",
+        Some("json") => "application/json; charset=utf-8",
+        Some("webmanifest") => "application/manifest+json; charset=utf-8",
+        Some("png") => "image/png",
+        Some("svg") => "image/svg+xml",
+        Some("woff2") => "font/woff2",
+        Some("wav") => "audio/wav",
+        Some("opus") => "audio/ogg",
+        Some("mp3") => "audio/mpeg",
+        _ => "application/octet-stream",
+    }
+}
+
+/// FNV-1a. Six lines rather than `DefaultHasher` because this value is written
+/// to a file and read back by a later launch, and `DefaultHasher`'s output is
+/// explicitly not stable across Rust versions -- a stamp that changed when the
+/// toolchain did would re-unpack for no reason and hide the case where the
+/// shell really did change.
+fn fnv1a(mut h: u64, bytes: &[u8]) -> u64 {
+    for b in bytes {
+        h ^= *b as u64;
+        h = h.wrapping_mul(0x0000_0100_0000_01b3);
+    }
+    h
+}
+
+/// What was embedded: the count, and a hash over every asset's name and bytes.
+///
+/// Names alone would have caught the bug in front of us and not the next one:
+/// editing `library.html` without renaming it leaves the key set identical, and
+/// a silently stale page is the expensive kind of wrong. Hashing the bytes as
+/// well is one pass over 1.5 MB at launch, which is not a cost worth having an
+/// opinion about.
+fn fingerprint(assets: &[(String, Vec<u8>)]) -> String {
+    let mut ordered: Vec<&(String, Vec<u8>)> = assets.iter().collect();
+    ordered.sort_by(|a, b| a.0.cmp(&b.0));
+    let mut h = 0xcbf2_9ce4_8422_2325_u64;
+    for (key, bytes) in ordered {
+        h = fnv1a(h, key.as_bytes());
+        h = fnv1a(h, &bytes.len().to_le_bytes());
+        h = fnv1a(h, bytes);
+    }
+    format!("{}-{:016x}", assets.len(), h)
+}
+
+/// Why this build has no shell in it. There are exactly two reasons and they
+/// want opposite fixes, so the app has to say which one it is rather than
+/// guess: one is a missing build step, the other is `tauri dev` behaving as
+/// designed. Takes the `devUrl` rather than the app so it can be tested.
+fn no_shell_reason(dev_url: Option<&str>) -> String {
+    match dev_url {
+        Some(url) => format!(
+            "frank: the shell is not in this build -- `tauri dev` started its own dev server \
+             ({url}) and set devUrl, and tauri-codegen embeds no assets at all when dev and \
+             devUrl are both set. Re-run with `--no-dev-server`, or build."
+        ),
+        None => "frank: the shell is not in this build -- prebuild.py was not run before compile"
+            .to_string(),
+    }
+}
+
+/// What to say on the 404 page when the binary carries no shell at all.
+///
+/// This is reached only after the dev fallback has ALSO come up empty, so in
+/// dev it knows one thing [`no_shell_reason`] does not: `frontendDist` has not
+/// got the file either, which means `Frank/dist/` is empty or stale and the
+/// answer is `prebuild.py` -- not `--no-dev-server`, which would embed the same
+/// nothing. Outside dev there is no second place to have looked.
+fn nothing_anywhere(dev_url: Option<&str>, path: &str) -> String {
+    match dev_url {
+        Some(url) => format!(
+            "frank: no {path}. This build embeds no assets -- `tauri dev` set devUrl ({url}), \
+             and tauri-codegen embeds nothing when it is set -- and the fallback read of \
+             frontendDist has no {path} either. Run tools/prebuild.py."
+        ),
+        None => no_shell_reason(None),
+    }
+}
+
+/// A request path as the asset keys spell it: leading slash, percent-decoded,
+/// `/` meaning `/index.html`.
+///
+/// The two defaults live here and [`resolve`] calls this on its way to a
+/// filesystem path, so the handler's disk lookup and the dev fallback's asset
+/// lookup cannot come to disagree about which file was asked for. Percent-
+/// decoding is the small decoder and not a dependency because the shell's own
+/// names are ASCII; a book slug with a space in it later is the case it is for.
+fn site_path(request_path: &str) -> String {
+    let rel = request_path.trim_start_matches('/');
+    let rel = if rel.is_empty() { "index.html" } else { rel };
+    format!("/{}", percent_decode(rel))
+}
+
+/// Write the embedded shell into `root`, once per distinct shell.
+///
+/// `Err` is a sentence for a human, already prefixed `frank:`. It is not a
+/// reason to stop the app: see the `setup` closure.
+fn unpack_shell<R: tauri::Runtime>(
+    app: &tauri::AppHandle<R>,
+    root: &Path,
+) -> Result<usize, String> {
+    let resolver = app.asset_resolver();
+    let assets: Vec<(String, Vec<u8>)> = resolver
+        .iter()
+        .map(|(k, v)| (k.into_owned(), v.into_owned()))
+        .collect();
+    // Logged before anything can go wrong with it, and at Info, because "how
+    // many files does this binary think it is carrying" is the first question
+    // every one of these failures asks.
+    log::info!("frank: {} embedded shell assets", assets.len());
+    if assets.is_empty() {
+        return Err(no_shell_reason(
+            app.config().build.dev_url.as_ref().map(|u| u.as_str()),
+        ));
+    }
+
+    let want = fingerprint(&assets);
+    let stamp = root.join(STAMP);
+    // The stamp says what was once written, not what is still there -- a user
+    // can delete files and a write can half-finish -- so the home page has to
+    // be on disk before the stamp is believed.
+    if fs::read_to_string(&stamp).ok().as_deref() == Some(want.as_str())
+        && root.join(HOME_PAGE).is_file()
+    {
+        log::info!("frank: shell {want} already unpacked in {}", root.display());
+        return Ok(assets.len());
+    }
+
+    let io = |what: &str, path: &Path, e: std::io::Error| {
+        format!("frank: cannot {what} {} -- {e}", path.display())
+    };
+    if root.exists() {
+        fs::remove_dir_all(root).map_err(|e| io("clear", root, e))?;
+    }
+    fs::create_dir_all(root).map_err(|e| io("create", root, e))?;
+    let mut n = 0usize;
+    for (key, bytes) in &assets {
+        // Asset keys are absolute-ish site paths (`/library/library.css`).
+        let Some(dst) = resolve(root, key) else {
+            continue;
+        };
+        if let Some(parent) = dst.parent() {
+            fs::create_dir_all(parent).map_err(|e| io("create", parent, e))?;
+        }
+        fs::write(&dst, bytes).map_err(|e| io("write", &dst, e))?;
+        n += 1;
+    }
+    // Belt to the stamp's braces: the one file the window is about to ask for.
+    let home = root.join(HOME_PAGE);
+    if !home.is_file() {
+        return Err(format!(
+            "frank: unpacked {n} files into {} and {HOME_PAGE} is not one of them",
+            root.display()
+        ));
+    }
+    fs::write(&stamp, &want).map_err(|e| io("write", &stamp, e))?;
+    log::info!("frank: unpacked {n} shell files -> {}", root.display());
+    Ok(n)
+}
+
+fn escape(s: &str) -> String {
+    s.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;")
+}
+
+/// The page served instead of a file that is not there.
+///
+/// HTML and not `text/plain` because on a phone this is the entire user
+/// interface when something has gone wrong, and it carries the three facts that
+/// tell the two failures apart: what was asked for, where the shell was looked
+/// for, and how many assets the binary is carrying.
+fn not_here<R: tauri::Runtime>(app: &tauri::AppHandle<R>, root: &Path, path: &str) -> String {
+    let n = app.asset_resolver().iter().count();
+    let why = if n == 0 {
+        nothing_anywhere(
+            app.config().build.dev_url.as_ref().map(|u| u.as_str()),
+            path,
+        )
+    } else {
+        format!("frank: no {path} in the shell")
+    };
+    format!(
+        "<!doctype html><meta name=viewport content=\"width=device-width\"><title>Frank</title>\
+         <body style=\"font:15px/1.6 -apple-system,system-ui,sans-serif;margin:2rem;color:#222\">\
+         <p>{}</p><p style=\"opacity:.65\">{n} embedded assets &middot; shell root <code>{}</code></p>",
+        escape(&why),
+        escape(&root.display().to_string()),
+    )
+}
+
+/// The one entry point, on all four platforms.
+///
+/// `main.rs` calls this on desktop. On a phone there is no `main`: the
+/// generated Xcode and Gradle projects link `frank_lib` as a static library and
+/// call a C symbol, and `tauri::mobile_entry_point` is what emits it (it keeps
+/// the function and adds `extern "C" fn start_app()` beside it). Without the
+/// attribute the crate compiles for iOS perfectly well and then fails at the
+/// *link* step with an undefined `_start_app` -- which is why it is here before
+/// `ios init` rather than after the first red Xcode build.
+///
+/// `desktop/src-tauri` spells this as two functions because its mobile half is
+/// a different app (`mobile.rs`, no tab strip, no server child). Frank's two
+/// halves are the same app -- that is the whole claim of this crate -- so it is
+/// one function with `cfg_attr` rather than two with `cfg`.
+#[cfg_attr(mobile, tauri::mobile_entry_point)]
+pub fn run() {
+    tauri::Builder::default()
+        // `Wry` and not a generic `R`: `Builder::default()` is a
+        // `Builder<Wry>`, and spelling it lets the closure's argument type be
+        // written down rather than inferred through a `_`.
+        .register_uri_scheme_protocol(SCHEME, |ctx: UriSchemeContext<'_, Wry>, request| {
+            let app = ctx.app_handle();
+            let root = shell_root(app);
+            let path = request.uri().path().to_string();
+            let disk = resolve(&root, &path);
+
+            if let Some(p) = &disk {
+                if let Ok(bytes) = fs::read(p) {
+                    return http_response(200, content_type(p), bytes);
+                }
+            }
+
+            // Dev only. `tauri dev` sets devUrl, so nothing is embedded and the
+            // unpack above found nothing to write; Tauri's own
+            // `AssetResolver::get` handles exactly this by reading
+            // `frontendDist` off disk, and this is that same second source
+            // rather than a second idea. `content_type` is ours either way --
+            // the asset's own mime type is inferred from bytes and is not the
+            // curated table `tests/test_frank_shell.py` holds to the shell.
+            #[cfg(dev)]
+            if let Some(p) = &disk {
+                if let Some(asset) = app.asset_resolver().get(site_path(&path)) {
+                    log::info!("frank: dev -- {path} served from frontendDist");
+                    return http_response(200, content_type(p), asset.bytes);
+                }
+            }
+
+            http_response(
+                404,
+                "text/html; charset=utf-8",
+                not_here(app, &root, &path).into_bytes(),
+            )
+        })
+        .setup(|app| {
+            if cfg!(debug_assertions) {
+                app.handle().plugin(
+                    tauri_plugin_log::Builder::default()
+                        .level(log::LevelFilter::Info)
+                        .build(),
+                )?;
+            }
+
+            let root = shell_root(app.handle());
+            match unpack_shell(app.handle(), &root) {
+                Ok(n) => log::info!("frank: shell ready, {n} files"),
+                // Deliberately not `?`. Returning Err here aborts `setup`, and
+                // an aborted setup on a phone is a process that dies before it
+                // draws anything -- the blank screen this change exists to
+                // stop. Loud in the log, and the window opens anyway onto the
+                // page that says the same sentence.
+                Err(why) => log::error!("{why}"),
+            }
+
+            // `app.windows` is `[]` in tauri.conf.json: a window declared there
+            // is opened before `setup` runs, which would race the unpack above
+            // and paint a 404 on a first launch. One window, asked for here,
+            // after the files exist. (`mobile.rs` asks for its window in
+            // `setup` for the same shape of reason.)
+            WebviewWindowBuilder::new(
+                app,
+                "main",
+                WebviewUrl::CustomProtocol(shell_url(HOME_PAGE).parse()?),
+            )
+            .title("Frank")
+            .inner_size(1100.0, 800.0)
+            .min_inner_size(400.0, 400.0)
+            .build()?;
+            Ok(())
+        })
+        .run(tauri::generate_context!())
+        .expect("error while running Frank");
+}
+
+fn shell_root<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> PathBuf {
+    app.path()
+        .app_data_dir()
+        .expect("no app data dir")
+        .join(SHELL_DIR)
+}
+
+fn http_response(
+    status: u16,
+    content_type: &str,
+    body: Vec<u8>,
+) -> tauri::http::Response<Cow<'static, [u8]>> {
+    tauri::http::Response::builder()
+        .status(status)
+        .header(tauri::http::header::CONTENT_TYPE, content_type)
+        // The shell is one origin talking to itself, and it is the only thing
+        // served here; a page that wants the network goes to the endpoint by
+        // its own absolute URL and never through this handler.
+        .header("Cache-Control", "no-store")
+        .body(Cow::Owned(body))
+        .expect("static response")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn resolve_refuses_to_leave_the_shell() {
+        let root = Path::new("/tmp/shell");
+        assert!(resolve(root, "/../../etc/passwd").is_none());
+        assert!(resolve(root, "/library/../../etc/passwd").is_none());
+        assert_eq!(
+            resolve(root, "/library/library.html").unwrap(),
+            root.join("library").join("library.html")
+        );
+        assert_eq!(resolve(root, "/").unwrap(), root.join("index.html"));
+        assert_eq!(
+            resolve(root, "/a%20b/c.js").unwrap(),
+            root.join("a b").join("c.js")
+        );
+    }
+
+    #[test]
+    fn the_shell_url_is_the_site_path() {
+        assert!(shell_url(HOME_PAGE).ends_with("/library/library.html"));
+    }
+
+    /// The two defaults are applied once and both callers see the same answer.
+    #[test]
+    fn a_request_path_means_the_same_file_to_both_lookups() {
+        let root = Path::new("/tmp/shell");
+        for (request, key) in [
+            ("/", "/index.html"),
+            ("/library/library.html", "/library/library.html"),
+            ("/a%20b/c.js", "/a b/c.js"),
+        ] {
+            assert_eq!(site_path(request), key, "site_path({request})");
+            assert_eq!(
+                resolve(root, request).unwrap(),
+                root.join(key.trim_start_matches('/')),
+                "resolve({request})"
+            );
+        }
+    }
+
+    /// The bug of 5 Sep in one assertion: a stamp that only counted names would
+    /// have called an edited `library.html` up to date.
+    #[test]
+    fn the_fingerprint_follows_the_bytes_and_not_only_the_names() {
+        let a = vec![("/library/library.html".to_string(), b"one".to_vec())];
+        let b = vec![("/library/library.html".to_string(), b"two".to_vec())];
+        assert_ne!(fingerprint(&a), fingerprint(&b));
+
+        // Same shell, listed in a different order, is the same shell.
+        let one = vec![
+            ("/a.js".to_string(), b"x".to_vec()),
+            ("/b.js".to_string(), b"y".to_vec()),
+        ];
+        let other = vec![
+            ("/b.js".to_string(), b"y".to_vec()),
+            ("/a.js".to_string(), b"x".to_vec()),
+        ];
+        assert_eq!(fingerprint(&one), fingerprint(&other));
+
+        // An empty shell can never match a stamp a real one wrote.
+        assert!(fingerprint(&[]).starts_with("0-"));
+        assert!(fingerprint(&a).starts_with("1-"));
+        assert_ne!(fingerprint(&[]), fingerprint(&a));
+    }
+
+    /// Two causes, two fixes; the sentence has to name the right one.
+    #[test]
+    fn the_reason_tells_the_dev_server_from_the_missing_build_step() {
+        let dev = no_shell_reason(Some("http://192.168.1.4:1430/"));
+        assert!(dev.contains("--no-dev-server"), "{dev}");
+        assert!(dev.contains("192.168.1.4"), "{dev}");
+        assert!(!dev.contains("prebuild.py"), "{dev}");
+
+        let built = no_shell_reason(None);
+        assert!(built.contains("prebuild.py"), "{built}");
+        assert!(!built.contains("--no-dev-server"), "{built}");
+    }
+
+    /// The 404 page is reached after the dev fallback failed too, so in dev it
+    /// must send you to `prebuild.py` and not to the flag that would embed the
+    /// same empty folder.
+    #[test]
+    fn the_404_page_blames_the_empty_dist_and_not_the_dev_server() {
+        let dev = nothing_anywhere(Some("http://127.0.0.1:1430/"), "/library/library.html");
+        assert!(dev.contains("prebuild.py"), "{dev}");
+        assert!(!dev.contains("--no-dev-server"), "{dev}");
+        assert!(dev.contains("/library/library.html"), "{dev}");
+
+        // Not in dev there is no second place, so it is the plain sentence.
+        assert_eq!(nothing_anywhere(None, "/x"), no_shell_reason(None));
+    }
+
+    #[test]
+    fn the_error_page_cannot_be_broken_by_a_path() {
+        assert_eq!(escape("a<b>&c"), "a&lt;b&gt;&amp;c");
+    }
+}
