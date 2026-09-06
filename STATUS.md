@@ -58,8 +58,8 @@ No sync code on the phone; no proof on any device; the Mac half's shapes may mov
 Osca's a/b/c. Then `library/sync.js` (TTSTV) + the plist keys, LAN on the simulator.
 
 ### 8b. Commit check
-`git add -- SYNC.md STATUS.md` then `git commit -m … -- SYNC.md STATUS.md`; hash below.
-HEAD did not move under me in this repo.
+`git add -- SYNC.md STATUS.md` then `git commit -m … -- SYNC.md STATUS.md` → `6e46eb9` (2 files, +217); this line `a`-follows it.
+HEAD did not move under me in this repo. Locks moved to `_to_delete/`: `index.lock` ×2, `HEAD.lock`, `next-index-11.lock`, `objects/maintenance.lock`.
 
 ### 9. Status line
 `IOS-TTS-TV · job 26 phone half 0/4 built, laid out · 6 Sep · waiting on a/b/c`
