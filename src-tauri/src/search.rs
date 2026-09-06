@@ -367,9 +367,14 @@ pub fn init<R: Runtime>() -> TauriPlugin<R> {
             };
             #[cfg(target_os = "ios")]
             {
+                // Through `probe_note` (lib.rs) and not `log::` alone: on a
+                // simulator debug build that line also lands in
+                // `scratch-probe/probe.log`, which is how a session with no
+                // macOS shell reads that the press reached the sheet, and with
+                // which address (the webview frame, 6 Sep).
                 match present(&target) {
-                    Ok(()) => log::info!("frank: search sheet -> {target}"),
-                    Err(why) => log::error!("frank: search sheet refused: {why} ({target})"),
+                    Ok(()) => crate::probe_note(&format!("frank: search sheet -> {target}")),
+                    Err(why) => crate::probe_note(&format!("frank: search sheet refused: {why} ({target})")),
                 }
                 // Cancelled either way. A door that opened nothing must not fall
                 // through to a real navigation -- that is the reader leaving.
