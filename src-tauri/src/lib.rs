@@ -1219,6 +1219,11 @@ extern "C" {
     fn frank_webview_fill(webview: *mut std::ffi::c_void, out: *mut f64) -> i32;
 }
 
+/// How many doubles [`frank_webview_fill`] writes: root w,h after; webview
+/// x,y,w,h before; window w,h before. `FrankWebView.m` writes exactly these.
+#[cfg(target_os = "ios")]
+const FILL_OUT: usize = 8;
+
 /// What `FrankWebView.m` returns, as a sentence. `0` is success.
 pub fn webview_fill_why(code: i32) -> &'static str {
     match code {
@@ -1226,6 +1231,7 @@ pub fn webview_fill_why(code: i32) -> &'static str {
         1 => "no webview pointer",
         2 => "the pointer is not a UIView",
         3 => "the webview has no superview -- nothing to fill",
+        4 => "the webview is in no window -- nothing to size against the screen",
         _ => "unknown frank_webview_fill result",
     }
 }
@@ -1245,19 +1251,19 @@ pub fn webview_fill_why(code: i32) -> &'static str {
 #[cfg(target_os = "ios")]
 fn fill_root_view(window: &tauri::WebviewWindow<Wry>) {
     let sent = window.with_webview(|platform| {
-        let mut out = [0f64; 6];
+        let mut out = [0f64; FILL_OUT];
         // SAFETY: `inner()` is this window's WKWebView, which is a UIView;
-        // `out` is six doubles the callee writes and this frame owns. Both
-        // outlive the call, and the call is on the UI thread.
+        // `out` is FILL_OUT doubles the callee writes and this frame owns.
+        // Both outlive the call, and the call is on the UI thread.
         let code = unsafe { frank_webview_fill(platform.inner(), out.as_mut_ptr()) };
         if code == 0 {
-            log::info!(
-                "frank: webview fills the root -- root {:.0}x{:.0}, webview was \
-                 ({:.0},{:.0}) {:.0}x{:.0}, now (0,0) {:.0}x{:.0}",
-                out[0], out[1], out[2], out[3], out[4], out[5], out[0], out[1]
-            );
+            probe_note(&format!(
+                "frank: webview fills the screen -- window was {:.0}x{:.0}, root now \
+                 {:.0}x{:.0}, webview was ({:.0},{:.0}) {:.0}x{:.0}, now (0,0) {:.0}x{:.0}",
+                out[6], out[7], out[0], out[1], out[2], out[3], out[4], out[5], out[0], out[1]
+            ));
         } else {
-            log::error!("frank: webview NOT filled -- {}", webview_fill_why(code));
+            probe_note(&format!("frank: webview NOT filled -- {}", webview_fill_why(code)));
         }
     });
     if let Err(why) = sent {
@@ -1336,11 +1342,23 @@ pub const PROBE_JS: &str = r#"(function () {
     pad.parentNode.removeChild(pad);
     var inner = Math.round(window.innerHeight * d);
     var screenH = Math.round((s.height || 0) * d);
+    /* the first-run gate's sheet, when it is up: its rect must sit inside
+       0..innerWidth, which is the claim "the card is centred on the PHONE" */
+    var card = document.querySelector(".ttstv-settings.fr-gate .fr-sheet");
+    var r = card ? card.getBoundingClientRect() : null;
+    var mq = window.matchMedia ? window.matchMedia("(max-width: 600px)") : null;
     say("viewport", {
       why: why, dpr: d,
       innerH: inner, screenH: screenH, fills: inner === screenH ? 1 : 0,
       innerW: Math.round(window.innerWidth * d),
       screenW: Math.round((s.width || 0) * d),
+      cssW: window.innerWidth, cssH: window.innerHeight,
+      cssScreenW: s.width || 0, cssScreenH: s.height || 0,
+      band: Math.max(0, (s.height || 0) - window.innerHeight),
+      phone: mq ? (mq.matches ? 1 : 0) : -1,
+      cardL: r ? Math.round(r.left) : -1, cardR: r ? Math.round(r.right) : -1,
+      cardW: r ? Math.round(r.width) : -1,
+      cardIn: r ? ((r.left >= 0 && r.right <= window.innerWidth) ? 1 : 0) : -1,
       safeTop: safeTop, safeBottom: safeBottom
     });
   }
@@ -1442,6 +1460,62 @@ pub const PROBE_JS: &str = r#"(function () {
 })();
 "#;
 
+/// The window's size on a desktop, and nothing at all on iOS.
+///
+/// THE WEBVIEW FRAME (Osca, 6 Sep): *"the WKWebView is 1024x768 and never
+/// resizes to the screen"* -- a 560 px card centred at x~262, a black band
+/// under the page. Job 2's fill was right and filling the wrong box: on iOS
+/// `tao` builds the UIWindow, the root view and the view controller's view
+/// from `inner_size` when one is given (`tao-0.35.3/src/platform_impl/ios/
+/// window.rs`, `let frame = match window_attributes.inner_size { Some(dim) =>
+/// CGRect { origin: screen_bounds.origin, size: dim }, None => screen_bounds }`),
+/// so the 1100x800 meant for a Mac window was the PHONE's window, the root
+/// view was 1100x800, and `frank_webview_fill` dutifully filled 1100x800 of
+/// it. `min_inner_size` is a warning on iOS ("ignored") and nothing else.
+///
+/// Off iOS the two lines are what they were. On iOS the builder is returned
+/// untouched and tao's `None` arm -- the screen's bounds -- is the frame; the
+/// native fill then re-asserts the window against the screen as well, so a
+/// size that ever sneaks back in here is corrected rather than obeyed.
+fn desktop_size<'a, R: tauri::Runtime, M: Manager<R>>(
+    b: WebviewWindowBuilder<'a, R, M>,
+) -> WebviewWindowBuilder<'a, R, M> {
+    #[cfg(target_os = "ios")]
+    {
+        b
+    }
+    #[cfg(not(target_os = "ios"))]
+    {
+        b.inner_size(1100.0, 800.0).min_inner_size(400.0, 400.0)
+    }
+}
+
+/// Where the simulator's numbers land so a session without a macOS shell can
+/// read them: `<repo>/scratch-probe/probe.log`, one line per probe, appended.
+/// Compiled into a SIMULATOR DEBUG build and nothing else (`target_abi =
+/// "sim"` is `aarch64-apple-ios-sim`; a device build has no host disk to write
+/// and a release build has no probe). `CARGO_MANIFEST_DIR` is baked in at
+/// compile time, which is the point -- the app knows the checkout it was built
+/// from, and a simulator process runs as the Mac user with the host's disk.
+#[cfg(all(debug_assertions, target_os = "ios", target_abi = "sim"))]
+const PROBE_FILE: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../scratch-probe/probe.log");
+
+/// One probe line: the process log always, and [`PROBE_FILE`] on a simulator.
+fn probe_note(line: &str) {
+    log::info!("{line}");
+    #[cfg(all(debug_assertions, target_os = "ios", target_abi = "sim"))]
+    {
+        use std::io::Write;
+        let p = std::path::Path::new(PROBE_FILE);
+        if let Some(dir) = p.parent() {
+            let _ = fs::create_dir_all(dir);
+        }
+        if let Ok(mut f) = fs::OpenOptions::new().create(true).append(true).open(p) {
+            let _ = writeln!(f, "{line}");
+        }
+    }
+}
+
 /// The one entry point, on all four platforms.
 ///
 /// `main.rs` calls this on desktop. On a phone there is no `main`: the
@@ -1492,7 +1566,7 @@ pub fn run() {
             // injected there either. Answered before the disk is touched so a
             // measurement never depends on the shell being unpacked.
             if cfg!(debug_assertions) && path == PROBE_PATH {
-                log::info!("frank: probe {}", request.uri().query().unwrap_or(""));
+                probe_note(&format!("frank: probe {}", request.uri().query().unwrap_or("")));
                 return http_response(204, "text/plain; charset=utf-8", Vec::new());
             }
 
@@ -1604,12 +1678,13 @@ pub fn run() {
             // expression. An empty init script is a no-op, not an empty
             // `<script>`.
             .initialization_script(if cfg!(debug_assertions) { PROBE_JS } else { "" })
-            .inner_size(1100.0, 800.0)
-            .min_inner_size(400.0, 400.0)
             // Every document, including the first: whatever a launch link left
             // pending is written here, once.
-            .on_page_load(|window, _payload| flush_pair(window.app_handle()))
-            .build()?;
+            .on_page_load(|window, _payload| flush_pair(window.app_handle()));
+            // The desktop's 1100x800 -- and on iOS NOTHING, because tao makes
+            // the UIWindow from `inner_size` (the webview frame, 6 Sep; the
+            // long version is over `desktop_size`).
+            let window = desktop_size(window).build()?;
 
             // The black bar (job 2). After `build`, because there is no
             // webview to reach into before it; dispatched, so it lands after

@@ -36,11 +36,24 @@
     beats us to, a keyboard, a future split view -- it looks like the page and
     not like a broken app.
 
-    `out` is six doubles for the caller's log, because a fix like this is worth
-    a number and not an adjective: the root's size, then the rectangle the
-    webview had before. The rectangle it has after is (0, 0, out[0], out[1]) by
-    construction.
-      0 ok · 1 no pointer · 2 not a UIView · 3 no superview
+    THE FOURTH LINE, AND THE ONE THAT WAS THE BAR ALL ALONG (the webview
+    frame, 6 Sep). The fill above was right and filled the wrong box. tao
+    builds the UIWindow -- and so the root view -- from the window builder's
+    `inner_size` when one is given (`tao-0.35.3/src/platform_impl/ios/
+    window.rs`: `Some(dim) => CGRect { origin: screen_bounds.origin, size:
+    dim }`), so the desktop's 1100x800 was the PHONE's window, the root was
+    1100x800, and the webview filled 1100 of 393 points: a 560 px card
+    centred at x~262 and a band under the page where no window was. lib.rs no
+    longer passes a size on iOS; this file ALSO puts the window back on the
+    screen (`window.frame = screen.bounds`, root = window.bounds) so a size
+    that sneaks back in is corrected rather than obeyed, and the log says by
+    how much.
+
+    `out` is eight doubles for the caller's log, because a fix like this is
+    worth a number and not an adjective: the root's size after, the rectangle
+    the webview had before, the size the WINDOW had before. The rectangle the
+    webview has after is (0, 0, out[0], out[1]) by construction.
+      0 ok · 1 no pointer · 2 not a UIView · 3 no superview · 4 no window
 */
 #import <UIKit/UIKit.h>
 
@@ -70,8 +83,37 @@ int frank_webview_fill(void *webview, double *out) {
     if (root == nil) {
         return 3;
     }
+    UIWindow *window = view.window;
+    if (window == nil) {
+        return 4;
+    }
 
     CGRect was = view.frame;
+    CGRect windowWas = window.frame;
+
+    /* The window first: tao sized it from `inner_size`, and every view under
+       it takes its size from the window. The screen the window is on, not
+       `mainScreen`, so an external display or a future split does not put the
+       phone's rectangle on the wrong glass. */
+    UIScreen *screen = window.screen ?: [UIScreen mainScreen];
+    CGRect screenBounds = screen.bounds;
+    if (!CGRectEqualToRect(windowWas, screenBounds)) {
+        window.frame = screenBounds;
+    }
+    /* Then the view controller's view, which is `root` when the controller's
+       own view is the root; when it is not (a wrapper tao adds one day),
+       the controller's view is the one UIKit lays out against the window,
+       so size that too. Both are the window's bounds in the window's space. */
+    UIView *top = window.rootViewController.view ?: root;
+    if (top != nil && !CGRectEqualToRect(top.frame, window.bounds)) {
+        top.frame = window.bounds;
+        top.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
+    }
+    if (root != top && !CGRectEqualToRect(root.frame, top.bounds)) {
+        root.frame = top.bounds;
+        root.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
+    }
+
     CGRect fill = root.bounds;
     if (out != NULL) {
         out[0] = fill.size.width;
@@ -80,6 +122,8 @@ int frank_webview_fill(void *webview, double *out) {
         out[3] = was.origin.y;
         out[4] = was.size.width;
         out[5] = was.size.height;
+        out[6] = windowWas.size.width;
+        out[7] = windowWas.size.height;
     }
 
     view.translatesAutoresizingMaskIntoConstraints = YES;
@@ -87,6 +131,8 @@ int frank_webview_fill(void *webview, double *out) {
     view.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
 
     UIColor *paper = frank_paper();
+    window.backgroundColor = paper;
+    if (top != nil) { top.backgroundColor = paper; }
     root.backgroundColor = paper;
     view.backgroundColor = paper;
 
