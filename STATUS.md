@@ -78,6 +78,182 @@ PKCE needs none. 28 of the repo's tests pass; the one failure
 
 ---
 
+## job 28 · Android on the emulator — and the loop needs no network at all · 6 Sep
+
+**Android is the easier of the two platforms, and the go's own framing had the
+mechanism wrong in a way worth correcting before anyone types `10.0.2.2`.**
+
+### 1. Built
+- **`PHONE.md` §5, rewritten** into §5.0 the one export, §5.1 the three lines,
+  §5.2 the apk and why `--debug` is load-bearing, §5.3 `chrome://inspect`.
+- **`tools/android.sh`** (new, executable) — the apk built and installed in one
+  command: optional shell import → `android_permissions.py` → `tauri android
+  build --apk --debug` → `adb install -r`. Sets `JAVA_HOME` to Android Studio's
+  JBR **only when it is not already that**, and says so when it overrides. Finds
+  the apk rather than assuming its path. Refuses rather than guesses on two
+  devices.
+- **`tools/android_permissions.py`** — one docstring line: it named
+  `voiceui/asr.js`, and this repo may not name a file of the shell (§2).
+- **`tests/test_phone_loop.py`** — 6 new Android tests (14 in the file).
+- **`tests/test_phone_shell.py`** — a defect fixed, see §2.
+
+### 2. Verified — and how
+Everything below is **read off the sources that decide it**, in the cloud
+container: `tauri-cli` 2.11.4's own crate, which carries the Android templates.
+Nothing was run — see the end of this section.
+
+| claim | where it is decided | what it says |
+|---|---|---|
+| **`10.0.2.2` is the wrong answer** | `src/mobile/android/android_studio_script.rs:275` | dev runs **`adb reverse tcp:P tcp:P`**, and loops on `adb reverse --list` until the forward is really there. So **`localhost:P` on the device is the Mac** — no LAN, no firewall, no `--host`, and the same command works over USB on a real phone. `10.0.2.2` is what you would need *without* the reverse, and an app pointed at it only ever works on an emulator |
+| the one export, and why it is needed at all | `src/mobile/android/mod.rs:472` `ensure_java` | Tauri substitutes `/Applications/Android Studio.app/Contents/jbr/Contents/Home` **only `if std::env::var_os("JAVA_HOME").is_none()`**. So a JDK 25 exported in a shell profile is used in preference and Gradle refuses; the fix has to *name* the JBR, not merely be absent |
+| `INTERNET` needs no patch | `templates/mobile/android/app/src/main/AndroidManifest.xml:3` | it is in the template Tauri generates. `RECORD_AUDIO` is not — which is why `android_permissions.py` exists and why it is re-run after every `init` |
+| `--debug` is load-bearing | `templates/mobile/android/app/build.gradle.kts:22,34` | `manifestPlaceholders["usesCleartextTraffic"]` is `"false"` in `defaultConfig` and `"true"` in the **debug** build type, and the manifest reads that placeholder — so a debug apk may reach a plain-http Studio on the LAN (§6b's pairing) and a release apk may not |
+| the console | `tauri` 2.11.3 `src/webview/mod.rs:1115` | *"Android: Open `chrome://inspect/#devices` in Chrome to get the devtools window"*, devtools on by default in debug — the same rule as iOS, with no device-side toggle to find |
+| the asset story is iOS's | this repo's `lib.rs` | a built apk embeds the shell compressed exactly as an `.ipa` does, so addendum 2's `iter()`/`get()` fix and the read-back guard are what stand between a built Android app and the same page of glyphs |
+
+**A red that had been on this suite all session turned out to be a real defect
+in the guard, not in the code it guards.**
+`test_the_app_names_no_shell_file_of_its_own` scans this repo's `.py`/`.rs` for
+names of shell files. Its token pattern had **no right-hand boundary**, so
+`book.json` matched `book.js` *inside itself* — and `tools/prebuild.py`'s
+docstring says *"no `book.json` or …"*, which is the sentence that was failing
+the test whose whole purpose is keeping `book.json` out. The comment directly
+above the pattern said "Whole path segments, so `book.json` is not read as
+`book.js`", and it had been untrue since the file was written. Fixed with a
+lookahead, and the comment now has **a test of its own** so it cannot go back to
+being a claim. Two other names it caught were genuine and are handled honestly:
+`sw.js` is **exempted** — `reader/sw.js` is where the LIST lives and
+`import_shell.py` must name it to read the list off it, which is the opposite of
+restating it (the exemption is asserted alongside `shell_files()` being what is
+actually called); `asr.js` was prose in `android_permissions.py` and is now the
+module's name instead.
+
+**`tests` is 45 passed, 1 skipped, 0 failed** — green for the first time this
+session. The skip is job 27's plist drift, still waiting on `xcodegen`.
+
+**Not verified — everything with Android in it.** No `android init`, no
+`android dev`, no emulator, no `adb`, no apk, no `chrome://inspect`. There is no
+Android SDK, no JDK, no emulator and no macOS in a Cowork session
+(`tools/android.sh` has never been executed; `bash -n` is all this shell can say
+about it). The three proofs the go asks for — the Library's
+`getBoundingClientRect`, a bundle importing, and Sync finding Studio — are
+**Osca's**, in §8, and none of them is claimed here.
+
+### 3. Judgment calls
+- *the go says "10.0.2.2 is the host"* → **true of the emulator and not what
+  this loop uses.** `adb reverse` is better on every axis (works on a USB phone
+  too, needs no network permission, survives the Mac's firewall), and telling
+  someone to hard-code `10.0.2.2` would produce an app that cannot leave an
+  emulator. §5 names it as the thing *not* to set, with the reason, rather than
+  omitting it and leaving the question open.
+- *the go asks for dev first, then the apk* → kept exactly, and §8 is in that
+  order. The apk is where the Brotli guard finally gets a second platform to
+  prove itself on, which is a reason to do it second rather than skip it.
+- *`android.sh` overriding a set `JAVA_HOME`* → **it overrides, and says so on
+  stdout.** Silence would be wrong (it is someone's deliberate export) and
+  obeying would be wrong (Gradle refuses); a line naming what it did is the only
+  option that leaves the person in charge.
+- *fixing a test that was red before I arrived* → **fixed**, because the
+  evidence arrived in this job: chasing the Android red led to `prebuild.py`,
+  and the pattern's own comment was the giveaway. I had named it "pre-existing"
+  three times, which was true and was not the same as harmless.
+- *a committed AndroidManifest* → **still no**, and `android_permissions.py`'s
+  own docstring already argues it: `gen/android/` is generated whole and a
+  committed manifest would be a copy of a generated file.
+
+### 4. Boundary check
+Touched, all in this repo: `PHONE.md`, `tools/android.sh` (new),
+`tools/android_permissions.py`, `tests/test_phone_loop.py`,
+`tests/test_phone_shell.py`, `STATUS.md`. TTSTV not read and not written.
+`src-tauri/` **not touched at all** this job — no Rust, no config.
+
+**Left alone**: the four generated Apple files Osca's build and Xcode keep dirty
+(`project.pbxproj`, the xcscheme, `Info.plist`, `frank_iOS.entitlements`), and
+untracked `shell/`, `shell.manifest.json`, `scratch26b/` (the Google lane's).
+
+### 5. Footprint
+Nothing added but source. In the cloud container, `tauri-cli` 2.11.4's crate
+source, downloaded to read the Android templates; it dies with the session.
+`_to_delete/` is unchanged from job 27 and one `rm _to_delete/*` still clears it.
+
+### 6. Requests to core / other modules
+None.
+
+### 7. Known gaps
+- **Nothing here has run on Android.** Six file-level tests and a run sheet.
+- **`android.sh` has never been executed.** Its `adb devices` parsing and its
+  apk `find` are written against documented output, not observed output — the
+  same caveat `phone.sh` carries, and the same first-run risk.
+- **The apk has never embedded a shell on Android**, so the Brotli guard is
+  unproved on this platform. If the Library comes up garbled the log says so;
+  if the guard fires, its sentence names the first eight bytes.
+- **Bonjour on Android is untested.** The go is right that Android has no
+  multicast entitlement problem, but `mdns-sd`'s browse has been run on nothing.
+  `NSBonjourServices` has no Android equivalent to forget; what it does need is
+  `INTERNET`, which the template already has.
+- **`tauri android init` has not been run**, so `gen/android/` does not exist in
+  this repo and `android_permissions.py` cannot be exercised end to end — its
+  patch function has unit tests, its target does not exist yet.
+- The JDK version Android Studio bundles is not asserted anywhere: §5.0 says
+  "the JDK Android Studio ships with" rather than naming 17 or 21, because the
+  bundled version moves and a number would rot.
+
+### 8. Every command Osca types, one line each
+
+```bash
+export JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home"
+```
+```bash
+npx tauri android init
+```
+```bash
+python3 tools/android_permissions.py
+```
+```bash
+npx tauri android dev
+```
+```bash
+npx tauri android build --apk --debug
+```
+```bash
+tools/android.sh
+```
+
+The first goes in `~/.zshrc` and is typed once. The next three are the loop:
+`init` once, the permission after every `init`, then `dev` — which builds,
+installs and launches on the running AVD and then serves the shell from the Mac,
+so edits to `shell/` appear without a rebuild. The fifth is the apk when the Mac
+must be out of it; the sixth is the fifth plus `adb install -r`, and is the one
+to use.
+
+**The three numbers to send back**, all from Chrome → `chrome://inspect/#devices`
+→ inspect (§5.3):
+
+```js
+document.querySelectorAll('#readercol p.line, #readercol p.sp, #readercol p.dir').length
+```
+```js
+(await TTSTVBundle.importZip(await (await fetch('/…/bundle.zip')).arrayBuffer(), {})).books[0]
+```
+```js
+await TTSTVHost.syncDiscover(2500)
+```
+
+The first is the Library rendering (job 15c's poems chapter one was 1,007 boxes
+in Chromium; anything non-zero is the shell alive). The second is a bundle
+importing — `{ok: true, hash, has_book_data, has_word_map}`. The third is
+Settings → Transfer → Sync finding the Mac's Studio, and it is the one Android
+should be *better* at than iOS.
+
+### 8b. Commit check
+Pathspec, by file, on `main`; `git show --stat --name-only HEAD` checked after.
+`tools/android.sh` `git add`ed by its own single path first.
+
+### 9. Status line
+`IOS-TTS-TV · job 28 · 6 Sep · Android dev needs no network (adb reverse, not 10.0.2.2), JAVA_HOME must NAME the JBR, --debug is what allows cleartext — 45 tests green, and the suite's long-standing red was the guard's own unanchored regex`
+
+---
+
 ## job 27 · the phone loop is one press — dev over the LAN, ▶, and one script · 6 Sep
 
 **Osca, 6 Sep: *"simpler than the terminal, minutes, and my password three

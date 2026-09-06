@@ -114,23 +114,52 @@ def test_the_app_names_no_shell_file_of_its_own():
             l for l in f.read_text(encoding="utf-8").splitlines()
             if not l.lstrip().startswith(("//", "#"))
         )
-        # Whole path segments, so `book.json` is not read as `book.js`.
-        tokens = set(re.findall(r"[\w.-]+\.(?:js|css|html|png|webmanifest)", code))
+        # Whole path segments, so `book.json` is not read as `book.js` -- and
+        # for eight days it WAS, because this pattern had no right-hand
+        # boundary and `book.json` matched `book.js` inside itself. Found
+        # 6 Sep: `tools/prebuild.py` says "no `book.json` or ..." in its own
+        # docstring, and that sentence was failing the test that exists to keep
+        # `book.json` out. The lookahead is the fix, and it is the reason the
+        # comment above it now has a test of its own below.
+        tokens = set(re.findall(r"[\w.-]+\.(?:js|css|html|png|webmanifest)(?![\w.-])", code))
         # `library/library.html` is the page the window opens on: a
         # destination, and the only shell name this repo is allowed to know.
-        hits = sorted((tokens & names) - {"library.html", "index.html"})
+        # `sw.js` is the third, and it is the opposite of a restatement:
+        # `reader/sw.js` is where the LIST lives, so `import_shell.py` has to
+        # name it to read the list off it and to refuse a directory that is not
+        # a TTSTV checkout. A rule that forbade naming the source of the list
+        # would forbid the one thing this repo is built to do (README, "The
+        # list of what the shell is lives in TTSTV"). Found 6 Sep: this test had
+        # been red since the Android lane, on exactly that name.
+        hits = sorted((tokens & names) - {"library.html", "index.html", "sw.js"})
         assert not hits, f"{f.relative_to(REPO)} names shell files itself: {hits}"
 
 
 def test_the_names_the_tools_are_allowed_to_know_are_these_three():
     """`library/library.html` is the page the window opens on -- a destination.
-    `index.html` is the one name this repo adds. `book-data.js` and `book.json`
-    are the two that must NEVER arrive. All four are the opposite of a file
-    list, and they are asserted here so the exemptions above are a statement
-    rather than a hole."""
+    `index.html` is the one name this repo adds. `reader/sw.js` is where the
+    LIST lives, so naming it is how the list is read rather than copied.
+    `book-data.js` and `book.json` are the two that must NEVER arrive. All of
+    them are the opposite of a file list, and they are asserted here so the
+    exemptions above are a statement rather than a hole."""
     assert HOME_PAGE == "library/library.html"
     assert INDEX_HTML == "index.html"
     assert set(NEVER) == {"book-data.js", "book.json"}
+    # the exemption is for the LIST's source, and it is a read, not a copy
+    src = (REPO / "tools" / "import_shell.py").read_text(encoding="utf-8")
+    assert "reader" in src and "sw.js" in src, "import_shell reads the list off sw.js"
+    assert "shell_files()" in src, "...by calling TTSTV's own reader, never by listing"
+
+
+def test_a_json_name_is_not_read_as_a_js_name():
+    """The scan above matches whole path segments. Asserted rather than
+    commented, because it was commented and untrue for eight days: `book.json`
+    matched `book.js` inside itself and put a permanent red on the suite."""
+    pat = re.compile(r"[\w.-]+\.(?:js|css|html|png|webmanifest)(?![\w.-])")
+    assert pat.findall("no book.json or state.json here") == []
+    assert pat.findall("reader/sw.js and book.js") == ["sw.js", "book.js"]
+    assert pat.findall("library.html, tokens.css, icon-192.png") == [
+        "library.html", "tokens.css", "icon-192.png"]
 
 
 # ------------------------------------------------------------- the shell ---

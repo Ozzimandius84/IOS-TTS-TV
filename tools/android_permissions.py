@@ -16,9 +16,10 @@ run it twice and the second run says so and changes nothing. It is one line in
 `PHONE.md`'s run sheet, immediately after `android init`, and it is the line to
 re-run if `init` is ever run again.
 
-Hands-free needs the permission on day one -- `voiceui/asr.js` asks for the
-microphone the first time the trigger is armed, and on Android a `getUserMedia`
-in a webview whose host app does not hold `RECORD_AUDIO` fails with
+Hands-free needs the permission on day one -- `voiceui/`'s ASR layer asks for
+the microphone the first time the trigger is armed, and on Android a
+`getUserMedia` in a webview whose host app does not hold `RECORD_AUDIO` fails
+with
 `NotAllowedError` before the user is ever asked, which reads exactly like a
 declined prompt and is not one.
 """

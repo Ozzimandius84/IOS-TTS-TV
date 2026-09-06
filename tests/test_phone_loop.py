@@ -146,6 +146,70 @@ def test_phone_sh_runs_under_shellcheck_free_bash_n():
     assert subprocess.run(["bash", "-n", str(PHONE_SH)]).returncode == 0
 
 
+# ------------------------------------------------------------------- Android
+
+ANDROID_SH = REPO / "tools" / "android.sh"
+STUDIO_JBR = "/Applications/Android Studio.app/Contents/jbr/Contents/Home"
+
+
+def test_the_java_home_export_is_android_studios_own_jbr():
+    """`tauri-cli`'s `ensure_java` substitutes Android Studio's bundled JBR only
+    when JAVA_HOME is UNSET. A JDK 25 exported in a shell profile therefore wins
+    and Gradle refuses -- so the export has to name the JBR, not merely be
+    absent."""
+    md = PHONE_MD.read_text(encoding="utf-8")
+    assert f'export JAVA_HOME="{STUDIO_JBR}"' in md, "PHONE.md §5.0"
+    assert "is_none()" in md or "unset" in md, "and says WHY, or the next person unsets it and moves on"
+    assert STUDIO_JBR in ANDROID_SH.read_text(encoding="utf-8")
+
+
+def test_android_dev_needs_no_network_and_the_page_does_not_name_10_0_2_2():
+    """Tauri runs `adb reverse tcp:P tcp:P`, so localhost on the device is the
+    Mac -- no LAN, no firewall, no --host. `10.0.2.2` is what you would need
+    WITHOUT the reverse, and an app pointed at it only ever works on an
+    emulator, so the run sheet must not tell anyone to set it."""
+    md = PHONE_MD.read_text(encoding="utf-8")
+    assert "adb reverse" in md
+    assert "10.0.2.2" in md, "it is named..."
+    assert re.search(r"do not set `?10\.0\.2\.2", md, re.I), "...and named as the thing NOT to set"
+
+
+def test_the_debug_flag_is_load_bearing_on_android_and_the_page_says_why():
+    """`build.gradle.kts` sets usesCleartextTraffic "false" in defaultConfig and
+    "true" in the debug build type, and the manifest reads that placeholder. So
+    a release apk cannot reach a plain-http Studio on the LAN."""
+    md = PHONE_MD.read_text(encoding="utf-8")
+    assert "usesCleartextTraffic" in md
+    assert "android build --apk --debug" in md
+    src = ANDROID_SH.read_text(encoding="utf-8")
+    assert "android build --apk --debug" in src
+    assert "--release" not in src
+
+
+def test_android_sh_patches_the_manifest_after_it_could_have_been_regenerated():
+    """`gen/android/` is generated whole and is not tracked, so RECORD_AUDIO has
+    to go back in after every `init`. The script runs the patch itself rather
+    than trusting that somebody remembered."""
+    src = ANDROID_SH.read_text(encoding="utf-8")
+    assert "android_permissions.py" in src
+    assert src.index("android_permissions.py") < src.index("android build --apk")
+    assert "adb -s" in src and "install -r" in src, "-r, or the second run fails ALREADY_EXISTS"
+    assert "more than one device" in src, "refuse rather than guess"
+    assert subprocess.run(["bash", "-n", str(ANDROID_SH)]).returncode == 0
+
+
+def test_android_sh_finds_the_apk_rather_than_assuming_its_path():
+    src = ANDROID_SH.read_text(encoding="utf-8")
+    assert "find " in src and "outputs/apk" in src
+    assert "universal/debug/app-universal-debug.apk" not in src, \
+        "--split-per-abi and a future Gradle both move it"
+
+
+def test_the_android_console_is_chrome_inspect():
+    md = PHONE_MD.read_text(encoding="utf-8")
+    assert "chrome://inspect" in md
+
+
 # ------------------------------------------------------------- the daily loop
 
 def test_phone_md_names_the_flag_the_blank_screen_needed():

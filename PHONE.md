@@ -140,26 +140,96 @@ handler falls back to reading `frontendDist` off disk (`#[cfg(dev)]` in
 `lib.rs`). A *built* app embeds the shell and unpacks it once. If a built app
 ever says 0, that is the real bug and the 404 page names which of the two it is.
 
-## 5. Android — the friend's phone
+## 5. Android — the emulator, then the friend's phone
 
+**Android is the easier of the two, and for one reason: the loop needs no
+network at all.** Where iOS makes the phone reach the Mac across the LAN
+(§6c: `--host`, the firewall, the ATS key), Tauri's Android dev runs
+`adb reverse tcp:<port> tcp:<port>` — it waits and re-checks `adb reverse
+--list` until the forward is really there — so **`localhost:<port>` on the
+device is the Mac**. No LAN, no firewall toggle, no `--host`, and the same
+thing works over USB on a real phone as on an emulator.
+
+**So do not set `10.0.2.2`.** It is the emulator's alias for the host and it is
+what you would need *without* the reverse forward; with it, an app pointed at
+`10.0.2.2` is one that only ever works on an emulator. Tauri does the reverse;
+leave the address alone.
+
+### 5.0 JAVA_HOME — the one export
+
+```bash
+export JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home"
 ```
+
+Android's Gradle wants the JDK Android Studio ships with, and a JDK 25 on the
+machine will be picked up in preference to it — because Tauri only substitutes
+Android Studio's bundled JBR **when `JAVA_HOME` is unset**
+(`tauri-cli`'s `ensure_java`: `if std::env::var_os("JAVA_HOME").is_none()`,
+then `/Applications/Android Studio.app/Contents/jbr/Contents/Home`). With
+`JAVA_HOME` pointing at 25 it uses 25 and Gradle refuses. Put the line in
+`~/.zshrc`, or prefix each command with it; unsetting `JAVA_HOME` entirely
+works too and is the same outcome by a longer road.
+
+### 5.1 The three lines, in order
+
+```bash
 npx tauri android init
 ```
-```
+```bash
 python3 tools/android_permissions.py
 ```
-```
-npx tauri android build --apk
+```bash
+npx tauri android dev
 ```
 
-The second line is not optional and is not a one-off: `gen/android/` is
-generated whole and is **not** tracked here, so the `RECORD_AUDIO` permission
-has to be put back after every `init`. Running it twice is safe — it says so
-and changes nothing. Without it, hands-free fails on Android with a
-`NotAllowedError` that looks exactly like a declined prompt and is not one.
+The second is **not optional and not a one-off**: `gen/android/` is generated
+whole and is not tracked here, so `RECORD_AUDIO` has to be put back after every
+`init`. Running it twice is safe — it says so and changes nothing. Without it,
+hands-free fails with a `NotAllowedError` that looks exactly like a declined
+prompt and is not one. `INTERNET` needs no such patch: it is in the template
+manifest Tauri generates.
 
-The `.apk` lands in
-`src-tauri/gen/android/app/build/outputs/apk/universal/release/`.
+`android dev` builds, installs and launches on whatever the emulator or a USB
+phone is showing, and then serves the shell from the Mac — the same asset story
+as iOS §6c, and edits to `shell/` appear without a rebuild.
+
+### 5.2 The apk, when the Mac must be out of it
+
+```bash
+npx tauri android build --apk --debug
+```
+```bash
+tools/android.sh          # ...or this, which builds it and installs it
+```
+
+**`--debug`, and the flag matters more than it looks.** The generated
+`build.gradle.kts` sets `manifestPlaceholders["usesCleartextTraffic"]` to
+`"false"` in `defaultConfig` and to `"true"` in the **debug** build type, and
+the manifest reads that placeholder — so a debug apk may talk to a plain-http
+Studio on the LAN (§6b's pairing, a LAN door) and a release apk may not. A
+release apk also carries no web inspector.
+
+The apk path is printed by the build (`Finished 1 APK at: …`); it is normally
+`src-tauri/gen/android/app/build/outputs/apk/universal/debug/`. `tools/android.sh`
+finds it rather than assuming it.
+
+**The Brotli story is the same here.** A built apk embeds the shell compressed
+exactly as an `.ipa` does, so the `iter()`/`get()` fix and the read-back guard
+(`lib.rs`, addendum 2) are what stand between a built Android app and the same
+page of glyphs. It has never been run on Android; if the Library comes up
+garbled or blank, the log says which — §5.3.
+
+### 5.3 The console — `chrome://inspect`
+
+Chrome on the Mac → `chrome://inspect/#devices` → the emulator or phone appears
+→ **inspect** under Frank. Tauri's own note for `devtools`: *"Android: Open
+`chrome://inspect/#devices` in Chrome to get the devtools window"*, and it is
+enabled by default on debug builds — the same rule as iOS §6d, with Chrome in
+Safari's place and no device-side toggle to find.
+
+This is where the numbers come from: `getBoundingClientRect` on the rendered
+page, `TTSTVHost.pairRead()`, and the console line the unpack writes if the
+shell did not land.
 
 ---
 
