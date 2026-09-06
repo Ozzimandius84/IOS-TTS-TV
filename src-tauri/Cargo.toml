@@ -55,3 +55,10 @@ serde_json = "1"
 # Info.plist from `tauri.conf.json`'s `plugins.deep-link.mobile`. 2.4.10 is the
 # newest 2.x and wants `tauri ^2.10`, which the pin above satisfies.
 tauri-plugin-deep-link = "2.4.10"
+# Google (job 26b, 6 Sep): the consent page must open in the SYSTEM browser --
+# Google refuses it in an embedded web view and RFC 8252 §8.12 says an app must
+# not use one for it. This is the official Tauri v2 plugin (UIApplication
+# openURL on iOS, NSWorkspace on macOS, an Intent on Android); it is registered
+# in lib.rs and granted NO page permission -- `google_sign_in` is the only
+# caller and it opens Google's authorization endpoint or nothing.
+tauri-plugin-opener = "2"

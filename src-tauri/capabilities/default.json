@@ -1,12 +1,13 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "The one window, and only what a window needs. The shell reaches its own files over frank:// and Studio over fetch; the ONE command it calls is sync_discover (job 26, 6 Sep) -- the Bonjour browse behind the Sync button -- through window.TTSTVHost, which lib.rs injects. Nothing else beyond core:default is granted. NOTE what is deliberately absent: tauri-plugin-deep-link is registered in lib.rs (job 23d, 6 Sep) and gets NO permission here, so none of its commands are reachable from the page. The link is read in Rust and the pairing is written into localStorage from there; a page that could call get_current() could read the pass out of the launch URL, and no page needs to.",
+  "description": "The one window, and only what a window needs. The shell reaches its own files over frank:// and Studio over fetch; the TWO commands it calls are sync_discover (job 26, 6 Sep) -- the Bonjour browse behind the Sync button -- and google_sign_in (job 26b, 6 Sep) -- Google's consent page in the system browser, which Google will not show in a web view -- both through window.TTSTVHost, which lib.rs injects. Nothing else beyond core:default is granted. NOTE what is deliberately absent: tauri-plugin-deep-link AND tauri-plugin-opener are registered in lib.rs and get NO permission here, so none of their commands are reachable from the page. Both links a phone receives -- frank-pair:// and Google's redirect -- are read in Rust and written into localStorage from there; a page that could call get_current() could read the pass, or another app's redirect, out of a launch URL, and no page needs to. And opener without a permission cannot be asked to open an arbitrary address: google_sign_in opens Google's authorization endpoint or refuses in words.",
   "windows": [
     "main"
   ],
   "permissions": [
     "core:default",
-    "allow-sync-discover"
+    "allow-sync-discover",
+    "allow-google-sign-in"
   ]
 }

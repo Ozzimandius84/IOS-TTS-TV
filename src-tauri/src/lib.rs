@@ -306,6 +306,163 @@ pub const PAIR_JS: &str = r#"(function () {
 })();
 "#;
 
+// ------------------------------------------------------- Google (job 26b)
+//
+// *"Google IS the account"* (Osca, 6 Sep). The account is the same one on
+// the Mac and here, and neither device has a server of ours behind it: the
+// flow is PKCE, and an iOS OAuth client has no secret at all -- so nothing
+// in this crate is a credential, and the one string it carries (the client
+// id) is public by design, printed in Google's console and readable in any
+// installed app's binary.
+//
+// WHAT THIS CRATE OWNS, AND THE TWO THINGS IT DOES NOT. It owns the two
+// halves the page cannot do for itself:
+//
+//   1. **Opening the consent page in the SYSTEM BROWSER.** Google refuses
+//      its consent page inside an embedded web view (the "disallowed_useragent"
+//      answer), which is the whole reason `google_sign_in` is a command and
+//      not a `window.open` in the shell. RFC 8252 §8.12 says the same thing
+//      from the other side: an app must not put the authorization request in
+//      a web view it controls, because the person cannot see what they are
+//      typing their password into.
+//   2. **Catching the redirect the OS hands back** -- `com.googleusercontent.
+//      apps.<n>:/oauth?code=…` -- and writing it into the ONE key the shell
+//      polls. The same shape as `frank-pair://`: read in Rust, written into
+//      `localStorage` from here, so the page never has the deep-link plugin's
+//      commands and cannot read a redirect it was not given.
+//
+// It does NOT own the PKCE, the exchange, or anything the tokens touch:
+// that is `library/drive.js` in the shell (TTSTV), which makes the verifier
+// with `crypto.subtle`, exchanges the code, and keeps the refresh token in
+// its own `ttstv.sync.google`. One flow, and the crate is the two doors the
+// web page has no key to.
+//
+// THE ID IS PASTED ONCE, IN `google.json`, AND THE SCHEME IS DERIVED FROM
+// IT. `tauri.conf.json`'s `plugins.deep-link.mobile` is what the plugin's
+// build script writes into `CFBundleURLTypes`, and it is static JSON -- so
+// the scheme is written there by hand and `tests/test_google_scheme.py`
+// asserts it is exactly the reverse of the id in `google.json`. Two places,
+// one fact, and a test rather than a comment holding them together. Until
+// Osca pastes the id both are empty and `TTSTVHost.google` is not injected
+// at all -- the Settings page then says "no Google client on this device"
+// and stays on This network, which is the truthful state and not a stub.
+
+/// The iOS client id, from `src-tauri/google.json` at compile time. Empty
+/// until Osca pastes it (`studio/STATUS.md` job 26 §6.3: Credentials ▸
+/// Create client ▸ iOS, bundle id `com.ttstv.frank`).
+pub const GOOGLE_JSON: &str = include_str!("../google.json");
+
+/// The one field of it, scanned by hand rather than with a JSON crate --
+/// `parse_pair_link` reads its own URL the same way, and a dependency for
+/// one string in one file is a dependency to keep in step forever.
+pub fn google_ios_client_id() -> &'static str {
+    json_field(GOOGLE_JSON, "ios_client_id")
+}
+
+/// `"key": "value"` out of a flat object, or `""`. No escapes are honoured
+/// because none can occur: a Google client id is `<digits>-<base32ish>.apps.
+/// googleusercontent.com`, and anything else is not one.
+pub fn json_field<'a>(src: &'a str, key: &str) -> &'a str {
+    let needle = format!("\"{key}\"");
+    let Some(i) = src.find(&needle) else { return "" };
+    let rest = &src[i + needle.len()..];
+    let Some(c) = rest.find(':') else { return "" };
+    let rest = &rest[c + 1..];
+    let Some(o) = rest.find('"') else { return "" };
+    let rest = &rest[o + 1..];
+    match rest.find('"') {
+        Some(e) => &rest[..e],
+        None => "",
+    }
+}
+
+/// The redirect an installed iOS app gets: the client id's parts reversed,
+/// then `:/oauth`. Google prints this beside the id as the "iOS URL scheme"
+/// and it is what `CFBundleURLTypes` must carry. `""` when there is no id.
+pub fn google_redirect_scheme() -> String {
+    let id = google_ios_client_id();
+    let Some(number) = id.strip_suffix(".apps.googleusercontent.com") else {
+        return String::new();
+    };
+    if number.is_empty() {
+        return String::new();
+    }
+    format!("com.googleusercontent.apps.{number}")
+}
+
+pub fn google_redirect_uri() -> String {
+    let s = google_redirect_scheme();
+    if s.is_empty() { s } else { format!("{s}:/oauth") }
+}
+
+/// The key the shell polls for the redirect -- `library/drive.js`'s
+/// `GOOGLE_REDIRECT_KEY`, and the only name shared between the two files.
+pub const GOOGLE_REDIRECT_KEY: &str = "ttstv.sync.googleRedirect";
+
+/// Open the consent page in the system browser. The page hands the whole
+/// URL over (it made the PKCE challenge and the state, so only it can), and
+/// this refuses anything that is not Google's own authorization endpoint:
+/// a command that opens any URL a page names is a way out of the app, and
+/// the one thing this command exists for has exactly one address.
+#[tauri::command]
+fn google_sign_in<R: tauri::Runtime>(app: tauri::AppHandle<R>, url: String) -> Result<(), String> {
+    const AUTH: &str = "https://accounts.google.com/o/oauth2/v2/auth?";
+    if !url.starts_with(AUTH) {
+        return Err(format!("not Google's consent page (must begin {AUTH})"));
+    }
+    if google_ios_client_id().is_empty() {
+        return Err("no Google client id in google.json -- see studio/STATUS.md job 26 §6.3".into());
+    }
+    tauri_plugin_opener::OpenerExt::opener(&app)
+        .open_url(url, None::<&str>)
+        .map_err(|e| format!("could not open the browser: {e}"))
+}
+
+/// `window.TTSTVHost.google` and `.googleSignIn`, injected separately from
+/// [`HOST_JS`] because there is a state in which they must NOT exist: with
+/// no client id pasted there is no account to sign in to, and a button that
+/// pretends is worse than one that says so (the shell's own rule for a face
+/// a device lacks). Empty string then, and the Settings page reads the
+/// absence.
+pub fn google_js() -> String {
+    let id = google_ios_client_id();
+    let redirect = google_redirect_uri();
+    if id.is_empty() || redirect.is_empty() {
+        return String::new();
+    }
+    format!(
+        r#"(function () {{
+  "use strict";
+  var TAURI = window.__TAURI__ && window.__TAURI__.core;
+  if (!TAURI || typeof TAURI.invoke !== "function") return;
+  window.TTSTVHost = window.TTSTVHost || {{}};
+  window.TTSTVHost.google = {{ clientId: {id}, redirect: {redirect} }};
+  window.TTSTVHost.googleSignIn = function (url) {{ return TAURI.invoke("google_sign_in", {{ url: url }}); }};
+}})();
+"#,
+        id = json_string(id),
+        redirect = json_string(&redirect),
+    )
+}
+
+/// The redirect, into the key the shell polls. One `setItem` and nothing
+/// else: the code in that URL is single-use, tied to the verifier the page
+/// still holds, and the page is the only thing that can spend it.
+pub fn google_write_js(url: &str) -> String {
+    format!(
+        "try {{ localStorage.setItem({key}, {url}); }} catch (e) {{}}",
+        key = json_string(GOOGLE_REDIRECT_KEY),
+        url = json_string(url),
+    )
+}
+
+/// Is this one of ours? The reverse client id, and nothing else -- a link
+/// that is not this and not `frank-pair://` is logged and dropped.
+pub fn is_google_redirect(url: &str) -> bool {
+    let scheme = google_redirect_scheme();
+    !scheme.is_empty() && url.starts_with(&format!("{scheme}:"))
+}
+
 // ------------------------------------------------------------ the pairing
 //
 // A phone that is going to send a book somewhere to be parsed and voiced has
@@ -516,6 +673,12 @@ v:{},url:{},pass:{},workspace:{},app:{},made:{}}});",
 /// double write harmless: whichever gets there first empties it.
 #[derive(Default)]
 pub struct PendingPair(pub Mutex<Option<Pairing>>);
+
+/// The same, for Google's redirect (job 26b) -- a whole URL rather than a
+/// parsed object, because the page is what parses it: the code inside is
+/// tied to a verifier only the page holds.
+#[derive(Default)]
+pub struct PendingGoogle(pub Mutex<Option<String>>);
 
 /// Turn a request path into a path under `root`, or `None` if it tries to leave.
 ///
@@ -852,14 +1015,21 @@ fn not_here<R: tauri::Runtime>(app: &tauri::AppHandle<R>, root: &Path, path: &st
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
-        .invoke_handler(tauri::generate_handler![sync_discover])
+        .invoke_handler(tauri::generate_handler![sync_discover, google_sign_in])
         // The launch scheme (`frank-pair://`, NOT the asset scheme). The
         // plugin is what turns an OS open into an event on iOS, macOS and
         // Android; on the phone the scheme itself is declared in
         // `tauri.conf.json`'s `plugins.deep-link.mobile`, which the plugin's
         // own build script writes into `CFBundleURLTypes`.
         .plugin(tauri_plugin_deep_link::init())
+        // Google's consent page in the SYSTEM browser (job 26b): Google
+        // refuses it inside a web view, and RFC 8252 §8.12 says an app must
+        // not put it in one anyway. The plugin is registered here and gets
+        // no permission on the page: `google_sign_in` below is the only way
+        // to it, and it opens Google's authorization endpoint or nothing.
+        .plugin(tauri_plugin_opener::init())
         .manage(PendingPair::default())
+        .manage(PendingGoogle::default())
         // `Wry` and not a generic `R`: `Builder::default()` is a
         // `Builder<Wry>`, and spelling it lets the closure's argument type be
         // written down rather than inferred through a `_`.
@@ -954,6 +1124,9 @@ pub fn run() {
             // note. Both run before the document's own scripts, so a page that
             // reads the key at load reads a key a link has already written.
             .initialization_script(PAIR_JS)
+            // ...and Google's two names (job 26b), which are absent -- not
+            // inert -- until an id is pasted into `google.json`.
+            .initialization_script(google_js())
             .inner_size(1100.0, 800.0)
             .min_inner_size(400.0, 400.0)
             // Every document, including the first: whatever a launch link left
@@ -966,6 +1139,30 @@ pub fn run() {
         .expect("error while running Frank");
 }
 
+/// Google's redirect into the key the shell polls, and clear it. Same
+/// shape as [`flush_pair`] and called from it: one link, one write, and a
+/// slot that has been taken cannot be written twice.
+fn flush_google<R: tauri::Runtime>(app: &tauri::AppHandle<R>) {
+    let pending = app
+        .try_state::<PendingGoogle>()
+        .and_then(|s| s.0.lock().ok().and_then(|mut slot| slot.take()));
+    let Some(url) = pending else { return };
+    match app.get_webview_window("main") {
+        Some(w) => {
+            if let Err(why) = w.eval(google_write_js(&url)) {
+                log::error!("frank: could not write the Google redirect -- {why}");
+            }
+        }
+        None => {
+            if let Some(state) = app.try_state::<PendingGoogle>() {
+                if let Ok(mut slot) = state.0.lock() {
+                    *slot = Some(url);
+                }
+            }
+        }
+    }
+}
+
 /// Keep the last pairing link of a batch, and say in the log what happened to
 /// the rest. A batch is normally one URL; the OS may hand over several, and a
 /// link that is not ours (or is malformed) is dropped with its reason rather
@@ -973,6 +1170,18 @@ pub fn run() {
 /// wrong is worse than one that launches unpaired.
 fn take_pair_links<R: tauri::Runtime, I: Iterator<Item = String>>(app: &tauri::AppHandle<R>, urls: I) {
     for u in urls {
+        // Google's redirect (job 26b) comes through the same door and is
+        // kept whole, in its own slot: `frank-pair://` is a pairing to
+        // parse, this is a URL to hand back to the page that started it.
+        if is_google_redirect(&u) {
+            log::info!("frank: Google redirect");
+            if let Some(state) = app.try_state::<PendingGoogle>() {
+                if let Ok(mut slot) = state.0.lock() {
+                    *slot = Some(u);
+                }
+            }
+            continue;
+        }
         match parse_pair_link(&u) {
             Ok(p) => {
                 // The pass is in `p` and goes no further than the store. What
@@ -994,6 +1203,7 @@ fn take_pair_links<R: tauri::Runtime, I: Iterator<Item = String>>(app: &tauri::A
 /// on every page load and on every open: an empty slot is a no-op, and the take
 /// is what stops one link being written twice.
 fn flush_pair<R: tauri::Runtime>(app: &tauri::AppHandle<R>) {
+    flush_google(app);
     let pending = app
         .try_state::<PendingPair>()
         .and_then(|s| s.0.lock().ok().and_then(|mut slot| slot.take()));
@@ -1053,6 +1263,47 @@ mod tests {
         assert!(HOST_JS.contains("const TAURI = window.__TAURI__ && window.__TAURI__.core")
             || HOST_JS.contains("var TAURI = window.__TAURI__ && window.__TAURI__.core"));
         assert!(HOST_JS.contains("if (!TAURI"), "a page outside Frank gets no host object");
+    }
+
+    // ------------------------------------------------- Google (job 26b)
+
+    #[test]
+    fn the_client_id_is_read_from_google_json_and_the_scheme_is_its_reverse() {
+        // the file exists and is the shape the ONE field is scanned out of
+        assert!(GOOGLE_JSON.contains("ios_client_id"), "google.json has lost its field");
+        assert_eq!(json_field(r#"{"a": "x", "ios_client_id": "12-ab.apps.googleusercontent.com"}"#,
+                              "ios_client_id"), "12-ab.apps.googleusercontent.com");
+        assert_eq!(json_field(r#"{"ios_client_id": ""}"#, "ios_client_id"), "");
+        assert_eq!(json_field(r#"{"other": "x"}"#, "ios_client_id"), "");
+        // and whatever is pasted, the redirect is Google's own reverse form
+        let id = google_ios_client_id();
+        if id.is_empty() {
+            assert_eq!(google_redirect_uri(), "", "no id -> no redirect, and no host object");
+            assert_eq!(google_js(), "", "no id -> the page is told there is no Google here");
+            assert!(!is_google_redirect("com.googleusercontent.apps.12-ab:/oauth?code=x"));
+        } else {
+            let number = id.strip_suffix(".apps.googleusercontent.com")
+                .expect("an iOS client id ends .apps.googleusercontent.com");
+            assert_eq!(google_redirect_scheme(), format!("com.googleusercontent.apps.{number}"));
+            assert_eq!(google_redirect_uri(), format!("com.googleusercontent.apps.{number}:/oauth"));
+            assert!(is_google_redirect(&format!("{}:/oauth?code=4/x", google_redirect_scheme())));
+            assert!(!is_google_redirect("frank-pair://v1?url=x"));
+            let js = google_js();
+            assert!(js.contains(r#"invoke("google_sign_in""#) && js.contains("window.TTSTVHost.google"));
+            assert!(js.contains("if (!TAURI"), "a page outside Frank gets no sign-in");
+            assert!(!js.contains("client_secret"), "an iOS client has none, and this crate carries none");
+        }
+    }
+
+    #[test]
+    fn the_redirect_is_written_into_the_one_key_the_shell_polls() {
+        // the key `library/drive.js` polls, and one setItem -- nothing else
+        assert_eq!(GOOGLE_REDIRECT_KEY, "ttstv.sync.googleRedirect");
+        let js = google_write_js("com.googleusercontent.apps.12-ab:/oauth?code=4/x&state=s");
+        assert!(js.contains(r#""ttstv.sync.googleRedirect""#));
+        assert!(js.contains(r#"4\/x"#), "the URL is a JSON string, escaped by json_string");
+        assert_eq!(js.matches("setItem").count(), 1);
+        assert!(!js.contains("eval") && !js.contains("<script"));
     }
 
     #[test]
