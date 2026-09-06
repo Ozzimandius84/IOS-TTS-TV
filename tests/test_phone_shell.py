@@ -67,11 +67,16 @@ def test_the_frontend_is_the_committed_shell_and_the_before_command_only_checks_
     # than staged from TTSTV at build time, which is what lets the phone app
     # build with no TTSTV on the disk.
     assert c["build"]["frontendDist"] == "../shell"
+    # One word per argument: Tauri runs this through `cmd /S /C` on Windows,
+    # where a shell-grouped line is a syntax error before anything compiles.
+    # The two differ by exactly one flag, and the difference is the point: a
+    # BUILD refuses a book under shell/, a DEV run allows the dev shelf that
+    # is the only thing a simulator can show (`tools/dev_books.py`, 6 Sep).
+    assert c["build"]["beforeBuildCommand"] == "python3 tools/prebuild.py"
+    assert c["build"]["beforeDevCommand"] == "python3 tools/prebuild.py --dev"
     for key in ("beforeBuildCommand", "beforeDevCommand"):
-        # One word per argument: Tauri runs this through `cmd /S /C` on
-        # Windows, where a shell-grouped line is a syntax error before
-        # anything compiles.
-        assert c["build"][key] == "python3 tools/prebuild.py", c["build"][key]
+        for grouped in ("&&", ";", "|", '"', "'"):
+            assert grouped not in c["build"][key], c["build"][key]
 
 
 def test_the_config_declares_no_window_so_setup_can_unpack_first():
@@ -166,7 +171,27 @@ def test_a_json_name_is_not_read_as_a_js_name():
 
 @needs_shell
 def test_the_shell_on_disk_is_the_shell_that_was_imported():
-    assert check() == []
+    """In DEV terms, because that is what a working tree looks like once
+    `tools/dev_books.py` has run: the shelf is gitignored, it is not the app,
+    and `check(dev=True)` is the mode `beforeDevCommand` asks. Everything the
+    manifest names must still be present and unedited -- `dev=True` relaxes
+    the "not named" list and the `NEVER` refusal, nothing else -- so this is
+    still the test that a hand-edited shell fails."""
+    assert check(dev=True) == []
+
+
+@needs_shell
+def test_a_build_still_refuses_the_dev_shelf():
+    """The other half, and the one that matters on the 13th: with books under
+    `shell/`, the BUILD check must not pass. Skipped when there is no dev
+    shelf on this machine -- there is nothing to refuse then, and the refusal
+    itself is proved on a fixture in `test_dev_books.py`."""
+    from shell_manifest import is_dev_only, walk
+    if not any(is_dev_only(rel) for rel in walk()):
+        pytest.skip("no dev shelf on this machine; tools/dev_books.py has not run")
+    problems = check()
+    assert problems, "a build accepted a shell carrying a book"
+    assert all("books/" in p or "library.json" in p for p in problems), problems
 
 
 @needs_shell

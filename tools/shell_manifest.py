@@ -56,6 +56,28 @@ INDEX = """<!doctype html>
 #: different repos and only one of them is here at build time.
 NEVER = ("book-data.js", "book.json")
 
+#: The two things a DEV run may have under `shell/` that an import did not
+#: write, and a build still may not (`tools/dev_books.py`, 6 Sep).
+#:
+#: `shell/books/` is gitignored -- *a book is not part of the app* -- and that
+#: has not changed: nothing commits one and `check()` without `dev=True` still
+#: refuses them, so `beforeBuildCommand` stops a build carrying a book exactly
+#: as it did before. What changed is only that `beforeDevCommand` no longer
+#: refuses the thing that makes a simulator show a Library at all.
+#:
+#: `library/library.json` is here for the same reason and by the same rule: it
+#: is the inventory `library.html` reads when no Studio answers, it is written
+#: by `dev_books.py` beside the books it describes, and it is as much *not the
+#: app* as they are.
+DEV_ONLY = ("books/", "library/library.json")
+
+
+def is_dev_only(rel: str) -> bool:
+    """Is this site path one of the two a dev run may add? Prefix-matched on
+    `books/` so every file of every dev book is covered by one rule, and exact
+    for the inventory beside them."""
+    return rel == "library/library.json" or rel.startswith("books/")
+
 
 def sha256(path: Path) -> str:
     h = hashlib.sha256()
@@ -96,13 +118,20 @@ def save(data: dict, manifest: Path = MANIFEST) -> None:
     manifest.write_text(json.dumps(data, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
-def check(shell: Path = SHELL, manifest: Path = MANIFEST) -> list[str]:
+def check(shell: Path = SHELL, manifest: Path = MANIFEST, dev: bool = False) -> list[str]:
     """Every way `shell/` can disagree with its record, as sentences.
 
     Returns an empty list when the tree on disk is exactly the tree the import
     wrote. Every sentence is addressed to a human and names the one command
     that fixes it, because the only correct response to any of them is to
     re-import: `shell/` is never edited by hand.
+
+    `dev=True` allows the two paths [`DEV_ONLY`] names and **nothing else**:
+    a dev book is extra, never missing and never edited, so the two checks it
+    relaxes are the "not named by the manifest" list and the `NEVER` refusal.
+    Every other sentence -- a file the manifest names and is gone, a file that
+    was edited since it was imported, a missing home page -- is asked in both
+    modes, because none of them is made true or false by a book being there.
     """
     fix = "run `python3 tools/import_shell.py --ttstv <path to TTSTV>`"
     if not manifest.exists():
@@ -115,7 +144,8 @@ def check(shell: Path = SHELL, manifest: Path = MANIFEST) -> list[str]:
     out: list[str] = []
 
     missing = sorted(set(want["files"]) - set(have))
-    extra = sorted(set(have) - set(want["files"]))
+    extra = sorted(rel for rel in set(have) - set(want["files"])
+                   if not (dev and is_dev_only(rel)))
     if missing:
         out.append(f"{len(missing)} file(s) named by the manifest are not in shell/: {missing[:6]} -- {fix}")
     if extra:
@@ -132,7 +162,11 @@ def check(shell: Path = SHELL, manifest: Path = MANIFEST) -> list[str]:
         out.append(f"shell/{home} is missing -- Frank's window opens on it and would paint a 404; {fix}")
 
     for rel in have:
-        if Path(rel).name in NEVER:
-            out.append(f"shell/{rel} must never ship: no book, in any form, enters the phone's shell")
+        if Path(rel).name in NEVER and not (dev and is_dev_only(rel)):
+            out.append(
+                f"shell/{rel} must never ship: no book, in any form, enters the phone's shell"
+                + ("" if dev else " (a DEV run may have one under shell/books/: "
+                                 "`python3 tools/prebuild.py --dev`)")
+            )
 
     return out

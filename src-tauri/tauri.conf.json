@@ -6,7 +6,7 @@
   "build": {
     "frontendDist": "../shell",
     "beforeBuildCommand": "python3 tools/prebuild.py",
-    "beforeDevCommand": "python3 tools/prebuild.py"
+    "beforeDevCommand": "python3 tools/prebuild.py --dev"
   },
   "app": {
     "withGlobalTauri": true,
