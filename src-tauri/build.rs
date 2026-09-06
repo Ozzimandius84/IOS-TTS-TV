@@ -24,8 +24,24 @@ fn main() {
             .flag("-fobjc-arc")
             .flag("-fmodules")
             .compile("frankaudio");
+        // ios/FrankWebView.m -> `frank_webview_fill`, the black bar (job 2,
+        // 6 Sep). ITS OWN ARCHIVE and not a second `.file()` on the build
+        // above: `compile()` names the archive, and one archive called
+        // `frankaudio` holding the webview fix is the kind of lie that costs
+        // an hour the next time a symbol goes missing.
+        println!("cargo:rerun-if-changed=ios/FrankWebView.m");
+        cc::Build::new()
+            .file("ios/FrankWebView.m")
+            .flag("-fobjc-arc")
+            .flag("-fmodules")
+            .compile("frankwebview");
+        // Said here for the record and for a non-Xcode link; the build that
+        // matters is Xcode's, and it is `gen/apple/project.yml`'s
+        // `dependencies:` that actually names these -- a `staticlib` crate
+        // never runs a linker, so nothing on this line reaches one.
         println!("cargo:rustc-link-lib=framework=AVFoundation");
         println!("cargo:rustc-link-lib=framework=Foundation");
+        println!("cargo:rustc-link-lib=framework=UIKit");
     }
     tauri_build::try_build(
         tauri_build::Attributes::new().app_manifest(

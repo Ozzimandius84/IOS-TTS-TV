@@ -1037,8 +1037,13 @@ pub fn audio_session_why(code: i32) -> &'static str {
 /// Route this app's sound as playback. Called once, in `setup`.
 pub fn audio_session_category() -> Result<(), String> {
     // SAFETY: a C function taking nothing and returning an int, defined in
-    // `src-tauri/ios/FrankAudio.m` and linked into the same binary by the Xcode
-    // target (`gen/apple/project.yml` -> sources: ../../ios).
+    // `src-tauri/ios/FrankAudio.m` and compiled into this crate by `build.rs`
+    // (the `cc` crate, iOS targets only). NOT by the Xcode target: there is
+    // deliberately no `- path: ../../ios` in `gen/apple/project.yml`, because
+    // two compilations of one file is `duplicate symbol
+    // _frank_audio_session_category` at link time. Corrected 6 Sep -- the
+    // sentence this replaces described the arrangement as it was proposed and
+    // never as it was built.
     #[cfg(target_os = "ios")]
     let code = unsafe { frank_audio_session_category() };
     #[cfg(not(target_os = "ios"))]
@@ -1162,6 +1167,240 @@ pub const NOW_PLAYING_JS: &str = r#"(function () {
 })();
 "#;
 
+// ------------------------------------------------------- the black bar
+//
+// Job 2 (Osca, 6 Sep): *"the WebView stops ~60pt short of the bottom and the
+// root view shows black"*. Not CSS. `wry` builds the WKWebView with the root
+// view's `frame` -- a rectangle in the ROOT's superview's coordinate space --
+// and then adds it as a subview of that same root, where the rectangle is read
+// in the root's own space instead, so any non-zero origin is applied twice; and
+// it sets no autoresizing mask, so whatever rectangle came out of that one
+// instant is the rectangle forever. `ios/FrankWebView.m` has the long version
+// and the three lines of wry that cause it.
+//
+// The fix has to be native and it has to be after the webview exists, which is
+// what `with_webview` is for. Everything below is `cfg(target_os = "ios")`:
+// there is no bar on the Mac, and `cargo test` targets macOS.
+
+#[cfg(target_os = "ios")]
+extern "C" {
+    fn frank_webview_fill(webview: *mut std::ffi::c_void, out: *mut f64) -> i32;
+}
+
+/// What `FrankWebView.m` returns, as a sentence. `0` is success.
+pub fn webview_fill_why(code: i32) -> &'static str {
+    match code {
+        0 => "ok",
+        1 => "no webview pointer",
+        2 => "the pointer is not a UIView",
+        3 => "the webview has no superview -- nothing to fill",
+        _ => "unknown frank_webview_fill result",
+    }
+}
+
+/// Make the one window's WKWebView fill its root view, and keep it filling.
+///
+/// `Wry` and not a generic `R` on purpose: `PlatformWebview` is the wry
+/// runtime's, and `with_webview` downcasts to it -- spelling the runtime here
+/// is the difference between a compile error and a panic on a runtime that is
+/// never going to be swapped anyway.
+///
+/// The closure runs on the UI thread, dispatched, so this returns before the
+/// work happens; the numbers arrive in the log a moment later. That is also
+/// what makes it safe to call from `setup`, where the event loop has not
+/// started and the first layout has not happened: the message is delivered
+/// after both.
+#[cfg(target_os = "ios")]
+fn fill_root_view(window: &tauri::WebviewWindow<Wry>) {
+    let sent = window.with_webview(|platform| {
+        let mut out = [0f64; 6];
+        // SAFETY: `inner()` is this window's WKWebView, which is a UIView;
+        // `out` is six doubles the callee writes and this frame owns. Both
+        // outlive the call, and the call is on the UI thread.
+        let code = unsafe { frank_webview_fill(platform.inner(), out.as_mut_ptr()) };
+        if code == 0 {
+            log::info!(
+                "frank: webview fills the root -- root {:.0}x{:.0}, webview was \
+                 ({:.0},{:.0}) {:.0}x{:.0}, now (0,0) {:.0}x{:.0}",
+                out[0], out[1], out[2], out[3], out[4], out[5], out[0], out[1]
+            );
+        } else {
+            log::error!("frank: webview NOT filled -- {}", webview_fill_why(code));
+        }
+    });
+    if let Err(why) = sent {
+        log::error!("frank: could not reach the webview to fill it -- {why}");
+    }
+}
+
+// ------------------------------------------------------------- the probe
+//
+// A WKWebView's console goes nowhere a process log can read, and
+// `xcrun simctl launch --console` reads the process log -- so the two numbers
+// jobs 2 and 3 are judged on have to come out of the app itself, through the
+// one door the page already has to the host: a `fetch` on its own origin.
+//
+// DEBUG BUILDS ONLY, both halves: the script is not injected in a release
+// binary and the route is not answered there either, so `--release` has neither
+// the button nor the handler. It is here and not in `shell/` because `shell/`
+// is another lane's folder and because a diagnostic that measures the host
+// belongs to the host.
+
+/// The path [`PROBE_JS`] reports to. Two leading underscores so it can never
+/// collide with a file in the shell tree -- `resolve` would answer 404 for it
+/// anyway, but the handler answers first.
+const PROBE_PATH: &str = "/__probe";
+
+/// The two measurements, and a 64x36 button to start the second one.
+///
+/// **The viewport (job 2).** `window.innerHeight * devicePixelRatio` against
+/// `screen.height * devicePixelRatio`, plus the safe-area insets read off a
+/// throwaway element -- because a webview that does not reach the bottom of the
+/// screen reports `env(safe-area-inset-bottom)` as 0, so the shell's `--safe-*`
+/// vars were right and describing the wrong box. Reported at load, at 1500 ms
+/// (after UIKit has finished laying out), and on every resize.
+///
+/// **The sound (job 3).** A REAL media element -- a 30-second 220 Hz sine built
+/// as a WAV data URI, looping, at 5% -- and not a WebAudio oscillator: an
+/// oscillator is not a media element, does not raise `play`, and does not own
+/// the system's now-playing session, so it would prove nothing about the thing
+/// under test. It needs a tap because iOS refuses media playback without a user
+/// gesture, hence the button; `NOW_PLAYING_JS`'s `play` listener fires on it
+/// exactly as it will on the reader's, which is the point. Then every
+/// `timeupdate` reports how many seconds it is since the app went to the
+/// background. The last such line while `hidden=1` is the answer.
+///
+/// The reader has no rendered audio yet (`shell/reader/listen.js` runs a clock
+/// where the `<audio>` will be), so this element is the only real sound in the
+/// app today. When there is a chapter to play, the same three listeners report
+/// on it and the button stops being the only source.
+pub const PROBE_JS: &str = r#"(function () {
+  "use strict";
+  var MIN_MS = 1000, RATE = 8000, SECONDS = 30, HZ = 220;
+  var media = null, playAt = 0, hiddenAt = 0, lastBeat = 0, resizeTimer = 0;
+
+  function say(kind, fields) {
+    var q = "/__probe?k=" + kind;
+    for (var key in fields) {
+      if (Object.prototype.hasOwnProperty.call(fields, key)) {
+        q += "&" + key + "=" + encodeURIComponent(String(fields[key]));
+      }
+    }
+    try { fetch(q, { cache: "no-store" }).catch(function () {}); } catch (e) {}
+  }
+
+  /* ---------------------------------------------------------- the viewport */
+  function viewport(why) {
+    var d = window.devicePixelRatio || 1;
+    var s = window.screen || {};
+    var pad = document.createElement("div");
+    pad.style.cssText = "position:fixed;left:0;top:0;width:0;visibility:hidden;" +
+      "pointer-events:none;padding-top:env(safe-area-inset-top,0px);" +
+      "padding-bottom:env(safe-area-inset-bottom,0px)";
+    document.documentElement.appendChild(pad);
+    var cs = window.getComputedStyle(pad);
+    var safeTop = parseFloat(cs.paddingTop) || 0;
+    var safeBottom = parseFloat(cs.paddingBottom) || 0;
+    pad.parentNode.removeChild(pad);
+    var inner = Math.round(window.innerHeight * d);
+    var screenH = Math.round((s.height || 0) * d);
+    say("viewport", {
+      why: why, dpr: d,
+      innerH: inner, screenH: screenH, fills: inner === screenH ? 1 : 0,
+      innerW: Math.round(window.innerWidth * d),
+      screenW: Math.round((s.width || 0) * d),
+      safeTop: safeTop, safeBottom: safeBottom
+    });
+  }
+
+  /* ------------------------------------------------------------- the sound */
+  /* 8-bit unsigned mono PCM: the smallest WAV that is unambiguously a media
+     file, and small enough to sit in a data URI without a fetch. */
+  function wav() {
+    var n = RATE * SECONDS, size = 44 + n;
+    var b = new Uint8Array(size), v = new DataView(b.buffer);
+    function tag(o, str) { for (var i = 0; i < str.length; i++) b[o + i] = str.charCodeAt(i); }
+    tag(0, "RIFF"); v.setUint32(4, size - 8, true); tag(8, "WAVEfmt ");
+    v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
+    v.setUint32(24, RATE, true); v.setUint32(28, RATE, true);
+    v.setUint16(32, 1, true); v.setUint16(34, 8, true);
+    tag(36, "data"); v.setUint32(40, n, true);
+    for (var i = 0; i < n; i++) {
+      b[44 + i] = 128 + Math.round(100 * Math.sin(2 * Math.PI * HZ * i / RATE));
+    }
+    var bin = "", CHUNK = 4096;
+    for (var j = 0; j < size; j += CHUNK) {
+      bin += String.fromCharCode.apply(null, b.subarray(j, Math.min(j + CHUNK, size)));
+    }
+    return "data:audio/wav;base64," + window.btoa(bin);
+  }
+
+  function beat(what) {
+    var now = Date.now();
+    if (what === "tick" && now - lastBeat < MIN_MS) { return; }
+    lastBeat = now;
+    say("audio", {
+      e: what,
+      t: media ? media.currentTime.toFixed(2) : -1,
+      paused: media ? (media.paused ? 1 : 0) : -1,
+      secs: playAt ? Math.round((now - playAt) / 1000) : 0,
+      hidden: document.hidden ? 1 : 0,
+      bg: hiddenAt ? Math.round((now - hiddenAt) / 1000) : 0
+    });
+  }
+
+  function start() {
+    if (media) { media.play(); return; }
+    media = document.createElement("audio");
+    media.src = wav();
+    media.loop = true;
+    media.volume = 0.05;
+    media.setAttribute("data-frank-probe", "1");
+    /* in the document, because `NOW_PLAYING_JS` listens on `document` in the
+       capture phase and a detached element's events never get there. */
+    document.body.appendChild(media);
+    playAt = Date.now();
+    var p = media.play();
+    if (p && p.catch) { p.catch(function (e) { say("audio", { e: "refused", why: String(e) }); }); }
+  }
+
+  /* ---------------------------------------------------------------- wiring */
+  function ready() {
+    var b = document.createElement("button");
+    b.type = "button";
+    b.textContent = "probe";
+    b.setAttribute("data-frank-probe", "1");
+    b.style.cssText = "position:fixed;z-index:2147483647;right:8px;" +
+      "bottom:calc(8px + env(safe-area-inset-bottom,0px));width:64px;height:36px;" +
+      "border-radius:8px;border:1px solid #8886;background:#c9c4bb;color:#111;" +
+      "font:12px/1 system-ui,sans-serif;opacity:.85";
+    b.addEventListener("click", function () { start(); viewport("tap"); });
+    document.body.appendChild(b);
+
+    viewport("load");
+    window.setTimeout(function () { viewport("settled"); }, 1500);
+    window.addEventListener("resize", function () {
+      if (resizeTimer) { return; }
+      resizeTimer = window.setTimeout(function () { resizeTimer = 0; viewport("resize"); }, 250);
+    });
+
+    document.addEventListener("timeupdate", function () { beat("tick"); }, true);
+    document.addEventListener("play", function () { playAt = playAt || Date.now(); beat("play"); }, true);
+    document.addEventListener("pause", function () { beat("pause"); }, true);
+    document.addEventListener("visibilitychange", function () {
+      hiddenAt = document.hidden ? Date.now() : 0;
+      beat(document.hidden ? "hidden" : "shown");
+    });
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", ready);
+  } else {
+    ready();
+  }
+})();
+"#;
+
 /// The one entry point, on all four platforms.
 ///
 /// `main.rs` calls this on desktop. On a phone there is no `main`: the
@@ -1205,6 +1444,16 @@ pub fn run() {
             let app = ctx.app_handle();
             let root = shell_root(app);
             let path = request.uri().path().to_string();
+
+            // The probe (jobs 2 and 3), and nothing in a release binary:
+            // `cfg!(debug_assertions)` is false there and `PROBE_JS` is not
+            // injected there either. Answered before the disk is touched so a
+            // measurement never depends on the shell being unpacked.
+            if cfg!(debug_assertions) && path == PROBE_PATH {
+                log::info!("frank: probe {}", request.uri().query().unwrap_or(""));
+                return http_response(204, "text/plain; charset=utf-8", Vec::new());
+            }
+
             let disk = resolve(&root, &path);
 
             if let Some(p) = &disk {
@@ -1290,7 +1539,7 @@ pub fn run() {
             // and paint a 404 on a first launch. One window, asked for here,
             // after the files exist. (`mobile.rs` asks for its window in
             // `setup` for the same shape of reason.)
-            WebviewWindowBuilder::new(
+            let window = WebviewWindowBuilder::new(
                 app,
                 "main",
                 WebviewUrl::CustomProtocol(shell_url(HOME_PAGE).parse()?),
@@ -1307,12 +1556,27 @@ pub fn run() {
             // The lock screen and the audio session (job 8b). Unconditional,
             // like PAIR_JS: its `mediaSession` half runs in a browser too.
             .initialization_script(NOW_PLAYING_JS)
+            // The probe, in a debug build and nowhere else: the empty string
+            // rather than a second builder branch, because `WebviewWindowBuilder`
+            // is a move-consuming chain and a `cfg!` on the value keeps it one
+            // expression. An empty init script is a no-op, not an empty
+            // `<script>`.
+            .initialization_script(if cfg!(debug_assertions) { PROBE_JS } else { "" })
             .inner_size(1100.0, 800.0)
             .min_inner_size(400.0, 400.0)
             // Every document, including the first: whatever a launch link left
             // pending is written here, once.
             .on_page_load(|window, _payload| flush_pair(window.app_handle()))
             .build()?;
+
+            // The black bar (job 2). After `build`, because there is no
+            // webview to reach into before it; dispatched, so it lands after
+            // the first layout. Off iOS there is no bar and no symbol.
+            #[cfg(target_os = "ios")]
+            fill_root_view(&window);
+            #[cfg(not(target_os = "ios"))]
+            let _ = &window;
+
             Ok(())
         })
         .run(tauri::generate_context!())
