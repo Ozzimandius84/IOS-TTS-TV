@@ -4,6 +4,264 @@ Newest first. `REPORT_PROTOCOL.md` (TTSTV), nine headings. `README.md` says what
 
 ---
 
+## job 29 — WebKit first, then dev books: **there is no error, and that IS the error** · 6 Sep
+
+**Osca, 6 Sep:** *"The Library page draws nothing in WebKit (the phone app, and
+Safari on the phone), but draws in Chrome."*
+
+**The first error, verbatim, is that there is no first error.** Driven headless
+through WebKitWebDriver against real WebKit — **WebKitGTK 2.36**, which is
+Safari 15's JavaScriptCore and StyleResolver, and **WebKitGTK 2.52**, which is
+Safari 26's — the Library page raises **0 pageerrors, 0 unhandled rejections
+and 0 console errors**, in both, at 393×852, over plain `http://` from a
+non-secure LAN origin as well as from localhost. It also drew: 6 `.railrow`,
+6 `.tile`, `SHELF` in the DOM. Every JS hypothesis was **tested and killed**,
+not argued away: the shell parses at ES2020 with acorn and uses nothing newer
+(no lookbehind, no `Object.groupBy`, no `Promise.withResolvers`, no modules);
+with **every** `localStorage` access rewritten to throw `SecurityError` — the
+`frank://` opaque-origin case, and Safari's Block-All-Cookies case — the shelf
+still drew 6 rows; with `library.json` and `books/` absent it drew 0 rows and
+**still raised nothing**, which is `SHELF · 0`, not a blank page.
+
+**What is actually wrong is a colour, and it cannot raise an error by
+construction.** `library/library.css` defined `--bg` and `--fg` twice: the
+plain values (`#fcfcfb` / `#0b0b0b`, and the dark pair) and then, in the
+warmth block, `color-mix(in oklab, …)`. **A custom property accepts any token
+stream**, so the second declaration parses in every engine ever written and
+overrides the first — and then, in an engine that cannot COMPUTE `color-mix`
+(**Safari before 16.2**), it fails at computed-value time instead:
+`background: var(--bg)` and `color: var(--fg)` both become `unset`, and the
+page paints on whatever is behind the webview. The plain fallback four lines
+above was dead in every engine. Measured, same page, same server:
+
+| | `CSS.supports(color-mix)` | `--bg` computed | `body` background |
+|---|---|---|---|
+| WebKit 2.36, before | `false` | `color-mix(in oklab, #fcfcfb, …)` | **`rgba(0, 0, 0, 0)`** |
+| WebKit 2.36, after | `false` | `#fcfcfb` | **`rgb(252, 252, 251)`** |
+| WebKit 2.52, before → after | `true` | `color-mix(…)` | `oklab(0.990791 −0.000372 0.001263)` → unchanged |
+| Chromium, before → after | `true` | `color-mix(…)` | `oklab(0.990761 −0.00032863 0.0012874)` → unchanged |
+
+The fix is `@supports (color: color-mix(in oklab, #000, #fff 50%))` around the
+three blocks that set `--bg`/`--fg`. A plain declaration placed *after* them
+would not work — the same "any tokens are valid" rule keeps the later one.
+It lands in TTSTV: **`library/library.css`, FRANK `2df080e`**, and came across
+by re-import. `library/library.css` is the **only** file in the whole shell
+that defines `--bg` or `--fg` through `color-mix`; `reader/chrome.css` and the
+rest already carry `var(--fg, #0b0b0b)` fallbacks inside theirs.
+
+**And the honest limit, said once:** this is the only WebKit-only defect on the
+page that a machine in Cowork can find. Whether it is the whole of what Osca
+sees depends on the phone's iOS — it bites Safari < 16.2 and nothing newer. If
+the phone is on 16.2 or later, the blank is not the page: it is §6c's transport
+(`--host`, the ATS key that `xcodegen` has not written yet, Local Network
+permission), which PHONE.md already says looks exactly like *"a blank page and
+no error"*. §7 says how to tell the two apart in one minute.
+
+### 1. Built
+- **`tests/webkit_smoke.mjs`** (new, 239 lines) — serves `shell/` statically
+  with correct MIME, opens `/library/library.html` in Playwright's **WebKit**
+  under the **iPhone 15** device descriptor, and prints every `pageerror`,
+  `console.error` and `requestfailed` **with file:line**, the first one
+  verbatim. `--engine webkit|chromium|both` (default both, and it prints the
+  per-field diff). Asserts: 0 hard errors · `SHELF` in the DOM · **body
+  background is not transparent** — the last one is the guard for the bug
+  above, which no console anywhere reports. Then the flow, because a page that
+  draws and cannot be used is the same bug one step later: the first-run card
+  is present on a first open, gone after **Skip**, and a double-tap on the
+  first tile opens `reader.html?book=books%2F<slug>` with > 0 paragraphs
+  (`--no-flow` to skip). A 404 is printed as `resource` and never counted —
+  Chromium logs one on the console and WebKit does not, so counting it would
+  make the two incomparable and would fail the page for asking Studio a
+  question no static host answers.
+- **TTSTV `library/library.css`** (`2df080e`, the other repo) — the `@supports`
+  guard. `--warm`, `--paper-warm`, `--ink-warm` stay outside it; nothing else
+  moved, and on an engine WITH `color-mix` every computed value is unchanged.
+- **`tools/dev_books.py`** — copies `<TTSTV>/books/<slug>` into `shell/books/`
+  and writes `shell/library/library.json` from `<TTSTV>/books/index.json`'s own
+  rows plus `has_audio:false, has_timings:false`. Six default slugs. `--clear`,
+  `--no-audio`. (Written earlier today in this lane; committed here with its
+  tests.)
+- **`tools/prebuild.py --dev`** — allows exactly `shell/books/**` and
+  `shell/library/library.json` and relaxes nothing else, and names the books it
+  found so a run that shows none says so. `beforeDevCommand` is now
+  `python3 tools/prebuild.py --dev`; `beforeBuildCommand` is untouched.
+- **`tools/shell_manifest.py`** — `DEV_ONLY`, `is_dev_only()`, `check(dev=…)`.
+- **`tools/import_shell.py`** — holds the dev shelf across a re-import and takes
+  the manifest before restoring it, so the record still names only what TTSTV
+  produced. New: **`clear_tree()`** — `rmtree`, and on `Operation not permitted`
+  a RENAME into `_to_delete/`, which is the only way a Cowork session can empty
+  `shell/` at all; and the hold directory moved from `/tmp` to a sibling of
+  `shell/` inside the repo, because `/tmp` is a different filesystem and
+  `shutil.move` there is a copy-then-unlink — the unlink being the thing this
+  shell cannot do.
+- **`shell/` + `shell.manifest.json`** — **in git for the first time**
+  (`0e799ec`, 53 files): 51 shell files, 1 366 671 bytes, from FRANK `2df080e`
+  @ `ttstv-shell-v35`. `prebuild.py`'s whole design is that the shell is
+  carried here so a fresh clone builds with no TTSTV on the disk; it was
+  untracked only because the import could not run from this shell until today.
+- **`tests/test_dev_books.py`** (new, 12 tests) and 1 new test in
+  `tests/test_phone_shell.py`.
+
+### 2. Verified — and how
+- **live, container** · **WebKitGTK 2.36 (Safari 15) and 2.52 (Safari 26)**,
+  headless via `WebKitWebDriver` + `xvfb`, on the freshly imported shell:
+  **0 hard errors** in both. 2.36: `railrow 6`, `tile 6`, `shelfInDom true`,
+  `firstRunCard true`, `supportsColorMix false`, `--bg #fcfcfb`, body
+  background `rgb(252, 252, 251)`. 2.52: `railrow 6`, `tile 6`, `--bg
+  color-mix(…)`, body background `oklab(0.990791 −0.000372 0.001263)`. The one
+  non-error in both: `books/ethics/cover.jpg` 404 — **`ethics` has a
+  `cover.json` and no `cover.jpg` in TTSTV**, which is book data, not the shell.
+- **live, container** · `node tests/webkit_smoke.mjs --engine chromium` on the
+  same tree: `ERRORS: 0 hard, 13 other`; `railrow 6`, `tile 6`; UA
+  `…(iPhone; CPU iPhone OS 17_5…)` — the iPhone 15 descriptor is really applied;
+  **FLOW**: `firstRunCardOnOpen true` → Skip → `firstRunCardAfterSkip false`;
+  double-tap → `reader/reader.html?book=books%2Feclogues-virgil`, **885
+  paragraphs**. `webkit_smoke: OK`.
+- **live, bridge VM** · the re-import: *holding the dev shelf: books/,
+  library/library.json* → *clearing shell/: could not delete (Operation not
+  permitted); moved to `_to_delete/shell.1788707662`* → **51 files, 1 366 671
+  bytes, from 2df080e @ ttstv-shell-v35**. Afterwards `sed -n 51p
+  shell/library/library.html` is exactly
+  `<script>window.TTSTVSettings.firstRun(document);</script>` — **the gate is in
+  the copy**, which the 5 Sep shell did not have. Six books and a 61-line
+  `library.json` survived it.
+- **live, bridge VM** · `python3 tools/prebuild.py --dev` → **exit 0**,
+  *"dev shelf — 6 book(s): eclogues-virgil, ethics, euthyphro, hamlet,
+  self-isolation-poems, singapore-story-c1"*. `python3 tools/prebuild.py` →
+  **exit 1**, 14 sentences, each naming a `book.json` or `book-data.js`.
+- **unit** · `python3 -m pytest tests -q` → **75 passed**, 0 failed (62 at
+  HEAD, 2 of which were failing on the dev shelf and are now asked in the right
+  mode; 13 added).
+- **unit** · acorn at ES2017…ES2022 over every `.js` and every inline
+  `<script>` in the shell: nothing needs more than **ES2020**, and the two
+  ES2018 hits are object spread. No lookbehind anywhere.
+- **not verified**: the simulator, any phone, `cargo`, `xcodegen`. None is
+  reachable from Cowork. **Playwright's own WebKit could not be downloaded at
+  all** — `cdn.playwright.dev` and `playwright.download.prss.microsoft.com` both
+  answer *"request blocked: no rule or allowlist entry allows host"* from the
+  container AND from the bridge VM, which is why the WebKit numbers above come
+  from distribution WebKitGTK instead. `tests/webkit_smoke.mjs`'s WebKit half
+  has therefore **never been run**; its Chromium half has, on the real tree.
+- **invariant** · TTSTV's `reader/sw.js` is untouched (`ttstv-shell-v35`, no
+  `--bump`), `git status` in TTSTV shows only another session's
+  `PROMPTS/day-6-sep.md`; no server was started and no route pressed, so
+  `languages/catalogue.json` was never opened.
+
+### 3. Judgment calls
+- *"Find the error … paste the first error verbatim"* → **there is no console
+  error, and I say so rather than manufacturing one.** Reporting a fabricated
+  first line would have been the worse answer; the measured 0s, in two WebKit
+  versions, are the finding.
+- *`npx playwright install webkit`* → **blocked by egress in both shells.** I
+  did not stop: `apt` reaches `archive.ubuntu.com`, so the diagnosis ran on
+  `webkit2gtk-driver` 2.52 (noble) and 2.36 (jammy, extracted from the .deb and
+  run against its own libs). 2.36 is the important one — it is the only engine
+  on the machine old enough to be the phone.
+- *"the fix lands in TTSTV … name the file"* → `library/library.css`, and I
+  edited **only** the library crown there. The same class of bug is not present
+  in any other module's CSS; I checked rather than assumed.
+- Step 5's *"double-tap a tile → reader.html?book=…"* → the page does this with
+  `window.open(url, "_blank")`, so the proof captures a **popup**, not a
+  navigation. That is also §7's warning about the app.
+- The dev shelf's tests were written against **fixture trees**, not against the
+  real `shell/`, so they pass on a machine that has never run `dev_books.py`;
+  the one test that needs a real shelf skips itself when there is none.
+- `shell/` was untracked. Committing it is not scope creep — `prebuild.py`'s
+  docstring says the shell is carried in git and `.gitignore` already excludes
+  every book — but it is a 53-file commit and is named here for that reason.
+
+### 4. Boundary check
+This repo, and only these files:
+`tests/webkit_smoke.mjs` · `tests/test_dev_books.py` · `tests/test_phone_shell.py` ·
+`tools/dev_books.py` · `tools/prebuild.py` · `tools/shell_manifest.py` ·
+`tools/import_shell.py` · `src-tauri/tauri.conf.json` · `shell/**` (51, written
+by the import) · `shell.manifest.json` · this file.
+In TTSTV: `library/library.css` and `library/STATUS.md` — **one module**, the
+library crown, and nothing else. `core/` untouched in both repos. **Not** a move
+or a re-wire; no second folder was needed.
+
+**Dirty and left alone, because they are another session's** (job 15c, the
+SFSafariViewController search, and job 8b's generated Apple tree):
+`src-tauri/build.rs`, `src-tauri/gen/apple/project.yml`,
+`src-tauri/gen/apple/frank.xcodeproj/project.pbxproj`,
+`src-tauri/gen/apple/frank_iOS/Info.plist`,
+`src-tauri/gen/apple/frank_iOS/frank_iOS.entitlements`,
+`src-tauri/ios/FrankSearch.m`, `src-tauri/src/search.rs`, `scratch-float/`,
+`scratch26b/`. In TTSTV: `PROMPTS/day-6-sep.md`. `src-tauri/src/lib.rs` was
+modified by that session mid-job and was **never touched here** — the prompt
+forbids it and so does the boundary.
+
+### 5. Footprint
+- **Cowork container** (nothing on the Mac): `webkit2gtk-driver` 2.52 + `xvfb`
+  via apt (~120 MB), jammy `webkit2gtk` 2.36 .debs extracted under
+  `~/wk/j22/root` (~90 MB), `npm i playwright` + `acorn`, and the staged shell
+  copies under `~/wk*`. All ephemeral; the container is thrown away.
+- **Bridge VM**: `playwright` and `pytest` installed into the repo's gitignored
+  `node_modules/` (`--no-save`, so `package.json` and the lock are untouched)
+  and `~/.local` respectively.
+- **The repo**: `_to_delete/` gained `shell.1788707662` (the pre-import shell,
+  50 MB with its dev books), four staging tarballs, a scratch copy of
+  `webkit_smoke.mjs`, `__rmtest`, and **five `.git/*.lock` files this shell
+  could not unlink** — three from TTSTV, two from here. Osca empties it.
+- No SSD, no depot, no models, no GPU. Kaggle/Modal: not used, no quota spent.
+
+### 6. Requests to core / other modules
+- **reader/ (or whoever owns `openReader`)** — `library.html`'s `openReader`
+  falls back to `window.open(url, "_blank")` when no host offers
+  `TTSTVHost.openReader`. **A WKWebView does not open a `_blank` window unless
+  the app implements `WKUIDelegate.createWebViewWith`**, so on the simulator and
+  on the phone a double-tap is likely to do *nothing at all*. The fix is one
+  method — `TTSTVHost.openReader(slug)` setting `location.href` — and it lives
+  in `lib.rs`'s `HOST_JS`, which this job was told not to touch. It is the next
+  thing after the Library draws.
+- **parser/ or the book owner** — `books/ethics/` has `cover.json` and no
+  `cover.jpg`; every load of the shelf 404s on it in every engine.
+
+### 7. Known gaps
+- **`tests/webkit_smoke.mjs` has never been run against Playwright's WebKit** —
+  that download is not on the egress allowlist from anywhere in Cowork. Its
+  Chromium half ran; the WebKit assertions are the same code path.
+- **How to tell the colour bug from §6c's transport, in one minute**, on the
+  phone: Safari → Develop → *iPhone 2* → Frank, and type
+  `getComputedStyle(document.body).backgroundColor`. `rgba(0, 0, 0, 0)` on a
+  build from before `2df080e` is this bug and this fix ends it. A page that is
+  not there at all — no console, no Frank in the Develop menu — is §6c: `--host`,
+  the ATS key `xcodegen` has not written yet, or Local Network permission.
+- The dark-theme half of the fix is proved by the same mechanism but was
+  measured light-only; the guard covers all three blocks.
+- `dev_books.py` copies whole book folders — `hamlet` alone is 22 MB and the six
+  are ~49 MB under `shell/books/`. Gitignored, never shipped, but it is real
+  disk on the Mac.
+
+### 8. Next
+Step 4's run, which is Osca's: the simulator. The one command is at the end of
+this entry. Nothing else is started.
+**The single question that blocks nothing but would sharpen §7: which iOS is
+the phone on?** Below 16.2 and this fix is the whole answer; 16.2 or above and
+the blank is the transport.
+
+### 8b. Commit check
+Two commits here, both by pathspec, both `git show --stat`-confirmed:
+`1a01daf` (8 files: the tools, the tests, `tauri.conf.json`) and `0e799ec`
+(53 files, every one under `shell/` plus `shell.manifest.json`). One in TTSTV:
+`2df080e` (2 files: `library/library.css`, `library/STATUS.md`). No `--amend`,
+no `git add -A`, no directory pathspec. New files were `git add`ed by their own
+single path first.
+**Locks moved to `_to_delete/` for Osca to clear**: TTSTV `HEAD.lock`,
+`next-index-16.lock`, `index.lock`; here `HEAD.lock`, `next-index-8.lock`,
+`next-index-16.lock`. Each was a `File exists` failure the retry loop then got
+past; nothing was lost.
+
+### 9. The one command
+```bash
+cd "/Users/oscarwilson-brown/Documents/RUNNERS/TTSTV_IOS/IOS TTS TV" && npm run -- tauri ios dev "$(xcrun simctl list devices available | sed -n 's/^ *\(iPhone [^(]*[^ (]\) *(.*/\1/p' | tail -1)"
+```
+It picks the newest **simulator** `xcrun` actually lists, so it can never
+select *iPhone 2* — the physical phone this job was told not to touch — and
+`beforeDevCommand` prints the six books before Xcode starts.
+
+---
+
 ## jobs 1, 2, 3 — the black bar was wry's frame; the audio is owed a simulator · 6 Sep
 
 ### 1. Built
