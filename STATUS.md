@@ -278,10 +278,13 @@ this commit's parent. The lane that wrote `f667ef8` and `93d9cfc` (job 26,
 Bonjour) had stopped ~40 minutes before I started, and its three dirty Xcode
 files are untouched — §4.
 
-**Two locks moved, for Osca to empty:** `_to_delete/index.lock.<epoch>` twice —
-one before the `git add`, one before the commit, each after the retry loop found
-it 7 s and 14 s old (over the 3 s bar, so a crashed lock and not a session
-mid-write). The loop was run with **`GD=$(git rev-parse --git-dir)`** — the fix
+**The locks moved, as an epoch range rather than a count that moves** (the
+lesson `50ffa0b` cost the sync lane an hour ago): everything in `_to_delete/`
+stamped **1788691782 – 1788692030** is this session's — `index.lock` ×3,
+`HEAD.lock` and `next-index-17.lock`, across the `git add` and the two commits.
+The retry loop found each 7–20 s old, over the 3 s bar, so they were crashed
+locks and not a session mid-write. The loop was run with
+**`GD=$(git rev-parse --git-dir)`** — the fix
 the installer lane proposed to `CLAUDE.md` on 6 Sep for worktrees; it costs
 nothing in a normal checkout like this one and means one loop works in both.
 `_to_delete/` also now holds this session's two staging tarballs (§5).
