@@ -97,6 +97,7 @@ use std::time::{Duration, Instant};
 use serde::Serialize;
 use tauri::{Manager, UriSchemeContext, WebviewUrl, WebviewWindowBuilder, Wry};
 use tauri_plugin_deep_link::DeepLinkExt;
+mod search;
 
 /// The scheme. One word, and it is in three places that must agree: here, the
 /// window URL built by [`shell_url`], and `tauri.conf.json`'s CSP (which is
@@ -1444,6 +1445,7 @@ pub fn run() {
         // no permission on the page: `google_sign_in` below is the only way
         // to it, and it opens Google's authorization endpoint or nothing.
         .plugin(tauri_plugin_opener::init())
+        .plugin(search::init())
         .manage(PendingPair::default())
         .manage(PendingGoogle::default())
         // `Wry` and not a generic `R`: `Builder::default()` is a
