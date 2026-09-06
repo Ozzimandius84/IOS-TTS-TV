@@ -130,6 +130,11 @@ targets:
       # Two compilations of one file is `duplicate symbol
       # _frank_audio_session_category`, twenty minutes into a phone build.
       - sdk: AVFoundation.framework
+      # FrankSearch.m (job 13, the search sheet). Same rule as AVFoundation
+      # above: `build.rs` compiles the .m, Xcode links the binary, so
+      # SafariServices is named HERE or `_OBJC_CLASS_$_SFSafariViewController`
+      # is undefined at the last minute of a phone build.
+      - sdk: SafariServices.framework
       - sdk: CoreGraphics.framework
       - sdk: Metal.framework
       - sdk: MetalKit.framework

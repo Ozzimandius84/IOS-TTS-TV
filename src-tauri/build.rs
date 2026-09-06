@@ -35,6 +35,16 @@ fn main() {
             .flag("-fobjc-arc")
             .flag("-fmodules")
             .compile("frankwebview");
+        // ios/FrankSearch.m -> `frank_search_present`, the search sheet (job
+        // 13, 6 Sep): SFSafariViewController over the app, so "Search the web"
+        // never throws the reader away. Its own archive, for the reason above.
+        // `search.rs` is its only caller and holds the whole of the why.
+        println!("cargo:rerun-if-changed=ios/FrankSearch.m");
+        cc::Build::new()
+            .file("ios/FrankSearch.m")
+            .flag("-fobjc-arc")
+            .flag("-fmodules")
+            .compile("franksearch");
         // Said here for the record and for a non-Xcode link; the build that
         // matters is Xcode's, and it is `gen/apple/project.yml`'s
         // `dependencies:` that actually names these -- a `staticlib` crate
@@ -42,6 +52,7 @@ fn main() {
         println!("cargo:rustc-link-lib=framework=AVFoundation");
         println!("cargo:rustc-link-lib=framework=Foundation");
         println!("cargo:rustc-link-lib=framework=UIKit");
+        println!("cargo:rustc-link-lib=framework=SafariServices");
     }
     tauri_build::try_build(
         tauri_build::Attributes::new().app_manifest(
