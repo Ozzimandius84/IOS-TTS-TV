@@ -61,6 +61,17 @@ four are the build's or Osca's own generated Apple files:
 `…/frank.xcodeproj/project.pbxproj`, `…/xcshareddata/xcschemes/frank_iOS.xcscheme`.
 `tests` is **25 pass, 1 fail** (the same pre-existing `asr.js` red, §2 below).
 
+**Commit check**: **`f0af183`**, 4 files (`src-tauri/Cargo.toml`,
+`src-tauri/Cargo.lock`, `tests/test_pair_link.py`, `STATUS.md`), pathspec, and
+`git show --stat --name-only HEAD` lists those and nothing else; this line is a
+later commit, so it cannot be in the one it names. HEAD did not move under me
+(`5baa406` → `f0af183`). Locks moved into `_to_delete/`, epoch range
+**1788692030 – 1788694560**: a `HEAD.lock` and a `next-index-29.lock` **606 s
+old** — long-crashed, from this session's own earlier commits — plus an
+`index.lock`/`next-index-9.lock` pair at 4 s on the retry. `_to_delete/` also
+still holds this session's two staging tarballs; **one `rm _to_delete/*` clears
+the lot.**
+
 **Next**: `PHONE.md` §6b's six presses are Osca's, starting with the build he
 is running now.
 
