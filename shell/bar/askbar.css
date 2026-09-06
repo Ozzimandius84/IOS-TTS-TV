@@ -246,5 +246,7 @@
   .askBtn { min-height: var(--ph-tap); }
 }
 @media (max-height: 500px) and (orientation: landscape) {
-  :root { --ph-cols: 4; }
+  /* 3, not 4 (Osca, 6 Sep: "one size, 2 across, 3 in landscape"); the same
+     value as library.css and settings.css, always */
+  :root { --ph-cols: 3; }
 }

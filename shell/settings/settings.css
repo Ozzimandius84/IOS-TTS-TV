@@ -92,6 +92,12 @@
   header button:focus-visible, header .headerLink:focus-visible {
     outline: 2px solid var(--accent); outline-offset: 1px;
   }
+  /* THE PHONE'S DOOR BACK TO THE LIBRARY (settings.html `#libraryDoor`):
+     nothing on the Mac, where this page is a WINDOW and a window has no back
+     (Osca, 31 Aug: no "< Library"). On the phone it is a page, and a page
+     with no way out is a trap; THE PHONE WHOLE block at the foot shows the
+     door under the phone's media query, and nowhere else. */
+  #libraryDoor { display: none; font-size: 1.4rem; line-height: 1; }
 
   /* 22px all round, the mock's, and NO card around the whole form: every
      setting now sits in a card of its own (settings.js's `.set-card`) and a
@@ -222,18 +228,50 @@
   header.set-titlebar .set-tab { min-height: var(--ph-tap); }
   header.set-titlebar .set-tab { padding: 2px 0; }
   header.set-titlebar .set-tab svg { margin-bottom: 0; }
-  /* seven names in 373px is 51px each: "Cloud GPU" at 11px wrapped to two
-     lines and stretched the whole row to 55. One line, 10px, and it fits. */
+  /* one line each. 9.5px was seven names in 373px ("Cloud GPU" wrapped at
+     11); the phone has FOUR since 6 Sep (THE PHONE WHOLE, settings.js
+     `phoneTabs`), ~80px each beside the door, and 11px fits them */
   header.set-titlebar .set-tab { white-space: nowrap; }
-  header.set-titlebar .set-tab { font-size: 9.5px; }
+  header.set-titlebar .set-tab { font-size: 11px; }
   /* and no 80px reserved for traffic lights the phone has not got: the row
      takes the width, in landscape too (the 480px rule below 640 never did) */
   header { padding-left: calc(10px + var(--safe-left, 0px)); }
   header { padding-right: calc(10px + var(--safe-right, 0px)); }
-  header .set-tabs { width: 100%; }
+  /* the strip takes what the row has left (`width: 100%` until 6 Sep, when
+     the door to the Library joined the row and 100% + 44 crossed the edge) */
+  header .set-tabs { width: auto; }
+  header .set-tabs { flex: 1 1 0; }
+  header .set-tabs { min-width: 0; }
 }
 @media (max-height: 500px) and (orientation: landscape) {
-  :root { --ph-cols: 4; }
+  /* 3, not 4 (Osca, 6 Sep: "one size, 2 across, 3 in landscape"); the same
+     value as library.css and bar/askbar.css, always */
+  :root { --ph-cols: 3; }
+}
+
+/* ==================================================================
+   THE PHONE, WHOLE (Osca, 6 Sep). design/phone/settings.html is the
+   contract; this block is its text, byte for byte (test-phone.mjs checks).
+   Settings on the phone is ONE COLUMN with the phone's own four tabs --
+   General, Reading, Sync, Voices; Cloud GPU folds under Sync, Models under
+   Voices, and Languages and Hotkeys are the Mac's (settings.js `phoneTabs`,
+   the JS half of this contract). The tab strip IS the title: nothing else
+   is in the header but the door back to the Library. Every rule keys on
+   `html[data-phone]` -- the flag settings.html's <head> sets for a coarse
+   pointer with no hover, or for ?phone -- INSIDE the media query: this
+   page's own Mac window is 560 wide and matches a width test alone, and the
+   Mac is untouched.
+   ================================================================== */
+@media (max-width: 600px), (max-height: 500px) {
+  html[data-phone] #libraryDoor { display: inline-flex; }
+  html[data-phone] header.set-titlebar { gap: 4px; }
+  /* one column: the cards take the width the margin leaves, never a 560 */
+  html[data-phone] main > * { max-width: none; }
+  /* a slider is a thumb's target too: the track's box is 44 tall (the thumb
+     the engine draws is its own size; the hit area is what this raises) */
+  html[data-phone] body .ttstv-settings .set-range { min-height: var(--ph-tap); }
+  /* ...and a field: the Kaggle and Modal cards' inputs, the pair address */
+  html[data-phone] body .ttstv-settings .kag-in, html[data-phone] body .ttstv-settings input[type="text"], html[data-phone] body .ttstv-settings input[type="password"] { min-height: var(--ph-tap); }
 }
 @media (max-width: 600px), (max-height: 500px) {
   /* the listen-window dots (settings.js .set-ticks, 13x13): the BUTTON is

@@ -1378,7 +1378,8 @@ function mount(o){
     // the one word blinking into something else. "just side to side, whilst
     // I scroll up and down."
     wordIdx=next; arrived=null;
-    subKey=null; markPaint();
+    if(wordPane) wordPane.forget();
+    markPaint();
     wordSlideX = dir>0 ? WORD.slide : -WORD.slide;
     setCursor(wordChapterIdx, wordIdx, "stepped");
     paintWordHighlight();
@@ -1822,11 +1823,12 @@ function mount(o){
   function clearWordZoom(){
     clearSpread(); clearPageZoom();
     anchor = null; arrived = null; wordSlideX = 0;
-    if(subEl){ subEl.style.opacity = "0"; subKey = null; }
-    // the rail goes with the line, and it gives its presses back to the page:
-    // a strip across the foot of the reading page that still took a pointer
-    // would be a control nobody can see swallowing every press aimed at a word
-    if(subRail){ subRail.style.opacity = "0"; subRail.style.pointerEvents = "none"; }
+    // the last pane goes with it -- the line to zero and the rail's presses
+    // back to the page: a strip across the foot of the reading page that still
+    // took a pointer would be a control nobody can see swallowing every press
+    // aimed at a word. (wordpane.js's own clear(); this file does not know how
+    // it is drawn.)
+    if(wordPane) wordPane.clear();
     if(o.readerBox){
       o.readerBox.style.transformOrigin = "";
       writeReaderTransform();
@@ -1978,112 +1980,55 @@ function mount(o){
        by hand goes scale(7.4874) -> scale(14.3622). A jump has no direction,
        so it takes no lateral slide -- that part of stepWord is about reading
        ON, not about arriving somewhere. */
-    arrived = null; wordSlideX = 0; subKey = null;
+    arrived = null; wordSlideX = 0;
+    if(wordPane) wordPane.forget();
     setCursor(ch, wordIdx, why || "goTo");
     paintWordHighlight(); markPaint();
     if(seat) seatOnWord();
     return {chapter:ch, word:wordIdx};
   }
 
-  let subEl = null;
-  function wordSub(){
-    if(subEl) return subEl;
+  /* ============ THE LAST PANE IS ITS OWN ASSET ==========================
+     Osca, 6 September: "THE LAST PANE IS ITS OWN ASSET: the one-word pane (far
+     right, sleeps, scrubs, sideways) becomes its own file pair --
+     design/reader/wordpane.css + wordpane.js -- mounted by book-nav.js, not
+     written inside shell.css/book-nav.js."
+
+     So the line the word came out of, the rail under it, and the rule about
+     when it sleeps are all wordpane.js's now, and its look is wordpane.css's.
+     What stays here is the only thing that cannot leave: WHICH word. There is
+     one cursor in this file and the pane is handed four questions about it --
+     where along the book it is, what its line says, whether that has changed,
+     and how long to wait before sleeping -- plus one instruction, what to do
+     when the rail is dragged. It never learns what a book is.
+
+     It is mounted on `o.bookEl`, beside the reading box and never inside
+     #readercol, so the zoom (a css `zoom` on the column) cannot touch it: at
+     +2 it is a separate layer over the zoomed page, which is what Osca asked
+     for and what the pane's own rect proves. */
+  let wordPane = null;
+  function pane(){
+    if(wordPane) return wordPane;
+    if(!(typeof window !== "undefined" && window.WordPane)) return null;
     const host = o.bookEl || (o.readerBox && o.readerBox.parentNode) || null;
-    if(!host || !host.appendChild) return null;
-    subEl = document.createElement("div");
-    subEl.classList.add("wordsub");
-    subEl.setAttribute("aria-hidden", "true");
-    const a = document.createElement("span"), b = document.createElement("b"),
-          c = document.createElement("span");
-    subEl.append(a, b, c);
-    host.appendChild(subEl);
-    return subEl;
-  }
-
-  /* ---------- AND IT SLEEPS, AND IT SCRUBS (job 24) -----------------------
-     Osca, 6 Sep: "it disappears when you stop moving/tapping (just playing)
-     after a second or so, and you can use it to scrub."
-
-     TWO HALVES, and the first one is a rule about WHEN rather than a timer
-     that always runs. Awake on any wheel, tap or key -- the three doors this
-     file already counts through `inputTick` -- and asleep `WORD.subsleep` ms
-     after the last one ONLY WHILE SOMETHING IS PLAYING. With nothing playing
-     the line is the one thing on the screen that says where the word came
-     from, and taking it away from a reader who has simply stopped moving is
-     removing the answer to the question they stopped to ask. While narration
-     is carrying them along it is a caption, and a caption that will not go is
-     furniture. `nav.playing` is the door the app sets from listen.js's own
-     play/pause; nothing here starts a sound, and the bench has a switch.
-
-     The timer's shape is scrub.js's, deliberately: `wake()` adds the class,
-     clears the pending sleep and arms a new one. One timer, never a stack. */
-  let subAwake = true, subSleepT = null, playing = false;
-  function wakeSub(){
-    subAwake = true;
-    if(subSleepT){ clearTimeout(subSleepT); subSleepT = null; }
-    if(!playing || !(WORD.subsleep > 0)) { markPaint(); return; }
-    subSleepT = setTimeout(() => {
-      subSleepT = null; subAwake = false; markPaint();
-    }, WORD.subsleep);
-    markPaint();
-  }
-  function setPlaying(on){
-    playing = !!on;
-    // going quiet wakes it and leaves it awake; starting to play arms the
-    // sleep from that moment, so a person who pressed play and did not touch
-    // anything still watches it go rather than waiting for a stray wheel.
-    wakeSub();
-    return playing;
-  }
-
-  /* THE RAIL UNDER IT, and it moves the CURSOR. The reader's own scrub (the
-     one down the right edge) moves the SCROLL, which in one word view is not
-     the thing you are holding -- the cursor is, and the reader follows it. So
-     this rail is the book end to end and dragging it sets the word: the
-     chapter from where along the rail you are, the word from where inside that
-     chapter's own share you are, and then `seatOnWord()` brings the page to it
-     exactly as an arrow key would. It is the same door as goTo and stepWord --
-     one cursor, a third driver of it, never a second copy.
-
-     Horizontal, because the subtitle is a row along the foot of the view
-     (Osca: "ONE LINE, a TINY floater, quite long, in the bottom of the page"),
-     and a rail that runs along its own line reads as part of it. */
-  let subRail = null, subFill = null, subDrag = null;
-  function wordSubRail(){
-    if(subRail) return subRail;
-    const host = o.bookEl || (o.readerBox && o.readerBox.parentNode) || null;
-    if(!host || !host.appendChild) return null;
-    subRail = document.createElement("div");
-    subRail.classList.add("wordsubrail");
-    subRail.setAttribute("aria-hidden", "true");
-    subFill = document.createElement("i");
-    subRail.appendChild(subFill);
-    host.appendChild(subRail);
-    if(subRail.addEventListener){
-      const seek = e => {
-        const r = subRail.getBoundingClientRect();
-        subSeek((e.clientX - r.left) / Math.max(1, r.width));
-      };
-      subRail.addEventListener("pointerdown", e => {
-        subDrag = e.pointerId; wakeSub();
-        try{ subRail.setPointerCapture(e.pointerId); }catch(_){}
-        seek(e);
-        if(e.preventDefault) e.preventDefault();
-      });
-      subRail.addEventListener("pointermove", e => {
-        wakeSub();
-        if(subDrag == null) return;
-        seek(e);
-      });
-      const up = e => {
-        if(subDrag == null) return;
-        try{ subRail.releasePointerCapture(subDrag); }catch(_){}
-        subDrag = null;
-      };
-      subRail.addEventListener("pointerup", up);
-      subRail.addEventListener("pointercancel", up);
-    }
-    return subRail;
+    if(!host) return null;
+    wordPane = window.WordPane.mount({
+      host,
+      repaint: markPaint,
+      sleep: () => WORD.subsleep,
+      fraction: subFraction,
+      seek: subSeek,
+      key: () => wordChapterIdx + ":" + wordIdx,
+      line(){
+        const w = wordDomIndex[wordIdx];
+        const text = w && w.p ? (w.p.textContent || "") : "";
+        if(w && text) return { before: text.slice(0, w.start),
+                               word: text.slice(w.start, w.end),
+                               after: text.slice(w.end) };
+        return { before: "", word: wordTextAt(wordIdx) || "", after: "" };
+      },
+    });
+    return wordPane;
   }
   /* where along the book the cursor is, 0..1 -- chapters, then the word's own
      place inside its chapter, which is what makes the rail move smoothly while
@@ -2115,45 +2060,9 @@ function mount(o){
     const total = Math.max(1, wordTotal());
     return jumpTo(ch, Math.round(u * (total - 1)), "subscrub", true);
   }
-  let subKey = null;
-  function paintWordSub(f){
-    const el = wordSub();
-    if(!el) return;
-    const rail = wordSubRail();
-    const on = f > 0;
-    // ASLEEP IS NOT GONE FROM THE PAGE, it is at zero -- the same opacity the
-    // line already fades in on, so waking and sleeping are the one transition
-    // shell.css already describes and there is nothing to re-flow.
-    const o1 = (on && subAwake) ? String(Math.min(1, f * 1.6).toFixed(3)) : "0";
-    if(el.style.opacity !== o1) el.style.opacity = o1;
-    if(rail){
-      if(rail.style.opacity !== o1) rail.style.opacity = o1;
-      // NEVER IN PAGE VIEW, and not merely invisible there: a rail across the
-      // foot of the reading page would take every press aimed at the text.
-      const pe = (on && subAwake) ? "auto" : "none";
-      if(rail.style.pointerEvents !== pe) rail.style.pointerEvents = pe;
-      if(subFill && on){
-        const w = (subFraction() * 100).toFixed(3) + "%";
-        if(subFill.style.width !== w) subFill.style.width = w;
-      }
-    }
-    if(!on) return;
-    const w = wordDomIndex[wordIdx];
-    const key = wordChapterIdx + ":" + wordIdx;
-    if(key === subKey) return;                 // one write per word, not per frame
-    subKey = key;
-    const line = w && w.p ? (w.p.textContent || "") : "";
-    const kids = el.children || [];
-    if(w && line){
-      if(kids[0]) kids[0].textContent = line.slice(0, w.start);
-      if(kids[1]) kids[1].textContent = line.slice(w.start, w.end);
-      if(kids[2]) kids[2].textContent = line.slice(w.end);
-    }else{
-      if(kids[0]) kids[0].textContent = "";
-      if(kids[1]) kids[1].textContent = wordTextAt(wordIdx) || "";
-      if(kids[2]) kids[2].textContent = "";
-    }
-  }
+  function wakeSub(){ const p = pane(); if(p) p.wake(); else markPaint(); }
+  function setPlaying(on){ const p = pane(); return p ? p.playing(on) : !!on; }
+  function paintWordSub(f){ const p = pane(); if(p) p.paint(f); }
 
   let spreadNow = 0;
   let lastDy = Infinity, stuckY = 0;   // the closing loop's own progress
@@ -2878,11 +2787,16 @@ function mount(o){
        wheel, tap or key while narration runs, and stays up when it does not.
        `subScrub(f)` is the rail's, exposed so a check (and a bench) can drag
        it without a pointer; the rail itself calls the same function. */
-    get playing(){ return playing; }, set playing(v){ setPlaying(v); },
-    get subAwake(){ return subAwake; },
-    subWake(){ wakeSub(); return subAwake; },
+    get playing(){ return !!(wordPane && wordPane.isPlaying); },
+    set playing(v){ setPlaying(v); },
+    get subAwake(){ const p = pane(); return p ? p.awake : true; },
+    subWake(){ wakeSub(); const p = pane(); return p ? p.awake : true; },
     subScrub(f){ return subSeek(f); },
     get subAt(){ return subFraction(); },
+    /* the pane itself, for a bench that wants to measure its two elements --
+       and the proof that the zoom is not on it: its rect is the same at +2 as
+       it is at 0. */
+    get wordPane(){ return pane(); },
     /* how much harder the axis pulls home from inside one word */
     get outSnap(){ return OUT_SNAP; }, set outSnap(v){ OUT_SNAP = +v || 1; },
     skip:setSkipOffscreen, get skipping(){return skipOffscreen;},

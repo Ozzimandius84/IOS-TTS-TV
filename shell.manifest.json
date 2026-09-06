@@ -2,12 +2,12 @@
   "added_here": [
     "index.html"
   ],
-  "bytes": 1382490,
+  "bytes": 1395469,
   "count": 51,
   "files": {
     "bar/askbar.css": {
-      "bytes": 11045,
-      "sha256": "57591d528632b6ac5e693e1faa41dee91620006389e5f317fd7c531ebee7da7f"
+      "bytes": 11175,
+      "sha256": "9aad3d62a13ba38e9b390f6074a72ed15e81b6f24b5893d0e1ec6e3d40ae0f3a"
     },
     "bar/askbar.js": {
       "bytes": 36071,
@@ -34,12 +34,12 @@
       "sha256": "3e731b5a2c10b98d64a3e1feacc9e7c8776e5e9d6a786dc100b8fc385606a107"
     },
     "library/library.css": {
-      "bytes": 63169,
-      "sha256": "8baeecf7bf5d3d735e89506c207ef2ea1e414dea16ba7f502f9745512193ba2f"
+      "bytes": 66142,
+      "sha256": "b1b4929859784ca8a2cd260cbb0e590331dd42a66de423318e4b88c7b81eec40"
     },
     "library/library.html": {
-      "bytes": 241657,
-      "sha256": "fca2f334610d9cd4fd63d58d66216723a64ef08814d0581022cfead7d67154cb"
+      "bytes": 243260,
+      "sha256": "6e8aba73eaac7621af5bf0b547bef5770618cac1aba117535be1dd7ea174693c"
     },
     "library/transfer.js": {
       "bytes": 11069,
@@ -54,8 +54,8 @@
       "sha256": "2b0c86208e4e044b7fec34956b014f34b4837527364a5824910391af43677c9c"
     },
     "reader/book-nav.js": {
-      "bytes": 157547,
-      "sha256": "1b1ff0214086b7b4b2e034037b53939d7d73ea4921badcf642c65339c40112a8"
+      "bytes": 153937,
+      "sha256": "4534fb4fda96ff46307e3f5893f4f58d65f608305f5b05f817a71afbecf483d7"
     },
     "reader/book.js": {
       "bytes": 6116,
@@ -126,8 +126,8 @@
       "sha256": "e14fe44f2e9e119765d5e3b4d337808da7c8b5a43d1d672b0aa92e5664b11958"
     },
     "reader/pane.js": {
-      "bytes": 12456,
-      "sha256": "de1f06384a5ca99fa2b378f534d1e3760e6357840c95b76c81964ca5bf5b134f"
+      "bytes": 15541,
+      "sha256": "6158921849f69fb40f11bfee7f0141bde7b2bb944933673ab9757afabb44d086"
     },
     "reader/popover.js": {
       "bytes": 11571,
@@ -138,12 +138,12 @@
       "sha256": "01d0599452f0583b677409bef75c8211aeee66c02d6033831ced4bace0fc37cd"
     },
     "reader/reader.html": {
-      "bytes": 42163,
-      "sha256": "ac9cba1bce907b5cf59ce825af267a5d94ec1d4df4207b9bdce5bf3966013c0b"
+      "bytes": 43567,
+      "sha256": "d425cdc897270b644c5a8fde2e7584ef4054e47f6a13eeba03ffd374e828f6fb"
     },
     "reader/shell.css": {
-      "bytes": 25938,
-      "sha256": "61e3c766db4e015c629b5143c550e8190801bc638a9258afbbb158252b023798"
+      "bytes": 25348,
+      "sha256": "c94969e982a3770a0e182a62db3c88079335d983ac0ec8fa46c395796e7be423"
     },
     "reader/sw.js": {
       "bytes": 18224,
@@ -154,24 +154,24 @@
       "sha256": "2132267fdb5bd8e7af744bba23be070f7d9ee8ef3e154e8ab14ccd3f2354ab59"
     },
     "reader/wheel.css": {
-      "bytes": 2397,
-      "sha256": "ff3a04b9f88f2e4018fea352228896c507144cddeefb4e5ac547a8ff65372166"
+      "bytes": 3423,
+      "sha256": "5ac435fbe0771e6565925b58af09769b818cd17ac89f75520781de24290da09e"
     },
     "reader/wheel.js": {
       "bytes": 20225,
       "sha256": "2926ce71f6ed60b7c36e8ce7db27976d0913d890d3563f3f7f9c68b5280144b4"
     },
     "settings/settings.css": {
-      "bytes": 14501,
-      "sha256": "ffffeaff3efbf673824cac1baaaef1866289077c838c02d769b71619521ec9e4"
+      "bytes": 17062,
+      "sha256": "bb6282d8599f6ff3c5271a26662f0af260eda7636fee5f4fb055713e08dc8abb"
     },
     "settings/settings.html": {
-      "bytes": 12231,
-      "sha256": "d8fa77879ece5ef73d136699f5ec900bb1f8276e49732b557707c2af9299b287"
+      "bytes": 14061,
+      "sha256": "f9c835162bdb95c46c8df634663fbc117fd1712b82e8194d6696f3e6b51b550c"
     },
     "settings/settings.js": {
-      "bytes": 225950,
-      "sha256": "a3e6be9ff8f064cca0f3081970538a5e9ea5bb195a248ab0695b8ab24e72a09d"
+      "bytes": 228517,
+      "sha256": "c47b7db7400a2a31b81415be0b3b271750623681c8a7b6deaeee115f8851317c"
     },
     "voiceui/answers.js": {
       "bytes": 4253,
@@ -212,8 +212,8 @@
   },
   "home_page": "library/library.html",
   "source": {
-    "commit": "5fbb23c",
-    "repo": "/sessions/rcw-01dgdhw8uiaxqpgnemcnp539/mnt/TTSTV",
+    "commit": "9ac6ec2",
+    "repo": "/sessions/rcw-0136bgibjqrrgsjrmhewcuhu/mnt/TTSTV",
     "shell_cache": "ttstv-shell-v35"
   }
 }

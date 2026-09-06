@@ -513,6 +513,32 @@
                 + "1.2 s to come back." },
   };
 
+  /* THE FOLD, one table. General and Reading as they are; Transfer becomes
+   * Sync and Cloud GPU's two cards are drawn under its own; Models becomes
+   * Voices. Languages (studio's) and Hotkeys (a keyboard's) are not the
+   * phone's. `needsStudio` is dropped on the two folded panels: on a phone
+   * nothing is behind them and their builders say so in one line each
+   * ("No studio behind this page ..."), which is the truth, where an absent
+   * tab would be a hole. `by.transfer.build` is not called through `t.build`
+   * so the panel handle Sync returns is still Transfer's own. */
+  function phoneTabs() {
+    var by = {};
+    TABS.forEach(function (t) { by[t.id] = t; });
+    return [
+      by.general,
+      by.reading,
+      Object.assign({}, by.transfer, {
+        label: "Sync", sub: "your devices, and where renders run", needsStudio: false,
+        build: function (panel, ctx, o) {
+          var h = buildTransferPanel(panel, ctx, o);
+          buildCloudPanel(panel, ctx, o);
+          return h;
+        },
+      }),
+      Object.assign({}, by.models, { label: "Voices", sub: "the voices", needsStudio: false }),
+    ];
+  }
+
   var TABS = [
     { id: "general", label: "General", sub: "the app itself",
       cards: [
@@ -1334,7 +1360,10 @@
              line: languageLine, els: { list: list, note: note } };
   }
 
-  function buildKagglePanel(panel, ctx) {
+  function buildKagglePanel(panel, ctx, opts) {
+    // a phone renders nowhere but the cloud: no "This Mac" to choose, no
+    // model to install (6 Sep, THE PHONE WHOLE -- no "on this Mac" notes)
+    var phone = !!(opts && opts.phone);
     var doc = panel.ownerDocument;
     /* THE PICTURE (31 Aug): an Account card whose first row is the green dot,
      * *Connected as name*, the sentence about where renders run, and
@@ -1359,7 +1388,7 @@
     var head = kEl(doc, "div", "kag-line kag-who st", "Asking studio…");
     whoL.appendChild(head);
     whoL.appendChild(kEl(doc, "small", "kag-why-here",
-      "Renders run on Kaggle unless you install a model on this Mac."));
+      phone ? "Renders run on Kaggle." : "Renders run on Kaggle unless you install a model on this Mac."));
     // ...and what this lane IS, beside the card that connects it (2 Sep)
     whoL.appendChild(kEl(doc, "small", "kag-why-here kag-lane", KAGGLE_LANE_LINE));
     var acts = kEl(doc, "div", "set-c kag-row kag-acts");
@@ -1428,7 +1457,9 @@
       whereOpts.appendChild(b); whereBtns[o[0]] = b;
     });
     whereRow.appendChild(whereOpts);
-    card.appendChild(whereRow);
+    // the row exists either way (paint() writes to it); on a phone it is
+    // never on the card, because there is no "here" for a render to run
+    if (!phone) card.appendChild(whereRow);
 
     /* ---- the key, when studio will take one: its own card, because it is a
      *      different question from "am I signed in".
@@ -2511,9 +2542,11 @@
     return handle;
   }
 
-  function buildTransferPanel(panel, ctx) {
+  function buildTransferPanel(panel, ctx, opts) {
     var doc = panel.ownerDocument;
-    var isStudio = !!origin();
+    // the same override `mount` honours for `hasStudio`: a test, or the
+    // design bench's `?phone`, says what is behind the page (6 Sep)
+    var isStudio = (opts && opts.studio !== undefined) ? !!opts.studio : !!origin();
     var host = global.TTSTVHost;
 
     /* ---- First run: the card, lifted whole (`buildFirstRunCard`), drawn
@@ -2708,7 +2741,7 @@
      * flow, on the phone the host's browser + this page's PKCE. A page with
      * neither (the PWA on the web, a file:// open) says so and stays inert. */
     var canGoogle = isStudio || !!(host && host.google && host.google.clientId && typeof host.googleSignIn === "function");
-    var NO_GOOGLE_HERE = "no Google client on this device -- sign in is built for Frank on the phone and Studio on the Mac";
+    var NO_GOOGLE_HERE = "no Google client on this device -- sign in is built into Frank and into Studio";
 
     /* The account this page acts on: Studio's on the Mac (`GET /account`),
      * this page's on the phone. `account` (localStorage) still records the
@@ -3878,6 +3911,20 @@
     // otherwise -- the same question `save()` asks before it tries the mirror.
     var hasStudio = opts.studio === undefined ? !!origin() : !!opts.studio;
     var tabs = TABS.filter(function (t) { return !t.needsStudio || hasStudio; });
+    /* THE PHONE'S OWN FOUR (Osca, 6 Sep, THE PHONE WHOLE: "Settings is one
+     * column with the phone's own tabs (General, Reading, Sync, Voices --
+     * Cloud GPU and Models fold under Sync/Voices)"). The JS half of
+     * design/phone/settings.html's contract; settings.css carries the rest.
+     * A phone is `isTouchOnly()` -- the same question the Voice group asks
+     * (a coarse pointer and no hover) -- or `opts.phone`, the design bench's
+     * word (`settings.html?phone`). The Mac's seven are untouched: this runs
+     * on nothing that has a keyboard. */
+    if (opts.phone || isTouchOnly()) {
+      tabs = phoneTabs();
+      // ...and every builder sees the one flag, so a card can leave out the
+      // row that is the Mac's (the Kaggle card's "where a render runs")
+      opts = Object.assign({}, opts, { phone: true });
+    }
     var open = null;
     try { open = global.localStorage && global.localStorage.getItem(TAB_KEY); } catch (e) { open = null; }
     if (!tabs.some(function (t) { return t.id === open; })) open = tabs[0].id;

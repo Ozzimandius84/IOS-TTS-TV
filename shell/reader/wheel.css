@@ -23,7 +23,24 @@
         transform-origin:50% 50%;          /* the central horizontal axis */
         transform-style:preserve-3d; backface-visibility:visible;
         will-change:transform,opacity; }
-.wheel .row .rt{ display:block; position:relative; }
+/* AND A NAME NEVER REACHES THE ONE BELOW IT. Osca, 6 Sep: "its entries jam
+   together." A row is a band one --pitch tall with its text centred in it, so
+   two names are only ever as far apart as the band is tall MINUS what they
+   themselves take up: at 168px of pitch and 31.1px of leading, a name that
+   wraps to five lines is 155.7px tall and leaves 12px between itself and the
+   next one; at six it is taller than its own band and they touch. Long chapter
+   names on a narrow pane do exactly that (David Copperfield's "PREFACE TO THE
+   CHARLES DICKENS EDITION" is already three).
+
+   So the text is held to a band's height less one line, which is the same
+   sentence as "the gap between two names is never less than a line": the
+   clamp is the guarantee, the line count is the ellipsis. Both are variables,
+   because --pitch is. */
+.wheel .row .rt{ display:-webkit-box; position:relative;
+        -webkit-box-orient:vertical;
+        -webkit-line-clamp:var(--row-lines, 4);
+        max-height:calc(var(--pitch) - var(--row-gap, 1.25em));
+        overflow:hidden; }
 .wheel .row .s{ display:block; margin-top:.5em; font-family:var(--ui);
         font-size:.4rem; letter-spacing:.14em; text-transform:uppercase;
         color:var(--dim); opacity:.75; }

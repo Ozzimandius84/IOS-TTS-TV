@@ -336,6 +336,23 @@ body{ font-family:var(--serif); color:var(--ink); }
   transition:opacity .18s ease, color .18s ease; }
 #librarydoor:hover, #librarydoor:focus-visible{ opacity:1; color:var(--ink); }
 #librarydoor svg{ width:15px; height:15px; display:block; }
+/* THE PHONE (design/phone/reader.html, 6 Sep): the door is a thumb's target,
+   44 square, and the row it sits in is not made taller for it -- the extra
+   is margin the row's own 28px absorbs. The same query the shell files use,
+   and the same flag -- `html[data-phone]`, reader.html's <head> sets it for
+   a coarse pointer with no hover, or for ?phone -- so a small Mac window is
+   not a phone. Nothing above it changes. */
+@media (max-width: 600px), (max-height: 500px){
+  html[data-phone] #librarydoor{ min-width:44px; min-height:44px; margin:-8px 0; opacity:.7; }
+  /* ...and the row it sits in starts under the phone's island, not under it:
+     the safe inset, as library.css and settings.css read it (`--safe-top` is
+     the bench's word for env(); the phone answers env() itself) */
+  html[data-phone] .barrow{ top:var(--safe-top, env(safe-area-inset-top, 0px)); }
+  /* ...and the hands-free pill's mic (voiceui/app.js draws it 34px, a mask
+     the size of its box) is a thumb's target too. voiceui's element, this
+     page's phone layout; voiceui is asked to carry the line itself (§6). */
+  html[data-phone] .voiceui-pill .voiceui-toggle{ width:44px; height:44px; }
+}
 
 /* -------- WARMTH -- bench-page.html's own big slider, unchanged. */
 .warmth{ position:fixed; top:22px; left:50%; transform:translateX(-50%); z-index:41;
@@ -364,45 +381,10 @@ body{ font-family:var(--serif); color:var(--ink); }
 .bench a{ color:var(--dim); text-decoration:none; padding:6px 3px; }
 .bench .r{ color:var(--dim); padding:6px 3px; }
 
-/* =============== THE LAST PANE'S OWN SUBTITLE ==============================
-   Osca: "I need a small subtitle in the final pane of the one word view, so
-   give me the lines floating in the page, larger than the one view."
+/* ---- THE LAST PANE IS ITS OWN ASSET (6 Sep). The line the word came from and
+   the rail under it moved out whole to wordpane.css, mounted by book-nav.js
+   through wordpane.js. They were never the shell's -- they are the last
+   pane's, and a page that wants that pane should not have to load a shell to
+   get it. Not one rule of theirs is left in this file: every selector they
+   used is now in wordpane.css and in no other stylesheet. */
 
-   The word alone is the whole of that pane, and the one thing it costs is
-   knowing where the word was standing. This is the line it came out of,
-   floating over the page: small type on a wide measure -- far wider than the
-   word, which is the "larger" -- the word itself in ink and the rest of the
-   line dimmed, so the eye finds it without being told.
-
-   It is FIXED, not part of the zoomed page: at scale(14) anything laid out
-   with the text would be a mile high and half a mile away. Fixed to the
-   viewport, it keeps its own size and its own place, which is what "floating
-   in the page" has to mean once the page itself is fourteen times up.
-
-   Every number is a custom property, so the bench sets one declaration:
-     --sub-bottom how far up from the foot of the view it sits
-     --sub-size   its type size
-     --sub-w      its measure
-     --sub-lines  how many lines of it before it ellipsises   */
-.wordsub{
-  /* ONE LINE, TINY, LONG, AT THE FOOT. Osca: "I just wanted ONE LINE, in the
-     subtitle, a TINY floater, quite long, in the bottom of the page." It sat
-     at 63vh in two lines at 19px, which put a second paragraph across the
-     middle of the view and under the word itself. Anchored to the BOTTOM now,
-     so it stays out of the way of a word of any size. */
-  position:fixed; left:50%; transform:translateX(-50%);
-  bottom:var(--sub-bottom, 4.5vh);
-  width:min(var(--sub-w, 104ch), 92vw);
-  z-index:12; pointer-events:none;
-  text-align:center;
-  font-family:var(--serif); font-size:var(--sub-size, 13px); line-height:1.5;
-  letter-spacing:-.01em;
-  color:var(--dim);
-  opacity:0; transition:opacity .16s ease;
-  display:-webkit-box; -webkit-box-orient:vertical;
-  -webkit-line-clamp:var(--sub-lines, 1); overflow:hidden;
-  white-space:normal; text-overflow:ellipsis;
-}
-/* the word you are on, in the page's own ink -- the same weight, so it is the
-   colour that marks it and not a second typeface */
-.wordsub b{ color:var(--ink); font-weight:inherit; }

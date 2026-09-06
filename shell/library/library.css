@@ -112,6 +112,11 @@
   header button:focus-visible, header .headerLink:focus-visible {
     outline: 2px solid var(--accent); outline-offset: 1px;
   }
+  /* THE PHONE'S DOOR TO SETTINGS (library.html `#settingsDoor`): nothing on
+     the Mac, where Settings is a window off Cmd-, and the menu (30 Aug, the
+     gear left the header). THE PHONE WHOLE block at the foot of this file
+     shows it under the phone's media query, and nowhere else. */
+  #settingsDoor { display: none; font-size: 1.15rem; }
   /* The way out of the Library (Osca, 28 Aug: "Open library means I pretty much
      have to close the app"). Top-left in BOTH layouts, before the sources toggle. */
 
@@ -979,23 +984,57 @@
   #shelf.rail { display: block; }
   #shelf.rail { padding-left: calc(var(--ph-margin) + var(--safe-left, 0px)); }
   #shelf.rail { padding-right: calc(var(--ph-margin) + var(--safe-right, 0px)); }
-  #shelf[data-zoom="4"] .shelfgrid { --cols: var(--ph-cols); }
-  #shelf[data-zoom="4"] .shelfgrid { --bookw: var(--ph-tile); }
-  #shelf[data-zoom="4"] .shelfgrid { gap: var(--ph-gap); }
+  /* `[data-zoom]`, not `[data-zoom="4"]` (6 Sep, THE PHONE WHOLE): the phone
+     has ONE size, so whichever zoom the shelf remembers, the grid is this */
+  #shelf[data-zoom] .shelfgrid { --cols: var(--ph-cols); }
+  #shelf[data-zoom] .shelfgrid { --bookw: var(--ph-tile); }
+  #shelf[data-zoom] .shelfgrid { gap: var(--ph-gap); }
   #shelf .railrow { min-height: var(--ph-tap); }
   #importBtn, .ingest-retry, .menu button { min-height: var(--ph-tap); }
-  /* tap targets under 44 raised (Osca, 6 Sep): the shelf-zoom buttons
-     (28x22) and the shelf heading's toggle (29 tall) */
-  .zoom button { min-height: var(--ph-tap); }
-  .zoom button { min-width: var(--ph-tap); }
+  /* tap targets under 44 raised (Osca, 6 Sep): the shelf heading's toggle
+     (29 tall). The two `.zoom button` lines that stood here went with the bar
+     itself (THE PHONE WHOLE, below: "no shelf-zoom bar") */
   .shelftoggle { min-height: var(--ph-tap); }
   /* the first-run gate is settings.js's card, drawn over THIS page; its own
-     rules are injected after this sheet, so these weigh one `body` more */
-  body .ttstv-settings.fr-gate .fr-sheet { max-width: var(--ph-card); }
-  body .ttstv-settings.fr-gate .fr-sheet { padding-left: calc(var(--ph-margin) + var(--safe-left, 0px)); }
-  body .ttstv-settings.fr-gate .fr-sheet { padding-right: calc(var(--ph-margin) + var(--safe-right, 0px)); }
+     rules are injected after this sheet, so these weigh one `body` more.
+     (`max-width: var(--ph-card)` and the two paddings stood here until 6 Sep:
+     the card FILLS the screen now -- THE PHONE WHOLE, below.) */
   body .ttstv-settings .kag-btn { min-height: var(--ph-tap); }
 }
 @media (max-height: 500px) and (orientation: landscape) {
-  :root { --ph-cols: 4; }
+  /* 3, not 4 (Osca, 6 Sep: "one size, 2 across, 3 in landscape") */
+  :root { --ph-cols: 3; }
+}
+
+/* ==================================================================
+   THE PHONE, WHOLE (Osca, 6 Sep). design/phone/library.html and
+   design/phone/firstrun.html are the contract; this block is their text,
+   byte for byte (test-phone.mjs checks). It decides what is NOT on the
+   phone as much as what is. Every rule keys on `html[data-phone]` -- the
+   flag library.html's <head> sets for a coarse pointer with no hover, or
+   for ?phone -- INSIDE the media query: the Mac's smallest window matches a
+   width test alone, and the Mac is untouched.
+   ================================================================== */
+@media (max-width: 600px), (max-height: 500px) {
+  /* NO SHELF-ZOOM BAR: one size, 2 across, 3 in landscape; zoom by pinch,
+     later. The ladder's four steps are the Mac's. */
+  html[data-phone] .shelffoot { display: none; }
+  /* THE DOOR TO SETTINGS. On the Mac Settings is a window (Cmd-, and the
+     app's own menu) and the header has no gear; on the phone there is no
+     Cmd-, and no window -- Settings is a page -- so the header carries one
+     link to it. A link, so a press is its own proof. */
+  html[data-phone] #settingsDoor { display: inline-flex; }
+  /* NO "ON THIS MAC" NOTES ANYWHERE: the two lines that name the Mac's
+     mirror are bench-only already; on the phone they are gone by rule too */
+  html[data-phone] .libline, html[data-phone] .phoneline { display: none; }
+  /* THE FIRST-RUN CARD FILLS THE SCREEN: the gate is the screen under the
+     safe areas, the sheet is the whole of it, the three choices are rows a
+     thumb can find -- the name above, the button the full width below */
+  html[data-phone] body .ttstv-settings.fr-gate { padding: var(--safe-top, 0px) 0 var(--safe-bottom, 0px); align-items: stretch; }
+  html[data-phone] body .ttstv-settings.fr-gate .fr-sheet { max-width: none; min-height: 100%; display: flex; flex-direction: column; justify-content: center; box-sizing: border-box; }
+  html[data-phone] body .ttstv-settings.fr-gate .fr-sheet { padding-left: calc(var(--ph-margin) + var(--safe-left, 0px)); }
+  html[data-phone] body .ttstv-settings.fr-gate .fr-sheet { padding-right: calc(var(--ph-margin) + var(--safe-right, 0px)); }
+  html[data-phone] body .ttstv-settings.fr-gate .fr-sheet .set-row { flex-direction: column; align-items: stretch; gap: 8px; }
+  html[data-phone] body .ttstv-settings.fr-gate .fr-sheet .set-c { width: 100%; justify-content: stretch; }
+  html[data-phone] body .ttstv-settings.fr-gate .fr-sheet .kag-btn { width: 100%; min-height: var(--ph-tap); }
 }

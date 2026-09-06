@@ -1,10 +1,17 @@
 <!doctype html>
 <meta charset="utf-8">
+<!-- THE PHONE LAYS THIS PAGE OUT AT ITS OWN WIDTH (design/phone/reader.html,
+     6 Sep). Without a viewport meta a WKWebView lays a page out 980 CSS px
+     wide and shrinks it -- a Mac window squeezed, which is exactly the thing
+     the phone pages exist to end. library.html and settings.html carry the
+     same line; the reader had none. Inert in a desktop window. -->
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Frank — the shell</title>
 <link rel="stylesheet" href="tokens.css">
 <link rel="stylesheet" href="wheel.css">
 <link rel="stylesheet" href="page.css">
 <link rel="stylesheet" href="pane.css">
+<link rel="stylesheet" href="wordpane.css">
 <link rel="stylesheet" href="shell.css">
 <link rel="stylesheet" href="listen.css">
 <link rel="stylesheet" href="lookup.css">
@@ -21,6 +28,22 @@
      page asks it for is the hotkey grammar. -->
 <script src="keys.js"></script>
 <script src="../prefs/prefs.js"></script>
+<!-- THE PHONE'S ONE FLAG (design/phone/, 6 Sep): `html[data-phone]`, set before
+     the first paint, is what the phone-only rules in this page's sheet key
+     on -- a door, a bar that is not there. The test is the one settings.js
+     asks for the Voice group (a coarse pointer and no hover: a phone, not a
+     Mac with a trackpad), or ?phone, the design bench's word. Width alone
+     will not do: the Mac's Settings window is 560 wide and matches every
+     phone media query, and "Mac untouched" means untouched. -->
+<script>
+(function () {
+  try {
+    if (/(?:^|[?&])phone(?:[=&]|$)/.test(location.search)
+        || (window.matchMedia && matchMedia("(pointer: coarse)").matches && matchMedia("(hover: none)").matches))
+      document.documentElement.setAttribute("data-phone", "1");
+  } catch (e) { /* no matchMedia: not a phone */ }
+})();
+</script>
 
 <div id="book">
   <div class="readerbox" id="readerbox">
@@ -96,6 +119,7 @@
 <script src="wheel.js"></script>
 <script src="page.js"></script>
 <script src="pane.js"></script>
+<script src="wordpane.js"></script>
 <script src="book-nav.js"></script>
 <script src="listen.js"></script>
 <script src="lookup.js"></script>

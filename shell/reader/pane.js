@@ -35,6 +35,17 @@
     scale:    1.23,   // everything at once
     base:     17.5,     // vw -- the innermost pane, the one nearest the reader
     falloff:  0.64,    // each pane further out is this much of the one before it
+    // THE FIRST PANE HAS THE PAGE'S OWN MARGIN. Osca, 6 Sep: "the contents
+    // pane (the first one) has the wrong margin... set its margin to the
+    // reading column's." Measured in his shell at 1710x951: the entries stood
+    // 15.4px from the screen edge while the book's text started at 355 -- the
+    // contents glued to the edge beside a page with a wide margin. This is the
+    // reading page's own rule, page.css's `.chapter{ max-width:calc(100% -
+    // 3rem) }`: 1.5rem of margin at each side, never less. It is the FIRST
+    // pane's alone -- that one is the reading column's own margin made visible,
+    // so it is the one that has to keep the page's grid; the panes behind it
+    // are narrower columns of their own and keep padL.
+    firstPad: 1.5,    // rem -- pane 0's left margin: the reading page's own
     padL:     0.6,    // rem -- inside the pane, left: the room the live dot needs
     padR:     0.5,    // rem -- inside the pane, right: its own number, so the
                       //        column can be pushed off either edge separately
@@ -58,6 +69,28 @@
     narrow:   860,    // px -- under this the panes stop being a stack of
     narrowW:  88,     // columns and take the screen: %, first pane
     narrowStep: 8,    // % less for each one further out
+    // ...AND UNDER IT THERE IS ONE SLOT, NOT TWO (job 24, the landscape pass).
+    // `cap` is how many panes are side by side in the window at once, and two
+    // is right on a desk: 17vw and 11vw of 1280 sit beside each other with the
+    // reader still readable past them. On a phone each pane is already 88% and
+    // 80% of the screen (`narrowW`/`narrowStep` above), so two slots ask for
+    // 168% of a 390px screen and the pair can only be drawn by pushing the
+    // first one most of the way off it -- which is the stack covering itself
+    // rather than two panes you can read. Landscape does not rescue it: 844 is
+    // still under `narrow`, and 88% of 844 is 743. So below the mark the cap is
+    // ONE: the pane you pulled is the pane you see, and everything older piles
+    // behind it exactly as the third pane already does on a desk.
+    narrowCap: 1,
+    // ...AND A PHONE IS A PHONE WHICHEVER WAY UP IT IS. `narrow` is a width,
+    // and measured against a width alone the two landscape sizes disagree:
+    // 844x390 is under the mark and behaves, 932x430 is OVER it and comes out
+    // with a desk's ladder -- 218/146/100/90px columns on a phone held
+    // sideways. The short side is what says whether this is a phone: 390 and
+    // 430 both, either way up, against 800 on the smallest desk this is used
+    // on. So the mark is EITHER: a narrow width, or a short side under this.
+    // (Pass `vh` to measure()/widthOf()/capOf() for it to apply -- without one
+    // they judge on width alone, exactly as they always did.)
+    narrowH:  500,
   };
 
 
@@ -85,13 +118,24 @@
     return (((h >>> 0) % 360) + i * st) % 360;
   }
 
+  // HOW MANY SLOTS THERE ARE, at this width. One below the narrow mark (a
+  // phone, either way up), `cap` above it. Exported because the bench draws
+  // the number and the checks assert it.
+  function isNarrow(c, vw, vh){
+    return !!((vw && vw <= c.narrow) || (vh && vh <= c.narrowH));
+  }
+  function capOf(cfg, vw, vh){
+    const c = Object.assign({}, DEFAULTS, cfg||{});
+    return Math.max(1, isNarrow(c, vw, vh) ? (c.narrowCap|0 || 1) : (c.cap|0 || 1));
+  }
+
   // How wide pane i is, in px, before anything is open.
-  function widthOf(i, cfg, vw){
+  function widthOf(i, cfg, vw, vh){
     const c = Object.assign({}, DEFAULTS, cfg||{});
     // ON A PHONE THEY ARE NOT A STACK OF COLUMNS. 17vw of a 390px screen is
     // 66px, which holds no name at all, so under the narrow mark each pane
     // takes most of the width and they simply cover each other.
-    if(vw && vw <= c.narrow){
+    if(isNarrow(c, vw, vh)){
       const pc = Math.max(30, c.narrowW - i * c.narrowStep);
       return Math.max(c.minWidth, Math.round(vw * pc/100));
     }
@@ -116,6 +160,7 @@
     const n   = Math.max(0, o.n|0);
     const dx  = +o.dx || 0;
     const vw  = o.vw || (root.innerWidth || 0);
+    const vh  = o.vh || 0;                    // optional: the short-side test
     const first = o.first;                    // px, or undefined
     if(!n) return { panes:[], right:0, limit:0, cfg };
 
@@ -123,7 +168,7 @@
     for(let i=0;i<n;i++){
       const fr = clamp(-dx - i, 0, 1);
       f[i] = cfg.ease === 1 ? fr : Math.pow(fr, cfg.ease);
-      w[i] = (i === 0 && first != null) ? Math.round(first) : widthOf(i, cfg, vw);
+      w[i] = (i === 0 && first != null) ? Math.round(first) : widthOf(i, cfg, vw, vh);
     }
 
     /* ---------------------------------------------------------------- SLOTS
@@ -148,7 +193,7 @@
     const gutterPx = vw * (cfg.gutter/100);
     const fStack   = n > 1 ? clamp(-dx - 1, 0, 1) : 0;
     const anchorL  = gutterPx * fStack;       // the window's left edge
-    const slots    = Math.max(1, Math.min(n, cfg.cap|0 || 1));
+    const slots    = Math.max(1, Math.min(n, capOf(cfg, vw, vh)));
     const S        = Math.max(1, slots - 1);  // how many steps between slots
 
     // THE WINDOW'S RIGHT EDGE. It grows while the first `slots` panes are
@@ -175,7 +220,9 @@
         slot:  clamp(newest - i, 0, S),       // 0 left, S right, S = piled
         piled: newest - i > S,                // behind the right slot
         open:  f[i] > 0,
-        pl: cfg.padL, pr: cfg.padR,           // the two sides of the column
+        // the two sides of the column -- and pane 0 keeps the page's own margin
+        pl: (i === 0 && cfg.firstPad != null) ? cfg.firstPad : cfg.padL,
+        pr: cfg.padR,
         wash:  i % 2 === 1,                   // white, colour, white, colour
         hue:   hue(o.seed, i, cfg.hueStep),
         // THE ONE YOU JUST PULLED UP IS THE ONE IN FRONT. Osca: "when I bring
@@ -228,7 +275,7 @@
     R.style.setProperty("--pane-l", c.light + "%");
   }
 
-  const Panes = { DEFAULTS, defaults, measure, apply, paint, hue, widthOf };
+  const Panes = { DEFAULTS, defaults, measure, apply, paint, hue, widthOf, capOf, isNarrow };
   if(typeof module === "object" && module.exports) module.exports = Panes;
   root.Panes = Panes;
 })(typeof window !== "undefined" ? window : globalThis);

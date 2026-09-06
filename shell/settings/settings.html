@@ -15,6 +15,22 @@
      synchronous, so nothing has been painted when the attribute lands. It
      also carries the reading font, which flashed for the same reason. -->
 <script src="../prefs/prefs.js"></script>
+<!-- THE PHONE'S ONE FLAG (design/phone/, 6 Sep): `html[data-phone]`, set before
+     the first paint, is what the phone-only rules in this page's sheet key
+     on -- a door, a bar that is not there. The test is the one settings.js
+     asks for the Voice group (a coarse pointer and no hover: a phone, not a
+     Mac with a trackpad), or ?phone, the design bench's word. Width alone
+     will not do: the Mac's Settings window is 560 wide and matches every
+     phone media query, and "Mac untouched" means untouched. -->
+<script>
+(function () {
+  try {
+    if (/(?:^|[?&])phone(?:[=&]|$)/.test(location.search)
+        || (window.matchMedia && matchMedia("(pointer: coarse)").matches && matchMedia("(hover: none)").matches))
+      document.documentElement.setAttribute("data-phone", "1");
+  } catch (e) { /* no matchMedia: not a phone */ }
+})();
+</script>
 <!-- THIS PAGE'S OWN FORM, and it is the only page that loads it (module-split
      Stage 4, 5 Sep). The tabs, the fields, the Cloud GPU cards, Models,
      Languages, Hotkeys and this window's CSS were the other half of what used
@@ -49,6 +65,13 @@
      which are <button>s inside it, still click. It is inert in a browser tab and
      in the export, which is exactly right -- there is no window to drag there. -->
 <header class="set-titlebar" id="titlebar" data-tauri-drag-region>
+  <!-- THE DOOR BACK TO THE LIBRARY, ON THE PHONE ONLY (design/phone/settings.html,
+       6 Sep). It does not contradict the note below: on the Mac this page is
+       a WINDOW and the door is display:none (settings.css); on the phone it
+       is a PAGE, reached from the Library's own door, and a page needs a way
+       out. An <a href>, not a <button>: no handler, and a press that
+       navigates is its own proof. -->
+  <a id="libraryDoor" class="headerLink" href="../library/library.html" aria-label="Library" title="Library">&#8249;</a>
   <!-- settings.js's tab strip lands HERE (the form's `mount`, `tabsInto`), not at the top
        of the panel: the picture puts the six icons in the title bar. Nothing
        else is in this row -- the moon went with the Theme setting (31 Aug). -->
@@ -162,8 +185,15 @@ const reportHeight = () => requestAnimationFrame(() => {
   if (window.TTSTVSettings) TTSTVSettings.reportHeight(document.getElementById("fields"));
 });
 
+/* THE PHONE'S SHAPE (settings.js `phoneTabs`, and every "no studio" branch):
+   the flag the <head> script set -- a real phone by its pointer, or ?phone,
+   the design bench's word, so design/phone/settings.html can show it in a
+   frame on a Mac. The app never carries a query. */
+const PHONE = document.documentElement.getAttribute("data-phone") === "1";
 const form = S.mount(document.getElementById("fields"), {
   status: document.getElementById("status"),
+  phone: PHONE || undefined,
+  studio: PHONE ? false : undefined,
   // the six icon tabs go in the window's own bar, not above the panel
   tabsInto: document.getElementById("titlebar"),
   // the preview is a paragraph of a BOOK, so it is shown with the tab about

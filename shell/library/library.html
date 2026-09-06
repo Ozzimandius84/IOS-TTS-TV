@@ -24,6 +24,22 @@
      own since Stage 4 (5 Sep) and is "../prefs/prefs.js", not reader's. -->
 <script src="../reader/keys.js"></script>
 <script src="../prefs/prefs.js"></script>
+<!-- THE PHONE'S ONE FLAG (design/phone/, 6 Sep): `html[data-phone]`, set before
+     the first paint, is what the phone-only rules in this page's sheet key
+     on -- a door, a bar that is not there. The test is the one settings.js
+     asks for the Voice group (a coarse pointer and no hover: a phone, not a
+     Mac with a trackpad), or ?phone, the design bench's word. Width alone
+     will not do: the Mac's Settings window is 560 wide and matches every
+     phone media query, and "Mac untouched" means untouched. -->
+<script>
+(function () {
+  try {
+    if (/(?:^|[?&])phone(?:[=&]|$)/.test(location.search)
+        || (window.matchMedia && matchMedia("(pointer: coarse)").matches && matchMedia("(hover: none)").matches))
+      document.documentElement.setAttribute("data-phone", "1");
+  } catch (e) { /* no matchMedia: not a phone */ }
+})();
+</script>
 <!-- THE APPLICATION'S CHROME, one file for every web surface: the
      scrollbar, and so far nothing else. reader.html, library.html and
      settings.html link this one. studio/studio.html does NOT, though this
@@ -56,6 +72,15 @@
      controls the strip does not carry in a browser. -->
 <header>
   <button id="sourcesToggle" aria-label="Sources" title="Sources" aria-expanded="false">&#9776;</button>
+  <!-- THE DOOR TO SETTINGS, ON THE PHONE ONLY (design/phone/library.html, 6 Sep).
+       On the Mac Settings is a window -- Cmd-, and the app's own menu -- and
+       the header has no gear (30 Aug); on the phone there is no Cmd-, and no
+       window (Settings is a page), so the Library carries one link to it.
+       library.css keeps it display:none and shows it only under the phone's
+       media query. An <a href>, not a <button>: it needs no handler, and a
+       press that navigates is its own proof (no header button that does
+       nothing). &#xFE0E; asks for the text glyph, not the emoji. -->
+  <a id="settingsDoor" class="headerLink" href="../settings/settings.html" aria-label="Settings" title="Settings">&#9881;&#xFE0E;</a>
   <span class="headerspace"></span>
   <!-- AND NO DESIGN BENCH LINK (Osca, 5 Sep: the shell ships the app, not the
        bench). It was a dead link as well as a wrong one: it pointed at
