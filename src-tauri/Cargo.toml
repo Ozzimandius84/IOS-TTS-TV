@@ -32,6 +32,22 @@ log = "0.4"
 # and the row then takes the address Studio's row shows (PHONE.md §8).
 mdns-sd = "0.13"
 serde = { version = "1", features = ["derive"] }
+# `tauri::generate_context!()` emits code that names `::serde_json` in THIS
+# crate -- E0433, found by Osca on the first real `tauri ios build --debug`,
+# 6 Sep. Same pin as desktop/.
+#
+# WHAT PUTS IT THERE, because "the macro needs it" is not a reason and the next
+# person will want one: the macro embeds `tauri.conf.json`, and the `plugins`
+# block is a `HashMap<String, serde_json::Value>` whose `ToTokens`
+# (`tauri-utils::config::PluginConfig`, config.rs) maps each value through
+# `tokens::json_value_lit`, which writes `::serde_json::Value` / `::Map` /
+# `::Number` straight into the calling crate. `map_lit` emits
+# `::std::collections::HashMap::new()` and NOTHING ELSE for an empty map -- so
+# this crate needed no `serde_json` until `tauri.conf.json` grew its first
+# `plugins` block, which was `deep-link` on 6 Sep. **Adding any plugin config
+# to that file requires this line**; removing the last one would make it
+# unused again.
+serde_json = "1"
 # Pairing (job 23d, 6 Sep): the system camera reads a `frank-pair://` square on
 # the Mac's screen and the OS hands the URL to this app. On iOS, macOS and
 # Android that hand-over is an event only a plugin receives; the plugin's own

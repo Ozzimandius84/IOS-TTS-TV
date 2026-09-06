@@ -101,6 +101,28 @@ def test_the_asset_scheme_is_declared_as_a_url_type_nowhere():
     assert re.search(r"^\s+- frank$", types, re.M) is None, types
 
 
+def test_a_plugins_block_in_the_config_means_serde_json_in_the_crate():
+    """The E0433 of 6 Sep, as a test rather than a memory.
+
+    `generate_context!()` embeds `tauri.conf.json`, and the `plugins` block is a
+    `HashMap<String, serde_json::Value>` whose `ToTokens`
+    (`tauri-utils::config::PluginConfig`) maps every value through
+    `tokens::json_value_lit` -- which writes `::serde_json::Value` into THIS
+    crate. `map_lit` emits `::std::collections::HashMap::new()` and nothing else
+    for an empty map, so the dependency became necessary at the exact moment the
+    config grew its first plugin, and it is unnecessary again if the last one
+    goes. Neither direction is obvious from the error, which names a crate the
+    author never typed."""
+    conf = json.loads(CONF.read_text(encoding="utf-8"))
+    cargo = CARGO.read_text(encoding="utf-8")
+    if conf.get("plugins"):
+        assert re.search(r"^serde_json = ", cargo, re.M), (
+            "tauri.conf.json has a plugins block, so generate_context!() will name "
+            "::serde_json in this crate -- add `serde_json = \"1\"` to [dependencies] "
+            "or the first `tauri ios build` dies with E0433"
+        )
+
+
 def test_the_plugin_is_pinned_and_the_page_is_granted_none_of_it():
     """The plugin is registered in Rust and reachable from nowhere else. A page
     that could call its `get_current` could read the pass straight out of the

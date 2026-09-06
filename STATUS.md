@@ -4,6 +4,68 @@ Newest first. `REPORT_PROTOCOL.md` (TTSTV), nine headings. `README.md` says what
 
 ---
 
+## job 23d · addendum — the first real build, and what it proved · 6 Sep
+
+Osca ran the first `tauri ios build --debug` against `ec3155c`. It died on
+**E0433**, he fixed it, and the fix plus the `Cargo.lock` the build wrote are
+committed here. Two things it settled that no shell in Cowork could.
+
+**1. `serde_json` — and it is MY change that needed it, not a latent gap.**
+`generate_context!()` embeds `tauri.conf.json`; the `plugins` block is a
+`HashMap<String, serde_json::Value>` whose `ToTokens`
+(`tauri-utils::config::PluginConfig`, `config.rs:4391`) maps every value
+through `tokens::json_value_lit`, which writes `::serde_json::Value` / `::Map`
+/ `::Number` **into the calling crate**. `map_lit` (`tokens.rs:115`) emits
+`::std::collections::HashMap::new()` and nothing else for an EMPTY map — so
+this crate needed no `serde_json` until `tauri.conf.json` grew its first
+`plugins` block, which was `deep-link`, in `ec3155c`. Read off
+`tauri-utils` 2.9.3's own source, not inferred from the error.
+
+So the note in the diff — *"under `tauri/custom-protocol` (every `tauri ios
+build`, never `ios dev`)"* — is right about **when** it shows and wrong about
+**why**: the trigger is the `plugins` block, not the feature. Both sentences are
+now in `Cargo.toml`'s comment, and
+`tests/test_pair_link.py::test_a_plugins_block_in_the_config_means_serde_json_in_the_crate`
+is the guard, in both directions: a config with plugins and no `serde_json` line
+fails here rather than on somebody's Mac twenty minutes into a build.
+
+**2. The three-file agreement held, on a real Mac.** The plugin's build script
+ran and wrote into the generated Info.plist exactly what `project.yml` says:
+
+```xml
+<key>CFBundleURLTypes</key><array><dict>
+  <key>CFBundleURLSchemes</key><array><string>frank-pair</string></array>
+  <key>CFBundleURLName</key><string>frank-pair</string>
+</dict></array>
+```
+
+`frank` appears in it nowhere. That is the one thing `tests/test_pair_link.py`
+could only assert about *files* and never about a *build*, and it is now
+observed. The predicted entitlements side effect also happened and is
+**smaller than predicted**: `update_entitlements` rewrote
+`frank_iOS.entitlements` to remove a `com.apple.developer.associated-domains`
+that was never there, so the whole diff is a **dropped trailing newline** —
+no semantic change at all.
+
+**Still not verified**: the build had not finished when this was written, so
+the crate is **not yet known to compile**, nothing has run on a simulator or a
+phone, and no `frank-pair://` has been opened by an OS. §2 of the entry below
+stands unchanged except that "the plugin's build script has never run" is no
+longer true.
+
+**Touched**: `src-tauri/Cargo.toml` (Osca's line, comment rewritten to the
+measured cause), `src-tauri/Cargo.lock` (the build's, taken as written),
+`tests/test_pair_link.py` (+1, now 12), `STATUS.md`. **Left alone**, and all
+four are the build's or Osca's own generated Apple files:
+`gen/apple/frank_iOS/Info.plist`, `…/frank_iOS.entitlements`,
+`…/frank.xcodeproj/project.pbxproj`, `…/xcshareddata/xcschemes/frank_iOS.xcscheme`.
+`tests` is **25 pass, 1 fail** (the same pre-existing `asr.js` red, §2 below).
+
+**Next**: `PHONE.md` §6b's six presses are Osca's, starting with the build he
+is running now.
+
+---
+
 ## job 23d · the phone's half of pairing — the deep link, and the one key · 6 Sep
 
 ### 1. Built
@@ -213,8 +275,11 @@ while the tab is open.
 **not** carried. That is longer than the 92 characters 23b measured (it carries
 key names rather than positions): a `https://ozzi--ttstv-cloud-api.modal.run`
 door with a 43-character pass comes to ~120 characters, still inside `segno`'s
-version-6 byte mode at ECC M. If the square's size ever matters more than the
-link's readability, say so and I will make the grammar positional.
+version-6 byte mode at ECC M. ~~If the square's size ever matters more than the
+link's readability, say so and I will make the grammar positional.~~
+**ANSWERED (Osca, 6 Sep): keep it named. Density is not the constraint at
+version 6, and the installer lane encodes exactly the grammar above.** The link
+is settled on both sides; nothing about it is open.
 
 **To nobody, but worth writing down:** `serve_local.py`'s own example binds
 `127.0.0.1`, which a phone cannot reach. `--host 0.0.0.0` is in `PHONE.md` §6b.
@@ -259,9 +324,8 @@ cannot be shown to work until one of the other two lands — that is the honest
 shape of it, and it is why §2 says "not verified: anything with a phone in it"
 rather than dressing the extraction up as a proof.
 
-**The single question that changes nothing but the order:** should the square
-encode a *positional* link (~92 characters, 23b's measurement) instead of the
-named one above? Only the QR's density depends on it.
+~~**The single question that changes nothing but the order:** should the square
+encode a *positional* link?~~ **Closed the same day — named, see §6.**
 
 ### 8b. Commit check
 **`ec3155c`**, 8 files, +1,105/-1; `git show --stat --name-only HEAD` lists
