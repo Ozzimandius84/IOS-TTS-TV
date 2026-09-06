@@ -2,7 +2,12 @@ name: frank
 options:
   bundleIdPrefix: com.ttstv.frank
   deploymentTarget:
-    iOS: 14.0
+    # 14.0 -> 15.0, 6 Sep (job 8b, the float). The float's native road is
+    # `AVPictureInPictureController.ContentSource(sampleBufferDisplayLayer:
+    # playbackDelegate:)`, which is iOS 15 -- a PiP window that paints
+    # arbitrary content does not exist before it. Nothing else in this app
+    # needed the move and nothing on a phone in 2026 is left behind by it.
+    iOS: 15.0
 fileGroups: [../../src]
 configs:
   debug: debug
@@ -51,6 +56,21 @@ targets:
           - UIInterfaceOrientationPortraitUpsideDown
           - UIInterfaceOrientationLandscapeLeft
           - UIInterfaceOrientationLandscapeRight
+        # The float (job 8b, 6 Sep). WITHOUT THIS KEY THE APP IS SUSPENDED a
+        # few seconds after it goes to the background and the reader's audio
+        # stops with it -- so "listen along, do another thing" was blocked
+        # before any floating window was drawn. `audio` is an Info.plist
+        # value, NOT a provisioning entitlement, so the free personal team
+        # signs it (PHONE.md §4).
+        #
+        # The key is half of it: `src-tauri/ios/FrankAudio.m` sets the
+        # session's category to Playback, because a background mode over a
+        # SoloAmbient session still goes quiet. Both, or neither works.
+        #
+        # `voip` is NOT here and must never be: it is what
+        # AVPictureInPictureVideoCallLayer wants, and App Review rejects it
+        # for an app that is not a phone (scratch-float/ANSWER.md §3).
+        UIBackgroundModes: [audio]
         NSMicrophoneUsageDescription: Frank listens for the hands-free trigger and for the phrase after it. Nothing is recorded or sent anywhere; the audio is used on this phone and discarded.
         NSSpeechRecognitionUsageDescription: Frank turns what you say into text on this phone so it can act on it -- "read on", "what?", the name of a chapter.
         # Sync (job 26, 6 Sep). iOS 14+ asks once before an app may look at the
@@ -83,6 +103,12 @@ targets:
         RUST_LOG: info
     settings:
       base:
+        # Signing lives HERE, not in Xcode's Signing tab: xcodegen rewrites the
+        # project from this file, and the team Osca picked by hand on 6 Sep was
+        # wiped by the first `xcodegen generate`. Osca's personal team, read
+        # off the working build's TeamIdentifierPrefix.
+        DEVELOPMENT_TEAM: DC5G53NN4R
+        CODE_SIGN_STYLE: Automatic
         ENABLE_BITCODE: false
         ARCHS: [arm64]
         VALID_ARCHS: arm64 
@@ -94,6 +120,16 @@ targets:
     dependencies:
       - framework: libapp.a
         embed: false
+      # FrankAudio.m (job 8b). AVAudioSession's framework, and it has to be
+      # named HERE and not only by build.rs: the crate is a `staticlib`, so
+      # cargo never runs a linker, and its `cargo:rustc-link-lib=framework=`
+      # line reaches nothing. Xcode links this binary, so Xcode is told.
+      #
+      # The .m file itself is compiled by `build.rs` (the `cc` crate), NOT by
+      # this target -- there is deliberately no `- path: ../../ios` above.
+      # Two compilations of one file is `duplicate symbol
+      # _frank_audio_session_category`, twenty minutes into a phone build.
+      - sdk: AVFoundation.framework
       - sdk: CoreGraphics.framework
       - sdk: Metal.framework
       - sdk: MetalKit.framework

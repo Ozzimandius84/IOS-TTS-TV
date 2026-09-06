@@ -4,6 +4,191 @@ Newest first. `REPORT_PROTOCOL.md` (TTSTV), nine headings. `README.md` says what
 
 ---
 
+## job 8b — the float, half one: the audio that survives the app switcher · 6 Sep
+
+**Frank's sound stopped the moment you left the app, and it was two absences
+rather than a bug.** Osca, 6 Sep, off the float spike (`scratch-float/ANSWER.md`):
+*"UIBackgroundModes is absent and no AVAudioSession is set."* Both were true.
+iOS suspends a process seconds after it goes to the background unless the
+Info.plist claims a background mode; and a background mode over a `SoloAmbient`
+session — the default, which WKWebView does not change — is still silenced.
+**Neither half works without the other**, and that pairing is now a test rather
+than a sentence. The lock screen gets the **sentence** the reader is in, never
+the word: the spike measured the corpus at 3.56 words a second and 25 at the
+floor, so a title written once a second would show 61.7% of nothing.
+
+### 1. Built
+- **`src-tauri/ios/FrankAudio.m`** (new, 63 lines) — two C symbols.
+  `frank_audio_session_category()` sets `Playback`/`SpokenAudio`;
+  `frank_audio_session_activate()` takes the session. Objective-C and not Swift
+  because the caller is Rust: a Swift function is only callable across that
+  boundary through `@_cdecl`, an underscored attribute with no stability
+  promise, and a `.m` exports plain C symbols `extern "C"` links against —
+  the same door `gen/apple/Sources/frank/main.mm` already uses in reverse.
+- **`lib.rs`** — the `extern "C"` block under `cfg(target_os = "ios")`,
+  `audio_session_why/category/activate` (no-ops that say so off iOS), the
+  `audio_session_start` command, and `NOW_PLAYING_JS`.
+- **`NOW_PLAYING_JS`** — injected unconditionally beside `PAIR_JS`. A `play`
+  listener in the **capture** phase (media events do not bubble) takes the
+  session on the first play and puts the book's title up so the lock screen is
+  never blank; `TTSTVHost.nowPlaying(sentence, book)` writes the title **at
+  most once a second, trailing edge**, and `TTSTVHost.nowPlayingStats()` says
+  what it wrote, coalesced and refused.
+- **`gen/apple/project.yml`** — `UIBackgroundModes: [audio]`, deployment target
+  **14.0 → 15.0** (road (b)'s `ContentSource(sampleBufferDisplayLayer:)` is
+  iOS 15), `AVFoundation.framework`.
+- **`build.rs` / `capabilities/default.json`** — `audio_session_start`
+  declared, so `allow-audio-session-start` is generated and granted.
+- **`tests/test_float_audio.py`** (new) — 15 tests.
+
+### 2. Verified — and how
+- **unit** · `python3 -m pytest tests -q` → **62 passed**, 0 failed (was 47
+  before this job; the 15 are new). `NOW_PLAYING_JS` is run for real under node
+  against a `mediaSession` stub: 100 sentences in a burst produce **exactly two
+  writes** — the book title and `sentence 99` — with 99 coalesced; the same
+  sentence twice writes once; an empty title is refused; with no `__TAURI__` the
+  metadata still lands and no command is called.
+- **unit** · the two link-time agreements a compiler only reports as
+  `Undefined symbols for architecture arm64`: Rust's `frank_audio_session_*`
+  names are read off `lib.rs` and compared with the `int …(void)` definitions in
+  `FrankAudio.m` (equal sets), and exactly one of `build.rs`/`project.yml` is
+  allowed to compile that file.
+- **unit** · the pairing: if `UIBackgroundModes` is claimed, `FrankAudio.m` must
+  exist and must name `AVAudioSessionCategoryPlayback` and `setActive`.
+- **unit, in the container** · the Rust was extracted **by line range**
+  (`scratch-float/rust-extract/`, never retyped) into a scratch crate with an
+  empty `[dependencies]` and built with `cargo build --offline`: **0 errors**,
+  and again with `target_os = "ios"` rewritten to the host so the `extern`
+  block, the `unsafe` calls and the `#[cfg]` `let code` both compile on **both**
+  sides of the cfg. That covers everything in the block except the
+  `#[tauri::command]` shim and the `run()` wiring.
+- **not verified, and this is the whole of what is owed**: nothing has been
+  compiled by Xcode, `xcodegen generate` has not been run, `FrankAudio.m` has
+  never seen a compiler (no Xcode, no `xcrun`, no `swiftc`, no clang with an
+  iOS SDK in a Cowork session), and **the proof Osca asked for — chapter one,
+  Home, the audio continues, the lock screen shows the sentence — has not been
+  taken.** §8 is the four presses that take it.
+- Invariant: the other 47 tests are unchanged and green; no shell file touched;
+  `SCHEME`, `PAIR_SCHEME` and the Google id assertions still hold.
+
+### 3. Judgment calls
+- *Where the title comes from → `navigator.mediaSession`, not
+  `MPNowPlayingInfoCenter`.* The audio is WebKit's — the media element playing
+  the chapter owns the system's now-playing session, and metadata set beside it
+  from the app is the copy the system may ignore. This is the writer WebKit
+  itself forwards. Named as a risk in §7 because only a phone settles it.
+- *Category at launch, activation at first play.* Activating a `Playback`
+  session stops whatever else the phone is playing. Opening Frank must not kill
+  your music, so `setup` sets the category (which interrupts nothing) and the
+  page's first `play` takes the session. A test asserts `setup` does **not**
+  activate.
+- *The 1 Hz limit is enforced at the seam, not documented.* A caller that
+  pushes a word per word gets one word a second and costs nothing; a caller that
+  pushes sentences gets every sentence. The rule cannot be forgotten by the
+  reader lane because it is not the reader lane's to keep.
+- *Who compiles `FrankAudio.m` → `build.rs`, not the Xcode target.* Both routes
+  were live in the tree at once (see §8b) and both is a duplicate symbol. The
+  `cc` route won because someone has a real build behind it; `project.yml` still
+  names `AVFoundation.framework` because a `staticlib` crate never runs a
+  linker, so `cargo:rustc-link-lib=framework=` reaches nothing and Xcode has to
+  be told.
+- *`voip` is refused, permanently.* It is what `AVPictureInPictureVideoCallLayer`
+  wants and App Review rejects it for an app that is not a phone. A test greps
+  for it.
+
+### 4. Boundary check
+Touched, all in this repo: `src-tauri/src/lib.rs`, `src-tauri/ios/FrankAudio.m`
+(new), `src-tauri/build.rs`, `src-tauri/Cargo.toml`,
+`src-tauri/capabilities/default.json`, `src-tauri/gen/apple/project.yml`,
+`tests/test_float_audio.py` (new), `STATUS.md`. TTSTV untouched — read only.
+No shell file touched. `core/` does not exist here.
+
+Found dirty and **left alone**, another session's:
+`src-tauri/Cargo.lock` (+488 lines, a resolve from a build this session did not
+run — `cc` was already locked at HEAD, so `Cargo.toml`'s new build-dependency
+needs no network and no lock change),
+`src-tauri/gen/apple/frank.xcodeproj/project.pbxproj`,
+`gen/apple/frank_iOS/Info.plist`, `gen/apple/frank_iOS/frank_iOS.entitlements`,
+and the untracked `shell/`, `shell.manifest.json`, `scratch26b/`.
+
+### 5. Footprint
+One new file of 3.1 KB and one new test file. No env, no model, no download, no
+cache, nothing on the SSD. `cc` is a **build**-dependency and was already in
+`Cargo.lock` at HEAD as a transitive one, so nothing new is fetched.
+`scratch-float/` (92 KB, untracked) gained `rust-extract/extract.rs`, the
+line-range slice §2's container build used.
+
+### 6. Requests to other modules
+- **`reader/` (TTSTV)** — one line, and the lock screen is finished:
+  `window.TTSTVHost && TTSTVHost.nowPlaying(<the sentence the cursor is in>,
+  <the book's title>)` wherever `listen.js` already knows the sentence changed.
+  Call it as often as you like — the seam limits it. Absent, the lock screen
+  shows the book's title and nothing is broken.
+- **`design/reader/` (TTSTV)** — the float's look, still owed
+  (`scratch-float/ANSWER.md` §5). Not this repo's.
+
+### 7. Known gaps
+- **`mediaSession` may not be the winner.** If WebKit does not forward the
+  metadata for a WKWebView's media, the lock screen shows the page's own idea
+  of a title and `nowPlayingStats()` will say `wrote` climbing with nothing to
+  show for it. The fallback is a native `MPNowPlayingInfoCenter` writer behind
+  the same command; it is not written, on purpose, because writing both would
+  make the diagnosis harder rather than easier.
+- **No lock-screen controls are wired.** Play/pause from the lock screen is
+  whatever WebKit gives the media element; `setActionHandler` is not called.
+- **The session is never deactivated.** Frank holds it until the app is killed,
+  which is right for a reader and wrong for an app that should give the phone
+  back after an hour of silence.
+- `frank_audio_session_activate` is called once. A route change or an
+  interruption (a phone call) is not handled and the audio will not resume
+  itself afterwards.
+
+### 8. Next
+Four presses, Osca's Mac, ~10 minutes — and they are the proof this entry does
+not have:
+
+1. `cd src-tauri/gen/apple && xcodegen generate` — **§6e, the step nothing else
+   runs.** Then `grep -A2 UIBackgroundModes frank_iOS/Info.plist`. If it is not
+   there, nothing below can work and the rest is noise.
+2. Close and reopen Xcode (it caches the project), then `npm run -- tauri ios
+   dev "iPhone 2" --host`.
+3. Open a book, play chapter one, **press Home**. The audio should keep going.
+   The log line to look for is `frank: audio session active`; if it says
+   `NOT active`, paste it — the sentence after it is the AVAudioSession error.
+4. Lock the phone. The lock screen should show the book's title (the reader does
+   not name sentences yet — §6). To see a sentence, in Safari → Develop →
+   Simulator → Frank: `TTSTVHost.nowPlaying("Here I am, an old man in a dry
+   month", "Gerontion")`, then `TTSTVHost.nowPlayingStats()`.
+
+The single question that blocks the rest: **does step 4 put the text on the lock
+screen at all?** If it does, §6's one line finishes the road. If it does not,
+§7's native writer is a day and the float's own build (road (b), due 10 Sep)
+carries it instead.
+
+### 8b. Commit check
+`git commit -m "…" -- <eight paths>`, no bare commit, no `git add -A`.
+
+**HEAD moved twice during this session** (`c58d9ea` → `a391bf2` → `0d598b7`,
+job 28's Android work). Every file fact in §2 was re-taken at `0d598b7`, on the
+far side of both.
+
+**And another hand was in these exact files while this ran, on this same job.**
+Said plainly, because a pathspec commit carries whatever is in the working tree:
+between 14:22 and 14:26 `src-tauri/build.rs` gained a `cc::Build` block that
+was not written here, `src-tauri/Cargo.toml` gained `cc = "1"`, and
+`gen/apple/project.yml` gained `DEVELOPMENT_TEAM` and `CODE_SIGN_STYLE`.
+**Those four hunks are in this commit and are not this session's work.** They
+were kept rather than reverted because together with this session's half they
+are one coherent change and splitting them would leave a HEAD that does not
+build; the one thing that had to be decided — two compilers for one `.m` — was
+decided in favour of theirs (§3), and `- path: ../../ios` was removed from
+`project.yml` accordingly. `Cargo.lock` was left unstaged.
+
+### 9. Status line
+`ios-tts-tv · job 8b done, unpressed · 6 Sep · background audio + the sentence on the lock screen; xcodegen and four presses owed`
+
+---
+
 ## job 26b — Google, and the two doors a web page has no key to · 6 Sep
 
 **The flow is TTSTV's; this repo owns the two halves only an app can do.** Osca,

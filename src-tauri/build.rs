@@ -5,11 +5,35 @@
 // Bonjour browse the Transfer tab's Sync button asks for on a phone, and
 // `google_sign_in`, which opens Google's consent page in the SYSTEM browser
 // (Google refuses it in a web view) and refuses any other address.
+// THREE since job 8b (6 Sep): `audio_session_start`, which takes the
+// AVAudioSession the moment the reader first plays -- the page can see a
+// `play` event and an app cannot, and an app can hold an audio session and
+// a page cannot, so the one crosses to the other here.
 // Everything else the shell does it does over frank:// and fetch.
 fn main() {
+    // ios/FrankAudio.m -> the two C symbols `lib.rs` declares under
+    // cfg(target_os = "ios"). Compiled here, for iOS targets only, because
+    // Xcode never sees this file (it is the crate's, not the project's), and a
+    // declared-but-undefined symbol is a link error twenty minutes into a
+    // phone build -- which is how it was found at 14:24 on 6 Sep.
+    let target_os = std::env::var("CARGO_CFG_TARGET_OS").unwrap_or_default();
+    if target_os == "ios" {
+        println!("cargo:rerun-if-changed=ios/FrankAudio.m");
+        cc::Build::new()
+            .file("ios/FrankAudio.m")
+            .flag("-fobjc-arc")
+            .flag("-fmodules")
+            .compile("frankaudio");
+        println!("cargo:rustc-link-lib=framework=AVFoundation");
+        println!("cargo:rustc-link-lib=framework=Foundation");
+    }
     tauri_build::try_build(
         tauri_build::Attributes::new().app_manifest(
-            tauri_build::AppManifest::new().commands(&["sync_discover", "google_sign_in"]),
+            tauri_build::AppManifest::new().commands(&[
+                "sync_discover",
+                "google_sign_in",
+                "audio_session_start",
+            ]),
         ),
     )
     .expect("tauri_build");
