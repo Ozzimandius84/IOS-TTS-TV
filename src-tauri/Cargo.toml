@@ -32,3 +32,10 @@ log = "0.4"
 # and the row then takes the address Studio's row shows (PHONE.md §8).
 mdns-sd = "0.13"
 serde = { version = "1", features = ["derive"] }
+# Pairing (job 23d, 6 Sep): the system camera reads a `frank-pair://` square on
+# the Mac's screen and the OS hands the URL to this app. On iOS, macOS and
+# Android that hand-over is an event only a plugin receives; the plugin's own
+# build script is also what writes `CFBundleURLTypes` into the generated
+# Info.plist from `tauri.conf.json`'s `plugins.deep-link.mobile`. 2.4.10 is the
+# newest 2.x and wants `tauri ^2.10`, which the pin above satisfies.
+tauri-plugin-deep-link = "2.4.10"

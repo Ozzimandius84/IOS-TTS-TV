@@ -62,6 +62,17 @@ targets:
         NSBonjourServices: [_ttstv._tcp]
         NSAppTransportSecurity:
           NSAllowsLocalNetworking: true
+        # Pairing (job 23d, 6 Sep). The launch scheme, and it is NOT `frank`:
+        # that one is the asset scheme this app answers with its own files, and
+        # a launch scheme is a thing strangers can print on a wall.
+        # `tauri-plugin-deep-link`'s build script writes this same key into
+        # frank_iOS/Info.plist from tauri.conf.json's plugins.deep-link.mobile;
+        # this copy is what an `xcodegen` regeneration puts back, so the two
+        # must name the same scheme and src/lib.rs has the test that says so.
+        CFBundleURLTypes:
+          - CFBundleURLName: frank-pair
+            CFBundleURLSchemes:
+              - frank-pair
         CFBundleShortVersionString: 0.1.0
         CFBundleVersion: "0.1.0"
     entitlements:

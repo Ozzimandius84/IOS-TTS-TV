@@ -91,10 +91,12 @@ use std::borrow::Cow;
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Component, Path, PathBuf};
+use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
 use serde::Serialize;
 use tauri::{Manager, UriSchemeContext, WebviewUrl, WebviewWindowBuilder, Wry};
+use tauri_plugin_deep_link::DeepLinkExt;
 
 /// The scheme. One word, and it is in three places that must agree: here, the
 /// window URL built by [`shell_url`], and `tauri.conf.json`'s CSP (which is
@@ -251,6 +253,269 @@ pub const HOST_JS: &str = r#"(function () {
   window.TTSTVHost.deviceName = "Frank on this phone";
 })();
 "#;
+
+/// The writer of [`PAIR_KEY`], and it is injected separately from [`HOST_JS`]
+/// on purpose: **it must exist on a page that is not in Frank.**
+///
+/// `HOST_JS` returns early where there is no `__TAURI__`, because everything in
+/// it is a command and a command needs one. This is not a command. Settings >
+/// Transfer writes the same key from a typed address on the Mac, in a browser,
+/// in the simulator's dev server -- everywhere -- and the shell should not have
+/// to carry a second copy of the fingerprint rule for the case where Frank is
+/// not the one writing. So the function is defined unconditionally and the page
+/// may use it or not.
+///
+/// `fp` is computed here rather than carried: eight hex of sha256(pass), the
+/// same eight `deploy_to_my_modal.py::fingerprint` puts on the Mac's screen,
+/// through the same `crypto.subtle.digest("SHA-256", …)` `library/import.js`
+/// hashes a book's word ids with. A person compares two short strings across a
+/// room; nothing else uses it, and the pass itself is never drawn.
+///
+/// The `ttstv:pairing` event is so a Transfer tab that is already open redraws.
+/// A page that does not listen is unaffected -- the key is written either way.
+pub const PAIR_JS: &str = r#"(function () {
+  "use strict";
+  window.TTSTVHost = window.TTSTVHost || {};
+  var KEY = "transfer.pairing";
+  window.TTSTVHost.PAIR_KEY = KEY;
+  window.TTSTVHost.pairWrite = function (f) {
+    var pass = String((f && f.pass) || "");
+    if (!f || !f.url || !pass) return Promise.reject(new Error("a pairing needs an address and a pass"));
+    return crypto.subtle.digest("SHA-256", new TextEncoder().encode(pass)).then(function (buf) {
+      var fp = Array.from(new Uint8Array(buf))
+        .map(function (b) { return b.toString(16).padStart(2, "0"); }).join("").slice(0, 8);
+      var row = {
+        v: f.v || 1,
+        url: String(f.url),
+        pass: pass,
+        workspace: String(f.workspace || ""),
+        app: String(f.app || "ttstv-cloud"),
+        fp: fp,
+        made: f.made || Math.floor(Date.now() / 1000)
+      };
+      localStorage.setItem(KEY, JSON.stringify(row));
+      try {
+        window.dispatchEvent(new CustomEvent("ttstv:pairing", { detail: { fp: fp, url: row.url } }));
+      } catch (e) {}
+      return fp;
+    });
+  };
+  window.TTSTVHost.pairRead = function () {
+    try { return JSON.parse(localStorage.getItem(KEY) || "null"); } catch (e) { return null; }
+  };
+})();
+"#;
+
+// ------------------------------------------------------------ the pairing
+//
+// A phone that is going to send a book somewhere to be parsed and voiced has
+// to be told WHERE and WITH WHAT. `cloud/tools/deploy_to_my_modal.py::pairing`
+// (TTSTV, job 23b) settles what that is -- seven fields, one object -- and
+// settles that it is carried across the room rather than signed in to: the
+// Mac shows a square, the phone's camera reads it, and the customer's own
+// Modal workspace is never touched by anything of ours.
+//
+// THE PHONE MUST NOT BE ABLE TO TELL THE BACKENDS APART. `url` is a deployed
+// Modal door, or Frank Studio's own door on the LAN (job 23c, the Kaggle lane
+// and the no-account path), and the four calls are byte-for-byte the same
+// against either. So nothing here reads `url` for meaning beyond "is it http",
+// and there is no `backend` branch in this file. One client, one pairing shape.
+//
+// WHAT THIS CRATE DOES, AND THE ONE THING IT DOES NOT. It owns the LINK: the
+// scheme, the URL type, the parse, and the write into the one key. It does not
+// own the calls -- `library/transfer.js` (TTSTV, the sync lane) is one client
+// for the Mac and the phone, and it reads the same key. And it does not own
+// the Pair FIELD: that is Settings > Transfer, the shell's own page, and it
+// writes this key by hand from an address and a pass typed in. Two writers,
+// one key, and the key is the whole contract between them.
+
+/// The launch scheme, and it is deliberately **not** [`SCHEME`].
+///
+/// `frank://` is this app's ASSET scheme -- the thing `register_uri_scheme_protocol`
+/// answers with the shell's own files. A launch scheme is a different job: the
+/// OS hands it to the app from outside. Declaring one word for both would mean
+/// the system camera could ask the app to open `frank://localhost/...`, which
+/// is a request to render an arbitrary path of the served tree from a QR code
+/// somebody else printed. One word, one job.
+///
+/// It is in three places that must agree, and a test holds each: here,
+/// `tauri.conf.json`'s `plugins.deep-link.mobile` (which is what the plugin's
+/// own build script writes `CFBundleURLTypes` from), and
+/// `gen/apple/project.yml` (which is what an `xcodegen` regeneration puts back
+/// into the Info.plist the build script edits).
+pub const PAIR_SCHEME: &str = "frank-pair";
+
+/// The version this build understands, and the `v` of the object it writes.
+pub const PAIR_V: u32 = 1;
+
+/// The one key in the shell's `localStorage`. **The contract.** Settings >
+/// Transfer writes it from a typed address and pass; this file writes it from
+/// a scanned link; `library/transfer.js` reads it and nothing else.
+pub const PAIR_KEY: &str = "transfer.pairing";
+
+/// The app name a link may omit -- `cloud/endpoint.py::APP_NAME`'s own value,
+/// which is what `pairing()` defaults to on the Mac.
+pub const PAIR_APP: &str = "ttstv-cloud";
+
+/// What a link carries. `fp` is **not** here and is not carried: it is eight
+/// hex of sha256(pass) (`deploy_to_my_modal.py::fingerprint`), so a link that
+/// carried it could disagree with its own pass. It is computed at the write,
+/// in the page, by the same `crypto.subtle` `library/import.js` hashes a book
+/// with.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Pairing {
+    pub v: u32,
+    pub url: String,
+    pub pass: String,
+    pub workspace: String,
+    pub app: String,
+    pub made: u64,
+}
+
+/// `frank-pair://v1?url=…&pass=…&workspace=…&app=…&made=…` -> [`Pairing`].
+///
+/// Hand-parsed, on the string, with this file's own [`percent_decode`] -- not
+/// through `url::Url`, though the plugin hands one over. Two reasons and both
+/// are practical: it keeps the whole of the decision dependency-free, so it is
+/// provable by extraction in a shell with no Xcode and no phone (`STATUS.md`
+/// §2); and `url::Url` normalises a non-special scheme's authority in ways
+/// that would make `v1` and `V1` and `v1.` one thing, when the version segment
+/// is the one part of this link that must be read exactly as sent.
+///
+/// Every refusal is a sentence, because the only place a bad link is seen is a
+/// person's phone.
+pub fn parse_pair_link(link: &str) -> Result<Pairing, String> {
+    let prefix = format!("{PAIR_SCHEME}://");
+    let rest = match link.len() >= prefix.len()
+        && link[..prefix.len()].eq_ignore_ascii_case(&prefix)
+    {
+        true => &link[prefix.len()..],
+        false => {
+            return Err(format!(
+                "this is not a Frank pairing link (it does not start {prefix})"
+            ))
+        }
+    };
+    let (authority, query) = match rest.find('?') {
+        Some(i) => (&rest[..i], &rest[i + 1..]),
+        None => (rest, ""),
+    };
+    // `v1` or `v1/` -- a trailing slash is what some readers add and it means
+    // nothing here.
+    let ver = authority.trim_end_matches('/');
+    let n: u32 = match ver.strip_prefix('v').and_then(|d| d.parse().ok()) {
+        Some(n) => n,
+        None => return Err(format!("{ver:?} is not a pairing-link version")),
+    };
+    if n > PAIR_V {
+        // The same sentence `library/import.js` says to a book from a newer
+        // parser, for the same reason: the remedy is the app, not the link.
+        return Err(format!(
+            "this pairing link is version {n}; Frank knows up to {PAIR_V} — update the app"
+        ));
+    }
+    let mut url = String::new();
+    let mut pass = String::new();
+    let mut workspace = String::new();
+    let mut app = String::new();
+    let mut made: u64 = 0;
+    for pair in query.split('&').filter(|s| !s.is_empty()) {
+        let (k, v) = match pair.find('=') {
+            Some(i) => (&pair[..i], &pair[i + 1..]),
+            None => (pair, ""),
+        };
+        // `+` is a space in a query string; percent_decode does not know that.
+        let v = percent_decode(&v.replace('+', " "));
+        match k {
+            "url" => url = v,
+            "pass" => pass = v,
+            "workspace" => workspace = v,
+            "app" => app = v,
+            "made" => made = v.parse().unwrap_or(0),
+            // Unknown keys are ignored, not refused: a later Mac may add one,
+            // and `v` is what says whether this build can read the link at all.
+            _ => {}
+        }
+    }
+    if url.is_empty() {
+        return Err("this pairing link carries no address".into());
+    }
+    // The one thing read for meaning. A link is a string a stranger can print
+    // on a wall; `url` is about to be handed to `fetch` with a bearer token on
+    // it, so anything that is not a plain http(s) address is refused here
+    // rather than in the page.
+    let lower = url.to_ascii_lowercase();
+    if !(lower.starts_with("http://") || lower.starts_with("https://")) {
+        return Err(format!("{url:?} is not an http address"));
+    }
+    if pass.is_empty() {
+        return Err("this pairing link carries no pass".into());
+    }
+    Ok(Pairing {
+        v: n,
+        url,
+        pass,
+        workspace,
+        app: if app.is_empty() { PAIR_APP.into() } else { app },
+        made,
+    })
+}
+
+/// One JSON string literal, quotes and all. Hand-rolled for the same reason
+/// [`percent_decode`] is: this file has no `serde_json` and does not want one
+/// for six fields. Escapes what JSON requires plus `<` and `/`, so the result
+/// is safe inside a `<script>` as well as inside an `eval`.
+pub fn json_string(s: &str) -> String {
+    let mut out = String::with_capacity(s.len() + 2);
+    out.push('"');
+    for c in s.chars() {
+        match c {
+            '"' => out.push_str("\\\""),
+            '\\' => out.push_str("\\\\"),
+            '\n' => out.push_str("\\n"),
+            '\r' => out.push_str("\\r"),
+            '\t' => out.push_str("\\t"),
+            '<' => out.push_str("\\u003c"),
+            '>' => out.push_str("\\u003e"),
+            '&' => out.push_str("\\u0026"),
+            '/' => out.push_str("\\/"),
+            c if (c as u32) < 0x20 => out.push_str(&format!("\\u{:04x}", c as u32)),
+            c => out.push(c),
+        }
+    }
+    out.push('"');
+    out
+}
+
+/// The call that writes the key, as JavaScript. The writer itself is
+/// [`HOST_JS`]'s `pairWrite` -- this is only the call, with the five carried
+/// values quoted into it. Nothing is concatenated into a string the page then
+/// parses; every value goes through [`json_string`].
+pub fn pair_write_js(p: &Pairing) -> String {
+    format!(
+        "window.TTSTVHost && window.TTSTVHost.pairWrite && window.TTSTVHost.pairWrite({{\
+v:{},url:{},pass:{},workspace:{},app:{},made:{}}});",
+        p.v,
+        json_string(&p.url),
+        json_string(&p.pass),
+        json_string(&p.workspace),
+        json_string(&p.app),
+        p.made,
+    )
+}
+
+/// A link that arrived before there was a document to write it into.
+///
+/// Two ways in and they need different handling. A **cold** open -- the app was
+/// launched BY the link -- is `get_current()` in `setup`, at which point the
+/// window does not exist yet, let alone a page. A **warm** open -- the app was
+/// already running -- is `on_open_url`, and there a document is loaded and
+/// `eval` reaches it. So both put the pairing here, `on_page_load` drains it,
+/// and the warm path additionally evals straight away so the field the person
+/// is looking at redraws without a navigation. Draining is what makes the
+/// double write harmless: whichever gets there first empties it.
+#[derive(Default)]
+pub struct PendingPair(pub Mutex<Option<Pairing>>);
 
 /// Turn a request path into a path under `root`, or `None` if it tries to leave.
 ///
@@ -520,6 +785,13 @@ fn not_here<R: tauri::Runtime>(app: &tauri::AppHandle<R>, root: &Path, path: &st
 pub fn run() {
     tauri::Builder::default()
         .invoke_handler(tauri::generate_handler![sync_discover])
+        // The launch scheme (`frank-pair://`, NOT the asset scheme). The
+        // plugin is what turns an OS open into an event on iOS, macOS and
+        // Android; on the phone the scheme itself is declared in
+        // `tauri.conf.json`'s `plugins.deep-link.mobile`, which the plugin's
+        // own build script writes into `CFBundleURLTypes`.
+        .plugin(tauri_plugin_deep_link::init())
+        .manage(PendingPair::default())
         // `Wry` and not a generic `R`: `Builder::default()` is a
         // `Builder<Wry>`, and spelling it lets the closure's argument type be
         // written down rather than inferred through a `_`.
@@ -565,6 +837,28 @@ pub fn run() {
                 )?;
             }
 
+            // A COLD OPEN: the app was launched BY the link, so the URL is
+            // already in the plugin's hand and there is no window yet. Held,
+            // and `on_page_load` writes it into the first document there is.
+            // `get_current` answers `Ok(None)` on a normal launch and `Err` on
+            // a platform that has no such notion; neither is a fault here.
+            match app.deep_link().get_current() {
+                Ok(Some(urls)) => take_pair_links(app.handle(), urls.iter().map(|u| u.to_string())),
+                Ok(None) => {}
+                Err(why) => log::info!("frank: no launch link ({why})"),
+            }
+
+            // A WARM OPEN: the app was already running. A document is loaded,
+            // so this writes the key now -- the Transfer field the person is
+            // looking at redraws off `ttstv:pairing` without a navigation --
+            // and still leaves it pending, because `on_page_load` drains and a
+            // drained pending cannot be written twice.
+            let handle = app.handle().clone();
+            app.deep_link().on_open_url(move |event| {
+                take_pair_links(&handle, event.urls().iter().map(|u| u.to_string()));
+                flush_pair(&handle);
+            });
+
             let root = shell_root(app.handle());
             match unpack_shell(app.handle(), &root) {
                 Ok(n) => log::info!("frank: shell ready, {n} files"),
@@ -588,13 +882,70 @@ pub fn run() {
             )
             .title("Frank")
             .initialization_script(HOST_JS)
+            // Separate from HOST_JS, and unconditional -- see PAIR_JS's own
+            // note. Both run before the document's own scripts, so a page that
+            // reads the key at load reads a key a link has already written.
+            .initialization_script(PAIR_JS)
             .inner_size(1100.0, 800.0)
             .min_inner_size(400.0, 400.0)
+            // Every document, including the first: whatever a launch link left
+            // pending is written here, once.
+            .on_page_load(|window, _payload| flush_pair(window.app_handle()))
             .build()?;
             Ok(())
         })
         .run(tauri::generate_context!())
         .expect("error while running Frank");
+}
+
+/// Keep the last pairing link of a batch, and say in the log what happened to
+/// the rest. A batch is normally one URL; the OS may hand over several, and a
+/// link that is not ours (or is malformed) is dropped with its reason rather
+/// than failing the open -- an app that refuses to launch because a QR was
+/// wrong is worse than one that launches unpaired.
+fn take_pair_links<R: tauri::Runtime, I: Iterator<Item = String>>(app: &tauri::AppHandle<R>, urls: I) {
+    for u in urls {
+        match parse_pair_link(&u) {
+            Ok(p) => {
+                // The pass is in `p` and goes no further than the store. What
+                // the log gets is the address and nothing else; a log is read
+                // over a shoulder and copied into a bug report.
+                log::info!("frank: pairing link for {}", p.url);
+                if let Some(state) = app.try_state::<PendingPair>() {
+                    if let Ok(mut slot) = state.0.lock() {
+                        *slot = Some(p);
+                    }
+                }
+            }
+            Err(why) => log::warn!("frank: link ignored -- {why}"),
+        }
+    }
+}
+
+/// Write whatever is pending into the main window, and clear it. Safe to call
+/// on every page load and on every open: an empty slot is a no-op, and the take
+/// is what stops one link being written twice.
+fn flush_pair<R: tauri::Runtime>(app: &tauri::AppHandle<R>) {
+    let pending = app
+        .try_state::<PendingPair>()
+        .and_then(|s| s.0.lock().ok().and_then(|mut slot| slot.take()));
+    let Some(p) = pending else { return };
+    match app.get_webview_window("main") {
+        Some(w) => {
+            if let Err(why) = w.eval(pair_write_js(&p)) {
+                log::error!("frank: could not write the pairing -- {why}");
+            }
+        }
+        // No window yet (a link that arrived between setup and the build). Put
+        // it back; the first page load takes it.
+        None => {
+            if let Some(state) = app.try_state::<PendingPair>() {
+                if let Ok(mut slot) = state.0.lock() {
+                    *slot = Some(p);
+                }
+            }
+        }
+    }
 }
 
 fn shell_root<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> PathBuf {
@@ -647,6 +998,145 @@ mod tests {
         assert!(cap.contains(r#""allow-sync-discover""#));
         let build = include_str!("../build.rs");
         assert!(build.contains(r#"commands(&["sync_discover"])"#));
+    }
+
+    #[test]
+    fn the_launch_scheme_is_not_the_asset_scheme() {
+        // The whole of why this constant exists. `frank://` answers with files
+        // off the served tree; if the OS could hand this app a `frank://` from
+        // outside, a printed QR would be a request to open an arbitrary path.
+        assert_ne!(PAIR_SCHEME, SCHEME);
+        assert!(!PAIR_SCHEME.is_empty());
+        assert!(PAIR_SCHEME
+            .chars()
+            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-'));
+    }
+
+    #[test]
+    fn the_scheme_is_the_same_word_in_all_three_places() {
+        // here; what the plugin's build script writes CFBundleURLTypes from;
+        // and what an xcodegen regeneration puts back into the Info.plist it
+        // edited. Two of the three are files, so this is the drift guard.
+        let conf = include_str!("../tauri.conf.json");
+        assert!(conf.contains(&format!("\"{PAIR_SCHEME}\"")), "tauri.conf.json");
+        assert!(conf.contains("\"deep-link\""), "the plugin is configured");
+        let yml = include_str!("../gen/apple/project.yml");
+        assert!(yml.contains(&format!("- {PAIR_SCHEME}")), "project.yml CFBundleURLSchemes");
+        assert!(yml.contains("CFBundleURLTypes:"), "project.yml");
+    }
+
+    #[test]
+    fn a_link_becomes_the_seven_field_object_minus_the_fingerprint() {
+        let got = parse_pair_link(
+            "frank-pair://v1?url=https%3A%2F%2Fozzi--ttstv-cloud-api.modal.run\
+&pass=abc-123_XYZ&workspace=ozzi&app=ttstv-cloud&made=1788000000",
+        )
+        .unwrap();
+        assert_eq!(got.v, 1);
+        assert_eq!(got.url, "https://ozzi--ttstv-cloud-api.modal.run");
+        assert_eq!(got.pass, "abc-123_XYZ");
+        assert_eq!(got.workspace, "ozzi");
+        assert_eq!(got.app, "ttstv-cloud");
+        assert_eq!(got.made, 1788000000);
+    }
+
+    #[test]
+    fn the_lan_door_and_the_cloud_door_parse_the_same_way() {
+        // Job 23c's whole point: the phone cannot tell them apart, and this
+        // file is where it would learn to if anything read `url` for meaning.
+        let lan = parse_pair_link("frank-pair://v1?url=http%3A%2F%2F192.168.1.24%3A8099&pass=p")
+            .unwrap();
+        let cloud = parse_pair_link("frank-pair://v1?url=https%3A%2F%2Fx.modal.run&pass=p").unwrap();
+        assert_eq!(lan.pass, cloud.pass);
+        assert_eq!(lan.app, cloud.app, "both default to the same app name");
+        assert_eq!(lan.v, cloud.v);
+    }
+
+    #[test]
+    fn the_defaults_are_the_macs_defaults() {
+        let got = parse_pair_link("frank-pair://v1?url=https%3A%2F%2Fx.modal.run&pass=p").unwrap();
+        assert_eq!(got.app, PAIR_APP);
+        assert_eq!(got.workspace, "");
+        assert_eq!(got.made, 0, "0 means the page stamps it at the write");
+    }
+
+    #[test]
+    fn a_plus_is_a_space_and_a_percent_is_a_byte() {
+        let got =
+            parse_pair_link("frank-pair://v1?url=https%3A%2F%2Fx.modal.run&pass=p&workspace=my+team")
+                .unwrap();
+        assert_eq!(got.workspace, "my team");
+    }
+
+    #[test]
+    fn a_trailing_slash_and_a_shouted_scheme_are_the_same_link() {
+        let a = parse_pair_link("frank-pair://v1?url=https%3A%2F%2Fx.io&pass=p").unwrap();
+        let b = parse_pair_link("FRANK-PAIR://v1/?url=https%3A%2F%2Fx.io&pass=p").unwrap();
+        assert_eq!(a, b);
+    }
+
+    #[test]
+    fn every_refusal_is_a_sentence_and_nothing_is_half_read() {
+        // not ours at all
+        assert!(parse_pair_link("https://example.com/?pass=p").is_err());
+        // the ASSET scheme, which is the one that must never be a launch link
+        assert!(parse_pair_link("frank://localhost/library/library.html").is_err());
+        // a version this build does not know says so, in import.js's words
+        let why = parse_pair_link("frank-pair://v2?url=https%3A%2F%2Fx.io&pass=p").unwrap_err();
+        assert!(why.contains("version 2") && why.contains("update the app"), "{why}");
+        // the two required fields
+        assert!(parse_pair_link("frank-pair://v1?pass=p").unwrap_err().contains("address"));
+        assert!(parse_pair_link("frank-pair://v1?url=https%3A%2F%2Fx.io").unwrap_err().contains("pass"));
+        // and an address that is not an address. A QR is printed by strangers.
+        for bad in [
+            "frank-pair://v1?url=javascript%3Aalert(1)&pass=p",
+            "frank-pair://v1?url=file%3A%2F%2F%2Fetc%2Fpasswd&pass=p",
+            "frank-pair://v1?url=frank%3A%2F%2Flocalhost%2Fx&pass=p",
+        ] {
+            assert!(parse_pair_link(bad).is_err(), "{bad}");
+        }
+    }
+
+    #[test]
+    fn the_written_javascript_cannot_be_broken_out_of() {
+        let p = Pairing {
+            v: 1,
+            url: "https://x.io".into(),
+            pass: "\");alert(1);//".into(),
+            workspace: "</script><script>".into(),
+            app: "a\\b\"c".into(),
+            made: 7,
+        };
+        let js = pair_write_js(&p);
+        // the payload's own quote never appears unescaped
+        assert!(!js.contains("\");alert(1);//\""), "{js}");
+        assert!(js.contains("\\\");alert(1);\\/\\/"), "{js}");
+        assert!(!js.contains("</script>"), "{js}");
+        assert!(js.contains("\\u003c\\/script\\u003e"), "{js}");
+        assert!(js.contains("window.TTSTVHost.pairWrite"));
+        assert!(js.ends_with(");"), "{js}");
+    }
+
+    #[test]
+    fn the_writer_is_the_page_s_and_it_is_not_behind_the_tauri_check() {
+        // PAIR_JS must work where HOST_JS returns early -- Settings > Transfer
+        // writes this same key in a browser, on the Mac, with no __TAURI__.
+        assert!(!PAIR_JS.contains("__TAURI__"), "the writer needs no host");
+        assert!(!PAIR_JS.contains("invoke("), "and no command");
+        assert!(PAIR_JS.contains(&format!("var KEY = \"{PAIR_KEY}\"")));
+        assert!(PAIR_JS.contains("crypto.subtle.digest(\"SHA-256\""));
+        assert!(PAIR_JS.contains(".slice(0, 8)"), "eight hex, like the Mac's");
+        assert!(PAIR_JS.contains("localStorage.setItem(KEY"));
+        assert!(PAIR_JS.contains("ttstv:pairing"), "an open Transfer tab redraws");
+        assert!(!PAIR_JS.contains("console.log"), "the pass is never printed");
+    }
+
+    #[test]
+    fn the_key_is_the_contract_and_it_is_spelled_once() {
+        assert_eq!(PAIR_KEY, "transfer.pairing");
+        // Rust's constant and the page's literal are the same string, and the
+        // page is where Settings > Transfer will read it from.
+        assert!(PAIR_JS.contains(PAIR_KEY));
     }
 
     #[test]

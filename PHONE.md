@@ -172,6 +172,103 @@ this repo's. Until then, keep the phone to one pane out.
 
 ---
 
+## 6b. Pairing — the square, the link, and the one key
+
+The phone is told WHERE to send a book and WITH WHAT by a link it reads off the
+Mac's screen with the system camera. Frank ships no scanner: the camera app
+offers "Open in Frank" because the app declares a URL type, and that is the
+whole of the mechanism.
+
+**The link.** `frank-pair://v1?url=…&pass=…&workspace=…&app=…&made=…`, every
+value percent-encoded. `url` and `pass` are required; `app` defaults to
+`ttstv-cloud` and `workspace` to nothing; `made` may be left off and the phone
+stamps it. **`fp` is never carried** — it is eight hex of `sha256(pass)`,
+computed at the write, so a link cannot disagree with its own pass.
+
+**The scheme is `frank-pair`, and it is deliberately not `frank`.** `frank://`
+is the *asset* scheme this app answers with its own files. If the OS could hand
+this app a `frank://` from outside, a square printed by a stranger would be a
+request to open an arbitrary path of the served tree. Two words, two jobs.
+
+**Where the scheme is declared — three files, and they must agree:**
+
+| file | what it is for |
+|---|---|
+| `src-tauri/src/lib.rs` (`PAIR_SCHEME`) | parses the link |
+| `src-tauri/tauri.conf.json` → `plugins.deep-link.mobile` | what `tauri-plugin-deep-link`'s **build script** writes `CFBundleURLTypes` from, into the generated `Info.plist` |
+| `src-tauri/gen/apple/project.yml` → `CFBundleURLTypes` | what an **`xcodegen` regeneration** puts back into that same `Info.plist` afterwards |
+
+`tests/test_pair_link.py` holds the three equal. The plugin's build script also
+*removes* `com.apple.developer.associated-domains` from the entitlements when
+no app link is configured, which is correct here (there are none) and is why
+`frank_iOS.entitlements` may show as changed after a build.
+
+**Where it lands: `localStorage["transfer.pairing"]`**, one object, seven
+fields, in this order — `{v, url, pass, workspace, app, fp, made}`. That key is
+the contract and it has **two writers**: this repo's link, and Settings →
+Transfer's typed address-and-pass field (TTSTV, the shell's own page). It has
+one reader, `library/transfer.js` (TTSTV), which is one client for the Mac and
+the phone. Nothing in this repo makes the four HTTP calls.
+
+**Try it without the field, and without a camera.** Until Settings → Transfer
+lands, put a pairing in by hand from the webview console (Safari →
+Develop → the simulator or the phone → the Frank window):
+
+```js
+await TTSTVHost.pairWrite({ url: "http://192.168.1.24:8099", pass: "<the pass>" })
+TTSTVHost.pairRead()          // {v:1, url:…, pass:…, workspace:"", app:"ttstv-cloud", fp:"3e47e9d6", made:…}
+```
+
+and then drive the four calls in the same console — this is exactly what
+`library/transfer.js` will do:
+
+```js
+const P = TTSTVHost.pairRead(), H = { Authorization: "Bearer " + P.pass };
+const at = p => P.url.replace(/\/+$/, "") + p;
+// 1 parse   2 render   3 job   4 pull
+const tree = await (await fetch(at("/parse"), { method: "POST", headers: { ...H, "X-Filename": "book.epub" }, body: file })).arrayBuffer();
+const row  = await (await fetch(at("/render"), { method: "POST", headers: { ...H, "X-Engine": "stub" }, body: packedZip })).json();
+const st   = await (await fetch(at(`/job/${row.job_id}`), { headers: H })).json();
+const wavs = await (await fetch(at(`/job/${row.job_id}?audio=1`), { headers: H })).arrayBuffer();
+```
+
+**Start the door on the Mac** (no Modal account, no spend) — from a TTSTV
+checkout on the `installer` branch:
+
+```bash
+TTSTV_CLOUD_TOKEN=<the pass> python3 cloud/tools/serve_local.py \
+    --host 0.0.0.0 --port 8099 --vol /tmp/ttstv-local-vol
+```
+
+`--host 0.0.0.0` is the one change from that file's own example, and it is what
+makes it reachable from the phone rather than only from the Mac. The phone then
+pairs against `http://<the Mac's LAN address>:8099`. The plist already allows
+plain HTTP on the local network (`NSAllowsLocalNetworking`, §6 of job 26).
+
+**The presses that are Osca's, in order.** Nothing below has been run — there
+is no Xcode, no simulator and no camera in a Cowork session.
+
+1. `cd src-tauri/gen/apple && xcodegen generate` — or just build; either way
+   check `frank_iOS/Info.plist` afterwards for a `CFBundleURLTypes` naming
+   `frank-pair` and **not** `frank`.
+2. `cargo test -p frank --lib` in `src-tauri/` — the 10 pairing tests plus the
+   7 that were already there. (They were proved by extraction in the container;
+   this is the first time they run against the real crate.)
+3. `npm run -- tauri ios dev` — then, in another terminal:
+   `xcrun simctl openurl booted "frank-pair://v1?url=http%3A%2F%2F127.0.0.1%3A8099&pass=testpass"`.
+   Frank should come to the front; `TTSTVHost.pairRead()` in the console should
+   show the object with an `fp`.
+4. **Cold start**, which is the half `openurl` on a running app does not test:
+   kill Frank in the simulator, then run the same `openurl`. The link is read in
+   `setup` via `get_current()` and written on the first page load.
+5. On the **real phone**: show the square (Settings → Cloud GPU → the pairing
+   image, TTSTV), point the camera at it, take the offer. Then the four calls
+   from the console above against the Mac's LAN address.
+6. Deleting the app clears `localStorage`, so a re-pair is a re-scan; there is
+   no "forget" button in this repo.
+
+---
+
 ## 7. What is owed
 
 - **The shell itself** — blocked on TTSTV job 15 (§1). One command after it lands.
@@ -183,3 +280,10 @@ this repo's. Until then, keep the phone to one pane out.
   `init`. Nothing in this repo has been built for Android.
 - **A note in TTSTV's `Frank/FRANK.md`** that `Frank/` stays the *desktop*
   thin client and the phone moved here — owed to the installer lane.
+- **`library/transfer.js` (TTSTV)** — the four HTTP calls, one client for the
+  Mac and the phone, reading `localStorage["transfer.pairing"]`. The sync
+  lane's file, not this repo's; §6b has the shapes and `STATUS.md` §6 has them
+  with the measured status codes.
+- **Settings → Transfer's Pair field (TTSTV)** — the second writer of that key.
+  Until it lands, §6b's two console lines are the way in.
+- **Nothing here has been on a phone.** Every press in §6b is unrun.

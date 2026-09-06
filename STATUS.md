@@ -4,6 +4,274 @@ Newest first. `REPORT_PROTOCOL.md` (TTSTV), nine headings. `README.md` says what
 
 ---
 
+## job 23d · the phone's half of pairing — the deep link, and the one key · 6 Sep
+
+### 1. Built
+The link, and only the link. `src-tauri/src/lib.rs`:
+- `PAIR_SCHEME = "frank-pair"` — a launch scheme of its own, **deliberately not
+  `SCHEME`** (`frank`, the asset scheme, `lib.rs:102`).
+- `parse_pair_link(&str) -> Result<Pairing, String>` — `frank-pair://v1?url=…&pass=…
+  &workspace=…&app=…&made=…`. Hand-parsed on the string with this file's own
+  `percent_decode`, not through `url::Url`, so the whole decision is
+  dependency-free and provable in a shell with no Xcode (§2). Refuses a version
+  above 1 in `library/import.js`'s own words, and refuses a `url` that is not
+  plain http(s) — a link is a string a stranger prints on a wall.
+- `json_string()`, `pair_write_js()` — the write, as JavaScript, every value
+  JSON-quoted (`<`, `>`, `&`, `/` escaped too).
+- `PAIR_JS` — the writer, injected **separately from `HOST_JS` and
+  unconditionally**: `HOST_JS` returns early with no `__TAURI__` because
+  everything in it is a command; this is not a command, and Settings → Transfer
+  writes the same key in a browser where there is no host object.
+  `TTSTVHost.pairWrite(fields)` computes `fp` and writes;
+  `TTSTVHost.pairRead()` gives it back; a `ttstv:pairing` event redraws an open
+  tab. `fp` is `sha256(pass)` sliced to 8 hex — `deploy_to_my_modal.py::
+  fingerprint`'s rule, through the `crypto.subtle` `library/import.js` already
+  hashes a book with.
+- `PendingPair`, `take_pair_links()`, `flush_pair()` — cold open
+  (`deep_link().get_current()` in `setup`, before there is a window) and warm
+  open (`on_open_url`) both leave the pairing pending; `on_page_load` drains it.
+  The take is what makes the double write harmless.
+- `tauri_plugin_deep_link::init()` registered; `PendingPair` managed.
+
+`src-tauri/Cargo.toml` — `tauri-plugin-deep-link = "2.4.10"`.
+`src-tauri/tauri.conf.json` — `plugins.deep-link.mobile[0].scheme` +
+`desktop.schemes`. `src-tauri/gen/apple/project.yml` — `CFBundleURLTypes`.
+`src-tauri/capabilities/default.json` — description only: **the plugin is
+granted nothing**, so the page cannot call `get_current` and read the pass out
+of the launch URL.
+`tests/test_pair_link.py` (new, 11) · `PHONE.md` §6b (the link, the three
+files, the console drive, the six presses) · this entry.
+
+### 2. Verified — and how
+
+**unit, rust — 10 pass.** No cargo is reachable from a Cowork session, so the
+pure half was proved the way the move proved `lib.rs` before it: extracted **by
+line range** (`PAIR_JS` 257–307, the pairing block 309–518, `percent_decode`
+549–567, the tests) into a scratch crate with an empty `[dependencies]`, and
+`cargo test --offline` in the cloud container — **10 passed**. The two
+assertions that `include_str!` files cannot run there and are the python
+suite's instead, named rather than dropped.
+
+**unit, python — 11 pass** (`tests/test_pair_link.py`), of which the ones that
+matter:
+- the three files name the same scheme, and `frank` appears in the URL types
+  **nowhere**;
+- the capability grants the plugin nothing, and says so;
+- `PAIR_JS` **actually runs**, under node against a `localStorage` stub: one key
+  written and nothing else touched, the seven fields in the agreed order,
+  `pairRead` gives back what `pairWrite` put, an absent `made` is stamped, a
+  pairing with no address or no pass is refused;
+- **the fingerprint is checked against python's `hashlib`** for four passes
+  including non-ASCII — the same cross-language check `library/tests/
+  test_import.py` makes of the book hash, and for the same reason: two
+  implementations of one rule that nobody compares is how the square on the Mac
+  and the row on the phone come to show different eight-hex.
+
+**live — the four calls, against a real `cloud/tools/serve_local.py`.** Not read
+off the source: the door was started in the cloud container (`installer`
+branch's `cloud/`, `core/`, `parser/`, `voice/remote/`, parser's five pins from
+PyPI) and driven from node holding **nothing but a `transfer.pairing` object** —
+the shape this repo's link writes. Measured:
+
+| call | status | measured |
+|---|---|---|
+| `GET /` (no bearer) | **200** | `{"app":"ttstv-cloud (local)","routes":["POST /parse","POST /render","GET /job/{id}"]}` — the route list is open, everything else is not |
+| any call, wrong pass | **401** | |
+| `POST /parse` | **200** | a 2,808 B epub → a **6,286 B** tree zip, `X-Slug: the-pairing-proof`, `X-Parse-Seconds: 0.20` |
+| `POST /parse`, empty body | **400** | |
+| `POST /parse`, not a book | **422** | `{"ok":false,"why":…}` — the parser's own sentence, no traceback |
+| `POST /render`, a parse tree | **422** | *"this body is not a packed job folder (no job.json)"* |
+| `POST /render`, `X-Where: kaggle` | **501** | *"pair with Frank Studio's own door"* — job 23c, and the client must draw it as a place to go, not an error |
+| `GET /job/<unknown>` | **404** | |
+| `GET /job/<id>` | **200** | `{job_id, engine, where, call_id, state:"queued", started}` |
+| `GET /job/<id>?audio=1`, not done | **409** | the pull is the same route with one parameter |
+
+**not verified — anything with a phone in it.** No simulator, no device, no
+camera, no `xcrun`, no Xcode and no cargo in either shell here, so: the crate
+has **never been compiled** with the plugin in it, `xcodegen` has never
+regenerated the Info.plist, no `frank-pair://` has ever been opened by an OS,
+and no book has been parsed or rendered *from a phone*. `PHONE.md` §6b is the
+six presses that close it. The proof Osca asked for — pair from the simulator
+and the real phone, parse, render one chapter, play it, and open Frank from the
+camera — is **not done and is not claimed**.
+
+**the invariant**: `shell/` and `shell.manifest.json` untouched (both still
+untracked, and `tools/` is unmodified); TTSTV read only, and the `installer`
+worktree read only — nothing was written into either.
+
+**found already failing and left alone**: `tests/test_phone_shell.py::
+test_the_app_names_no_shell_file_of_its_own` — `tools/android_permissions.py`
+names `asr.js`, and that file is `HEAD`'s byte-for-byte (`diff` against
+`git show HEAD:` is empty) with the test file untouched by me. It goes red now
+because `shell/` has been imported and the skip-gate opens; it is another lane's.
+`tests` is **24 pass, 1 fail** with this work and would be 13 pass, 1 fail
+without it.
+
+### 3. Judgment calls
+- *the go says "its own scheme"; which word* → **`frank-pair`**, because
+  `cloud/STATUS.md` 23b §2 already sized the square against *"a 92-character
+  `frank-pair://` payload"*. Taking the word the other lane had already
+  measured beats inventing a second one. My grammar is longer than 92 characters
+  (it carries names, not positions) — §7.
+- *`url::Url` is handed over by the plugin; parse with it?* → **no.** A
+  dependency-free parser is one that can be proved in this shell, and
+  `url::Url` normalises a non-special scheme's authority in ways that would make
+  `v1`, `V1` and `v1.` one thing when the version segment is the one part that
+  must be read exactly as sent.
+- *who computes `fp`* → **the page**, not Rust. Rust would need `sha2`, a
+  dependency I cannot compile here to check; the page already has the exact
+  primitive `import.js` uses. It also means the Settings field and the link
+  reach the key by the same line of code.
+- *carry `fp` in the link?* → **no.** A link that carried both could disagree
+  with itself, and the fingerprint's whole job is to say that two things match.
+- *Rust writes `localStorage` by `eval`* → yes, and no IPC is granted for it.
+  The alternative — a command the page calls to fetch the pending link — puts
+  the pass behind a door any page in the webview could open.
+- *the plugin's `deep-link:default` permission* → **not granted.** It allows
+  `get_current`, which answers with the launch URL, which contains the pass.
+- *`Info.plist` is dirty (Osca's Xcode)* → **not touched.** The scheme goes in
+  `project.yml`, which is tracked, clean and mine to edit; the plugin's own
+  build script writes the same key into the plist at build time, and
+  `xcodegen` puts `project.yml`'s copy back. Two writers of one plist key, so
+  the test holds them equal.
+- *a 500 from `/render`* → recorded as a client rule, not as a door bug. A zip
+  whose `job.json` is not the shape `voice/remote/spec.py` expects answered
+  **500 with the job row already written** (the following poll returned 200
+  `queued`), so a client must not retry a 500 blindly. My fixture was a
+  hand-made `job.json`, not one packed by `voice`; 23b proved 202 → `done` →
+  pull with a real one. Named in §6 as a rule and in §7 as a thing I provoked.
+
+### 4. Boundary check
+Touched, all in this repo: `src-tauri/src/lib.rs`, `src-tauri/Cargo.toml`,
+`src-tauri/tauri.conf.json`, `src-tauri/capabilities/default.json`,
+`src-tauri/gen/apple/project.yml`, `tests/test_pair_link.py` (new), `PHONE.md`,
+`STATUS.md`. **TTSTV was read only** — `cloud/STATUS.md` and
+`Frank/FRANK.md` on `FRANK`, and `cloud/endpoint.py`, `cloud/tools/serve_local.py`,
+`cloud/tools/local_client.py`, `cloud/tools/deploy_to_my_modal.py` and
+`cloud/STATUS.md` on the **`installer` branch, in another session's worktree**
+(`scratch/wt-installer`, locked). Nothing was written to either, and no branch
+of TTSTV was checked out or moved.
+
+Not the move/re-wire exception — one repo, one folder tree.
+
+**Dirty and left alone** (Osca's Xcode/import, and they were dirty at the gate):
+`src-tauri/gen/apple/frank.xcodeproj/project.pbxproj`,
+`…/xcshareddata/xcschemes/frank_iOS.xcscheme`,
+`src-tauri/gen/apple/frank_iOS/Info.plist`, untracked `shell/` and
+`shell.manifest.json`.
+
+### 5. Footprint
+Nothing added to the repo but source. `_to_delete/pairx.tgz` (7 KB) and
+`_to_delete/cloudstage.tgz` (782 KB) are this session's staging tarballs and
+are **deletable** — this shell cannot delete inside the mount, so they join
+what is already there for Osca to empty. In the bridge VM outside `mnt/`:
+`~/work` (~1 MB). In the cloud container: the extracted crate, the staged
+`cloud/`+`parser/`, `fastapi[standard]` and parser's five pins, a 2.8 KB epub —
+all of it dies with the session. No GPU, no Kaggle contact, no Modal contact,
+nothing deployed, £0.
+
+### 6. Requests to core / other modules
+
+**To the sync lane, for `library/transfer.js` (TTSTV) — the four calls, with
+the status codes measured above.** One client, and it must not be able to tell
+a Modal door from Frank Studio on the LAN (job 23c): read `url` for nothing but
+its bytes, and never branch on it.
+
+```js
+const P = JSON.parse(localStorage.getItem("transfer.pairing"));   // the one key
+const H = { Authorization: "Bearer " + P.pass };
+const at = p => P.url.replace(/\/+$/, "") + p;
+```
+
+| verb | request | answers to draw |
+|---|---|---|
+| **parse** | `POST /parse`, the epub/pdf **bytes as the body**; `X-Filename` (defaults `upload.epub`), optional `X-Lang`, `X-Slug`, `X-Max-Chapters` | **200** → `application/zip`, the `books/<slug>/` tree; read the slug off **`X-Slug`** and the seconds off `X-Parse-Seconds`. **400** empty body · **413** over the cap · **422** `{ok:false, why}` — *show `why`, it is the parser's own sentence* · **401** |
+| **render** | `POST /render`, a **packed job folder, zipped**; `X-Engine`, `X-Job-Id` (optional, one is made), `X-Where` (`modal` default) | **202** → the job row, `{job_id, engine, where, call_id, state, started}` · **422** not packed / no engine · **400** bad `where` or zip-slip · **501** on `X-Where: kaggle` — *not an error: it is the sentence that sends the person to Studio's own door* |
+| **job** | `GET /job/<id>` | **200** → `{state: queued\|running\|done\|failed, …, audio: [names]}` · **404** no such job |
+| **pull** | `GET /job/<id>?audio=1` — **the same route, one parameter** | **200** → `application/zip` of the wavs · **409** while the job is not `done`/`running` · **404** |
+
+Three rules the measurements put on the client, and none is obvious from the
+source:
+1. **`GET /` needs no bearer and every other route does.** A reachability check
+   is free and proves nothing about the pass; the first 401 is the real answer.
+2. **Do not retry a 500 from `/render`.** The job row is written before the
+   render is attempted, so a retry makes a second job.
+3. **The pull is the poll.** One route, and `?audio=1` before `done` is a
+   **409**, not an empty zip.
+
+**To the settings/design lane — Settings → Transfer's Pair field.** It is the
+second writer of `localStorage["transfer.pairing"]`, and the object is
+`{v:1, url, pass, workspace, app, fp, made}` in that order, `fp` =
+`sha256(pass)` hex sliced to 8. Inside Frank the field can just call
+`TTSTVHost.pairWrite({url, pass})` and get the `fp` back; outside Frank
+(the Mac, a browser) it must do the same `crypto.subtle` line itself. Listening
+for the `ttstv:pairing` event is what makes the row redraw when a link arrives
+while the tab is open.
+
+**To the installer lane (`cloud/`)** — the square must encode
+`frank-pair://v1?url=…&pass=…&workspace=…&app=…&made=…`, percent-encoded, `fp`
+**not** carried. That is longer than the 92 characters 23b measured (it carries
+key names rather than positions): a `https://ozzi--ttstv-cloud-api.modal.run`
+door with a 43-character pass comes to ~120 characters, still inside `segno`'s
+version-6 byte mode at ECC M. If the square's size ever matters more than the
+link's readability, say so and I will make the grammar positional.
+
+**To nobody, but worth writing down:** `serve_local.py`'s own example binds
+`127.0.0.1`, which a phone cannot reach. `--host 0.0.0.0` is in `PHONE.md` §6b.
+
+### 7. Known gaps
+- **Nothing has been compiled.** `tauri-plugin-deep-link` is a new dependency
+  and `Cargo.lock` is not updated — no cargo on the bridge, and the real crate
+  cannot be built in the container either. The first `cargo build` on the Mac
+  is where an API mistake would show. Everything I could check without it, I
+  checked: the plugin's own source was read (2.4.10, wants `tauri ^2.10`, which
+  the `2.11.3` pin satisfies), and `on_page_load` / `eval` were read off
+  `tauri` 2.11.3's own source rather than assumed.
+- **No `frank-pair://` has ever been opened by an operating system**, so the
+  half of this that is Apple's — the URL type reaching the camera, the app
+  coming to the front, `get_current()` on a cold start — is unrun.
+- **The link grammar is mine.** Nothing on the Mac encodes it yet, so the two
+  halves have never met. §6 is the specification; a mismatch is one edit either
+  side.
+- **`made` is not checked for staleness.** A link photographed weeks ago pairs
+  exactly like a fresh one. `made` is carried so a future `pairWrite` can refuse
+  an old square, and today nothing does.
+- **A second link overwrites the first without asking.** One key, last write
+  wins. Right while there is one door; wrong the day someone has a LAN door and
+  a cloud door and wants both.
+- **`spans.json`-style question, unresolved:** deleting the app clears
+  `localStorage`, so a re-pair is a re-scan. There is no export and no forget.
+- The `/render` 500 above was provoked by **my** hand-made `job.json`; I did not
+  prove the door 500s on a job `voice` packed, and I do not claim it.
+
+### 8. Next — in days, and each is a different lane
+
+| | days | where |
+|---|---|---|
+| the six presses in `PHONE.md` §6b — build, `xcodegen`, simulator, cold start, the real phone, the camera | **0.5** | Osca's Mac |
+| `library/transfer.js` — the four calls against §6's table | **1** | TTSTV, the sync lane |
+| Settings → Transfer's Pair field, the second writer of the key | **0.5** | TTSTV, settings/design |
+| **then** the proof this go asked for, end to end: pair → parse → render one chapter → play it | **0.5** | Osca's Mac + the phone |
+
+**Two days to a phone that renders against the Mac**, of which half a day is
+already sitting in `PHONE.md` and needs only a Mac. The link half is done and
+cannot be shown to work until one of the other two lands — that is the honest
+shape of it, and it is why §2 says "not verified: anything with a phone in it"
+rather than dressing the extraction up as a proof.
+
+**The single question that changes nothing but the order:** should the square
+encode a *positional* link (~92 characters, 23b's measurement) instead of the
+named one above? Only the QR's density depends on it.
+
+### 8b. Commit check
+Pathspec, by file, on `main` in this repo; `git show --stat HEAD` checked
+afterwards. TTSTV: not committed to, not staged, not checked out.
+
+### 9. Status line
+`IOS-TTS-TV · job 23d done (the link half) · 6 Sep · frank-pair:// parses, writes transfer.pairing, and the four call shapes are measured against a real serve_local.py; 21 tests green, nothing on a phone`
+
+---
+
 ## job 26 · the phone half, laid out — `SYNC.md` · 6 Sep
 
 ### 1. Built
