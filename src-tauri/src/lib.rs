@@ -1384,8 +1384,17 @@ pub const PROBE_JS: &str = r#"(function () {
       resizeTimer = window.setTimeout(function () { resizeTimer = 0; viewport("resize"); }, 250);
     });
 
-    document.addEventListener("timeupdate", function () { beat("tick"); }, true);
-    document.addEventListener("play", function () { playAt = playAt || Date.now(); beat("play"); }, true);
+    /* `adopt` is what makes this a probe of the APP and not only of itself:
+       whatever media element plays first is the one reported on, so when the
+       reader has rendered audio these lines describe the reader and the button
+       is redundant. Until then the button is the only sound in the app. */
+    function adopt(ev) {
+      if (!media && ev && ev.target && typeof ev.target.currentTime === "number") { media = ev.target; }
+    }
+    document.addEventListener("timeupdate", function (ev) { adopt(ev); beat("tick"); }, true);
+    document.addEventListener("play", function (ev) {
+      adopt(ev); playAt = playAt || Date.now(); beat("play");
+    }, true);
     document.addEventListener("pause", function () { beat("pause"); }, true);
     document.addEventListener("visibilitychange", function () {
       hiddenAt = document.hidden ? Date.now() : 0;
