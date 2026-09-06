@@ -171,3 +171,88 @@
     header .set-tabs { width: 100%; }
     header .set-tab { flex: 1 1 0; width: auto; }
   }
+
+/* ==================================================================
+   PHONE FIT -- from design/phone/phone.html, 6 Sep 2026 (Copy CSS). THE PHONE'S NUMBERS.
+   One value per property, one property per rule, no other layout code.
+   The values are the same in library.css, settings.css and bar/askbar.css
+   (the bar is on the reader too, where neither page sheet is loaded); the
+   bench is the source and Copy CSS is how they change. `(max-height: 500px)`
+   is in the query because the phone rotated is 852 wide.
+   ================================================================== */
+@media (max-width: 600px), (max-height: 500px) {
+  :root {
+    --ph-margin: 14px;
+    --ph-gap: 14px;
+    --ph-cols: 2;
+    --ph-tile: 150px;
+    --ph-type: 16px;
+    --ph-head: 56px;
+    --ph-card: 560px;
+    --ph-tap: 44px;
+  }
+  html { font-size: var(--ph-type); }
+  /* the header is FIXED at --ph-head under the safe area (Osca, 6 Sep); the
+     padding leaves --ph-tap for the tab row */
+  header { height: calc(var(--ph-head) + var(--safe-top, 0px)); }
+  header { padding-top: calc(6px + var(--safe-top, 0px)); }
+  header { padding-bottom: 6px; }
+  header button, header .headerLink { min-width: var(--ph-tap); }
+  header button, header .headerLink { min-height: var(--ph-tap); }
+  main { padding-left: calc(var(--ph-margin) + var(--safe-left, 0px)); }
+  main { padding-right: calc(var(--ph-margin) + var(--safe-right, 0px)); }
+  main > * { max-width: var(--ph-card); }
+  /* the form's own rules (settings.js, injected after this sheet) weigh
+     (0,3,1) and later; `body` in front is what lets these win */
+  body .ttstv-settings .opts button { min-height: var(--ph-tap); }
+  body .ttstv-settings .opts.set-seg button { min-height: var(--ph-tap); }
+  body .ttstv-settings .opts.set-seg button { min-width: var(--ph-tap); }
+  body .ttstv-settings .set-menu { min-height: var(--ph-tap); }
+  body .ttstv-settings .kag-btn, body .ttstv-settings .lang-btn, body .ttstv-settings .vc-btn { min-height: var(--ph-tap); }
+  body .ttstv-settings .hk-cap { min-width: var(--ph-tap); }
+  body .ttstv-settings .hk-cap { min-height: var(--ph-tap); }
+  /* THE TABS, RE-LAID TO FIT THE FIXED HEADER (Osca, 6 Sep). settings.js's
+     `.set-titlebar .set-tab { flex: 0 0 auto; width: 62px }` beat this
+     sheet's own 480px rule (it weighs the same and comes later), so six
+     62px tabs wrapped to two rows at 393 and the header grew to 81. One
+     `header.` more and they share the width, one row, --ph-tap tall. */
+  header.set-titlebar .set-tab { flex: 1 1 0; }
+  header.set-titlebar .set-tab { width: auto; }
+  header.set-titlebar .set-tab { min-width: 0; }
+  header.set-titlebar .set-tab { min-height: var(--ph-tap); }
+  header.set-titlebar .set-tab { padding: 2px 0; }
+  header.set-titlebar .set-tab svg { margin-bottom: 0; }
+  /* seven names in 373px is 51px each: "Cloud GPU" at 11px wrapped to two
+     lines and stretched the whole row to 55. One line, 10px, and it fits. */
+  header.set-titlebar .set-tab { white-space: nowrap; }
+  header.set-titlebar .set-tab { font-size: 9.5px; }
+  /* and no 80px reserved for traffic lights the phone has not got: the row
+     takes the width, in landscape too (the 480px rule below 640 never did) */
+  header { padding-left: calc(10px + var(--safe-left, 0px)); }
+  header { padding-right: calc(10px + var(--safe-right, 0px)); }
+  header .set-tabs { width: 100%; }
+}
+@media (max-height: 500px) and (orientation: landscape) {
+  :root { --ph-cols: 4; }
+}
+@media (max-width: 600px), (max-height: 500px) {
+  /* the listen-window dots (settings.js .set-ticks, 13x13): the BUTTON is
+     --ph-tap square and invisible, the dot it drew is now its ::after, at
+     the same 13px / 16px thumb, so the rail looks as it did and every dot
+     is a thumb's target (Osca, 6 Sep: tap targets under 44 raised) */
+  body .ttstv-settings .opts.set-ticks button,
+  body .ttstv-settings .opts.set-ticks button[aria-pressed="true"] {
+    width: var(--ph-tap); height: var(--ph-tap);
+    background: transparent; border: 0; box-shadow: none;
+  }
+  body .ttstv-settings .opts.set-ticks button::after {
+    content: ""; position: absolute; left: 50%; top: 50%;
+    width: 13px; height: 13px; transform: translate(-50%, -50%);
+    border-radius: 50%; background: var(--control-bg); border: 1px solid var(--border);
+  }
+  body .ttstv-settings .opts.set-ticks button:hover:not([disabled])::after { background: var(--border); }
+  body .ttstv-settings .opts.set-ticks button[aria-pressed="true"]::after {
+    width: 16px; height: 16px; background: #fff; border: 0;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  }
+}

@@ -891,14 +891,20 @@
     }
     #sourcesScrim.on { opacity: 1; pointer-events: auto; }
 
-    /* the shelf as a grid of covers */
+    /* the shelf's padding on the phone. It WAS "the shelf as a grid of
+       covers" -- `display: grid; repeat(auto-fill, minmax(150px, 1fr))` on
+       #shelf.rail itself -- until 6 Sep, when the grid became .shelfgrid
+       INSIDE it and the two fought: one auto-fill cell holding the whole
+       shelf, one column of 176px tiles at 393. The PHONE FIT block at the
+       foot of this file says `#shelf.rail { display: block }` and owns the
+       columns (--ph-cols), the tile (--ph-tile) and the gap (--ph-gap);
+       the dead grid lines are gone from here. */
     #shelf.rail {
-      display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 14px;
       align-content: start;
       padding: 12px calc(14px + var(--safe-right)) calc(20px + var(--safe-bottom)) calc(14px + var(--safe-left));
       -webkit-overflow-scrolling: touch;
     }
-    #shelf.rail h2, #shelf .empty { grid-column: 1 / -1; padding: 0 2px; }
+    #shelf.rail h2, #shelf .empty { padding: 0 2px; }
     #shelf .railrow {
       max-width: none; aspect-ratio: 2 / 3; min-height: 44px;
       display: flex; flex-direction: column; justify-content: flex-end; gap: 2px;
@@ -940,3 +946,56 @@
       border-color: var(--border); background: var(--bg); }
     .importerr { margin-left: 2px; margin-right: 2px; font-size: 0.85rem; }
   }
+
+/* ==================================================================
+   PHONE FIT -- from design/phone/phone.html, 6 Sep 2026 (Copy CSS). THE PHONE'S NUMBERS.
+   One value per property, one property per rule, no other layout code.
+   The values are the same in library.css, settings.css and bar/askbar.css
+   (the bar is on the reader too, where neither page sheet is loaded); the
+   bench is the source and Copy CSS is how they change. `(max-height: 500px)`
+   is in the query because the phone rotated is 852 wide.
+   ================================================================== */
+@media (max-width: 600px), (max-height: 500px) {
+  :root {
+    --ph-margin: 14px;
+    --ph-gap: 14px;
+    --ph-cols: 2;
+    --ph-tile: 150px;
+    --ph-type: 16px;
+    --ph-head: 56px;
+    --ph-card: 560px;
+    --ph-tap: 44px;
+  }
+  html { font-size: var(--ph-type); }
+  /* the header is FIXED at --ph-head under the safe area (Osca, 6 Sep), and
+     its padding is what leaves --ph-tap for the buttons inside it */
+  header { height: calc(var(--ph-head) + var(--safe-top, 0px)); }
+  header { padding-top: calc(6px + var(--safe-top, 0px)); }
+  header { padding-bottom: 6px; }
+  header button, header .headerLink { min-width: var(--ph-tap); }
+  header button, header .headerLink { min-height: var(--ph-tap); }
+  /* the 30 Aug block above made #shelf.rail the grid; since 6 Sep the grid
+     is .shelfgrid inside it -- the shelf is the column again */
+  #shelf.rail { display: block; }
+  #shelf.rail { padding-left: calc(var(--ph-margin) + var(--safe-left, 0px)); }
+  #shelf.rail { padding-right: calc(var(--ph-margin) + var(--safe-right, 0px)); }
+  #shelf[data-zoom="4"] .shelfgrid { --cols: var(--ph-cols); }
+  #shelf[data-zoom="4"] .shelfgrid { --bookw: var(--ph-tile); }
+  #shelf[data-zoom="4"] .shelfgrid { gap: var(--ph-gap); }
+  #shelf .railrow { min-height: var(--ph-tap); }
+  #importBtn, .ingest-retry, .menu button { min-height: var(--ph-tap); }
+  /* tap targets under 44 raised (Osca, 6 Sep): the shelf-zoom buttons
+     (28x22) and the shelf heading's toggle (29 tall) */
+  .zoom button { min-height: var(--ph-tap); }
+  .zoom button { min-width: var(--ph-tap); }
+  .shelftoggle { min-height: var(--ph-tap); }
+  /* the first-run gate is settings.js's card, drawn over THIS page; its own
+     rules are injected after this sheet, so these weigh one `body` more */
+  body .ttstv-settings.fr-gate .fr-sheet { max-width: var(--ph-card); }
+  body .ttstv-settings.fr-gate .fr-sheet { padding-left: calc(var(--ph-margin) + var(--safe-left, 0px)); }
+  body .ttstv-settings.fr-gate .fr-sheet { padding-right: calc(var(--ph-margin) + var(--safe-right, 0px)); }
+  body .ttstv-settings .kag-btn { min-height: var(--ph-tap); }
+}
+@media (max-height: 500px) and (orientation: landscape) {
+  :root { --ph-cols: 4; }
+}

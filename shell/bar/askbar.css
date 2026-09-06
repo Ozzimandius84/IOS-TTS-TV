@@ -222,3 +222,29 @@
 :root[data-theme="dark"] .askPv { background: #17171a; color: #e8e7e6; border-color: #2a2a2e; }
 :root[data-theme="dark"] .askBtn,
 :root[data-theme="dark"] .askPlayer button { background: rgba(255,255,255,.05); border-color: #33333a; }
+
+/* ==================================================================
+   PHONE FIT -- from design/phone/phone.html, 6 Sep 2026 (Copy CSS). THE PHONE'S NUMBERS.
+   One value per property, one property per rule, no other layout code.
+   The values are the same in library.css, settings.css and bar/askbar.css
+   (the bar is on the reader too, where neither page sheet is loaded); the
+   bench is the source and Copy CSS is how they change. `(max-height: 500px)`
+   is in the query because the phone rotated is 852 wide.
+   ================================================================== */
+@media (max-width: 600px), (max-height: 500px) {
+  :root {
+    --ph-margin: 14px;
+    --ph-gap: 14px;
+    --ph-cols: 2;
+    --ph-tile: 150px;
+    --ph-type: 16px;
+    --ph-head: 56px;
+    --ph-card: 560px;
+    --ph-tap: 44px;
+  }
+  .askRow { min-height: var(--ph-tap); }
+  .askBtn { min-height: var(--ph-tap); }
+}
+@media (max-height: 500px) and (orientation: landscape) {
+  :root { --ph-cols: 4; }
+}
