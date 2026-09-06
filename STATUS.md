@@ -4,6 +4,150 @@ Newest first. `REPORT_PROTOCOL.md` (TTSTV), nine headings. `README.md` says what
 
 ---
 
+## jobs 1, 2, 3 — the black bar was wry's frame; the audio is owed a simulator · 6 Sep
+
+### 1. Built
+- `src-tauri/ios/FrankWebView.m` (new, 95 lines) — `frank_webview_fill(void *webview, double *out)`.
+  frame = superview **bounds**, `autoresizingMask = flexibleWidth|flexibleHeight`, and both views
+  painted with the shell's own `--bg` (#fcfcfb / #131316, `colorWithDynamicProvider:`). Writes six
+  doubles back for the caller's log. `0 ok · 1 no pointer · 2 not a UIView · 3 no superview`.
+- `src-tauri/build.rs` — a second `cc::Build` compiling it into its own archive (`frankwebview`),
+  plus `rerun-if-changed` and a `UIKit` link line; and a sentence saying the `rustc-link-lib`
+  lines reach no linker, because a `staticlib` crate never runs one.
+- `src-tauri/src/lib.rs` — `webview_fill_why`, `fill_root_view` (the `with_webview` call, iOS only),
+  `PROBE_PATH` + `PROBE_JS`, the `/__probe` branch in the scheme handler, the window bound so it can
+  be filled, and the corrected SAFETY note over `audio_session_category`.
+- `src-tauri/Cargo.lock` — committed at last (job 1).
+
+### 2. Verified — and how
+- **unit** — 74 of 75 python tests pass. The one failure,
+  `test_phone_shell.py::test_the_app_names_no_shell_file_of_its_own` naming
+  `scratch26b/sync_md_patch.py`, is another lane's untracked scratch folder and fails identically
+  before and after this work.
+- **unit** — `rustfmt --edition 2021` parses `lib.rs` and `build.rs` (exit 0); `clang -fsyntax-only
+  -x objective-c -fobjc-arc -fblocks -fobjc-runtime=ios-15.0` type-checks `FrankWebView.m` against
+  stub headers carrying UIKit's real shapes (`frame`, `bounds`, `superview`, `autoresizingMask`,
+  `colorWithDynamicProvider:`), exit 0.
+- **unit** — `PROBE_JS` extracted verbatim and run under node against a stub DOM at dpr 3:
+
+  | webview | innerH | screenH | fills | safeBottom |
+  |---|---|---|---|---|
+  | fills the screen (852 CSS px) | 2556 | 2556 | **1** | 34 |
+  | 60 pt short (792 CSS px) | 2376 | 2556 | **0** | 0 |
+
+  180 device pixels, and a bottom inset that goes to zero with them — which is why the shell's
+  `--safe-*` vars were right and describing the wrong box. With a reader element playing and the
+  app hidden at t+4 s: `e=tick t=34.00 hidden=1 bg=30`. The tone decodes to a valid **30.0-second,
+  8 kHz, mono, 8-bit WAV measuring 220.0 Hz** by zero-crossing count.
+- **not verified — everything with Xcode in it.** No `xcodegen generate`, no
+  `npm run -- tauri ios build --debug`, no simulator, no `innerHeight` off a real WKWebView, no
+  seconds-after-Home. This session's shell is the Cowork bridge VM: **Linux, aarch64, no cargo, no
+  clang for arm64-apple-ios, no xcodegen, no simctl.** Terminal on the Mac can only be granted in
+  click mode (no typing), so there was no route to a macOS shell from here either.
+- **the plist, stated exactly.** `gen/apple/project.yml:73` has `UIBackgroundModes: [audio]`.
+  `gen/apple/frank_iOS/Info.plist` does **not** — it was last generated at 14:19 and the key went
+  into project.yml at 14:29. The claim "xcodegen applies it" is therefore **untested**; §8 has the
+  one-line grep that settles it.
+
+### 3. Judgment calls
+- *job 1 names four files that are already in HEAD (`4b776e5`, 14:32) → committed what was actually
+  uncommitted of that work: `Cargo.lock`* — `cc`, `serde_json` and `tauri-plugin-opener` were
+  resolved on disk and never committed, so a clean checkout would have re-resolved them.
+- *"fix it via `with_webview`" → the fix itself is Objective-C, called through `with_webview`* —
+  `PlatformWebview::inner()` hands back a `*mut c_void`, and doing UIKit from Rust would mean
+  adding `objc2`/`objc2-ui-kit` and keeping their versions in step with wry's. `ios/` already had
+  the C-symbol door open.
+- *"non-black root background" → the shell's own `--bg`, dynamic, not white* — a white strip under
+  a dark page is the same mistake the other way round. #131316 is not black.
+- *the numbers need a log line and a WKWebView console reaches no process log → a debug-only probe
+  in the host* — `PROBE_JS` is not injected and `/__probe` is not answered in a release binary. It
+  is in `lib.rs` and not in `shell/` because `shell/` is another lane's and because a diagnostic
+  that measures the host belongs to the host.
+- *the reader has no rendered audio, so job 3 has nothing to keep playing → the probe carries a
+  real 30 s WAV media element behind one button* — a WebAudio oscillator is not a media element,
+  raises no `play`, and owns no now-playing session, so it would have proved nothing. The
+  listeners adopt whatever plays first, so the day `listen.js` has an `<audio>` they describe the
+  reader instead.
+- *`lib.rs` said `FrankAudio.m` is linked by the Xcode target "sources: ../../ios" → deleted* —
+  it is not and must not be (`project.yml` says so in its own comment); prose against code, and
+  CLAUDE.md says the code is right.
+
+### 4. Boundary check
+Touched, and nothing else: `src-tauri/Cargo.lock`, `src-tauri/ios/FrankWebView.m` (new),
+`src-tauri/build.rs`, `src-tauri/src/lib.rs`, and this file. Not a move and not a re-wire, so the
+two-folder exception is not claimed. `core/` does not exist in this repo. `tools/`, `shell/`,
+`tests/`, `tauri.conf.json`, `capabilities/` and `permissions/` untouched.
+
+Found dirty and **left alone** — another session's, and it cannot be known whose:
+`src-tauri/build.rs` (a `FrankSearch.m` block that appeared after my commit),
+`src-tauri/gen/apple/frank.xcodeproj/project.pbxproj`, `src-tauri/gen/apple/frank_iOS/Info.plist`,
+`src-tauri/gen/apple/frank_iOS/frank_iOS.entitlements`, and untracked
+`src-tauri/ios/FrankSearch.m`, `src-tauri/src/search.rs`, `scratch-float/`, `scratch26b/`.
+The whole of `shell/` was staged in the shared index by another session while this one ran; the
+pathspec form is what kept it out of these three commits.
+
+### 5. Footprint
+Nothing on disk beyond the four files. `pip install pytest` into the bridge VM's user site
+(~4 MB) to run the suite. No env, no model, no download, no SSD, no scratch tree. Ran with no
+external drive.
+
+### 6. Requests to core / other modules
+- **`build.rs` has two owners today.** `ios/FrankSearch.m` and `src/search.rs` want a `cc::Build`
+  in the same `if target_os == "ios"` block this job edited. It merged cleanly; a third
+  simultaneous editor will not. Worth one lane owning `build.rs` for the rest of the 13th.
+- **`shell/`**: when `reader/listen.js` gets a real `<audio>`, nothing needs to change here — the
+  probe's listeners adopt it. Job 3's number can then be taken off a chapter instead of a tone.
+
+### 7. Known gaps
+- The three numbers the prompt asks for are **not taken**: the build, `innerHeight*dpr ===
+  screen.height*dpr` off a real WKWebView, and seconds-still-playing after Home. §8 is the recipe.
+- **The link is unproven.** `frank_webview_fill` is declared in Rust and defined in C and nothing
+  has linked them; the same class of error as the `_frank_audio_session_*` one found at 14:24
+  yesterday. The syntax checks above are not a link.
+- `with_webview` is dispatched, so the fill lands after the first layout but before nothing in
+  particular. The autoresizing mask is what covers a later relayout; if a bar survives on a cold
+  launch, that is where to look, and `why=settled` at 1500 ms is the line that will show it.
+- The probe's button sits over the page in debug builds. Deliberate, and it is the only way to
+  raise a `play` without a chapter, but it is one more thing to remember to be unsurprised by.
+
+### 8. Next
+Four commands on the Mac, in order, from `IOS TTS TV/`:
+
+```
+xcodegen generate --spec src-tauri/gen/apple/project.yml --project src-tauri/gen/apple
+/usr/libexec/PlistBuddy -c "Print :UIBackgroundModes" src-tauri/gen/apple/frank_iOS/Info.plist
+npm run -- tauri ios build --debug
+xcrun simctl launch --console-pty booted com.ttstv.frank
+```
+
+The second answers job 3's first half (`Array { audio }` or a failure). The third answers job 1
+(no undefined `_frank_audio_session_*`, and now no undefined `_frank_webview_fill`). In the fourth:
+read `frank: webview fills the root -- …`, then `frank: probe k=viewport … fills=1`; tap **probe**
+bottom-right, then ⌘⇧H, wait, and the last `frank: probe k=audio … hidden=1 bg=N` is job 3's
+number. Then the regenerated `Info.plist` and `project.pbxproj` want committing.
+
+**The single question that blocks it:** none — it needs a macOS shell, which this session cannot
+have. Stopping here.
+
+### 8b. Commit check
+Three commits, every path on the commit line, no `--amend`, no `git add -A`:
+- `acc4b4d` — `src-tauri/Cargo.lock` (job 1)
+- `3c1137b` — `src-tauri/ios/FrankWebView.m` (`git add`ed first, as a pathspec refuses an untracked
+  path), `src-tauri/build.rs`, `src-tauri/src/lib.rs`
+- `3ca5b34` — `src-tauri/src/lib.rs`
+
+`git show --stat HEAD` after each listed exactly those files and nothing else. **HEAD moved under
+me three times** — `1a01daf` and `0e799ec` (job 29) and the `build.rs` edit still dirty behind
+them; every control in §2 was taken on the far side of all three, on the tree as it stands. The
+bridge cannot delete inside the repo, so **seven stale git locks were moved to `_to_delete/`**
+(`index.lock` ×3, `HEAD.lock` ×2, `next-index-{10,23,152}.lock`), each after the 3-second check —
+`git` itself created them and could not unlink them. Osca to clear that folder.
+
+### 9. Status line
+`ios · jobs 1-3 · 6 Sep · black bar fixed and unproven; the simulator is owed three numbers`
+
+---
+
 ## job 8b — the float, half one: the audio that survives the app switcher · 6 Sep
 
 **Frank's sound stopped the moment you left the app, and it was two absences
