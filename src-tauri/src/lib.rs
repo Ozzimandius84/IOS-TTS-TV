@@ -148,7 +148,7 @@ fn shell_url(path: &str) -> String {
 // ONE thing a page cannot do for itself is find Studio: a webview has no
 // multicast socket. So this crate offers exactly one command, `sync_discover`,
 // which browses `_ttstv._tcp` for a moment and answers what it saw, and
-// injects a `window.TTSTVHost` with one method that calls it. Pairing, the
+// injects a `window.TTSTVHost` whose methods call it. Pairing, the
 // token, the store, the merge: none of it is here. The phone's half of sync
 // is a browse and forty lines.
 
@@ -241,9 +241,28 @@ fn studio_name(fullname: &str, txt: Option<&str>) -> String {
 }
 
 /// `window.TTSTVHost`, injected into every page this app opens -- the
-/// desktop app's shape (`desktop/src/host.js`), one method wide. The shell
+/// desktop app's shape (`desktop/src/host.js`), two methods wide. The shell
 /// checks for it and works without it: a page that is not in Frank simply
-/// finds no Studios and offers the address field instead.
+/// finds no Studios and offers the address field instead, and its look-up
+/// panel's Search shows one sentence rather than moving anything.
+///
+/// `search(q)` is the reader's one way out (TTSTV `reader/lookup.js`, job 15c
+/// re-wired 6 Sep: *"THE GUARD IS ON THE METHOD, never the object"* --
+/// `typeof TTSTVHost.search === "function"` is the page's only test, and with
+/// the method absent the panel writes `#note` and moves nothing). The name
+/// and shape are `desktop/src/host.js`'s, so one page reaches both hosts by
+/// one call: the word as printed goes in, a `Promise<string | null>` comes
+/// out -- `null` for an empty query, the landing it took otherwise. Here the
+/// landing is the Safari sheet (`search.rs`), and **the sheet takes the
+/// `-site:` form**: `host.js` builds `web` from the mock's `COVERED` list and
+/// passes `{ query, web }` to its window; `search.rs` says the exclusions
+/// "arrive already in it ... this file never builds, adds to, or trims that
+/// list". So this is where they are built for the phone -- the same five
+/// domains in the same order, `webQuery()` as `design/reader/search.html`
+/// writes it -- and `frank_search` is invoked on `web`, the one argument its
+/// door reads (`SEARCH_JS`: `open(args && args.query)`). The call is made at
+/// the press, through `TAURI.invoke` as it is THEN, which is how the plugin's
+/// wrapper (installed at `load`, after this script) gets to answer it.
 pub const HOST_JS: &str = r#"(function () {
   "use strict";
   var TAURI = window.__TAURI__ && window.__TAURI__.core;
@@ -252,6 +271,18 @@ pub const HOST_JS: &str = r#"(function () {
   /* the Bonjour browse behind the Transfer tab's Sync button (job 26) */
   window.TTSTVHost.syncDiscover = function (ms) { return TAURI.invoke("sync_discover", { ms: ms }); };
   window.TTSTVHost.deviceName = "Frank on this phone";
+  /* design/reader/search.html's COVERED, in its order, and its webQuery():
+     the words, then -site: for every source the app already covers. The
+     same two lines desktop/src/host.js carries; the sheet adds nothing. */
+  var COVERED = ["gutenberg.org", "archive.org", "youtube.com", "wikipedia.org", "wiktionary.org"];
+  var webQuery = function (q) { return q + COVERED.map(function (d) { return " -site:" + d; }).join(""); };
+  // TTSTVHost.search(q: string) -> Promise<string | null>
+  window.TTSTVHost.search = function (q) {
+    const query = String(q == null ? "" : q).trim();
+    if (!query) return Promise.resolve(null);
+    const web = webQuery(query);
+    return TAURI.invoke("frank_search", { query: web }).then(() => "sheet");
+  };
 })();
 "#;
 
@@ -1709,15 +1740,43 @@ mod tests {
     use super::*;
 
     #[test]
-    fn the_host_object_calls_the_one_command_and_nothing_else() {
+    fn the_host_object_calls_its_two_commands_and_nothing_else() {
         // the page reaches the browse through window.TTSTVHost.syncDiscover
-        // and the browse is the command build.rs declares
+        // and the browse is the command build.rs declares; the reader reaches
+        // the sheet through window.TTSTVHost.search and the sheet is the name
+        // search.rs's wrapper answers (job 13) -- two commands, two calls
         assert!(HOST_JS.contains("window.TTSTVHost.syncDiscover"));
         assert!(HOST_JS.contains(r#"invoke("sync_discover""#));
-        assert_eq!(HOST_JS.matches("invoke(").count(), 1, "one command, one call");
+        assert!(HOST_JS.contains("window.TTSTVHost.search = function (q)"));
+        assert!(HOST_JS.contains(&format!(r#"invoke("{}", {{ query: web }})"#, search::CMD)));
+        assert_eq!(HOST_JS.matches("invoke(").count(), 2, "two commands, two calls");
         assert!(HOST_JS.contains("const TAURI = window.__TAURI__ && window.__TAURI__.core")
             || HOST_JS.contains("var TAURI = window.__TAURI__ && window.__TAURI__.core"));
         assert!(HOST_JS.contains("if (!TAURI"), "a page outside Frank gets no host object");
+    }
+
+    #[test]
+    fn search_is_the_desktop_hosts_shape_and_the_sheet_takes_the_site_form() {
+        // the name and shape lookup.js guards on, exactly as desktop/src/host.js
+        // spells them: q in, Promise<string | null> out, null for nothing
+        assert!(HOST_JS.contains("// TTSTVHost.search(q: string) -> Promise<string | null>"));
+        assert!(HOST_JS.contains(r#"const query = String(q == null ? "" : q).trim();"#));
+        assert!(HOST_JS.contains("if (!query) return Promise.resolve(null);"));
+        assert!(HOST_JS.contains(r#".then(() => "sheet")"#));
+        // the -site: form is built HERE (search.rs never builds it), from the
+        // mock's five domains in the mock's order -- host.js's own two lines
+        let covered = r#"["gutenberg.org", "archive.org", "youtube.com", "wikipedia.org", "wiktionary.org"]"#;
+        assert!(HOST_JS.contains(covered), "COVERED is the mock's list, in its order");
+        assert!(HOST_JS.contains(r#"" -site:" + d"#));
+        assert!(HOST_JS.contains("const web = webQuery(query);"));
+        // and it is `web`, not the bare word, that crosses to the sheet
+        assert!(!HOST_JS.contains(r#"invoke("frank_search", { query })"#));
+        assert!(!HOST_JS.contains(r#"invoke("frank_search", { query: query })"#));
+        // HOST_JS never touches location or window.open: the sheet is the
+        // wrapper's (search.rs), reached through invoke and nothing else
+        assert!(!HOST_JS.contains("location."));
+        assert!(!HOST_JS.contains("window.open"));
+        assert!(!HOST_JS.contains(search::DOOR), "door one is search.rs's, not the host's");
     }
 
     // ------------------------------------------------- Google (job 26b)
