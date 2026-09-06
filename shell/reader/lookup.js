@@ -72,31 +72,27 @@
       session; nothing is written anywhere.
 
    2. ONE SEARCH CONTROL, and it is the only control this panel has besides
-      its close. It leaves the app: `https://www.google.com/search?q=` and the
-      query, with nothing else in the URL and nothing taken out of the query.
-      **One call shape, three places it can land** -- and the ORDER is the
-      contract, not a preference:
+      its close. It leaves the app -- and HOW it leaves is the host's business,
+      never this page's (Osca, 6 Sep: the re-wire). One call:
 
-        frank_search        `window.__TAURI__`'s command. The phone repo
-                            implements it as an SFSafariViewController sheet
-                            (day-6-sep.md's phone line; this file consumes the
-                            command and writes no Swift), and the Mac will
-                            implement it as a 900x700 webview window. Tried
-                            first everywhere, so the day it exists on either
-                            platform nothing here changes.
-        WebviewWindow       the same 900x700, made from the page through
-                            Tauri's own JS API, for a Frank whose Rust does
-                            not carry the command yet. Needs
-                            `core:webview:allow-create-webview-window` in
-                            `desktop/src-tauri/capabilities/default.json`; §6
-                            asks the desktop lane for that one line rather
-                            than this session editing another lane's folder in
-                            installer week.
-        window.open         a browser, and Frank today: `tabs.rs`'s
-                            `on_new_window` files any non-loopback URL as a
-                            TAB beside the reader. That is a real answer and
-                            not the one asked for -- the window is Osca's
-                            press once §6 lands.
+        TTSTVHost.search(q)   the word, as printed, nothing taken out of it.
+                              In Frank Studio `desktop/src/host.js` answers it
+                              with the search window `design/reader/search.html`
+                              draws -- three lanes, BOOKS · VIDEOS · WEB, the WEB
+                              query carrying `-site:` for every source the app
+                              already covers -- and, until that window's Rust
+                              lands, with the WEB query as a tab beside the
+                              reader. On the phone the shell's own injector
+                              (IOS-TTS-TV `lib.rs`) answers the same name with
+                              its Safari sheet. THE GUARD IS ON THE METHOD,
+                              never the object: `typeof TTSTVHost.search ===
+                              "function"` is the only test, as with setContext.
+
+      No host, or a host without the method (a plain browser; a bundle opened
+      over file://; an older shell): a no-op that moves NOTHING -- no
+      `window.open`, no `location` -- and one sentence in the panel, `#note`,
+      saying so. This file names no URL, no engine, no window size and no
+      Tauri global: a grep for that global across reader/ is 0 and stays 0.
 
       Nothing is stored. No key, no cost, no account, and no history of what
       was searched: `last` below is one record, in memory, for the driver.  */
@@ -246,22 +242,15 @@ function wikAsk(word, lang, done) {
     .catch(() => { wikCache.set(key, null); if (timer) clearTimeout(timer); done(null); });
 }
 
-/* ------------------------------------------- THE ONE THAT LEAVES (job 15c)
-   Nothing else in the URL, and nothing taken out of the query. */
-const SEARCH = "https://www.google.com/search?q=";
-const SHEET_W = 900, SHEET_H = 700;
-function searchUrl(q) { return SEARCH + encodeURIComponent(String(q == null ? "" : q)); }
-
-function tauriInvoke() {
-  const T = window.__TAURI__;
-  if (!T) return null;
-  const f = (T.core && T.core.invoke) || T.invoke;   // v2 global, then v1
-  return typeof f === "function" ? f.bind(T.core || T) : null;
-}
-function tauriWebviewWindow() {
-  const T = window.__TAURI__;
-  const W = T && T.webviewWindow && T.webviewWindow.WebviewWindow;
-  return typeof W === "function" ? W : null;
+/* ------------------------------------------- THE ONE THAT LEAVES (job 15c,
+   re-wired 6 Sep). The page hands the word to the host and names nothing
+   else: no URL, no engine, no window. The host is read at the PRESS, not at
+   mount -- the desktop injects it before any page script, a bundle never has
+   it, and a test swaps it between presses. */
+const NO_HOST_NOTE = "Search needs Frank — this page has no host to open it.";
+function hostSearch() {
+  const H = window.TTSTVHost;
+  return H && typeof H.search === "function" ? H.search.bind(H) : null;
 }
 
 function mount(o) {
@@ -308,67 +297,41 @@ function mount(o) {
      no history here and nothing is written anywhere. `how` names which of the
      three landings took it, which is the only thing a bench can see: the
      window itself belongs to the platform, not to this page. */
-  let last = null;             // { query, url, how }
-  let sheetWin = null, sheetN = 0;
+  let last = null;             // { query, how }
 
-  function openTab(url) {
-    last.how = "window.open";
-    try {
-      window.open(url, "_blank",
-                  "noopener,noreferrer,width=" + SHEET_W + ",height=" + SHEET_H);
-      return true;
-    } catch (e) { last.why = String(e && e.message || e); return false; }
-  }
-
-  /* The 900x700, made from the page. One at a time: the label carries a
-     counter and the one before it is closed, so pressing Search twice leaves
-     one window rather than a stack of them. */
-  function sheet(url) {
-    const W = tauriWebviewWindow();
-    if (!W) return openTab(url);
-    try {
-      if (sheetWin && sheetWin.close) { try { sheetWin.close(); } catch (e) {} }
-      sheetWin = new W("frank-search-" + (++sheetN), {
-        url: url, title: "Search", width: SHEET_W, height: SHEET_H, focus: true,
-      });
-      last.how = "WebviewWindow";
-      if (sheetWin && sheetWin.once) {
-        sheetWin.once("tauri://error", () => { sheetWin = null; openTab(url); });
-        sheetWin.once("tauri://destroyed", () => { sheetWin = null; });
-      }
-      return true;
-    } catch (e) { sheetWin = null; return openTab(url); }
-  }
-
+  /* One press, one call. `how` is "host" when the host took it and "none"
+     when there was nothing to take it -- in which case the page moves
+     nothing and says so once, in the panel, in `#note`. The host's promise
+     is watched only so a rejection never surfaces as an unhandled error:
+     what the host does with a refusal (a tab, a sheet, nothing) is the
+     host's own contract (desktop/src/host.js `search`). */
   function search(word) {
-    const q = String(word == null ? "" : word);
+    const q = String(word == null ? "" : word).trim();
     if (!q) return false;
-    const url = searchUrl(q);
-    last = { query: q, url: url, how: null };
-    const invoke = tauriInvoke();
-    if (invoke) {
-      let p = null;
-      try { p = invoke("frank_search", { query: q }); } catch (e) { p = null; }
-      if (p && typeof p.then === "function") {
-        last.how = "frank_search";
-        /* A HOST WITHOUT THE COMMAND REJECTS, and that is the one case the
-           order above is built for: the press still lands, one step down. */
-        p.catch(() => sheet(url));
-        return true;
-      }
+    last = { query: q, how: null };
+    const call = hostSearch();
+    if (!call) {
+      last.how = "none";
+      note(NO_HOST_NOTE);
+      return false;
     }
-    return sheet(url);
+    last.how = "host";
+    try {
+      const p = call(q);
+      if (p && typeof p.then === "function") p.catch(e => { last.why = String(e && e.message || e); });
+    } catch (e) { last.why = String(e && e.message || e); }
+    return true;
   }
 
-  /* Esc closes the panel; if the search window is ours and still open, it
-     closes that first -- the reader has the focus, so this is the only Esc
-     that can reach anything. The phone's sheet has its own Done and the Mac
-     window has its own close; neither is this page's to bind. */
-  function closeSearch() {
-    if (!sheetWin) return false;
-    try { sheetWin.close(); } catch (e) {}
-    sheetWin = null;
-    return true;
+  /* THE ONE SENTENCE, and only when it is needed: written into the panel
+     under the actions, replaced (never stacked) on a second press, and gone
+     with the next render. Not `innerHTML` -- textContent, like everything
+     else in this file. */
+  function note(text) {
+    let n = panel.querySelector("#note");
+    if (!n) { n = el("p", "lu-note", ""); n.id = "note"; panel.appendChild(n); }
+    n.textContent = text;
+    return n;
   }
 
   /* ----------------------------------------------------------- the panel */
@@ -505,7 +468,7 @@ function mount(o) {
     const acts = el("div", "lu-acts");
     const btn = el("button", "lu-search", "Search");
     btn.type = "button";
-    btn.title = searchUrl(word);
+    btn.title = "Search the web for \u201c" + w + "\u201d";
     btn.onclick = () => search(word);
     acts.appendChild(btn);
     panel.appendChild(acts);
@@ -536,7 +499,6 @@ function mount(o) {
 
   addEventListener("keydown", e => {
     if (e.key !== "Escape") return;
-    if (closeSearch()) { e.preventDefault(); return; }
     if (!panel.hidden) { e.preventDefault(); close(); }
   });
   addEventListener("pointerdown", e => {
@@ -552,7 +514,7 @@ function mount(o) {
   if (o.control) o.control.getDictionaryEntry = (side, text) => entry(text);
 
   return {
-    open, close, entry, place, search, closeSearch,
+    open, close, entry, place, search,
     at(x, y) { const h = wordAtPoint(col, x, y); return h ? open(h.text) : false; },
     get word() { return showing; },
     get loaded() { return !!dict; },
@@ -568,6 +530,5 @@ function mount(o) {
   };
 }
 
-window.Lookup = { mount, bare, keysFor, wordAtPoint, tokenise,
-                  searchUrl, wikLine, plain, SHEET_W, SHEET_H };
+window.Lookup = { mount, bare, keysFor, wordAtPoint, tokenise, wikLine, plain, NO_HOST_NOTE };
 })();

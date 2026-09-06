@@ -15,21 +15,33 @@
 .pane{ position:relative; height:100vh; overflow-y:auto; overscroll-behavior:contain;
   scroll-snap-type: y proximity; scrollbar-width:none; }
 .pane::-webkit-scrollbar{ display:none; }
-/* AND IT MAY BE WIDER THAN THE VIEW WHILE ONE WORD IS OPEN. The zoom scales
-   the word's own paragraph -- its width along with its type, so the lines
-   break where they broke on the page (book-nav.js's `wide`) -- and that box is
-   deliberately wider than the screen. Left to itself the scroller would answer
-   with a sideways scroll range nobody asked for, on the axis a book does not
-   have; book-nav.js hangs this class on the pane for exactly as long as the
-   zoom is on, and the overflow is simply clipped. */
+/* ============ THE ZOOM IS THE WHOLE PAGE ==================================
+   Osca, 6 September: "at +1 the ENTIRE reading view -- every paragraph in
+   view, the page as a whole -- scales by one factor about the cursor word, no
+   rewrap, no paragraph moves relative to any other, nothing is lifted off the
+   page."
+
+   book-nav.js writes css `zoom` on #readercol and nothing else -- one factor,
+   one element, no per-paragraph anything. `zoom` is a LAYOUT zoom: every used
+   length in the subtree is multiplied, the column's own width with them, so
+   the glyphs are laid out at their real size (sharp at any factor, and no
+   layer for WebKit to fail to re-raster) and no line re-wraps.
+
+   Two rules are all it needs from here.
+
+   1. A PERCENTAGE IS NOT A LENGTH IN THE SUBTREE. .chapter's max-width is
+      calc(100% - 3rem), measured against a containing block outside the zoom,
+      so it alone refuses to scale and holds the column at its reading width
+      while everything inside it grows -- which is the re-wrap, and the margin
+      that came with it. Measured in Chrome at zoom:4: with the cap in place,
+      widths x1.3624 and paragraph heights x10.7, x12.5, x14.0 -- every
+      paragraph a different ratio, which is the definition of the fault. With
+      it off: x4.0000, x4.0000, x4.0000, and the line count unchanged.
+   2. The column is then wider than the window on purpose, and a scroller left
+      to itself answers that with a sideways scroll range on the axis a book
+      does not have. */
+.column.zoomed .chapter{ max-width:none; }
 .pane.zoomed{ overflow-x:hidden; }
-/* AND WHAT IS BEHIND THE ZOOM IS THE PAGE. book-nav.js hangs this on the
-   word's own paragraph for as long as it is zoomed: the rest of the page is
-   still set at reading size underneath, and a word four hundred pixels tall
-   standing over lines of 29 reads as two pages at once. The ground is the
-   page's own, so nothing is added to the picture -- and a bench that wants to
-   watch the lines behind it hands back --zoom-back: transparent. */
-.wordzoom{ background:var(--zoom-back, var(--ground)); }
 
 /* AND IT STAYS HIDDEN. Osca: "ALWAYS HIDE the scroll bar IN SAFARI, that is
    not the one we want, I mean our PARTICULAR scroll bar." The browser's own
@@ -259,11 +271,11 @@ html[data-skipoff] .chapter{
    whereupon the geometry every frame of the zoom reads (the word's rect, the
    paragraph's width) comes back off contain-intrinsic-size's placeholder
    rather than off the type, which is the same lie job 27's seat was built to
-   survive. The host wears `.wordzoom` for exactly as long as the zoom is on
-   (book-nav.js::writeWordType/clearWordType), so the chapter that contains
-   one is the chapter to leave rendered -- one selector, and it costs one
-   section's layout, never the book's. */
-html[data-skipoff] .chapter:has(.wordzoom){
+   survive. Since the zoom became the whole page's (6 Sep, second pass) the
+   section holding the cursor word wears `.wordzoom` ITSELF, for exactly as
+   long as the zoom is on (book-nav.js::markZoomedChapter) -- one class on one
+   section, and it costs that section's layout, never the book's. */
+html[data-skipoff] .chapter.wordzoom{
   content-visibility:visible;
   contain-intrinsic-size:none;
 }

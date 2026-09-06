@@ -2399,21 +2399,47 @@
   }
 
   /* The one write a choice is. `kind` is the store's word ("device",
-   * "google", "icloud"); the record is the shape the Transfer tab reads. */
+   * "google", "icloud"); the record is the shape the Transfer tab reads.
+   * Returns the record whether or not the store took it -- the choice was
+   * made either way; `firstRunWritten` says whether it LANDED. */
   function firstRunChoose(kind, who) {
     var account = { kind: kind, who: who || null, at: Date.now() };
     syncWrite(SYNC_ACCOUNT_KEY, account);
     return account;
   }
 
+  /* Pure, given the store: did the choice land? Read back rather than
+   * trusted -- `syncWrite` answers false on a store that throws, and a
+   * store that swallows a write silently answers nothing at all. */
+  function firstRunWritten(account) {
+    var back = syncRead(SYNC_ACCOUNT_KEY);
+    return !!(account && back && back.kind === account.kind && back.at === account.at);
+  }
+
+  /* The one sentence a failed write gets, in the page's own `#note` (the
+   * Library has one; a page without one is told nothing, and the gate is
+   * down regardless). Never a modal, never a second gate. */
+  var FIRST_RUN_UNSAVED = "Your choice was not saved on this device, so this screen will ask again next time.";
+  function firstRunNote(doc, text) {
+    var el = doc && doc.getElementById ? doc.getElementById("note") : null;
+    if (!el) return false;
+    el.textContent = text;
+    return true;
+  }
+
   /* THE GATE. `firstRun(document)` is the Library's one line: if first run
    * has been answered it does nothing and returns null; otherwise it draws
    * the card full-window, over the page, as the body's first child, and
-   * returns a handle. Skip records the choice and takes the gate down -- the
-   * Library under it was loading all along, so nothing is waited for. A
-   * `ttstv:firstrun` event goes out on the document with the record, for a
-   * page that wants to know. No Escape and no scrim-click: the three rows
-   * are the ways out, and Skip is the honest one.
+   * returns a handle. Skip takes the gate down and THEN records the choice
+   * (Osca, 6 Sep: "SKIP IS DEAD ... syncWrite BEFORE handle.remove()") --
+   * the Library under it was loading all along, so nothing is waited for,
+   * and nothing a store can do -- throw, refuse, swallow -- can leave a
+   * person behind a gate whose one live button did nothing. A write that
+   * did not land is one sentence in the page's `#note`, and the gate will
+   * ask again next time, which is the truth. A `ttstv:firstrun` event goes
+   * out on the document with the record, for a page that wants to know. No
+   * Escape and no scrim-click: the three rows are the ways out, and Skip is
+   * the honest one.
    *
    * The style is this file's own sheet, scoped to `.ttstv-settings`: the
    * gate wears that class, so the rows are the Settings window's rows to the
@@ -2455,20 +2481,25 @@
     gate.setAttribute("aria-modal", "true");
     gate.setAttribute("aria-label", "First run");
     var sheet = kEl(doc, "div", "fr-sheet");
-    var handle = { el: gate, account: null };
+    var handle = { el: gate, account: null, written: null };
     var built = buildFirstRunCard(doc, function () { handle.choose("device"); });
     sheet.appendChild(built.head); sheet.appendChild(built.card);
     gate.appendChild(sheet);
     handle.buttons = built.buttons;
     handle.choose = function (kind, who) {
+      /* THE GATE COMES DOWN FIRST. The store is asked second, and the answer
+       * is read back rather than believed. */
+      try { handle.remove(); } catch (e) { /* a gate already gone is gone */ }
       handle.account = firstRunChoose(kind, who);
-      handle.remove();
+      handle.written = firstRunWritten(handle.account);
+      if (!handle.written) firstRunNote(doc, FIRST_RUN_UNSAVED);
       try {
         if (doc.dispatchEvent && global.CustomEvent) {
           doc.dispatchEvent(new global.CustomEvent("ttstv:firstrun", { detail: handle.account }));
         }
       } catch (e) { /* a document that cannot dispatch is still a document */ }
-      if (typeof opts.onChoose === "function") opts.onChoose(handle.account);
+      try { if (typeof opts.onChoose === "function") opts.onChoose(handle.account); }
+      catch (e) { /* the page's own listener failing is the page's, not the gate's */ }
       return handle.account;
     };
     handle.remove = function () {
@@ -4317,7 +4348,8 @@
     syncCountMarks: syncCountMarks, runSync: runSync, syncPair: syncPair, syncDiscover: syncDiscover,
     // first run (6 Sep): the rule, the card, the write and the gate
     firstRunChosen: firstRunChosen, buildFirstRunCard: buildFirstRunCard,
-    firstRunChoose: firstRunChoose, firstRun: firstRun,
+    firstRunChoose: firstRunChoose, firstRunWritten: firstRunWritten, firstRunNote: firstRunNote,
+    FIRST_RUN_UNSAVED: FIRST_RUN_UNSAVED, firstRun: firstRun,
     // the door's pairing (23d): the key, the event, the record, the write
     TRANSFER_PAIR_KEY: TRANSFER_PAIR_KEY, TRANSFER_PAIR_EVENT: TRANSFER_PAIR_EVENT,
     pairFingerprint: pairFingerprint, pairRecord: pairRecord, pairUrlOf: pairUrlOf, pairLine: pairLine,

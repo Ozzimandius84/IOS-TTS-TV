@@ -1255,8 +1255,7 @@ function mount(o){
     wordIdx = useCursor ? clamp(cursor.wi, 0, Math.max(0, wordTotal()-1))
                         : wordIdxNearLine(ch);
     if(!useCursor) setCursor(ch, wordIdx, "entered");
-    wordBox=null; wordBoxTried=false; wordSlideX=0;
-    wordRect=null; wordTick=0; arrived=null;
+    wordSlideX=0; arrived=null;
     paintWordHighlight();
     // THE READER GOES TO THE ENDPOINT FIRST. The cursor may be a hundred
     // chapters from where you have been reading; zooming about a word that is
@@ -1314,17 +1313,29 @@ function mount(o){
         if(max > 0 && to > max) to = max;
         pane.scrollTop = to;
         programmaticTop = pane.scrollTop;
-        arrived = null; wordRect = null;      // measured again where it now is
+        arrived = null;                       // measured again where it now is
         markPaint();                          // ...and applyDx has to be told
       }
       return Math.abs(d);
     };
+    // ...AND ONLY WHEN IT IS NOT ALREADY THERE. Osca, 6 September: "no
+    // transition that moves text up". Seating a cursor that is already on the
+    // screen is exactly that -- the page slides to centre a word you were
+    // looking at before the zoom has even begun, and the zoom then grows about
+    // a place the word was not. The seat is for a cursor in a chapter you have
+    // not been reading; if the word is in the view, the view is right.
+    const here = spot();
+    const pr0 = pane.getBoundingClientRect();
+    const off = !here || here.bottom < pr0.top + 8 ||
+                here.top > pr0.top + (pane.clientHeight || 0) - 8;
+    if(!off) return;                          // it is in the view: the view is right
+
     if(!host.scrollIntoView){                 // no browser here: the old sum
       const pr = pane.getBoundingClientRect();
       const hr = host.getBoundingClientRect();
       if(hr.top < pr.top + 8 || hr.bottom > pr.bottom - 8){
         const want = pane.scrollTop + (hr.top - pr.top) - pane.clientHeight*0.35;
-        pane.scrollTop = want; programmaticTop = want; wordRect = null;
+        pane.scrollTop = want; programmaticTop = want; arrived = null;
       }
       return;
     }
@@ -1366,7 +1377,7 @@ function mount(o){
     // on reads as the words moving sideways past a fixed centre rather than
     // the one word blinking into something else. "just side to side, whilst
     // I scroll up and down."
-    wordIdx=next; wordBox=null; wordBoxTried=false; wordRect=null; arrived=null;
+    wordIdx=next; arrived=null;
     subKey=null; markPaint();
     wordSlideX = dir>0 ? WORD.slide : -WORD.slide;
     setCursor(wordChapterIdx, wordIdx, "stepped");
@@ -1576,45 +1587,48 @@ function mount(o){
     maxzoom: 16,     // the most the page may be zoomed, whatever the word
     wordgap: 120,    // px the words are driven apart by, at full zoom
     linegap: 2.4,    // extra leading at full zoom, added to page.css's own 1.5
-    // THE ZOOM HAS NO MARGIN OF ITS OWN. Osca, 6 September: "the problem is
-    // it's making this stupid margin, when in fact, zoomed in it whould have no
-    // margin. It's just a zoom in. Allow me to cut them and keep them wide if
-    // I'd like."
-    //
-    // It made one because only the TYPE grew. The paragraph kept the reading
-    // column's own width -- 1000px on his window -- so 383px type re-wrapped
-    // INSIDE it: two words to a line, and the measure's own empty sides left
-    // standing on both sides of them. That is a re-set page, not a zoom.
-    //
-    // A zoom scales the box as well as the type. At wide=1 the paragraph's
-    // width is multiplied by the same k as its font, so every line breaks
-    // exactly where it broke on the page and what is on the screen is that
-    // page, magnified -- and there is no margin, because the column is by then
-    // wider than the view. At wide=0 it is released only as far as the view
-    // itself and the lines re-wrap to fill it, with `edge` per cent of the view
-    // kept back at the sides if a margin is wanted after all.
-    wide:    1,      // 1 = the lines scale with the type (a true zoom, the
-                     // breaks frozen); 0 = they re-wrap to fill the view
-    edge:    0,      // % of the view kept as a margin when they re-wrap
+    // `wide` and `edge` are GONE with the one-paragraph zoom they belonged to
+    // (6 Sep, second pass). They were the answer to a margin that only existed
+    // because a paragraph's type grew inside a column that did not: how far to
+    // release the column, and how much of the view to keep back when it was
+    // released. A page zoomed as a page has neither question -- the column is
+    // scaled by the same factor as everything else in it, nothing re-wraps at
+    // any zoom, and there is no measure left to leave a margin.
     leverage: 3.2,   // the shape of the pull toward an off-screen word:
                      // 1 = a straight line, higher = harder away, softer in
     pulltime: 14,    // how long that pull takes (0 = never follow)
     carry:   0.55,   // how much of a push is kept as a tail (0 = none, as before)
     glide:   0.93,   // how long that tail lasts, per frame (higher = travels further)
     vmax:    240,    // the fastest that tail may run, in px of scroll a frame
-    settle:  0.35    // how firmly the part-word left over settles onto a word
+    settle:  0.35,   // how firmly the part-word left over settles onto a word
+    // THE SUBTITLE SLEEPS (job 24; Osca, 6 Sep: "it disappears when you stop
+    // moving/tapping (just playing) after a second or so"). ms after the last
+    // wheel, tap or key before the line goes -- and only while something is
+    // PLAYING: with nothing playing there is nothing carrying you along, so the
+    // one thing on the screen that says where you are stays put.
+    subsleep: 1000,
+    // ONE WORD IS THE SAME SIZE WHICHEVER WAY THE PHONE IS HELD (job 24: "the
+    // one-word type size scales with the SHORT side, not the long"). The
+    // arrival's k is worked out against the view -- fill of its width, fillH of
+    // its height -- and on a phone that makes rotating it re-set the type:
+    // 0.55 of 844 is a 464px word in portrait and 0.55 of 390 is 214 in
+    // landscape, the same word, twice the size, for turning the thing over. So
+    // on a screen whose SHORT side is at or under this mark, both terms are
+    // measured against that short side, and k comes out identical either way
+    // up. Above it -- every desk -- nothing changes: 1280x800's short side is
+    // 800. Same mark as pane.js's `narrowH`, and the same idea: this is a
+    // phone.
+    shortside: 500
   };
   try{
     const saved = JSON.parse(localStorage.getItem("ttstv_word")||"null");
     if(saved) Object.keys(WORD).forEach(k=>{ if(typeof saved[k]==="number") WORD[k]=saved[k]; });
   }catch(_){}
-  let wordBox = null;         // the real word's own rect + font, measured once per word
-  let wordBoxTried = false;   // ...and attempted exactly once, never per frame
-  let wordSlideX = 0;
-  // The lifted-word overlay is gone (Osca: "NO LIFT"), and with it the
-  // element it lived in and the highlight that hid the real word underneath
-  // it. What you see zooming is the page's own word.
-
+  let wordSlideX = 0;         // a step's own lateral push, decayed per frame
+  // The lifted-word overlay is gone (Osca: "NO LIFT"), and with it the element
+  // it lived in, the highlight that hid the real word underneath it, and the
+  // per-word measurements the transform needed. What you see zooming is the
+  // page itself.
 
   // ---- the pull toward an off-screen word
   let pullFrom = 0, pullTo = null, pullT = 0, pullDur = 0, pullTick = 0;
@@ -1642,107 +1656,177 @@ function mount(o){
     markPaint();
   }
 
-  // TWO DIFFERENT THINGS, KEPT APART.
-  //   hostEl   -- the chapter the word is IN. True the whole time one word
-  //               view is open, whatever position it is standing on.
-  //   spreadEl -- the chapter that currently HAS the spacing on it, which is
-  //               only ever true on the way to position +2.
-  // They were one variable, and it cost the zoom outright: position +1 asks
-  // for no spacing, spreadPage(0) called clearSpread(), clearSpread nulled the
-  // element -- and computeArrived(), which needs the chapter to measure the
-  // word in, found nothing and gave up. So position +1 rendered as no zoom at
-  // all: the axis moved and the page sat still.
-  let hostEl = null, spreadEl = null, spreadQ = -1;
-  // THE HOST IS THE WORD'S OWN PARAGRAPH, NOT THE WHOLE CHAPTER.
-  // Opening the spacing on a chapter re-wraps every line in it, and in a
-  // chapter of any size that carries the word itself hundreds or thousands of
-  // pixels down the page -- which the zoom then multiplies by k, and the view
-  // lands somewhere the page is not. Scoped to the paragraph, only the lines
-  // of that paragraph above the word can move it at all, and everything below
-  // simply shifts down out of frame, where it was going anyway.
-  function wordHost(){
-    let el = null;
-    const w = wordDomIndex[wordIdx];
-    if(w && w.node){
-      let p = w.node.parentNode;
-      while(p && p.nodeType === 1){
-        const d = p.ownerDocument && p.ownerDocument.defaultView;
-        const disp = d && d.getComputedStyle ? d.getComputedStyle(p).display : "block";
-        if(disp !== "inline") break;
-        p = p.parentNode;
-      }
-      if(p && p.nodeType === 1) el = p;
-    }
-    if(!el) el = sections()[wordChapterIdx] || null;
-    if(el !== hostEl){ clearSpread(); clearWordType(); hostEl = el; }
-    return el;
+  // ====================== THE ZOOM IS THE WHOLE PAGE ========================
+  // Osca, 6 September, having said it many times: "at +1 the ENTIRE reading
+  // view -- every paragraph in view, the page as a whole -- scales by one
+  // factor about the cursor word, no rewrap, no paragraph moves relative to
+  // any other, nothing is lifted off the page, no transition that moves text
+  // up; the word stays where it was on screen (scroll compensates) and the
+  // page grows around it until the word reaches 'the most it may zoom'."
+  //
+  // What stood here until now grew the FONT of the word's own paragraph and
+  // left every other paragraph at reading size. That is not a zoom of a page,
+  // it is one paragraph re-set inside a page -- a word four hundred pixels
+  // tall standing over lines of twenty-nine -- and it re-wrapped, which is how
+  // it came to have a margin of its own at all.
+  //
+  // ONE FACTOR, ON ONE ELEMENT: css `zoom` on the reading column.
+  //   * it is a LAYOUT zoom, not a layer: every used length in the subtree is
+  //     multiplied, so the glyphs are laid out at their real size and stay
+  //     sharp at any factor. That is also the answer to the Mac -- a scaled
+  //     layer is what WebKit would not re-raster.
+  //   * the column's own WIDTH is one of those lengths, so nothing re-wraps:
+  //     measured in his Chrome, zoom:4 on #readercol with the percentage
+  //     max-width out of the way gave chapter widths x4.0000, x4.0000,
+  //     x4.0000 -- px, vw and rem alike -- and a paragraph's line count
+  //     unchanged. (With max-width left in, the same test gave x1.3624 and
+  //     heights of x10.7, x12.5, x14.0: the re-wrap, in numbers.)
+  //   * nothing is written per paragraph. Not a font-size, not a width, not a
+  //     transform, not an opacity. Every paragraph is carried by the one
+  //     factor, which is exactly "no paragraph moves relative to any other".
+  //
+  // Two things do not scale, and they are the whole of the rest of this:
+  // a percentage measured against something outside the zoom (page.css takes
+  // .chapter's max-width off while it is on), and the scroller's own
+  // scrollTop. The second one IS the compensation -- "the word stays where it
+  // was on screen (scroll compensates)".
+  let pageZ = 1;              // the factor now on the column
+  let shiftX = 0;             // ...and the sideways offset that holds the word
+  let anchor = null;          // where on the screen the word stays
+  let spreadQ = -1, lastWgap = "", lastLgap = "";
+  function writePageZoom(z, dx){
+    const col = o.readerCol;
+    if(!col) return;
+    pageZ = z; shiftX = dx;
+    // `left` is a length INSIDE the zoomed subtree, so the browser multiplies
+    // it by the same factor: to move the page dx on the screen, write dx/z.
+    // (The gap is closed by measurement every frame in any case; getting this
+    // right only means the correction lands in one frame instead of three.)
+    col.style.setProperty("zoom", z.toFixed(5));
+    col.style.setProperty("position", "relative");
+    col.style.setProperty("left", (dx / z).toFixed(2) + "px");
+    if(col.classList) col.classList.add("zoomed");
+    if(o.readerPane && o.readerPane.classList) o.readerPane.classList.add("zoomed");
+    markZoomedChapter();
   }
-  function spreadPage(wordF){
-    const el = wordHost();
-    if(!el) return;
-    // THE SPACING IS THE LAST THING THAT HAPPENS. Osca: "ALL I want is for
-    // the page to zoom in completely, THEN continue the animation, just to
-    // push the rest of the words out... I don't want to interfere with the
-    // text formatting AT ALL, it's just a view thing" / "Just need to push
-    // near words out, at the VERY LAST BIT."
-    //
-    // Opening it from the start of the gesture re-flowed the page while you
-    // could still read it -- the text visibly re-set itself before the zoom
-    // had gone anywhere, which is the formatting he does not want touched.
-    // Held back to the last stretch, everything but the word is already off
-    // the frame by the time it moves, so what it does is push the last
-    // neighbours out of view and nothing else.
-    const wc = wordF <= 0 ? 0 : (wordF >= 1 ? 1 : wordF);
-    const e = wc<=0 ? 0 : (wc>=1 ? 1 : wc*wc*(3-2*wc));
-    if(e <= 0){ clearSpread(); return; }   // spacing off -- the host stays
-    spreadEl = el;
-    el.classList.add("spreading");
-    // HOW FAR IS NOT A TASTE SETTING. Position +2 means one word and nothing
-    // else, so the gap is whatever actually clears the screen at the zoom
-    // this word arrived at -- measured, not dialled. The sliders can only add
-    // to it: his own were sitting at zero, which is why +2 did nothing at all.
+  // AND THE CHAPTER THE WORD IS IN STAYS RENDERED. content-visibility:auto
+  // skips a section the browser decides is off screen -- and the zoom grows
+  // this one until its own box is tens of thousands of pixels tall and mostly
+  // is, whereupon every rect read off it comes back from
+  // contain-intrinsic-size's placeholder instead of from the type. That is the
+  // same lie the seat was built to survive, and here it would feed the closing
+  // loop nonsense sixty times a second. One class, on one section, for exactly
+  // as long as the zoom is on (page.css does the rest): it costs that
+  // section's layout, never the book's, and it changes nothing you can see.
+  let zoomedCh = null;
+  function markZoomedChapter(){
+    const el = sections()[wordChapterIdx] || null;
+    if(el === zoomedCh) return;
+    if(zoomedCh && zoomedCh.classList) zoomedCh.classList.remove("wordzoom");
+    zoomedCh = el;
+    if(el && el.classList) el.classList.add("wordzoom");
+  }
+  function clearZoomedChapter(){
+    if(zoomedCh && zoomedCh.classList) zoomedCh.classList.remove("wordzoom");
+    zoomedCh = null;
+  }
+  function clearPageZoom(){
+    const col = o.readerCol, pane = o.readerPane;
+    // COMING OUT IS A SCROLL TOO, and it has to be done BEFORE the factor
+    // goes. The scroller's range is the zoomed one -- twelve times the book --
+    // and the position it is holding is a position in that range; take the
+    // zoom away and the same number is twelve times too far down, so the
+    // browser clamps it to the end. Measured live on Blood Meridian: leaving
+    // +1 put the reader on "Back matter." So the content the word was standing
+    // on is put back under it, in the page's own units, first.
+    if(col && pane && pageZ > 1.0001){
+      const py = pane.getBoundingClientRect ? pane.getBoundingClientRect().top : 0;
+      const at = anchor ? anchor.y : py + (pane.clientHeight || 0)/2;
+      const content = pane.scrollTop + (at - py);
+      const max = (pane.scrollHeight || 0)/pageZ - (pane.clientHeight || 0);
+      let to = content/pageZ - (at - py);
+      if(to < 0) to = 0;
+      if(max > 0 && to > max) to = max;
+      pane.scrollTop = to;
+      programmaticTop = to;
+    }
+    pageZ = 1; shiftX = 0;
+    clearZoomedChapter();
+    if(col){
+      col.style.removeProperty("zoom");
+      col.style.removeProperty("left");
+      col.style.removeProperty("position");
+      if(col.classList) col.classList.remove("zoomed");
+    }
+    if(o.readerPane && o.readerPane.classList) o.readerPane.classList.remove("zoomed");
+  }
+  // ---- WHERE THE WORD IS, RIGHT NOW. One rect, off the live page.
+  function wordRectNow(){
+    const r = currentWordRange();
+    if(!r) return null;
+    const rects = r.getClientRects ? r.getClientRects() : null;
+    const b = rects && rects.length ? rects[0] : r.getBoundingClientRect();
+    return (b && b.width > 0) ? b : null;
+  }
+  // ---- +2: THE SPACING, ON THAT ZOOMED PAGE. Osca: "+2 is spacing on that
+  // zoomed page: words driven apart, lines driven apart, the line it came from
+  // at the foot -- no other change." So it goes on the COLUMN, like the zoom:
+  // one declaration, every paragraph in view, nothing singled out.
+  //
+  // It is still held back to the last stretch -- "ALL I want is for the page to
+  // zoom in completely, THEN continue the animation" -- so the page is already
+  // empty of everything but the word by the time anything moves.
+  function spreadPage(f){
+    const col = o.readerCol;
+    if(!col) return;
+    const e = f <= 0 ? 0 : (f >= 1 ? 1 : f*f*(3-2*f));
+    if(e <= 0){ clearSpread(); return; }
+    if(col.classList) col.classList.add("spreading");
     const g = spreadGaps();
-    // in eighths: a re-flow per step of the gesture, not per frame. Nothing
-    // visible is lost -- the zoom itself is continuous.
+    // in eighths: a re-flow per step of the gesture, not per frame. The
+    // QUANTISER IS ON THE GESTURE, NOT ON THE NUMBERS -- gating the write on q
+    // alone meant a slider moved while position +2 was open changed nothing at
+    // all, because q had not moved, which is the sort of dead control this
+    // bench exists to catch.
     const q = Math.round(e * 8) / 8;
-    if(q !== spreadQ){
-      spreadQ = q;
-      el.style.setProperty("--wgap", (g.w * q).toFixed(2) + "px");
-      el.style.setProperty("--lgap", (g.l * q).toFixed(3));
+    spreadQ = q;
+    const wv = (g.w * q).toFixed(2) + "px", lv = (g.l * q).toFixed(3);
+    if(wv !== lastWgap || lv !== lastLgap){
+      lastWgap = wv; lastLgap = lv;
+      col.style.setProperty("--wgap", wv);
+      col.style.setProperty("--lgap", lv);
     }
   }
-  // THE GAP THAT EMPTIES THE FRAME, in the frame the type is now IN. It used
-  // to be divided by the scale, because a transform multiplied it after the
-  // fact. Nothing multiplies it any more: word-spacing is an absolute length
-  // on a paragraph whose own type has ALREADY grown, so the gap is simply the
-  // distance the neighbour has to travel -- half a viewport, plus half the
-  // grown word. The leading is a multiple of that same grown font, so it is
-  // worked out against it, and page.css's own 1.5 is already part of the way
-  // there (at 400px type, 1.5 leading is 600px of it).
+  // HOW FAR IS NOT A TASTE SETTING -- position +2 means one word and nothing
+  // else, so the gap is whatever actually clears the screen at the zoom this
+  // word arrived at. Both numbers are lengths INSIDE the zoomed page, so what
+  // has to clear the screen is divided by the factor that will multiply it.
+  // The sliders are what they say: the gap GROWS BY them.
   function spreadGaps(){
     const vw = window.innerWidth || 1, vh = window.innerHeight || 1;
-    const k = (arrived && arrived.k) || 1;
-    const w = ((arrived && arrived.w) || 20) * k;
-    const h = ((arrived && arrived.h) || 20) * k;
-    const f = Math.max(1, ((arrived && arrived.base) || 16) * k);
-    return { w: Math.max(WORD.wordgap, vw/2 + w/2),
-             l: Math.max(WORD.linegap, (vh/2 + h/2)/f - 1.5) };
+    const z = Math.max(1, pageZ);
+    const w = ((arrived && arrived.w) || 20) * z;      // the word, on the screen
+    const h = ((arrived && arrived.h) || 20) * z;
+    const f = Math.max(1, (arrived && arrived.base) || 16);   // the page's own type
+    return { w: (vw/2 + w/2)/z + WORD.wordgap,
+             l: (vh/2 + h/2)/z/f - 1.5 + WORD.linegap };
   }
   function clearSpread(){
-    if(!spreadEl) return;
-    spreadEl.classList.remove("spreading");
-    spreadEl.style.removeProperty("--wgap");
-    spreadEl.style.removeProperty("--lgap");
-    // --zoom is NOT cleared here. It belongs to the TYPE, and the type is
-    // still grown at position +1 with the spacing off; clearWordType owns it.
-    spreadEl = null; spreadQ = -1;
+    const col = o.readerCol;
+    spreadQ = -1; lastWgap = ""; lastLgap = "";
+    if(!col) return;
+    if(col.classList) col.classList.remove("spreading");
+    col.style.removeProperty("--wgap");
+    col.style.removeProperty("--lgap");
   }
   function clearWordZoom(){
-    clearSpread(); clearWordType(); hostEl = null;
-    if(o.readerPane && o.readerPane.classList) o.readerPane.classList.remove("zoomed");
+    clearSpread(); clearPageZoom();
+    anchor = null; arrived = null; wordSlideX = 0;
     if(subEl){ subEl.style.opacity = "0"; subKey = null; }
-    wordBox = null; wordBoxTried = false; wordSlideX = 0;
-    clearZoomHost();
+    // the rail goes with the line, and it gives its presses back to the page:
+    // a strip across the foot of the reading page that still took a pointer
+    // would be a control nobody can see swallowing every press aimed at a word
+    if(subRail){ subRail.style.opacity = "0"; subRail.style.pointerEvents = "none"; }
     if(o.readerBox){
       o.readerBox.style.transformOrigin = "";
       writeReaderTransform();
@@ -1754,246 +1838,101 @@ function mount(o){
     }
   }
 
-  // ONE WORD: A ZOOM AND A PUSH, AND NOTHING ELSE. Osca: "The zoom into page
-  // / (NO LIFT) increase spacing, IS NOT WORKING PROPERLY, it doesn't look
-  // like that, it's still lifting / fading things out - NO FADE, all it needs
-  // to do is push spacing and zoom in."
+  // ---- THE ARRIVAL: the state one word view is always going to.
   //
-  // Everything else is gone: the word is no longer lifted into an overlay of
-  // its own, the real word is no longer made transparent underneath one, and
-  // the page no longer fades. The page zooms, and its words and lines are
-  // driven apart as it does. That is the whole animation.
+  // Osca: "there is still no defined END POINT... Make a one word view -
+  // arrived. That should always be the same." It is three measured numbers and
+  // a place:
+  //     k     the factor that makes the word WORD.fill of the width (or fillH
+  //           of the height, whichever binds), capped at WORD.maxzoom -- "the
+  //           most it may zoom"
+  //     w, h  the word's own untouched box, which is what the +2 gaps are
+  //           worked out against
+  //     base  the page's own type, off the cascade, for the leading
+  // and `anchor`, set once per visit: the point on the screen the word stays
+  // at while the page grows around it.
   //
-  // HOW IT STAYS LOCKED ON THE WORD. Growing the leading moves the word down
-  // the page while the zoom is running, so a transform worked out once from
-  // the word's first position would drift off it. The word's own box is read
-  // every frame instead, converted back through the transform that is
-  // currently on it (origin 0 0, translate then scale, so the inverse is one
-  // subtraction and one divide), and the next transform is built from where
-  // the word IS. One rect read a frame, and only while the zoom is moving --
-  // every other section on the page is skipped by content-visibility, so it
-  // is one chapter's own layout, not the book's.
-  // ARRIVED: THE STATE ONE WORD VIEW IS ALWAYS GOING TO.
-  //
-  // Osca: "there is still no defined END POINT, of the one word view. Make a
-  // one word view - arrived. That should always be the same, the word centred,
-  // ONE WORD, nothing else. You need that bit, so it knows what it's getting
-  // to EVERY TIME, right now it doesn't know, so getting there confuses it."
-  //
-  // Exactly the fault. Every version so far worked the zoom out FROM WHATEVER
-  // IT COULD SEE, frame by frame -- and the spacing was moving the word while
-  // it looked, so the target moved too, and the transition chased it. Hence
-  // the drift, the stalls at the wrong size, and the freezes (a read and a
-  // write in the same frame, sixty times a second, on a chapter this size).
-  //
-  // ARRIVED is now computed ONCE, when the gesture begins, and it is a fixed
-  // set of numbers:
-  //
-  //     the word's centre lands on the centre of the view
-  //     at the scale that makes it WORD.fill of the width (or fillH of the
-  //     height, whichever binds)
-  //     with the spacing fully open around it
-  //
-  // It is measured with the spacing ALREADY APPLIED -- one reflow, one
-  // measurement -- so the number is the truth about where the word will be,
-  // not where it was before everything moved. The transition is then a plain
-  // interpolation from nothing to that, with no measuring at all in between:
-  // which is why it cannot drift, and cannot thrash layout.
-  // ---- THE TYPE IS THE ZOOM, AND ONE WRITER OWNS IT.
-  //
-  // Nothing it writes is a transform. `font-size` goes on the word's own
-  // paragraph -- page.css sets the reading sizes in rem, which is
-  // root-relative and would ignore anything set on the chapter, so the
-  // multiplier has to land on the paragraph itself (shell.css says exactly
-  // this) -- and `position:relative` + left/top nudge that paragraph's own
-  // box so the word lands in the middle of the view. A relative offset moves
-  // the painted box and leaves the flow, the layer, and
-  // getComputedStyle(...).transform alone, which is the whole point of it.
-  let zoomHost = null, zoomBase = 0, zoomK = 1, zoomDx = 0, zoomDy = 0, zoomW = 0;
-  // the type this word is actually set in, read off the cascade rather than
-  // guessed at. Headless there is no cascade, and a range's own height is
-  // page.css's 1.5 leading, so that is the fallback.
+  // All of it is measured with the zoom and the spacing OFF -- otherwise the
+  // factor is worked out against a page that is already multiplied, and it
+  // compounds.
+  // the type the page is actually set in, read off the cascade rather than
+  // guessed at -- the leading at +2 is a multiple of it. Headless there is no
+  // cascade, and a range's own height is page.css's 1.5 leading, so that is
+  // the fallback.
   function fontBase(el){
     let px = NaN;
     try{
-      const d = el.ownerDocument && el.ownerDocument.defaultView;
+      const d = el && el.ownerDocument && el.ownerDocument.defaultView;
       if(d && d.getComputedStyle) px = parseFloat(d.getComputedStyle(el).fontSize);
       else if(typeof getComputedStyle === "function") px = parseFloat(getComputedStyle(el).fontSize);
     }catch(_){}
     return px > 0 ? px : 0;
   }
-  function clearWordType(){
-    const el = zoomHost;
-    zoomHost = null; zoomBase = 0; zoomK = 1; zoomDx = 0; zoomDy = 0; zoomW = 0;
-    if(!el) return;
-    el.style.removeProperty("font-size");
-    el.style.removeProperty("--zoom");
-    el.style.removeProperty("position");
-    el.style.removeProperty("left");
-    el.style.removeProperty("top");
-    el.style.removeProperty("width");
-    el.style.removeProperty("max-width");
-    el.style.removeProperty("z-index");
-    if(el.classList) el.classList.remove("wordzoom");
-  }
-  function writeWordType(el, base, k){
-    if(!el) return;
-    if(zoomHost && zoomHost !== el) clearWordType();
-    zoomHost = el; zoomBase = base; zoomK = k;
-    el.style.setProperty("--zoom", k.toFixed(4));
-    el.style.setProperty("font-size", (base * k).toFixed(2) + "px");
-    el.style.setProperty("position", "relative");
-    // AND WHAT IS UNDER IT IS THE SAME PAGE, NOT A SECOND ONE. The zoom is one
-    // paragraph's, so the rest of the page stays at reading size underneath --
-    // and a word four hundred pixels tall standing over lines of 29px reads as
-    // two pages at once, which is what "HUGELY messed up" was looking at as
-    // much as the margin was. page.css gives this class the page's own ground,
-    // so what is behind the zoom is the page's colour and nothing else; the
-    // bench can hand back `--zoom-back: transparent` to see the lines again.
-    // The z-index is paint order only -- every .unit is position:relative, so
-    // without it the paragraphs after this one in the document paint over the
-    // top of it. Nothing is lifted, nothing rasters: "LEAVE IT, ON THE PAGE."
-    el.style.setProperty("z-index", "1");
-    if(el.classList) el.classList.add("wordzoom");
-  }
-  function writeWordOffset(el, dx, dy){
-    if(!el) return;
-    zoomDx = dx; zoomDy = dy;
-    el.style.setProperty("left", dx.toFixed(1) + "px");
-    el.style.setProperty("top",  dy.toFixed(1) + "px");
-  }
-  // THE COLUMN IS PART OF THE ZOOM. page.css holds the paragraph to the
-  // chapter's measure, which is right for reading and wrong for a zoom: type
-  // that grows inside a width that does not is a page RE-SET, and it shows as
-  // the margin Osca is looking at. So the width is written by the same hand
-  // and on the same easing as the font, and `max-width` -- .chapter's own
-  // calc(100% - 3rem) reaching the paragraph through the cascade -- is taken
-  // off it for as long as the zoom is on.
-  function writeWordWidth(el, px){
-    if(!el || !(px > 0)) return;
-    zoomW = px;
-    el.style.setProperty("width", px.toFixed(1) + "px");
-    el.style.setProperty("max-width", "none");
-  }
-  // WHAT THE WIDTH IS MULTIPLIED BY AT FULL ZOOM, against the width the
-  // paragraph has on the page. `wide` chooses between the two honest answers:
-  //   1  the same k as the type -- nothing re-wraps, the page is magnified
-  //   0  whatever fills the view -- the lines re-set to the screen, with
-  //      `edge` per cent of it kept back at the sides
-  // and anything between is a mix of the two.
-  function zoomWidthMul(){
-    if(!arrived || !(arrived.cw > 0)) return 1;
-    const vw = window.innerWidth || 1;
-    const keep = 1 - 2 * clamp(WORD.edge, 0, 45) / 100;
-    // and it MAY come in narrower than the page's own measure: a floor at 1
-    // made the margin slider dead for its whole upper half, since a column
-    // already 1000px wide inside 1710 is past the view the moment a third of
-    // it is kept back. The only floor is one that stops it collapsing.
-    const fit  = Math.max(0.2, (vw * keep) / arrived.cw);
-    const w    = clamp(WORD.wide, 0, 1);
-    return fit + w * (arrived.k - fit);
-  }
-
-  // ARRIVED: THE STATE ONE WORD VIEW IS ALWAYS GOING TO.
-  //
-  // Osca: "there is still no defined END POINT, of the one word view. Make a
-  // one word view - arrived. That should always be the same, the word centred,
-  // ONE WORD, nothing else. You need that bit, so it knows what it's getting
-  // to EVERY TIME, right now it doesn't know, so getting there confuses it."
-  //
-  // It is four numbers, computed ONCE when the gesture begins, and every one
-  // of them is measured with the type back at rest and the spacing off:
-  //
-  //     base   the px the word is really set in, off the cascade
-  //     k      the multiplier that makes it WORD.fill of the width (or fillH
-  //            of the height, whichever binds), capped at WORD.maxzoom
-  //     w, h   the word's own untouched box
-  //
-  // The two the old transform needed -- where to translate to, and how far the
-  // spacing then moved the word -- are gone with it. A re-flow cannot be
-  // predicted by arithmetic, so where the word LANDS is read once a frame
-  // instead (updateWordZoom), which is one rect on one paragraph and is
-  // exact in a way the two-measurement guess never was.
-  let arrived = null;    // {base, k, w, h} -- all of it pre-zoom
+  let arrived = null;
   function computeArrived(){
-    const host = wordHost();
-    if(!o.readerBox || !host) return null;
-    // MEASURED WITH THE TYPE AT REST. The zoom is a layout now, so the word
-    // has to be measured with the paragraph back at its own size -- otherwise
-    // the multiplier is worked out against type that is already multiplied,
-    // and it compounds. One reflow, at a moment when one is due anyway
-    // (it happens when you STEP, never inside the frame loop).
+    const col = o.readerCol;
+    if(!col || !o.readerPane) return null;
+    // NOT WHILE THE SEAT IS STILL WORKING. Two hands on the same scroller --
+    // one bringing the reader to the word, one holding the word still -- is
+    // how the page ran 253,000px away from it, measured live: the seat had not
+    // finished, the arrival was taken about a point that was still moving, and
+    // the closing loop then chased a rect that never answered.
+    if(seating) return null;
     const had = {
-      c: host.classList.contains("spreading"),
-      w: host.style.getPropertyValue("--wgap"),
-      l: host.style.getPropertyValue("--lgap"),
-      f: host.style.getPropertyValue("font-size"),
-      z: host.style.getPropertyValue("--zoom"),
-      x: host.style.getPropertyValue("left"),
-      y: host.style.getPropertyValue("top"),
-      W: host.style.getPropertyValue("width"),
-      M: host.style.getPropertyValue("max-width"),
+      z: col.style.getPropertyValue("zoom"),
+      l: col.style.getPropertyValue("left"),
+      w: col.style.getPropertyValue("--wgap"),
+      g: col.style.getPropertyValue("--lgap"),
+      s: col.classList ? col.classList.contains("spreading") : false,
     };
-    const put = (k, v) => { if(v) host.style.setProperty(k, v); else host.style.removeProperty(k); };
+    const put = (k, v) => { if(v) col.style.setProperty(k, v); else col.style.removeProperty(k); };
     const putBack = () => {
-      if(had.c) host.classList.add("spreading");
-      else { host.classList.remove("spreading"); spreadEl = null; }
-      put("--wgap", had.w); put("--lgap", had.l);
-      put("font-size", had.f); put("--zoom", had.z);
-      put("left", had.x); put("top", had.y);
-      put("width", had.W); put("max-width", had.M);
-      spreadQ = -1;                   // those writes bypassed the quantiser
+      put("zoom", had.z); put("left", had.l);
+      put("--wgap", had.w); put("--lgap", had.g);
+      if(col.classList){
+        if(had.s) col.classList.add("spreading"); else col.classList.remove("spreading");
+      }
+      spreadQ = -1; lastWgap = ""; lastLgap = "";   // those writes bypassed the quantiser
     };
-    const rectNow = () => {
-      const r = currentWordRange();
-      if(!r) return null;
-      const rects = r.getClientRects();
-      const b = rects.length ? rects[0] : r.getBoundingClientRect();
-      return (b && b.width > 0) ? b : null;
-    };
-
-    // THE WORD AS IT SITS ON THE PAGE: no growth, no spacing, no offset.
-    host.classList.remove("spreading");
-    host.style.removeProperty("--wgap"); host.style.removeProperty("--lgap");
-    host.style.removeProperty("font-size"); host.style.removeProperty("--zoom");
-    host.style.removeProperty("left"); host.style.removeProperty("top");
-    host.style.removeProperty("width"); host.style.removeProperty("max-width");
-    const a = rectNow();
+    col.style.removeProperty("zoom"); col.style.removeProperty("left");
+    col.style.removeProperty("--wgap"); col.style.removeProperty("--lgap");
+    if(col.classList) col.classList.remove("spreading");
+    const a = wordRectNow();
     if(!a){ putBack(); return null; }
 
-    // THE WORD HAS TO BE ON THE SCREEN BEFORE THERE IS AN ARRIVAL. The cursor
-    // can be a hundred chapters from where you were reading; an arrival about
-    // a point that is not in the view centres the page on somewhere off
-    // screen and everything visible goes blank. Caught exactly that in
-    // Chrome: reader in chapter 36, cursor in 34, white page. So the reader is
-    // brought to the word first and the arrival worked out on the next pass.
+    // THE WORD HAS TO BE ON THE SCREEN BEFORE THERE IS AN ARRIVAL. A page
+    // grown about a point that is not in the view puts everything visible off
+    // the edge of it. The seat brings the reader to the word (scrollIntoView
+    // and then the gap closed frame by frame, because a chapter nobody has
+    // visited reports the placeholder's numbers and not its own), and the
+    // arrival is worked out on a later pass.
     const vh0 = window.innerHeight || 1;
-    if(o.readerPane && (a.bottom < 8 || a.top > vh0 - 8)){
-      // ...and while the seat above is still closing the gap, this waits: two
-      // hands on the same scroller, one of them working from a skipped
-      // section's placeholder numbers, is how the page used to walk away from
-      // the word instead of arriving at it.
-      if(!seating){
-        const pr = o.readerPane.getBoundingClientRect();
-        const want = o.readerPane.scrollTop + (a.top - pr.top) - o.readerPane.clientHeight*0.35;
-        o.readerPane.scrollTop = want;
-        programmaticTop = want;
-      }
+    if(a.bottom < 8 || a.top > vh0 - 8){
+      if(!seating) seatOnWord();
       putBack();
       return null;
     }
 
-    const vw = window.innerWidth || 1, vh = window.innerHeight || 1;
-    const w0 = a.width, h0 = a.height;        // untouched: the type is at rest
+    const vw = window.innerWidth || 1;
+    const w0 = a.width, h0 = a.height;        // untouched: the page is at rest
+    // WHAT THE WORD IS MEASURED AGAINST. The view, on a desk; the SHORT side of
+    // it on a phone, so that turning the phone over does not re-set the type
+    // (WORD.shortside, above). In portrait the short side IS the width, so the
+    // first term is unchanged there and only the height cap tightens.
+    const S = Math.min(vw, vh0);
+    const phone = S <= WORD.shortside;
+    const wRef = phone ? S : vw, hRef = phone ? S : vh0;
     const k = Math.max(1, Math.min(WORD.maxzoom,
-                Math.min(WORD.fill*vw/Math.max(1,w0), WORD.fillH*vh/Math.max(1,h0))));
-    // ...and the paragraph's own width at rest, which is what the zoom
-    // multiplies. Read in the same breath as the word, with everything off.
-    const cw = host.getBoundingClientRect ? (host.getBoundingClientRect().width || 0) : 0;
-    const out = { base: fontBase(host) || h0/1.5, k, w: w0, h: h0, cw };
+                Math.min(WORD.fill*wRef/Math.max(1,w0), WORD.fillH*hRef/Math.max(1,h0))));
+    // WHERE THE WORD STAYS. The first word of a visit sets it -- "the word
+    // stays where it was on screen" -- and every word after it arrives at that
+    // same place, which is what reading on inside the zoom looks like.
+    if(!anchor) anchor = { x: a.left + a.width/2, y: a.top + a.height/2 };
+    const out = { k, w: w0, h: h0, base: fontBase(col) || h0/1.5 };
     putBack();
     return out;
   }
+
   /* ============ THE LINE THE WORD CAME OUT OF ==============================
      Osca: "I need a small subtitle in the final pane of the one word view, so
      give me the lines floating in the page, larger than the one view."
@@ -2011,6 +1950,41 @@ function mount(o){
 
      It belongs to the LAST pane alone: it fades in with that pane's own
      progress (dx 1 -> 2) and is not there at all before it. */
+  /* ONE DOOR TO THE CURSOR, and now two things come through it. `goTo` was
+     the only way to put the cursor somewhere it had not walked to; the
+     subtitle's rail is the second, and it must not be a second copy of what
+     goTo does -- that is exactly how the zoom came to be left behind by goTo
+     in the first place (22c ss6.2: the cursor moved, the zoom stayed on the
+     word it had arrived at, 0 transform changes over 54 advances). So the body
+     is here, once, and both call it.
+
+     `seat` is the one difference between them: a rail is a place you are
+     DRAGGING to and the page has to follow under your thumb, so it seats;
+     goTo is a call from outside (a voice engine following along) and seating
+     the reader under it would fight whatever else that engine is doing.  */
+  function jumpTo(ch, wi, why, seat){
+    if(!book || !book.chapters || !book.chapters[ch]) return null;
+    if(ch !== wordChapterIdx){
+      wordChapterIdx = ch;
+      wordWords = wordsOf(book.chapters[ch]);
+      wordDomIndex = buildWordDomIndex(ch);
+    }
+    wordIdx = clamp(+wi||0, 0, Math.max(0, wordTotal()-1));
+    /* AND THE ZOOM GOES WITH IT. stepWord throws away the word's own
+       measurement when it moves -- `arrived`, the fixed state one word view
+       is travelling to -- so the next frame measures the new word. goTo did not, so the cursor and the highlight
+       moved on while the zoom stayed on whatever word it had arrived at:
+       reader 22c measured 0 transform changes over 54 advances, where stepping
+       by hand goes scale(7.4874) -> scale(14.3622). A jump has no direction,
+       so it takes no lateral slide -- that part of stepWord is about reading
+       ON, not about arriving somewhere. */
+    arrived = null; wordSlideX = 0; subKey = null;
+    setCursor(ch, wordIdx, why || "goTo");
+    paintWordHighlight(); markPaint();
+    if(seat) seatOnWord();
+    return {chapter:ch, word:wordIdx};
+  }
+
   let subEl = null;
   function wordSub(){
     if(subEl) return subEl;
@@ -2025,13 +1999,144 @@ function mount(o){
     host.appendChild(subEl);
     return subEl;
   }
+
+  /* ---------- AND IT SLEEPS, AND IT SCRUBS (job 24) -----------------------
+     Osca, 6 Sep: "it disappears when you stop moving/tapping (just playing)
+     after a second or so, and you can use it to scrub."
+
+     TWO HALVES, and the first one is a rule about WHEN rather than a timer
+     that always runs. Awake on any wheel, tap or key -- the three doors this
+     file already counts through `inputTick` -- and asleep `WORD.subsleep` ms
+     after the last one ONLY WHILE SOMETHING IS PLAYING. With nothing playing
+     the line is the one thing on the screen that says where the word came
+     from, and taking it away from a reader who has simply stopped moving is
+     removing the answer to the question they stopped to ask. While narration
+     is carrying them along it is a caption, and a caption that will not go is
+     furniture. `nav.playing` is the door the app sets from listen.js's own
+     play/pause; nothing here starts a sound, and the bench has a switch.
+
+     The timer's shape is scrub.js's, deliberately: `wake()` adds the class,
+     clears the pending sleep and arms a new one. One timer, never a stack. */
+  let subAwake = true, subSleepT = null, playing = false;
+  function wakeSub(){
+    subAwake = true;
+    if(subSleepT){ clearTimeout(subSleepT); subSleepT = null; }
+    if(!playing || !(WORD.subsleep > 0)) { markPaint(); return; }
+    subSleepT = setTimeout(() => {
+      subSleepT = null; subAwake = false; markPaint();
+    }, WORD.subsleep);
+    markPaint();
+  }
+  function setPlaying(on){
+    playing = !!on;
+    // going quiet wakes it and leaves it awake; starting to play arms the
+    // sleep from that moment, so a person who pressed play and did not touch
+    // anything still watches it go rather than waiting for a stray wheel.
+    wakeSub();
+    return playing;
+  }
+
+  /* THE RAIL UNDER IT, and it moves the CURSOR. The reader's own scrub (the
+     one down the right edge) moves the SCROLL, which in one word view is not
+     the thing you are holding -- the cursor is, and the reader follows it. So
+     this rail is the book end to end and dragging it sets the word: the
+     chapter from where along the rail you are, the word from where inside that
+     chapter's own share you are, and then `seatOnWord()` brings the page to it
+     exactly as an arrow key would. It is the same door as goTo and stepWord --
+     one cursor, a third driver of it, never a second copy.
+
+     Horizontal, because the subtitle is a row along the foot of the view
+     (Osca: "ONE LINE, a TINY floater, quite long, in the bottom of the page"),
+     and a rail that runs along its own line reads as part of it. */
+  let subRail = null, subFill = null, subDrag = null;
+  function wordSubRail(){
+    if(subRail) return subRail;
+    const host = o.bookEl || (o.readerBox && o.readerBox.parentNode) || null;
+    if(!host || !host.appendChild) return null;
+    subRail = document.createElement("div");
+    subRail.classList.add("wordsubrail");
+    subRail.setAttribute("aria-hidden", "true");
+    subFill = document.createElement("i");
+    subRail.appendChild(subFill);
+    host.appendChild(subRail);
+    if(subRail.addEventListener){
+      const seek = e => {
+        const r = subRail.getBoundingClientRect();
+        subSeek((e.clientX - r.left) / Math.max(1, r.width));
+      };
+      subRail.addEventListener("pointerdown", e => {
+        subDrag = e.pointerId; wakeSub();
+        try{ subRail.setPointerCapture(e.pointerId); }catch(_){}
+        seek(e);
+        if(e.preventDefault) e.preventDefault();
+      });
+      subRail.addEventListener("pointermove", e => {
+        wakeSub();
+        if(subDrag == null) return;
+        seek(e);
+      });
+      const up = e => {
+        if(subDrag == null) return;
+        try{ subRail.releasePointerCapture(subDrag); }catch(_){}
+        subDrag = null;
+      };
+      subRail.addEventListener("pointerup", up);
+      subRail.addEventListener("pointercancel", up);
+    }
+    return subRail;
+  }
+  /* where along the book the cursor is, 0..1 -- chapters, then the word's own
+     place inside its chapter, which is what makes the rail move smoothly while
+     you read on rather than in 865 jumps */
+  function subFraction(){
+    const n = (book && book.chapters && book.chapters.length) || 0;
+    if(!n) return 0;
+    const total = Math.max(1, wordTotal());
+    const within = total > 1 ? clamp(wordIdx/(total-1), 0, 1) : 0;
+    return clamp((wordChapterIdx + within) / n, 0, 1);
+  }
+  /* ...and the same arithmetic backwards. One chapter's share of the rail is
+     one chapter, however long it is -- the reader's own scrub places its marks
+     by height instead, and that is right for a page you are scrolling and
+     wrong for a cursor you are placing: on the complete Shakespeare a chapter
+     is 1/865th of this rail whether it is a sonnet or Hamlet, so every play is
+     reachable with the same flick. */
+  function subSeek(f){
+    const n = (book && book.chapters && book.chapters.length) || 0;
+    if(!n) return null;
+    const t = clamp(f, 0, 1) * n;
+    const ch = Math.min(n - 1, Math.max(0, Math.floor(t)));
+    const u = clamp(t - ch, 0, 1);
+    if(ch !== wordChapterIdx){
+      wordChapterIdx = ch;
+      wordWords = wordsOf(book.chapters[ch]);
+      wordDomIndex = buildWordDomIndex(ch);
+    }
+    const total = Math.max(1, wordTotal());
+    return jumpTo(ch, Math.round(u * (total - 1)), "subscrub", true);
+  }
   let subKey = null;
   function paintWordSub(f){
     const el = wordSub();
     if(!el) return;
+    const rail = wordSubRail();
     const on = f > 0;
-    const o1 = on ? String(Math.min(1, f * 1.6).toFixed(3)) : "0";
+    // ASLEEP IS NOT GONE FROM THE PAGE, it is at zero -- the same opacity the
+    // line already fades in on, so waking and sleeping are the one transition
+    // shell.css already describes and there is nothing to re-flow.
+    const o1 = (on && subAwake) ? String(Math.min(1, f * 1.6).toFixed(3)) : "0";
     if(el.style.opacity !== o1) el.style.opacity = o1;
+    if(rail){
+      if(rail.style.opacity !== o1) rail.style.opacity = o1;
+      // NEVER IN PAGE VIEW, and not merely invisible there: a rail across the
+      // foot of the reading page would take every press aimed at the text.
+      const pe = (on && subAwake) ? "auto" : "none";
+      if(rail.style.pointerEvents !== pe) rail.style.pointerEvents = pe;
+      if(subFill && on){
+        const w = (subFraction() * 100).toFixed(3) + "%";
+        if(subFill.style.width !== w) subFill.style.width = w;
+      }
+    }
     if(!on) return;
     const w = wordDomIndex[wordIdx];
     const key = wordChapterIdx + ":" + wordIdx;
@@ -2051,49 +2156,63 @@ function mount(o){
   }
 
   let spreadNow = 0;
+  let lastDy = Infinity, stuckY = 0;   // the closing loop's own progress
   function updateWordZoom(wordF){
-    if(!o.readerBox) return;
+    if(!o.readerCol) return;
     if(wordF <= 0){ clearWordZoom(); return; }
 
-    // THE ARRIVAL FIRST. The gap that empties the frame is worked out from the
-    // scale this word arrived at, so spreading before there is an arrival
-    // would write one frame of a gap computed against no zoom at all -- half a
-    // viewport of word-spacing, and a re-flow to go with it.
-    if(!arrived) arrived = computeArrived();
-    if(!arrived) return;
-    spreadPage(spreadNow);            // position +2's own progress, quantised
+    if(!arrived){ arrived = computeArrived(); lastDy = Infinity; stuckY = 0; }
+    if(!arrived || !anchor) return;
 
-    const host = wordHost();
-    if(!host) return;
     const wc = WORD.curve === 1 ? wordF : Math.pow(wordF, WORD.curve);
     const e  = wc<=0 ? 0 : (wc>=1 ? 1 : wc*wc*(3-2*wc));
+    const z  = 1 + e*(arrived.k - 1);
+    writePageZoom(z, shiftX);
+    spreadPage(spreadNow);            // position +2's own progress, quantised
 
-    // THE TYPE GROWS, AND THEN THE WORD IS FOUND AGAIN. Growing the paragraph
-    // moves the word inside it -- its line-mates before it push it along, its
-    // own leading pushes it down -- and so does the spacing at +2. No
-    // arithmetic predicts where a re-flow lands, so it is READ: one rect after
-    // the write, and the paragraph's own box is nudged by the difference,
-    // eased by the same e as the growth. Both ends are fixed points -- e=0 is
-    // the word exactly where the page put it, e=1 is the centre of the view --
-    // so the word cannot drift on the way, and stepping cannot move it off
-    // centre once it is there.
-    writeWordType(host, arrived.base, 1 + e*(arrived.k - 1));
-    // the column opens with the type, so nothing re-wraps on the way in and
-    // there is no measure left to leave a margin at the sides
-    writeWordWidth(host, arrived.cw * (1 + e*(zoomWidthMul() - 1)));
-    if(o.readerPane) o.readerPane.classList.add("zoomed");
-    const r = currentWordRange();
-    const rects = r ? r.getClientRects() : null;
-    const b = rects && rects.length ? rects[0] : (r ? r.getBoundingClientRect() : null);
-    if(b && b.width > 0){
-      const vw = window.innerWidth || 1, vh = window.innerHeight || 1;
-      writeWordOffset(host,
-        e * (vw/2 - (b.left + b.width/2  - zoomDx)),
-        e * (vh/2 - (b.top  + b.height/2 - zoomDy)));
+    // ---- AND THE WORD DOES NOT MOVE. One rect a frame, and the gap between
+    // where the word IS and where it stays is closed: sideways on the column's
+    // own offset, vertically on the scroller -- which is the "scroll
+    // compensates" of the definition, and the reason no text ever travels up
+    // the screen while the page grows. Nothing is predicted: a page this size
+    // under content-visibility is not something arithmetic gets right twice,
+    // and both ends are fixed points (e=0 the page exactly as it was, e=1 the
+    // word at the same place k times bigger), so it cannot drift.
+    const b = wordRectNow();
+    let moved = false;
+    if(b && b.width > 0 && !seating){
+      // a step's own lateral push, so reading on reads as the words moving
+      // sideways past a fixed point rather than one word blinking into another
+      const dx = (anchor.x + wordSlideX) - (b.left + b.width/2);
+      if(Math.abs(dx) > 0.5){ writePageZoom(z, shiftX + dx); moved = true; }
+      const dy = (b.top + b.height/2) - anchor.y;
+      // AND IT GIVES UP RATHER THAN CHASING. If the gap stops shrinking, the
+      // thing being measured is not answering -- a section still skipped, a
+      // rect that is contain-intrinsic-size's and not the type's -- and a
+      // correction applied every frame to a number that never moves is a
+      // runaway: 253,000px of one, live, before this went in.
+      if(Math.abs(dy) >= Math.abs(lastDy) - 0.5){ if(++stuckY > 3) stuckY = 99; }
+      else stuckY = 0;
+      lastDy = dy;
+      if(Math.abs(dy) > 0.5 && stuckY < 99 && o.readerPane){
+        const max = (o.readerPane.scrollHeight || 0) - (o.readerPane.clientHeight || 0);
+        let to = o.readerPane.scrollTop + dy;
+        if(to < 0) to = 0;
+        if(max > 0 && to > max) to = max;
+        o.readerPane.scrollTop = to;
+        programmaticTop = to;
+        moved = true;
+      }
     }
+    if(wordSlideX){
+      wordSlideX *= WORD.decay;
+      if(Math.abs(wordSlideX) < 0.5) wordSlideX = 0;
+      moved = true;
+    }
+    // ...and the closing loop needs another frame to close in. It asks for one
+    // only while something is still moving, so a page at rest costs nothing.
+    if(moved) markPaint();
   }
-
-  function clearZoomHost(){ wordRect = null; wordTick = 0; arrived = null; }
 
   // ---------------------------------------------------------------- THE
   // TWO SCREENS -- dashboard, or an open book. No title screen any more:
@@ -2252,9 +2371,11 @@ function mount(o){
   // OUT rather than a layer it has to raster, which is why it has no size
   // limit and why the text stays sharp at any size."
   //
-  // So the growth is a font-size on the word's own paragraph now
-  // (writeWordType), and from the word up to #readerbox there is no transform
-  // at all: sharp at 400px, and no layer for WebKit to allocate.
+  // So the growth is css `zoom` on the reading column now (writePageZoom) --
+  // a layout zoom of the whole page, laid out at its real size rather than
+  // rastered and stretched -- and from the word up to #readerbox there is no
+  // transform at all: sharp at any factor, and no layer for WebKit to
+  // allocate.
   let readerShift = 0, readerRestLeft = 0, lastPush = -1, edgePending = false;
   function writeReaderTransform(){
     if(!o.readerBox) return;
@@ -2367,8 +2488,13 @@ function mount(o){
     // pane's width. It is the reading column's own margin, so that pane comes
     // out into space that was already blank and moves nothing.
     const marginW = Math.max(120, Math.round(((window.innerWidth||0) - readerColumnWidth()) / 2));
+    // AND THE HEIGHT GOES WITH THE WIDTH. pane.js decides "is this a phone"
+    // off the SHORT side as of job 24 -- 932x430 is a phone held sideways and
+    // is over the width mark -- and it can only do that if it is told both.
+    // Left out, it judges on width alone exactly as it always did.
     const laid = (window.Panes ? window.Panes.measure({
-      n, dx, vw: window.innerWidth || 0, first: marginW,
+      n, dx, vw: window.innerWidth || 0, vh: window.innerHeight || 0,
+      first: marginW,
       seed: (book && book.slug) || "", cfg: PANE
     }) : { panes: [], right: 0 });
     let stackRight = laid.right;
@@ -2651,9 +2777,16 @@ function mount(o){
     markPaint();
   });
 
+  // ...AND ANY TAP. The third of the three doors job 24 names, and the only
+  // one this file did not already have a listener for: it does nothing but
+  // wake, it is passive, and it is on the window rather than on the subtitle
+  // so that touching the PAGE wakes the line that says where you are.
+  addEventListener("pointerdown", () => { wakeSub(); }, {passive:true});
+
   // ---------------------------------------------------------------- INPUT
   addEventListener("wheel", e=>{
     inputTick++;
+    wakeSub();                       // any wheel wakes the subtitle (job 24)
     if(screen!=="open") return;
     if(levelOf(dx)==="word"){
       // down/up reads on (the finest grain there is); left/right only
@@ -2682,6 +2815,7 @@ function mount(o){
 
   addEventListener("keydown", e=>{
     inputTick++;
+    wakeSub();                       // ...and any key
     if(screen!=="open") return;
     const lvl=levelOf(dx);
     if(lvl==="word"){
@@ -2738,29 +2872,17 @@ function mount(o){
     /* THE CURSOR -- one word view's own endpoint, and the voice's place.
        Read it, or set it from outside (a voice engine following along). */
     get cursor(){ return cursor ? {chapter:cursor.ch, word:cursor.wi} : null; },
-    goTo(ch, wi){
-      if(!book || !book.chapters || !book.chapters[ch]) return null;
-      if(ch !== wordChapterIdx){
-        wordChapterIdx = ch;
-        wordWords = wordsOf(book.chapters[ch]);
-        wordDomIndex = buildWordDomIndex(ch);
-      }
-      wordIdx = clamp(+wi||0, 0, Math.max(0, wordTotal()-1));
-      /* AND THE ZOOM GOES WITH IT. stepWord throws away the word's own
-         measurements when it moves -- wordBox, wordRect and above all
-         `arrived`, the fixed state one word view is travelling to -- so the
-         next frame measures the new word. goTo did not, so the cursor and the
-         highlight moved on while the zoom stayed on whatever word it had
-         arrived at: reader 22c measured 0 transform changes over 54 advances,
-         where stepping by hand goes scale(7.4874) -> scale(14.3622). A jump
-         has no direction, so it takes no lateral slide -- that part of
-         stepWord is about reading ON, not about arriving somewhere. */
-      wordBox = null; wordBoxTried = false; wordRect = null; arrived = null;
-      wordSlideX = 0; subKey = null;
-      setCursor(ch, wordIdx, "goTo");
-      paintWordHighlight(); markPaint();
-      return {chapter:ch, word:wordIdx};
-    },
+    goTo(ch, wi){ return jumpTo(ch, wi, "goTo", false); },
+    /* THE SUBTITLE'S OWN TWO DOORS (job 24). `playing` is the app's -- set it
+       from listen.js's play/pause and the line sleeps a second after the last
+       wheel, tap or key while narration runs, and stays up when it does not.
+       `subScrub(f)` is the rail's, exposed so a check (and a bench) can drag
+       it without a pointer; the rail itself calls the same function. */
+    get playing(){ return playing; }, set playing(v){ setPlaying(v); },
+    get subAwake(){ return subAwake; },
+    subWake(){ wakeSub(); return subAwake; },
+    subScrub(f){ return subSeek(f); },
+    get subAt(){ return subFraction(); },
     /* how much harder the axis pulls home from inside one word */
     get outSnap(){ return OUT_SNAP; }, set outSnap(v){ OUT_SNAP = +v || 1; },
     skip:setSkipOffscreen, get skipping(){return skipOffscreen;},
