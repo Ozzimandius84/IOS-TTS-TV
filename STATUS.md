@@ -4,6 +4,63 @@ Newest first. `REPORT_PROTOCOL.md` (TTSTV), nine headings. `README.md` says what
 
 ---
 
+## THE WEBVIEW FRAME — the window was 1100×800 because `inner_size` said so; now the screen's, proved 402×874 on the iPhone 17 simulator · 6 Sep (`a3ce862`)
+
+**Osca, 6 Sep:** *"The WKWebView is 1024×768 and never resizes to the screen … a 560px card centred at x≈262 … an 84pt black band at the bottom."*
+
+### 1. Built
+- **`src-tauri/src/lib.rs`** — `desktop_size(builder)`: `.inner_size(1100, 800).min_inner_size(400, 400)` on every platform but iOS, and on iOS **nothing**, because `tao` builds the UIWindow from `inner_size` when one is given (`tao-0.35.3/src/platform_impl/ios/window.rs`: `Some(dim) => CGRect { origin: screen_bounds.origin, size: dim }`, `None => screen_bounds`). That was the bug: the Mac's 1100×800 was the phone's window, root view and webview, and job 2's `frank_webview_fill` filled that box faithfully. `FILL_OUT = 8`; `webview_fill_why` gains code 4. `probe_note(line)`: the process log always, and on a **simulator debug build** (`cfg(all(debug_assertions, target_os = "ios", target_abi = "sim"))`) appended to `PROBE_FILE = <CARGO_MANIFEST_DIR>/../scratch-probe/probe.log`, so a session with no macOS shell reads the numbers off the connected folder. The `/__probe` route and `fill_root_view` both write through it. `PROBE_JS`'s `viewport()` now also reports **`cssW`/`cssH`** (`innerWidth`/`innerHeight`), `cssScreenW/H`, **`band`** (`screen.height − innerHeight`), **`phone`** (`matchMedia("(max-width: 600px)").matches`), and the first-run sheet's rect **`cardL`/`cardR`/`cardW`/`cardIn`** (`.ttstv-settings.fr-gate .fr-sheet`, `getBoundingClientRect`, in ⟺ `left ≥ 0 && right ≤ innerWidth`).
+- **`src-tauri/ios/FrankWebView.m`** — `frank_webview_fill` now also walks to `view.window`, sets `window.frame = window.screen.bounds` when they differ, the root-view-controller's view to `window.bounds` with a flexible mask, then the webview to the root's bounds as before; paints window, controller view, root and webview with the shell's `--bg`; writes eight doubles (root after; webview before ×4; **window before** ×2). A size that ever sneaks back into the builder is corrected, and the log says by how much.
+- **`.gitignore`** — `scratch-probe/`.
+- **`gen/apple/project.yml`, `LaunchScreen.storyboard`** — read, **not changed**: no fixed 1024×768 anywhere. The storyboard is 414×896 with `widthSizable/heightSizable` and safe-area guides — the launch screen only, not the app's view.
+
+### 2. Verified — and how
+- **live, the iPhone 17 simulator** (Osca's `npm run -- tauri ios dev "iPhone 17"`, three launches, read off `scratch-probe/probe.log` from the bridge — 12 lines, each launch identical):
+
+  | line | window was | root now | webview | `cssW×cssH` | `screen` | `band` | `phone` | card L..R (W) | `cardIn` | safe T/B |
+  |---|---|---|---|---|---|---|---|---|---|---|
+  | native fill | 402×874 (first launch: 0×0) | 402×874 | (0,0) 402×874 → (0,0) 402×874 | | | | | | | |
+  | `why=load` | | | | 402×778 | 402×874 | 96 | 1 | 16..386 (370) | 1 | 0/0 |
+  | `why=resize` | | | | **402×874** | 402×874 | **0** | **1** | **16..386 (370)** | **1** | 62/34 |
+  | `why=settled` (1500 ms) | | | | **402×874** | 402×874 | **0** | **1** | **16..386 (370)** | **1** | 62/34 |
+
+  So: `innerWidth === 402`, `innerHeight === 874` (`fills=1`, 2622 = 2622 device px), `matchMedia('(max-width: 600px)').matches === true`, the first-run sheet's rect is inside `0..402` (16 to 386, 370 wide = 402 − 2×16 margin — the phone block's `--ph-margin: 14px` + the sheet's own padding, no longer the 560 px max), and the band is **0** — no black, and what UIKit lays out before the first `resize` is painted in `--bg`, not black. `why=load` is the instant before UIKit's first layout (778 = 874 − 96, the status bar + home indicator region not yet claimed; `safeTop 0`); the `resize` that follows within the same second is the frame settling, and it stays settled. **The prompt's 393×852 is the iPhone 16's screen; the iPhone 17 simulator reports 402×874 and the app fills exactly that** — the invariant is `innerWidth === screen.width && innerHeight === screen.height`, which holds.
+- **unit** — `rustfmt --edition 2021 --check` parses the new `lib.rs` (formatting diffs only, 0 errors); a scratch crate in the container compiles the exact `desktop_size` shape (generic `WebviewWindowBuilder<'a, R, M>` + the two `cfg` tail blocks), `cargo check` exit 0; `clang -fsyntax-only -x objective-c -fobjc-arc -fblocks -fobjc-runtime=ios-15.0 -Wall` against stub UIKit headers carrying the real shapes (`window`, `screen`, `rootViewController`, `CGRectEqualToRect`) type-checks `FrankWebView.m`, exit 0. The **real** link and compile is the simulator run above (`aarch64-apple-ios-sim`, the app launched and the fill line came out of it).
+- **unit, python** — 81 pass, 4 fail, and the four are **older than this job** and touch nothing it changed: `test_search_sheet.py` ×3 (`lib.rs must not name the command` — `HOST_JS` has named `frank_search` since `2b6582a`; `lookup.js has no SEARCH constant` and `the_shim_runs` — the `5fbb23c` shell moved it) and `test_phone_shell.py::test_the_app_names_no_shell_file_of_its_own` (`scratch26b/`, another lane's untracked folder).
+- Invariants: `git show --stat a3ce862` = exactly `.gitignore`, `FrankWebView.m`, `lib.rs`; `HOST_JS`, `PAIR_JS`, `NOW_PLAYING_JS`, `SEARCH_JS`, `build.rs`, `project.yml` untouched; off iOS the window is still 1100×800 / min 400×400 (same two calls, moved into a function).
+
+### 3. Judgment calls
+- *"fix in `with_webview` → set the WKWebView frame to its superview's bounds, autoresizingMask …"* → **that was already there (job 2, `3c1137b`) and it was right; the wrong box was the window.** Fixed the cause (no `inner_size` on iOS) and kept the belt: the native fill now sizes the window against its screen too, so the fix is not one `cfg` away from regressing.
+- *"root view background = page ground not black"* → was already `--bg` dynamic; extended to the UIWindow and the controller's view, the two layers above it that can show.
+- *"prove … 393 × 852"* → proved the screen's own numbers (402×874) and the equality, not the literal; said so above.
+- *the numbers need to reach a session without a macOS shell* → a **simulator-debug-only file sink**, baked path from `CARGO_MANIFEST_DIR`, gitignored. Not a device build (no host disk), not a release build (no probe).
+- *`min_inner_size` on iOS* → dropped with `inner_size`: tao logs "ignored on iOS" for it and nothing else.
+
+### 4. Boundary check
+IOS-TTS-TV only: `src-tauri/src/lib.rs`, `src-tauri/ios/FrankWebView.m`, `.gitignore` (`a3ce862`); this `STATUS.md`. Not a move, not a re-wire. Nothing in TTSTV. **Dirty and left alone** (another session's): `src-tauri/gen/apple/{frank.xcodeproj/project.pbxproj, frank_iOS/Info.plist, frank_iOS/frank_iOS.entitlements}`, untracked `scratch-float/`, `scratch-j13/`, `scratch26b/`.
+
+### 5. Footprint
+Mac: `scratch-probe/probe.log` (2.4 KB, written by the app, gitignored); `~/.local` pytest in the bridge VM (~4 MB). Container: `/tmp/crates` (tao, wry, tauri-runtime-wry sources, ~6 MB — **`static.crates.io` answered today**, contrary to the 5 Sep note), `/tmp/chk` (~1 MB). No env, model, SSD, GPU.
+
+### 6. Requests to core / other modules
+none. (For the shell lane, one observation, no ask: at 402 wide the first-run sheet is 370 — `--ph-card: 560px` never binds on a phone; fine.)
+
+### 7. Known gaps
+- Rotation not measured (the mask covers it; `why=resize` lines will say).
+- The four stale python tests above are left failing — `test_search_sheet.py` describes the phone before `2b6582a`/`5fbb23c` and belongs to the search lane's next commit.
+- A **device** debug build has no probe file; its numbers are `xcrun devicectl`/Console's.
+
+### 8. Next
+The search window job, on the phone: the reader's Search press → the SFSafariViewController sheet, proved on this same simulator — its two log lines (`search.rs:371-372`) want routing through `probe_note` so the URL lands in `scratch-probe/probe.log`, then a rebuild and the press. Blocking question: none.
+
+### 8b. Commit check
+`git commit -m … -- src-tauri/src/lib.rs src-tauri/ios/FrankWebView.m .gitignore` → `a3ce862` (3 files, +144 −19); `git show --stat HEAD` listed exactly those. This entry: pathspec, one path. HEAD did not move under me (`42c0c28` → mine). Locks: a stale `index.lock` (another session's, > 3 s) moved to `_to_delete/` on the retry loop's second pass; my own `HEAD.lock` and `next-index-20.lock` moved after (the bridge cannot unlink); 272 `.git/objects/*/tmp_obj_*` git could not unlink either — harmless, Osca to clear `_to_delete/`.
+
+### 9. Status line
+`IOS-TTS-TV · the webview frame 1/1 done · 6 Sep · inner_size was the phone's window; 402×874 = screen, band 0, card 16..386, phone media query true — read off scratch-probe/probe.log`
+
+---
+
 ## HOST_JS gains `TTSTVHost.search(q)` — the reader's Search lands once, on the `-site:` form · 6 Sep (`2b6582a` lib.rs · `3d18d51` shell re-import · this commit: the test + this entry)
 
 **Osca, 6 Sep:** *"Add to HOST_JS, this name and shape exactly, so the reader's Search lands once ... The sheet takes the -site: form (host.js passes {query, web}; use web)."*
