@@ -246,8 +246,23 @@ Settings → Transfer → Sync finding the Mac's Studio, and it is the one Andro
 should be *better* at than iOS.
 
 ### 8b. Commit check
-Pathspec, by file, on `main`; `git show --stat --name-only HEAD` checked after.
-`tools/android.sh` `git add`ed by its own single path first.
+**`a391bf2`**, 6 files, +467/-21; `git show --stat --name-only HEAD` lists
+exactly `PHONE.md`, `STATUS.md`, `tests/test_phone_loop.py`,
+`tests/test_phone_shell.py`, `tools/android.sh`, `tools/android_permissions.py`
+and nothing else. Pathspec, on `main`; `tools/android.sh` `git add`ed by its own
+single path first, on the first try. This line is a later commit.
+
+**HEAD did not move under me**: `c58d9ea` at the gate and as this commit's
+parent — the Google lane has been quiet since `c4b9f92`, though it has left a
+new untracked `scratch-float/` beside its `scratch26b/`, both left alone.
+
+Locks moved into `_to_delete/`, epoch range **1788697100 – 1788702600**,
+including a **`HEAD.lock` and a `next-index-25.lock` 4,809 s old** — an hour and
+a half, so long-crashed and from earlier in this session rather than anyone
+mid-write — plus the usual pair at 4 s on the retry. `_to_delete/` now holds
+four staging tarballs and every lock this session moved; **one `rm _to_delete/*`
+clears the lot**, and it is worth doing before the pile stops being ordinary
+residue and starts hiding a real one.
 
 ### 9. Status line
 `IOS-TTS-TV · job 28 · 6 Sep · Android dev needs no network (adb reverse, not 10.0.2.2), JAVA_HOME must NAME the JBR, --debug is what allows cleartext — 45 tests green, and the suite's long-standing red was the guard's own unanchored regex`
