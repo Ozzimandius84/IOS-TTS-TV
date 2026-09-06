@@ -4,6 +4,197 @@ Newest first. `REPORT_PROTOCOL.md` (TTSTV), nine headings. `README.md` says what
 
 ---
 
+## job 13 — the search sheet: `frank_search` is a sheet over the reader, and the reader never navigates · 6 Sep
+
+**Osca, 6 Sep:** *"`frank_search` opens an SFSafariViewController from the app, per
+`design/reader/search.html`."*
+
+### 1. Built
+
+- **`src-tauri/src/search.rs`** (555 lines) — a Tauri plugin, `search`, with **no command**
+  and therefore no ACL entry. `DOOR` (`x-web-search:`), `SEARCH`
+  (`https://www.google.com/search?q=`, `reader/lookup.js:251`'s constant), `CMD`
+  (`frank_search`) · `encode`/`decode` (`encodeURIComponent` and its inverse, written out so
+  the file extracts) · `door_query` · `sheet_url` — the whole routing decision, a pure
+  function of a string · `SEARCH_JS` · `present`/`present_why` · `init()`.
+- **`src-tauri/ios/FrankSearch.m`** (159 lines) — `frank_search_present(const char *)`,
+  `frank_search_top()` (foreground scene → key window → deepest presented VC), and a
+  three-line `SFSafariViewControllerDelegate` so Done is heard. One sheet, never a stack.
+- **`src-tauri/build.rs`** (+11) — compiles it into its own archive, `franksearch`.
+- **`src-tauri/gen/apple/project.yml`** (+5) — `SafariServices.framework`, because a
+  `staticlib` crate never runs a linker.
+- **`src-tauri/src/lib.rs`** (+2, and exactly two) — `mod search;` · `.plugin(search::init())`.
+- **`tests/test_search_sheet.py`** — 10 tests over the four-file wiring cargo cannot see.
+- `scratch-j13/` — untracked: `proof.mjs` (18 checks) and the recipe for the Rust extraction.
+
+**One door, two knocks.** The mock's WEB row is already an anchor to
+`x-web-search://?<encodeURIComponent(query)>`; the plugin's `on_navigation` sees it,
+**cancels the navigation**, and presents the sheet. `reader/lookup.js` invokes
+`frank_search`, and `SEARCH_JS` turns that one command name — and no other — into the same
+navigation. A second door passes a bare `https://www.google.com/search?q=…` through, so the
+sheet still opens if the shim never installs.
+
+**Why not a real command.** `tauri`'s router sends any `cmd` without a `plugin:` prefix to
+the app's `generate_handler!` and nowhere else (`webview/mod.rs`, `strip_prefix("plugin:")`),
+and with an app ACL manifest present — this crate has one — an unknown command is refused
+before dispatch. `frank_search` as a command is three lines in three files (`lib.rs`,
+`build.rs`, `capabilities/default.json`), and `lib.rs` was another session's open file today.
+
+**Why cancelling is the proof that back returns to the same reader position.** Nothing
+restores the chapter, the word, the scroll or the audio, and nothing needs to:
+`WKNavigationActionPolicyCancel` means the load never starts, `didCommitNavigation` never
+fires, the document is never torn down. Every road into the sheet is a navigation this
+plugin returns `false` for.
+
+### 2. Verified — and how
+
+- **unit, Rust — 12 tests pass.** `search.rs` extracted into a dependency-free crate:
+  **525 of 554 lines, 0 not verbatim**, only `use tauri::{…}` (5) and `pub fn init()` (24)
+  dropped. Asserted: the five `-site:` domains and their order are the mock's; `SEARCH` is
+  `lookup.js`'s; all four spellings of door one; an empty query opens nothing; door two is
+  byte-for-byte; `frank://…`, `youtube.com/results?…`, `<lan>:8000/state`,
+  `accounts.google.com/o/oauth2/…` and `about:blank` all come back `None`.
+- **live — `encode` is `encodeURIComponent`.** A sweep of the first **768 codepoints**
+  against node: **byte-identical**, including the ten (`-_.!~*'()`) where
+  `NON_ALPHANUMERIC` and Python's `quote(safe="")` each disagree. That is what makes the
+  shim's road and `lookup.js`'s own `window.open` road the same URL.
+- **live — the real `url` crate.** The anchor's href survives `Url::parse(…).as_str()`
+  unchanged; `sheet_url` turns it into
+  `https://www.google.com/search?q=Spinoza%20Ethics%20-site%3Agutenberg.org%20…` with all
+  five exclusions intact.
+- **live, node — `scratch-j13/proof.mjs`, 18 checks, 0 failed**, run on the bridge VM.
+  `SEARCH_JS` is sliced out of `search.rs` and `reader/lookup.js`'s own
+  `SEARCH`/`searchUrl`/`tauriInvoke`/`last`/`openTab`/`sheet`/`search` are sliced out of that
+  file, both verbatim, and RUN. `lookup.js`'s `search("Gerontion")` returns `true`, reports
+  `how === "frank_search"`, starts exactly **one** navigation, to door one, and calls neither
+  `WebviewWindow` nor `window.open`. With no `__TAURI__` at all it falls to `window.open`
+  untouched. `sync_discover`, `audio_session_start` and `google_sign_in` pass through with
+  their arguments and start no navigation.
+- **live — the injection order, read out of tauri 2.11.3.** `manager/webview.rs`
+  `prepare_webview` pushes plugin init scripts at **line 202** and the global API
+  (`withGlobalTauri`'s `window.__TAURI__`) at **line 216**. A shim that patched at install
+  time would patch nothing, silently. Hence `install()` at document start, at
+  `DOMContentLoaded` and at `load` — proved in case B above, where `__TAURI__` is created
+  *after* the script runs.
+- **live — wry 0.55.1 on iOS.** `wkwebview/navigation.rs::navigation_policy` hands the
+  handler the absolute URL of **every** navigation action, whatever the scheme, and `false`
+  → `WKNavigationActionPolicy::Cancel`. `x-web-search:` reaches Rust.
+- **unit, Objective-C — 0 diagnostics.** `clang -fsyntax-only -fblocks -Wall -Wextra
+  -x objective-c -fobjc-arc` against hand-written stub headers for the API surface used.
+  Worth exactly what it says: syntax, ARC legality and the shape of every message sent —
+  **not** that the selectors are Apple's.
+- **unit, python — `python3 -m pytest tests -q`: 84 pass, 1 fails.** The failure is
+  `test_phone_shell.py::test_the_app_names_no_shell_file_of_its_own`, and it names
+  `scratch26b/sync_md_patch.py` (another session's untracked scratch, `drive.js`). Nothing of
+  mine is in it. `tests/test_search_sheet.py` alone: **10 pass**.
+- **not verified:** the real crate under cargo on an iOS target (the Cowork container has
+  cargo — CLAUDE.md's "no cargo reachable from Cowork" is out of date — but no iOS SDK);
+  Xcode; the simulator; the phone; that the sheet actually comes up over the reader.
+- **invariant.** No file was written in TTSTV. No server was started and no route was
+  pressed, so `languages/catalogue.json` was never at risk and needs no gate.
+
+### 3. Judgment calls
+
+- *`frank_search` must be a command, but a plugin cannot serve a bare name and the three
+  files that would register it are another lane's* → shipped `SEARCH_JS`, which intercepts
+  that one name and forwards everything else with `apply`. Delete it the day `lib.rs` carries
+  the command; the `on_navigation` door stays either way, because the mock's anchor stays.
+- *`x-web-search:` means "the default engine" to Safari and to no API* → the sheet opens
+  `reader/lookup.js`'s already-decided `https://www.google.com/search?q=`. One constant here,
+  one there. **This is the one thing in the job that is a preference, and §8 asks it.**
+- *`build.rs` and `project.yml` were not named as mine* → touched anyway, 16 lines, because
+  the alternative is an undefined `_frank_search_present` twenty minutes into a phone build.
+  Both were clean at 15:20 and the diff is only mine. `lib.rs`'s two lines carry no comment,
+  deliberately: it is another lane's file and the why is in `search.rs`.
+- *`tests/` was not named as mine* → one new file, additive. The wiring that breaks is in
+  four files no compiler reads together.
+- *a new `frank-search://` scheme would have been cleaner in the abstract* → kept the mock's
+  `x-web-search://`, because it is already written, needs no `CFBundleURLTypes`, and still
+  means the right thing in a browser where Frank is not the host.
+
+### 4. Boundary check
+
+Touched: `src-tauri/src/search.rs` (new) · `src-tauri/ios/FrankSearch.m` (new) ·
+`src-tauri/build.rs` (+11) · `src-tauri/gen/apple/project.yml` (+5) ·
+`src-tauri/src/lib.rs` (+2, named in the prompt) · `tests/test_search_sheet.py` (new) ·
+`scratch-j13/` (untracked). TTSTV untouched — nothing was written there; `bar/` untouched,
+and the shell needed no new call. Not a move and not a re-wire.
+
+**Found dirty and left alone:** `src-tauri/gen/apple/frank.xcodeproj/project.pbxproj`,
+`src-tauri/gen/apple/frank_iOS/Info.plist`, `src-tauri/gen/apple/frank_iOS/frank_iOS.entitlements`
+(xcodegen output, another session's), and earlier in the session `src-tauri/build.rs`,
+`src-tauri/src/lib.rs`, `Cargo.lock`, `STATUS.md`, `tauri.conf.json`, `tools/*.py`,
+`tests/test_phone_shell.py`, `shell/` — all of which that session has since committed.
+
+### 5. Footprint
+
+`scratch-j13/` — 14 KB, untracked, internal. `pytest` installed `--user` in the bridge VM
+(~5 MB, outside the repo) because it was not there. In the Cowork container, ephemeral:
+the `tauri` and `wry` crate sources from crates.io and a throwaway crate, ~40 MB, in `/tmp`.
+No env, no model, no download in the repo. Nothing on the SSD; the SSD was not used.
+
+### 6. Requests to other modules
+
+1. **`bar/` — the VIDEOS lane cannot be an iframe.** `design/reader/search.html` frames
+   `youtube.com/results?search_query=…`, and `bar/askbar.js`'s own `NO_FRAME` list already
+   names `youtube.com` among "hosts that have been SEEN to send `X-Frame-Options`". The two
+   files contradict each other. The lane wants either the search tool's own thumbnails with
+   a tap into this sheet, or `youtube.com/embed/<id>`, which is frameable.
+2. **Whoever next owns `lib.rs`/`build.rs`/`capabilities/default.json`:** if `frank_search`
+   becomes a real command (`generate_handler!` + the manifest list + `allow-frank-search`),
+   delete `SEARCH_JS` from `search.rs` in the same commit. `test_search_sheet.py` will fail
+   loudly until you do.
+3. **`lib.rs` carries one stale line** and it is not mine to delete: `audio_session_category`'s
+   SAFETY note says `FrankAudio.m` is "linked into the same binary by the Xcode target
+   (`gen/apple/project.yml` → sources: `../../ios`)". `project.yml` says the opposite in
+   writing ("there is deliberately no `- path: ../../ios`") and `build.rs` is what compiles it.
+   `tests/test_float_audio.py` already enforces the correct half.
+
+### 7. Known gaps
+
+- Nobody has pressed it. No Xcode, no simulator, no phone in a Cowork session.
+- The engine is Google. `x-web-search:` cannot be honoured by `SFSafariViewController`.
+- `SEARCH_JS` wraps a global (`__TAURI__.core.invoke`). It is idempotent, blind to every
+  name but one, and has an expiry date written into its own doc comment — but it is a shim.
+- `frank_search` on the **Mac** is still unimplemented; `lookup.js`'s second landing (a
+  900×700 `WebviewWindow`) still wants one capability line there, as `lookup.js` §6 says.
+- The BOOKS lane and the VIDEOS lane are `bar/`'s work, not this one's.
+
+### 8. Next
+
+Osca presses it on the simulator: open the search pane, tap **Search the web**, expect a
+Safari sheet over the reader carrying the words and five `-site:` terms, and **Done** back to
+the same word. `project.yml` changed, so `xcodegen generate` is not optional (PHONE.md §6e).
+
+**The one question that blocks nothing but should be answered before the 13th:** the sheet
+names an engine because it must — **Google, or DuckDuckGo?** Two constants either way.
+
+### 8b. Commit check
+
+Three pathspec commits, each confirmed with `git show --stat HEAD`:
+
+| hash | files |
+|---|---|
+| `65617f7` | `src-tauri/src/search.rs` · `src-tauri/ios/FrankSearch.m` · `src-tauri/build.rs` · `src-tauri/gen/apple/project.yml` — 4 files, 730 insertions |
+| `07140ee` | `src-tauri/src/lib.rs` — 1 file, 2 insertions |
+| `57168bd` | `tests/test_search_sheet.py` — 1 file, 180 insertions |
+
+No `git add -A`, no `--amend`. **HEAD moved under me at least four times**
+(`acc4b4d`, `3c1137b`, `1a01daf`, `76d577d`) — every number in §2 was taken *after* the last
+of them, on the tree that `65617f7` was committed from. `git fetch origin` then
+`git rev-list --left-right --count origin/main...HEAD` = **0 behind, 25 ahead**, so
+`git pull --rebase` had nothing to do and was not run: it would have refused anyway on
+another session's three dirty files. **Locks:** the bridge cannot unlink, so `.git/HEAD.lock`,
+`.git/index.lock` and three `next-index-N.lock` were moved into `_to_delete/` after each
+commit, per CLAUDE.md's loop. `.git/objects/*/tmp_obj_*` residue from the same cause is
+git's own and harmless. `.git/*.lock` is empty now.
+
+### 9. Status line
+
+`src-tauri · job 13 done · 6 Sep · the search sheet is wired and proved without a phone; nobody has pressed it`
+
+---
+
 ## job 29 — WebKit first, then dev books: **there is no error, and that IS the error** · 6 Sep
 
 **Osca, 6 Sep:** *"The Library page draws nothing in WebKit (the phone app, and
