@@ -264,8 +264,32 @@ encode a *positional* link (~92 characters, 23b's measurement) instead of the
 named one above? Only the QR's density depends on it.
 
 ### 8b. Commit check
-Pathspec, by file, on `main` in this repo; `git show --stat HEAD` checked
-afterwards. TTSTV: not committed to, not staged, not checked out.
+**`ec3155c`**, 8 files, +1,105/-1; `git show --stat --name-only HEAD` lists
+exactly `PHONE.md`, `STATUS.md`, `src-tauri/Cargo.toml`,
+`src-tauri/capabilities/default.json`, `src-tauri/gen/apple/project.yml`,
+`src-tauri/src/lib.rs`, `src-tauri/tauri.conf.json`,
+`tests/test_pair_link.py` and nothing else. Pathspec, on `main`, in this repo;
+the one new file `git add`ed by its own single path first. No `git add -A`, no
+bare `git commit`. This §8b line is a second, later commit — the hash cannot be
+in the commit it names.
+
+**HEAD did not move under me**: `93d9cfc` at the gate (10:33) and `93d9cfc` as
+this commit's parent. The lane that wrote `f667ef8` and `93d9cfc` (job 26,
+Bonjour) had stopped ~40 minutes before I started, and its three dirty Xcode
+files are untouched — §4.
+
+**Two locks moved, for Osca to empty:** `_to_delete/index.lock.<epoch>` twice —
+one before the `git add`, one before the commit, each after the retry loop found
+it 7 s and 14 s old (over the 3 s bar, so a crashed lock and not a session
+mid-write). The loop was run with **`GD=$(git rev-parse --git-dir)`** — the fix
+the installer lane proposed to `CLAUDE.md` on 6 Sep for worktrees; it costs
+nothing in a normal checkout like this one and means one loop works in both.
+`_to_delete/` also now holds this session's two staging tarballs (§5).
+git's `unable to unlink '.git/objects/**/tmp_obj_*'` warnings are the ordinary
+bridge noise and were not chased.
+
+TTSTV: not committed to, not staged, not checked out — and the `installer`
+worktree, which is another session's and locked, was read and nothing else.
 
 ### 9. Status line
 `IOS-TTS-TV · job 23d done (the link half) · 6 Sep · frank-pair:// parses, writes transfer.pairing, and the four call shapes are measured against a real serve_local.py; 21 tests green, nothing on a phone`
