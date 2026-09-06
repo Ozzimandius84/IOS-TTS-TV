@@ -4,6 +4,129 @@ Newest first. `REPORT_PROTOCOL.md` (TTSTV), nine headings. `README.md` says what
 
 ---
 
+## job 23d · addendum 2 — the Library was Brotli, and the guard that says so · 6 Sep
+
+**Osca's first `ios build --debug` drew the Library as a page of glyphs.** He
+found it: `tauri build` embeds the shell **Brotli-compressed**, and the two ways
+out of the embedded map are not the same bytes —
+
+- `iter()` walks the map and yields **what is stored**: the compressed stream;
+- `get()` goes through `EmbeddedAssets::get`, which runs
+  `brotli::BrotliDecompress` (`tauri-utils/src/assets.rs:175`).
+
+`unpack_shell` wrote what `iter()` yielded, so every unpacked file was a `.br`
+blob and `library.html` was served as `text/html`. **`tauri dev` could never
+show it**: dev embeds nothing, so the handler's `#[cfg(dev)]` fallback was
+already going through `get()`.
+
+### 1. Built
+**The `iter()`-for-keys / `get()`-for-bytes change was already in the working
+tree when I got there** — written at 11:04:09, ninety seconds before I read the
+file. It is not mine and I did not touch it; what follows is what it was
+missing, added around it.
+
+- **`looks_like_html(&[u8])`** — after a BOM and any leading whitespace, an
+  HTML file's first byte is `<`. Written that way round on purpose: a Brotli
+  stream has no magic number (a real `brotli.compress("<!doctype html>…", 11)`
+  starts `1b d1 02 40`, and the first byte is a window-size header that varies),
+  so the answerable question is *is this HTML*, never *is this not Brotli*.
+- **The read-back.** After the unpack, `library.html` is read **off disk** and
+  put through it; a failure is a sentence naming the first eight bytes and
+  pointing at this file's head. In memory would not have done: the bug put the
+  right number of files in the right places, and every one was a Brotli stream.
+- **A dropped key is now a stop.** The `filter_map` in the fix drops any key
+  `get()` cannot resolve, so a shell quietly one file short would have been the
+  same class of fault again. `assets.len()` is now held equal to
+  `resolver.iter().count()`. The comment also records something not obvious from
+  the name: on a miss `AppManager::get_asset` does **not** return `None` — it
+  tries `<key>.html`, then `<key>/index.html`, then **`index.html`**, so a
+  hand-built key comes back as the home page under the wrong name. Nothing
+  builds a key; that is what keeps the chain unreachable.
+- The module head gains the `iter()`/`get()` paragraph, beside the one about
+  dev embedding nothing that has been there since the move.
+
+### 2. Verified — and how
+- **unit, rust — 1 new (11 in the pairing set).** `looks_like_html` extracted by
+  line range (`lib.rs` 626–643 plus its test) into a scratch crate with an empty
+  `[dependencies]`, `cargo test --offline` in the cloud container: **pass**. The
+  Brotli bytes in the assertion are **real** — the first eight of
+  `brotli.compress(b"<!doctype html>…", quality=11)`, generated in the container,
+  not invented. It also rejects an empty file, whitespace, a zip's `PK\x03\x04`,
+  and `doctype html>` with the bracket gone.
+- **unit, python — 25 pass, 1 fail**, the same pre-existing `asr.js` red named
+  in the entry below.
+- **the cause, read rather than inferred**: `tauri-utils` 2.9.3's `assets.rs:175`
+  for the decompress, `tauri` 2.11.3's `AppManager::get_asset` for the fallback
+  chain and the key normalisation.
+- **not verified**: the crate still has not been compiled here, and none of this
+  has run on a phone. **The proof is Osca's next build**, and it is now a loud
+  one either way — if a `.br` ever reaches the data dir again the app says so
+  instead of drawing it.
+
+### 3. Judgment calls
+- *another writer was in `lib.rs` 90 seconds before I read it* → **I did not
+  rewrite their lines.** Their `filter_map` expression and its comment are
+  untouched; the count check is additive and sits below it. Every edit was an
+  anchored replacement that fails rather than clobbers, and the file's mtime was
+  checked immediately before the write (`1788692649`, unchanged through six
+  10-second polls) and after (`1788692796`).
+- *check in memory or read back off disk* → **off disk**, for the reason above.
+- *`get()` per asset costs a decompress of the whole shell on every launch*
+  → kept: the fingerprint cannot decide to skip the write until it has the bytes
+  to hash, and a stamp over compressed bytes would be a fact about the encoder.
+  If it ever shows in a launch profile, the answer is a cheaper stamp, not
+  compressed bytes on disk.
+- *`serde_json` + the `Cargo.lock`* → **already committed**, in `f0af183`, with
+  the measured cause in the comment. Both files are clean in the working tree;
+  there was nothing left to take.
+
+### 4. Boundary check
+Touched: `src-tauri/src/lib.rs` (this repo), `STATUS.md`. Nothing else in this
+repo; TTSTV not read for this addendum and not written to at all.
+**Dirty and left alone**, all four generated by Osca's build or Xcode:
+`gen/apple/frank_iOS/Info.plist`, `…/frank_iOS.entitlements`,
+`…/frank.xcodeproj/project.pbxproj`, `…/xcshareddata/xcschemes/frank_iOS.xcscheme`;
+untracked `shell/`, `shell.manifest.json`.
+
+### 5. Footprint
+`_to_delete/brx.tgz` (1.2 KB), the extraction crate. Nothing else new.
+
+### 6. Requests
+None. Nothing outside this repo is implicated.
+
+### 7. Known gaps
+- **The fix is unproved on hardware.** Everything above is a guard and a test;
+  the thing that says the Library is a page again is Osca's next build.
+- `looks_like_html` checks **one** file. A `.css` or `.js` that arrived
+  compressed would still be silent — but they cannot arrive by a different route
+  than `library.html` did, so one sentinel is the honest amount of check.
+- The `.shell` stamp from the broken build is still on the phone. It will not
+  match the new fingerprint (the bytes it hashes have changed from compressed to
+  decompressed), so the first launch re-unpacks — no manual delete needed. That
+  is a claim from reading the code, not from a device.
+
+### 8. Next — the two lines, and they are Osca's
+
+```bash
+cd "$HOME/Documents/RUNNERS/TTSTV_IOS/IOS TTS TV"
+npm run -- tauri ios build --debug
+xcrun devicectl device install app --device <udid> \
+    src-tauri/gen/apple/build/arm64/Frank.ipa
+```
+
+`xcrun devicectl list devices` gives the udid. Then open Frank: the Library
+should be a **page**, not glyphs. If it is glyphs again, the log now says so in
+one line beginning `frank: unpacked N files … does not begin with '<'` — send
+that line rather than the screen. After that, `PHONE.md` §6b's six presses.
+
+### 8b. Commit check
+Pathspec, two files, on `main`; `git show --stat HEAD` checked after.
+
+### 9. Status line
+`IOS-TTS-TV · job 23d addendum 2 · 6 Sep · iter() was Brotli and get() is not; the unpack now reads library.html back and refuses anything that does not start '<' — 1 new rust test, 25 python, unproved on hardware until the next build`
+
+---
+
 ## job 23d · addendum — the first real build, and what it proved · 6 Sep
 
 Osca ran the first `tauri ios build --debug` against `ec3155c`. It died on

@@ -623,6 +623,25 @@ fn fingerprint(assets: &[(String, Vec<u8>)]) -> String {
     format!("{}-{:016x}", assets.len(), h)
 }
 
+/// Does this look like the page the window is about to be pointed at?
+///
+/// The narrowest check that catches the Brotli bug and nothing else: after a
+/// BOM and any leading whitespace, the first byte of an HTML file is `<`. A
+/// Brotli stream has no magic number to test for -- a real
+/// `brotli.compress(<!doctype html>…)` starts `1b d1 02 40`, and the first byte
+/// is a window-size header that varies -- so the test is written the way round
+/// that has a true answer: *this is HTML*, never *this is not Brotli*.
+///
+/// It is not a parser and must not become one. It runs once, on one file, to
+/// turn "the Library is a page of glyphs on a phone" into a sentence.
+fn looks_like_html(bytes: &[u8]) -> bool {
+    let rest = bytes.strip_prefix(&[0xef, 0xbb, 0xbf]).unwrap_or(bytes);
+    matches!(
+        rest.iter().find(|b| !b.is_ascii_whitespace()),
+        Some(b'<')
+    )
+}
+
 /// Why this build has no shell in it. There are exactly two reasons and they
 /// want opposite fixes, so the app has to say which one it is rather than
 /// guess: one is a missing build step, the other is `tauri dev` behaving as
@@ -680,9 +699,19 @@ fn unpack_shell<R: tauri::Runtime>(
     root: &Path,
 ) -> Result<usize, String> {
     let resolver = app.asset_resolver();
+    // `iter()` yields the bytes AS EMBEDDED, and a `tauri build` embeds them
+    // Brotli-compressed -- written to disk as they came, library.html was a
+    // .br stream served as text/html, which is the page of glyphs Osca's phone
+    // showed on the first real build (6 Sep, 12:00). `get()` is the accessor
+    // that decompresses (it is what the handler's own fallback uses), so the
+    // keys come from `iter()` and every byte from `get()`. The fingerprint is
+    // therefore over the decompressed bytes, the same in dev and build.
     let assets: Vec<(String, Vec<u8>)> = resolver
         .iter()
-        .map(|(k, v)| (k.into_owned(), v.into_owned()))
+        .filter_map(|(k, _)| {
+            let key = k.into_owned();
+            resolver.get(key.clone()).map(|a| (key, a.bytes().to_vec()))
+        })
         .collect();
     // Logged before anything can go wrong with it, and at Info, because "how
     // many files does this binary think it is carrying" is the first question
@@ -691,6 +720,26 @@ fn unpack_shell<R: tauri::Runtime>(
     if assets.is_empty() {
         return Err(no_shell_reason(
             app.config().build.dev_url.as_ref().map(|u| u.as_str()),
+        ));
+    }
+    // The `filter_map` above DROPS a key `get()` cannot resolve, and a shell
+    // that is quietly one file short is the same class of fault as the one this
+    // function was just fixed for. Every key came out of the map `get` looks in,
+    // so this can only fire if the two halves of one resolver disagree -- but
+    // that is a sentence worth having rather than a page that 404s later.
+    //
+    // (Worth knowing and not obvious from the name: on a miss
+    // `AppManager::get_asset` does not stop, it tries `<key>.html`, then
+    // `<key>/index.html`, then **`index.html`**. So a key that is not passed
+    // back exactly as `iter()` yielded it does not come back `None` -- it comes
+    // back as the home page, under the wrong name. Nothing here builds a key;
+    // that is what keeps the chain unreachable.)
+    let embedded = resolver.iter().count();
+    if assets.len() != embedded {
+        return Err(format!(
+            "frank: the binary lists {embedded} assets and only {} could be read back \
+             -- iter() and get() disagree, which is a Tauri-side fault, not a missing file",
+            assets.len()
         ));
     }
 
@@ -731,6 +780,25 @@ fn unpack_shell<R: tauri::Runtime>(
         return Err(format!(
             "frank: unpacked {n} files into {} and {HOME_PAGE} is not one of them",
             root.display()
+        ));
+    }
+    // ...and that what landed is the PAGE and not a compressed copy of it. Read
+    // BACK off disk rather than checked in memory: the bug of 6 Sep put the
+    // right number of files in the right places and every one of them was a
+    // Brotli stream, so the only check that would have caught it is this one,
+    // made after the bytes are where the handler will find them.
+    let head: Vec<u8> = fs::read(&home)
+        .map_err(|e| io("read back", &home, e))?
+        .into_iter()
+        .take(64)
+        .collect();
+    if !looks_like_html(&head) {
+        return Err(format!(
+            "frank: unpacked {n} files into {} but {HOME_PAGE} does not begin with '<' \
+             (first bytes {:02x?}) -- the embedded assets are Brotli-compressed and \
+             something wrote iter()'s bytes where get()'s belong; see lib.rs's head",
+            root.display(),
+            &head[..head.len().min(8)],
         ));
     }
     fs::write(&stamp, &want).map_err(|e| io("write", &stamp, e))?;
@@ -998,6 +1066,24 @@ mod tests {
         assert!(cap.contains(r#""allow-sync-discover""#));
         let build = include_str!("../build.rs");
         assert!(build.contains(r#"commands(&["sync_discover"])"#));
+    }
+
+    /// The 6 Sep phone bug, as an assertion. The Brotli bytes are real: they
+    /// are the first eight of `brotli.compress(b"<!doctype html>...", 11)`,
+    /// which is what `iter()` was handing the unpack.
+    #[test]
+    fn the_unpacked_home_page_must_begin_with_a_page() {
+        assert!(looks_like_html(b"<!doctype html>\n<html lang=\"en\">"));
+        assert!(looks_like_html(b"<!DOCTYPE html>"));
+        assert!(looks_like_html(b"\n\n  <html>"), "leading whitespace is fine");
+        assert!(looks_like_html(b"\xef\xbb\xbf<!doctype html>"), "and a BOM");
+
+        // what the phone actually got
+        assert!(!looks_like_html(&[0x1b, 0xd1, 0x02, 0x40, 0x2d, 0x0e, 0xec, 0x36]));
+        assert!(!looks_like_html(b""), "an empty file is not a page");
+        assert!(!looks_like_html(b"   "), "and neither is whitespace");
+        assert!(!looks_like_html(b"PK\x03\x04"), "nor a zip");
+        assert!(!looks_like_html(b"doctype html>"), "nor HTML with its bracket gone");
     }
 
     #[test]
