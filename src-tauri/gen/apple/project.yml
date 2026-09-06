@@ -53,6 +53,15 @@ targets:
           - UIInterfaceOrientationLandscapeRight
         NSMicrophoneUsageDescription: Frank listens for the hands-free trigger and for the phrase after it. Nothing is recorded or sent anywhere; the audio is used on this phone and discarded.
         NSSpeechRecognitionUsageDescription: Frank turns what you say into text on this phone so it can act on it -- "read on", "what?", the name of a chapter.
+        # Sync (job 26, 6 Sep). iOS 14+ asks once before an app may look at the
+        # local network; this sentence is the ask. NSBonjourServices names the
+        # one service the browse is allowed to see. NSAllowsLocalNetworking lets
+        # the page fetch http://<lan address> -- Studio is plain HTTP on the LAN
+        # and App Transport Security would otherwise refuse it silently.
+        NSLocalNetworkUsageDescription: Frank looks for Frank Studio on this network to sync your books, marks and reading position with it. Nothing leaves your network.
+        NSBonjourServices: [_ttstv._tcp]
+        NSAppTransportSecurity:
+          NSAllowsLocalNetworking: true
         CFBundleShortVersionString: 0.1.0
         CFBundleVersion: "0.1.0"
     entitlements:

@@ -9,7 +9,7 @@
     "beforeDevCommand": "python3 tools/prebuild.py"
   },
   "app": {
-    "withGlobalTauri": false,
+    "withGlobalTauri": true,
     "windows": [],
     "security": {
       "csp": null

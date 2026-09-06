@@ -88,9 +88,12 @@
 //! uses; in release there is exactly one source, the data dir.
 
 use std::borrow::Cow;
+use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Component, Path, PathBuf};
+use std::time::{Duration, Instant};
 
+use serde::Serialize;
 use tauri::{Manager, UriSchemeContext, WebviewUrl, WebviewWindowBuilder, Wry};
 
 /// The scheme. One word, and it is in three places that must agree: here, the
@@ -132,6 +135,122 @@ fn shell_origin() -> &'static str {
 fn shell_url(path: &str) -> String {
     format!("{}/{}", shell_origin(), path)
 }
+
+// ------------------------------------------------------------------- sync
+//
+// Job 26 (Osca, 6 Sep): *"a Sync button in both, in the Settings"*. The
+// button is the shell's (`settings/settings.js`, the same file the Mac runs)
+// and everything it does is `fetch` against the Studio it paired with --
+// pull the manifest, pull the files, push the marks and the position. The
+// ONE thing a page cannot do for itself is find Studio: a webview has no
+// multicast socket. So this crate offers exactly one command, `sync_discover`,
+// which browses `_ttstv._tcp` for a moment and answers what it saw, and
+// injects a `window.TTSTVHost` with one method that calls it. Pairing, the
+// token, the store, the merge: none of it is here. The phone's half of sync
+// is a browse and forty lines.
+
+/// The service `studio/sync.py::Advert` registers, and the one
+/// `NSBonjourServices` (gen/apple/project.yml) lets this app see.
+pub const SYNC_SERVICE: &str = "_ttstv._tcp.local.";
+
+/// How long a browse waits for answers. A Studio on the same network answers
+/// its first query inside a few hundred milliseconds; the rest is for a
+/// sleepy Wi-Fi radio. The page's own timeout (`settings.js`,
+/// `SYNC_DISCOVER_MS` + 1500) sits above this so it is this answer, not a
+/// race, that the row prints.
+pub const SYNC_BROWSE_MS: u64 = 2500;
+
+/// One Studio, as the row's picker draws it: `name` is what the advert
+/// called itself ("Osca's MacBook Air Studio"), `host` an address the phone
+/// can reach it at, `port` the LAN listener's.
+#[derive(Clone, Debug, Serialize, PartialEq, Eq)]
+pub struct Studio {
+    pub name: String,
+    pub host: String,
+    pub port: u16,
+}
+
+/// The page's view of the browse: `sync_discover(ms)` -> `[Studio]`, at most
+/// one per advertised name, IPv4 first. `ms` is clamped to
+/// `[500, 3 * SYNC_BROWSE_MS]` so a page cannot hold the radio open.
+#[tauri::command]
+fn sync_discover(ms: Option<u64>) -> Result<Vec<Studio>, String> {
+    let wait = Duration::from_millis(ms.unwrap_or(SYNC_BROWSE_MS).clamp(500, 3 * SYNC_BROWSE_MS));
+    let daemon = mdns_sd::ServiceDaemon::new().map_err(|e| format!("mDNS: {e}"))?;
+    let rx = daemon.browse(SYNC_SERVICE).map_err(|e| format!("mDNS browse: {e}"))?;
+    let mut found: BTreeMap<String, Studio> = BTreeMap::new();
+    let end = Instant::now() + wait;
+    while let Some(left) = end.checked_duration_since(Instant::now()).filter(|d| !d.is_zero()) {
+        match rx.recv_timeout(left) {
+            Ok(mdns_sd::ServiceEvent::ServiceResolved(info)) => {
+                if let Some(studio) = studio_of(&info) {
+                    found.entry(studio.name.clone()).or_insert(studio);
+                }
+            }
+            Ok(_) => continue,
+            Err(_) => break,
+        }
+    }
+    let _ = daemon.stop_browse(SYNC_SERVICE);
+    let _ = daemon.shutdown();
+    Ok(found.into_values().collect())
+}
+
+/// A resolved advert -> the row's `Studio`, preferring an IPv4 address (the
+/// page prints it, and `http://[fe80::…%en0]` is not a thing a person
+/// types). `None` when the advert carried no address at all.
+fn studio_of(info: &mdns_sd::ServiceInfo) -> Option<Studio> {
+    let mut v4 = None;
+    let mut v6 = None;
+    for a in info.get_addresses() {
+        match a {
+            std::net::IpAddr::V4(ip) => {
+                if v4.is_none() {
+                    v4 = Some(ip.to_string());
+                }
+            }
+            std::net::IpAddr::V6(ip) => {
+                if v6.is_none() {
+                    v6 = Some(format!("[{ip}]"));
+                }
+            }
+        }
+    }
+    Some(Studio {
+        name: studio_name(info.get_fullname(), info.get_property_val_str("name")),
+        host: v4.or(v6)?,
+        port: info.get_port(),
+    })
+}
+
+/// The name the row prints: the advert's `name` TXT when it carries one,
+/// else the instance name cut off the full name
+/// (`Air Studio._ttstv._tcp.local.` -> `Air Studio`).
+fn studio_name(fullname: &str, txt: Option<&str>) -> String {
+    if let Some(n) = txt.filter(|n| !n.is_empty()) {
+        return n.to_string();
+    }
+    fullname
+        .strip_suffix(SYNC_SERVICE)
+        .map(|s| s.trim_end_matches('.'))
+        .unwrap_or(fullname)
+        .to_string()
+}
+
+/// `window.TTSTVHost`, injected into every page this app opens -- the
+/// desktop app's shape (`desktop/src/host.js`), one method wide. The shell
+/// checks for it and works without it: a page that is not in Frank simply
+/// finds no Studios and offers the address field instead.
+pub const HOST_JS: &str = r#"(function () {
+  "use strict";
+  var TAURI = window.__TAURI__ && window.__TAURI__.core;
+  if (!TAURI || typeof TAURI.invoke !== "function") return;
+  window.TTSTVHost = window.TTSTVHost || {};
+  /* the Bonjour browse behind the Transfer tab's Sync button (job 26) */
+  window.TTSTVHost.syncDiscover = function (ms) { return TAURI.invoke("sync_discover", { ms: ms }); };
+  window.TTSTVHost.deviceName = "Frank on this phone";
+})();
+"#;
 
 /// Turn a request path into a path under `root`, or `None` if it tries to leave.
 ///
@@ -400,6 +519,7 @@ fn not_here<R: tauri::Runtime>(app: &tauri::AppHandle<R>, root: &Path, path: &st
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .invoke_handler(tauri::generate_handler![sync_discover])
         // `Wry` and not a generic `R`: `Builder::default()` is a
         // `Builder<Wry>`, and spelling it lets the closure's argument type be
         // written down rather than inferred through a `_`.
@@ -467,6 +587,7 @@ pub fn run() {
                 WebviewUrl::CustomProtocol(shell_url(HOME_PAGE).parse()?),
             )
             .title("Frank")
+            .initialization_script(HOST_JS)
             .inner_size(1100.0, 800.0)
             .min_inner_size(400.0, 400.0)
             .build()?;
@@ -502,6 +623,39 @@ fn http_response(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_host_object_calls_the_one_command_and_nothing_else() {
+        // the page reaches the browse through window.TTSTVHost.syncDiscover
+        // and the browse is the command build.rs declares
+        assert!(HOST_JS.contains("window.TTSTVHost.syncDiscover"));
+        assert!(HOST_JS.contains(r#"invoke("sync_discover""#));
+        assert_eq!(HOST_JS.matches("invoke(").count(), 1, "one command, one call");
+        assert!(HOST_JS.contains("const TAURI = window.__TAURI__ && window.__TAURI__.core")
+            || HOST_JS.contains("var TAURI = window.__TAURI__ && window.__TAURI__.core"));
+        assert!(HOST_JS.contains("if (!TAURI"), "a page outside Frank gets no host object");
+    }
+
+    #[test]
+    fn the_service_is_the_one_studio_advertises_and_the_plist_allows() {
+        assert_eq!(SYNC_SERVICE, "_ttstv._tcp.local.");
+        let yml = include_str!("../gen/apple/project.yml");
+        assert!(yml.contains("NSBonjourServices: [_ttstv._tcp]"));
+        assert!(yml.contains("NSLocalNetworkUsageDescription:"));
+        assert!(yml.contains("NSAllowsLocalNetworking: true"));
+        let cap = include_str!("../capabilities/default.json");
+        assert!(cap.contains(r#""allow-sync-discover""#));
+        let build = include_str!("../build.rs");
+        assert!(build.contains(r#"commands(&["sync_discover"])"#));
+    }
+
+    #[test]
+    fn the_rows_name_is_the_txt_or_the_instance() {
+        assert_eq!(studio_name("Air Studio._ttstv._tcp.local.", Some("Osca's Air Studio")), "Osca's Air Studio");
+        assert_eq!(studio_name("Air Studio._ttstv._tcp.local.", Some("")), "Air Studio");
+        assert_eq!(studio_name("Air Studio._ttstv._tcp.local.", None), "Air Studio");
+        assert_eq!(studio_name("odd", None), "odd");
+    }
 
     #[test]
     fn resolve_refuses_to_leave_the_shell() {

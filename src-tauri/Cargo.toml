@@ -22,3 +22,13 @@ tauri-build = { version = "2.6.3", features = [] }
 tauri = { version = "2.11.3", features = [] }
 tauri-plugin-log = "2"
 log = "0.4"
+# Sync (job 26, 6 Sep): the phone finds Studio on the network by Bonjour --
+# `_ttstv._tcp`, what `studio/sync.py::Advert` registers. Pure Rust, no
+# platform framework, so one crate serves the simulator, the phone and
+# Android. Its cost, said once: it browses with its own multicast socket, and
+# on a real iPhone (14+) that socket wants the `com.apple.developer.
+# networking.multicast` entitlement, which Apple grants on request to a paid
+# team -- so on Osca's phone under the free team the browse may find nothing,
+# and the row then takes the address Studio's row shows (PHONE.md §8).
+mdns-sd = "0.13"
+serde = { version = "1", features = ["derive"] }

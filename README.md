@@ -31,6 +31,34 @@ Everything else: **`PHONE.md`**.
 
 ## Status
 
+### 6 Sep — sync: the phone finds Studio (job 26; the report is TTSTV `studio/STATUS.md`, top entry)
+
+**Built.** `src-tauri/src/lib.rs`: `sync_discover(ms)` — a Bonjour browse of
+`_ttstv._tcp` (`mdns-sd`, ≤ 2.5 s, one `Studio {name, host, port}` per advert,
+IPv4 first) — and `HOST_JS`, the one-method `window.TTSTVHost` the shell's
+Transfer tab calls (`settings/settings.js`, `syncDiscover`), injected by
+`initialization_script`. `build.rs` declares the command, `capabilities/default.json`
+grants `allow-sync-discover`, `tauri.conf.json` `withGlobalTauri: true`, `Cargo.toml`
+`mdns-sd 0.13` + `serde`; `gen/apple/project.yml` gains `NSLocalNetworkUsageDescription`,
+`NSBonjourServices: [_ttstv._tcp]` and `NSAppTransportSecurity.NSAllowsLocalNetworking`
+(the page fetches plain `http://<lan>`). Everything else sync does — pair, pull, push —
+is the shell's own `fetch`. 3 rust tests added (string/const asserts).
+
+**Verified.** *live, cloud container*: the sync block of `lib.rs` extracted into a crate
+with `mdns-sd 0.13.11` — a browse with nobody advertising answers `[]` inside 2.5 s; a
+Python `zeroconf` sidecar registering exactly `studio/sync.py::Advert`'s shape is found:
+`Studio { name: "Test Studio", host: "127.0.0.1", port: 41499 }`. *unit*: `pytest tests`
+14 pass, 1 fails at HEAD (`android_permissions.py` names `asr.js`). *not verified*: the
+real crate under cargo (none reachable from Cowork), the simulator, the phone.
+
+**Owed, in order** (`PHONE.md` §1 first): `python3 tools/import_shell.py --ttstv …` — the
+bridge cannot clear `shell/`, so the shell here is still the 5 Sep one without the Sync
+row; `cargo test`; `tauri ios dev`. **Known**: on a real iPhone the browse wants the
+multicast entitlement Apple grants to paid teams — expect `[]` there and the row's
+address field; the fix is an `NWBrowser` Swift plugin (half a day, Osca's Mac).
+`Cargo.lock` was resolved by the Mac's rust-analyzer mid-session and is committed with
+the `Cargo.toml` it belongs to. `.git/index.lock` twice into `_to_delete/`.
+
 ### 5 Sep — the phone app moves into its own repo (`d06e239`)
 
 **1. Built.** `src-tauri/` — TTSTV's `Frank/src-tauri` moved whole; `src/lib.rs`
