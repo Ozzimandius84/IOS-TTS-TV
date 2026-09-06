@@ -1,0 +1,474 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>TTSTV Reader — phone probe</title>
+<meta name="theme-color" content="#832f2b">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<!--
+  reader/probe.html -- answers PROMPTS/phone-app.md's four phone-only unknowns,
+  from the phone itself: storage ceiling, 7-day eviction, background audio,
+  Media Session in standalone. Single self-contained file (no fetch of any
+  other file, no dependency on reader.html) so it works identically whether
+  opened as a tab, installed standalone, or offline via sw.js's shell cache.
+  Everything below writes into one shared, copyable log -- the point of this
+  page is text someone can paste back, not a UI to admire.
+-->
+<style>
+  :root {
+    --bg: #fcfcfb; --fg: #0b0b0b; --fg-dim: #52514f; --accent: #832f2b;
+    --border: #e4e3e0; --panel-bg: #ffffff; --control-bg: #f5f5f3; --ok: #3f7a45; --bad: #a3402f;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #131316; --fg: #e8e7e6; --fg-dim: #98979b; --accent: #c9c4bb;
+      --border: #2c2c32; --panel-bg: #1a1a1f; --control-bg: #1a1a1f; --ok: #7fc08a; --bad: #e07a5f;
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: var(--bg); color: var(--fg); }
+  body {
+    font-family: -apple-system, system-ui, sans-serif;
+    padding: 16px; padding-bottom: 48px; max-width: 720px; margin: 0 auto;
+    font-size: 17px; line-height: 1.4;
+  }
+  h1 { font-size: 1.25rem; margin: 0 0 4px; }
+  p.lede { color: var(--fg-dim); margin: 0 0 20px; font-size: 0.92rem; }
+  section {
+    background: var(--panel-bg); border: 1px solid var(--border); border-radius: 12px;
+    padding: 14px 16px; margin-bottom: 14px;
+  }
+  section h2 { font-size: 1rem; margin: 0 0 8px; }
+  section h2 small { color: var(--fg-dim); font-weight: 400; }
+  .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 8px 0; }
+  .stat { font-size: 0.95rem; }
+  .stat b { color: var(--accent); }
+  button {
+    min-height: 44px; padding: 0 16px; border-radius: 10px;
+    border: 1px solid var(--border); background: var(--control-bg); color: var(--fg);
+    font-size: 0.95rem; cursor: pointer;
+  }
+  button:active { opacity: 0.7; }
+  button.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .ok { color: var(--ok); font-weight: 600; }
+  .bad { color: var(--bad); font-weight: 600; }
+  .yn { font-size: 1.1rem; font-weight: 700; }
+  #log {
+    width: 100%; height: 220px; margin-top: 4px;
+    font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 0.78rem;
+    background: var(--bg); color: var(--fg); border: 1px solid var(--border);
+    border-radius: 10px; padding: 8px; resize: vertical;
+  }
+  #log:empty::before { content: ""; }
+</style>
+</head>
+<body>
+<h1>Phone probe</h1>
+<p class="lede">Answers the four unknowns in <code>PROMPTS/phone-app.md</code>. Run each section, then
+copy the log at the bottom and send it back — that's the point of this page.</p>
+
+<section id="secStorage">
+  <h2>1. Storage ceiling</h2>
+  <div class="row stat" id="storageEstimate">checking navigator.storage.estimate()…</div>
+  <div class="row">
+    <button id="fillBtn">Fill storage (10 MB steps) until it fails</button>
+    <button id="clearFillBtn">Clear filled test data</button>
+  </div>
+  <div class="row stat" id="fillResult"></div>
+</section>
+
+<section id="secEviction">
+  <h2>2. Eviction <small>(7-day question — reopen this page after a week)</small></h2>
+  <div class="row stat" id="persistState"></div>
+  <div class="row"><button id="persistBtn">Request persistent storage</button></div>
+  <p class="lede" style="margin:8px 0;">Three independent markers, since Safari's eviction history hasn't
+  always treated every storage type the same — if one survives and another doesn't, that's itself the finding.</p>
+  <div class="row stat" id="markerResult"></div>
+  <div class="row stat" id="markerResultLS"></div>
+  <div class="row stat" id="markerResultIDB"></div>
+</section>
+
+<section id="secAudio">
+  <h2>3. Background audio</h2>
+  <p class="lede" style="margin:0 0 8px;">Press play, then lock the screen or switch apps for at least
+  30 seconds, and come back. The log below records what happened while this tab was hidden.</p>
+  <div class="row">
+    <button id="playBtn" class="primary">&#9658; Play test tone</button>
+    <button id="pauseBtn">&#10074;&#10074; Pause</button>
+    <button id="stopBtn">&#9632; Stop</button>
+  </div>
+  <div class="row stat">audio.currentTime: <b id="audioTime">0.0s</b> — elapsed since play: <b id="audioElapsed">0.0s</b></div>
+</section>
+
+<section id="secMediaSession">
+  <h2>4. Media Session</h2>
+  <div class="row stat" id="msSupport"></div>
+  <div class="row stat" id="msAccepted"></div>
+  <p class="lede" style="margin:8px 0 0;">With the tone playing, use the lock-screen / notification-shade
+  transport controls (play, pause, seek, next/prev track) — every action actually received is logged below.</p>
+</section>
+
+<section>
+  <h2>Log <small>select all &amp; copy, or use the button</small></h2>
+  <div class="row">
+    <button id="copyResultsBtn" class="primary">Copy results (JSON)</button>
+    <button id="copyBtn">Copy log</button>
+    <button id="clearLogBtn">Clear log</button>
+  </div>
+  <p class="lede" style="margin:8px 0 0;">"Copy results" puts one JSON blob on the clipboard — the four
+  unknowns' current answers, not the whole log — so a phone answer travels back to a chat by paste.</p>
+  <textarea id="log" readonly></textarea>
+</section>
+
+<script>
+"use strict";
+
+// ------------------------------------------------------------------- log
+// Every line is also persisted to localStorage as it's written, not just
+// held in the textarea -- a Media Session tap received while the phone is
+// locked can be followed by the backgrounded tab being discarded/reloaded
+// before anyone looks at it, and an in-memory-only log would lose exactly
+// the event this page exists to catch. Capped so a long background session
+// can't grow it without bound.
+const logEl = document.getElementById("log");
+const LOG_KEY = "ttstv-probe-log";
+function persistLogLine(line) {
+  try {
+    const arr = JSON.parse(localStorage.getItem(LOG_KEY) || "[]");
+    arr.push(line);
+    while (arr.length > 1000) arr.shift();
+    localStorage.setItem(LOG_KEY, JSON.stringify(arr));
+  } catch (e) { /* localStorage unavailable -- log still works in-memory */ }
+}
+function log(msg) {
+  const t = new Date().toISOString().split("T")[1].replace("Z", "");
+  const line = `[${t}] ${msg}`;
+  logEl.value += line + "\n";
+  logEl.scrollTop = logEl.scrollHeight;
+  persistLogLine(line);
+}
+document.getElementById("copyBtn").addEventListener("click", async () => {
+  logEl.select();
+  try {
+    await navigator.clipboard.writeText(logEl.value);
+    log("(log copied to clipboard)");
+  } catch (e) {
+    document.execCommand("copy"); // fallback where clipboard API is blocked
+  }
+});
+document.getElementById("clearLogBtn").addEventListener("click", () => {
+  logEl.value = "";
+  try { localStorage.removeItem(LOG_KEY); } catch (e) { /* ignore */ }
+});
+
+// Replay whatever survived a previous visit (including one that ended with
+// the phone locked) before this visit's own lines start.
+try {
+  const prior = JSON.parse(localStorage.getItem(LOG_KEY) || "[]");
+  if (prior.length) {
+    logEl.value += prior.join("\n") + "\n";
+    logEl.value += "----- resumed " + new Date().toISOString() + " -----\n";
+  }
+} catch (e) { /* ignore */ }
+
+log(`ua: ${navigator.userAgent}`);
+log(`standalone: ${window.matchMedia("(display-mode: standalone)").matches || navigator.standalone === true}`);
+
+// -------------------------------------------------------------- results
+// One shared object, updated in place as each section runs, so "Copy
+// results" always has the latest answer for each of the four unknowns
+// without re-running every check itself (some, like the fill button, are
+// destructive/slow and shouldn't fire again just to build a JSON blob).
+const results = {
+  ua: navigator.userAgent,
+  standalone: window.matchMedia("(display-mode: standalone)").matches || navigator.standalone === true,
+  storage: { quota: null, usage: null, fill: null },
+  eviction: { persisted: null, markers: { cacheStorage: null, localStorage: null, indexedDB: null } },
+  backgroundAudio: null,
+  mediaSession: { supported: null, acceptedHandlers: null, receivedActions: [] },
+};
+
+// ------------------------------------------------------------ 1. storage
+function fmtMB(bytes) { return (bytes / (1024 * 1024)).toFixed(1) + " MB"; }
+
+async function refreshStorageEstimate() {
+  const el = document.getElementById("storageEstimate");
+  if (!(navigator.storage && navigator.storage.estimate)) {
+    el.textContent = "navigator.storage.estimate() not supported.";
+    return;
+  }
+  const { usage, quota } = await navigator.storage.estimate();
+  const pct = quota ? ((usage / quota) * 100).toFixed(1) : "?";
+  el.innerHTML = `quota: <b>${fmtMB(quota)}</b> — usage: <b>${fmtMB(usage)}</b> (${pct}%)`;
+  log(`storage.estimate(): quota=${fmtMB(quota)} usage=${fmtMB(usage)}`);
+  results.storage.quota = quota;
+  results.storage.usage = usage;
+}
+refreshStorageEstimate();
+
+const FILL_CACHE = "ttstv-probe-fill";
+document.getElementById("fillBtn").addEventListener("click", async () => {
+  const resultEl = document.getElementById("fillResult");
+  const cache = await caches.open(FILL_CACHE);
+  const chunk = new Uint8Array(10 * 1024 * 1024); // 10 MB, per phone-app.md's unit
+  let steps = 0;
+  log("fill: starting 10 MB steps…");
+  try {
+    while (true) {
+      const blob = new Blob([chunk]);
+      await cache.put(`/probe-fill/${steps}`, new Response(blob));
+      steps++;
+      resultEl.textContent = `wrote ${steps * 10} MB so far…`;
+      await refreshStorageEstimate();
+    }
+  } catch (e) {
+    const total = steps * 10;
+    resultEl.innerHTML = `stopped after <b>${total} MB</b> (${steps} steps): ${e.name || e}`;
+    log(`fill: stopped at ${total} MB (${steps} x 10 MB) — ${e.name || e}: ${e.message || ""}`);
+    results.storage.fill = { stoppedAtMB: total, steps, error: e.name || String(e) };
+    await refreshStorageEstimate();
+  }
+});
+document.getElementById("clearFillBtn").addEventListener("click", async () => {
+  await caches.delete(FILL_CACHE);
+  document.getElementById("fillResult").textContent = "fill cache cleared.";
+  log("fill: cleared ttstv-probe-fill");
+  results.storage.fill = null;
+  await refreshStorageEstimate();
+});
+
+// ----------------------------------------------------------- 2. eviction
+const MARKER_CACHE = "ttstv-probe-marker";
+const MARKER_URL = "/probe-marker";
+
+async function refreshPersistState() {
+  const el = document.getElementById("persistState");
+  if (!(navigator.storage && navigator.storage.persisted)) {
+    el.textContent = "navigator.storage.persisted() not supported.";
+    return;
+  }
+  const persisted = await navigator.storage.persisted();
+  el.innerHTML = `persisted(): <b class="${persisted ? "ok" : "bad"}">${persisted}</b>`;
+  log(`storage.persisted(): ${persisted}`);
+  results.eviction.persisted = persisted;
+}
+document.getElementById("persistBtn").addEventListener("click", async () => {
+  if (!(navigator.storage && navigator.storage.persist)) {
+    log("storage.persist(): not supported");
+    return;
+  }
+  const granted = await navigator.storage.persist();
+  log(`storage.persist() requested: granted=${granted}`);
+  refreshPersistState();
+});
+refreshPersistState();
+
+function describeMarker(kind, data, now) {
+  if (data) {
+    const first = new Date(data.firstSeen);
+    const days = ((now - first) / 86400000).toFixed(2);
+    return {
+      html: `<b>${kind}</b>: first written <b>${data.firstSeen}</b> — <b>${days} days ago</b>, still here.`,
+      logLine: `marker(${kind}) found: firstSeen=${data.firstSeen} (${days} days ago) — survived`,
+      summary: { found: true, firstSeen: data.firstSeen, daysAgo: Number(days) },
+    };
+  }
+  return {
+    html: `<b>${kind}</b>: no marker found — wrote one now (<b>${now.toISOString()}</b>). Reopen in a week.`,
+    logLine: `marker(${kind}) not found — wrote new marker at ${now.toISOString()}`,
+    summary: { found: false, firstSeen: now.toISOString(), daysAgo: 0 },
+  };
+}
+
+async function checkMarker() {
+  const el = document.getElementById("markerResult");
+  const cache = await caches.open(MARKER_CACHE);
+  const hit = await cache.match(MARKER_URL);
+  const now = new Date();
+  const data = hit ? await hit.json() : null;
+  const { html, logLine, summary } = describeMarker("Cache Storage", data, now);
+  el.innerHTML = html;
+  log(logLine);
+  results.eviction.markers.cacheStorage = summary;
+  await cache.put(MARKER_URL, new Response(JSON.stringify({ firstSeen: data ? data.firstSeen : now.toISOString(), lastSeen: now.toISOString() })));
+}
+checkMarker();
+
+const LS_MARKER_KEY = "ttstv-probe-marker";
+function checkMarkerLocalStorage() {
+  const el = document.getElementById("markerResultLS");
+  const now = new Date();
+  let data = null;
+  try {
+    const raw = localStorage.getItem(LS_MARKER_KEY);
+    data = raw ? JSON.parse(raw) : null;
+    const { html, logLine, summary } = describeMarker("localStorage", data, now);
+    el.innerHTML = html;
+    log(logLine);
+    results.eviction.markers.localStorage = summary;
+    localStorage.setItem(LS_MARKER_KEY, JSON.stringify({ firstSeen: data ? data.firstSeen : now.toISOString(), lastSeen: now.toISOString() }));
+  } catch (e) {
+    el.innerHTML = `<b>localStorage</b>: unavailable (${e.message || e})`;
+    results.eviction.markers.localStorage = { error: e.message || String(e) };
+  }
+}
+checkMarkerLocalStorage();
+
+const IDB_NAME = "ttstv-probe-db";
+const IDB_STORE = "markers";
+function openMarkerDB() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(IDB_NAME, 1);
+    req.onupgradeneeded = () => req.result.createObjectStore(IDB_STORE);
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+async function checkMarkerIndexedDB() {
+  const el = document.getElementById("markerResultIDB");
+  if (!("indexedDB" in window)) { el.innerHTML = `<b>IndexedDB</b>: not supported.`; return; }
+  const now = new Date();
+  try {
+    const db = await openMarkerDB();
+    const data = await new Promise((resolve, reject) => {
+      const tx = db.transaction(IDB_STORE, "readonly");
+      const req = tx.objectStore(IDB_STORE).get("marker");
+      req.onsuccess = () => resolve(req.result || null);
+      req.onerror = () => reject(req.error);
+    });
+    const { html, logLine, summary } = describeMarker("IndexedDB", data, now);
+    el.innerHTML = html;
+    log(logLine);
+    results.eviction.markers.indexedDB = summary;
+    await new Promise((resolve, reject) => {
+      const tx = db.transaction(IDB_STORE, "readwrite");
+      tx.objectStore(IDB_STORE).put({ firstSeen: data ? data.firstSeen : now.toISOString(), lastSeen: now.toISOString() }, "marker");
+      tx.oncomplete = resolve;
+      tx.onerror = () => reject(tx.error);
+    });
+  } catch (e) {
+    el.innerHTML = `<b>IndexedDB</b>: error (${e.message || e})`;
+    results.eviction.markers.indexedDB = { error: e.message || String(e) };
+  }
+}
+checkMarkerIndexedDB();
+
+// -------------------------------------------------------- 3. background audio
+// Synthesized in JS, not a bundled file, so this page stays self-contained --
+// a short looping sine tone encoded as a real WAV Blob, played through a real
+// <audio> element (not raw Web Audio API) since it's the element type Media
+// Session and background-audio behavior actually attach to.
+function makeToneBlobURL(seconds = 2, freq = 440, sampleRate = 8000) {
+  const n = seconds * sampleRate;
+  const buf = new ArrayBuffer(44 + n * 2);
+  const view = new DataView(buf);
+  const writeStr = (off, s) => { for (let i = 0; i < s.length; i++) view.setUint8(off + i, s.charCodeAt(i)); };
+  writeStr(0, "RIFF"); view.setUint32(4, 36 + n * 2, true); writeStr(8, "WAVE");
+  writeStr(12, "fmt "); view.setUint32(16, 16, true); view.setUint16(20, 1, true);
+  view.setUint16(22, 1, true); view.setUint32(24, sampleRate, true);
+  view.setUint32(28, sampleRate * 2, true); view.setUint16(32, 2, true); view.setUint16(34, 16, true);
+  writeStr(36, "data"); view.setUint32(40, n * 2, true);
+  for (let i = 0; i < n; i++) {
+    // fade the last 5% in/out so the loop point doesn't click
+    const fade = Math.min(1, Math.min(i, n - i) / (n * 0.05));
+    const sample = Math.sin(2 * Math.PI * freq * (i / sampleRate)) * 0.3 * fade;
+    view.setInt16(44 + i * 2, sample * 32767, true);
+  }
+  return URL.createObjectURL(new Blob([buf], { type: "audio/wav" }));
+}
+
+const audio = new Audio(makeToneBlobURL());
+audio.loop = true;
+let playStartedAt = null;
+
+document.getElementById("playBtn").addEventListener("click", () => {
+  audio.play().then(() => { playStartedAt = playStartedAt || Date.now(); log("audio: play()"); });
+});
+document.getElementById("pauseBtn").addEventListener("click", () => { audio.pause(); log("audio: pause()"); });
+document.getElementById("stopBtn").addEventListener("click", () => {
+  audio.pause(); audio.currentTime = 0; playStartedAt = null; log("audio: stop()");
+});
+
+setInterval(() => {
+  document.getElementById("audioTime").textContent = audio.currentTime.toFixed(1) + "s";
+  document.getElementById("audioElapsed").textContent =
+    (playStartedAt ? ((Date.now() - playStartedAt) / 1000).toFixed(1) : "0.0") + "s";
+}, 250);
+
+// visibilitychange brackets the "locked the screen" window: JS timers throttle
+// or stop while hidden, but audio.currentTime is driven by the media engine,
+// not a JS timer, so comparing it across the hidden window is the real signal.
+let hiddenAt = null, hiddenAudioTime = null;
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) {
+    hiddenAt = Date.now();
+    hiddenAudioTime = audio.currentTime;
+    log(`page hidden — audio.currentTime=${audio.currentTime.toFixed(1)}s, paused=${audio.paused}`);
+  } else if (hiddenAt !== null) {
+    const wallSec = (Date.now() - hiddenAt) / 1000;
+    const audioAdvanced = audio.currentTime - hiddenAudioTime;
+    // loop means audio.currentTime can wrap; compare against wall time modulo
+    // loop length isn't worth the complexity here -- report both raw numbers
+    // and let a human read "did it keep playing" off them.
+    const verdict = !audio.paused && audioAdvanced > wallSec * 0.5 ? "YES, kept playing" : "looks paused/stopped";
+    log(`page visible again — hidden for ${wallSec.toFixed(1)}s (wall), audio advanced ${audioAdvanced.toFixed(1)}s, paused=${audio.paused} -> background audio: ${verdict}`);
+    results.backgroundAudio = { hiddenWallSec: Number(wallSec.toFixed(1)), audioAdvancedSec: Number(audioAdvanced.toFixed(1)), pausedAfter: audio.paused, verdict };
+    hiddenAt = null;
+  }
+});
+
+// ------------------------------------------------------ 4. Media Session
+const msSupportEl = document.getElementById("msSupport");
+const msAcceptedEl = document.getElementById("msAccepted");
+if (!("mediaSession" in navigator)) {
+  msSupportEl.innerHTML = `<span class="bad">navigator.mediaSession not supported.</span>`;
+  log("mediaSession: not supported");
+  results.mediaSession.supported = false;
+} else {
+  msSupportEl.innerHTML = `<span class="ok">navigator.mediaSession supported.</span>`;
+  results.mediaSession.supported = true;
+  navigator.mediaSession.metadata = new MediaMetadata({
+    title: "TTSTV probe tone", artist: "reader/probe.html", album: "phone probe",
+  });
+  const actions = ["play", "pause", "stop", "seekbackward", "seekforward", "previoustrack", "nexttrack"];
+  const accepted = [];
+  for (const action of actions) {
+    try {
+      navigator.mediaSession.setActionHandler(action, (details) => {
+        log(`mediaSession action received: ${action}${details && details.seekOffset ? " (" + details.seekOffset + "s)" : ""}`);
+        results.mediaSession.receivedActions.push({ action, seekOffset: (details && details.seekOffset) || null, at: new Date().toISOString() });
+      });
+      accepted.push(action);
+    } catch (e) {
+      log(`mediaSession.setActionHandler("${action}") rejected: ${e.message || e}`);
+    }
+  }
+  msAcceptedEl.innerHTML = `accepted handlers: <b class="ok">${accepted.join(", ") || "none"}</b>`;
+  log(`mediaSession accepted handlers: ${accepted.join(", ") || "none"}`);
+  results.mediaSession.acceptedHandlers = accepted;
+}
+
+// -------------------------------------------------------- copy results
+// A single JSON blob of the four unknowns' current answers, distinct from
+// "Copy log" (the full timestamped text log) -- this is the thing meant to
+// travel back to a chat by paste.
+document.getElementById("copyResultsBtn").addEventListener("click", async () => {
+  await refreshStorageEstimate();
+  await refreshPersistState();
+  const snapshot = { capturedAt: new Date().toISOString(), ...results };
+  const json = JSON.stringify(snapshot, null, 2);
+  try {
+    await navigator.clipboard.writeText(json);
+    log("(results JSON copied to clipboard)");
+  } catch (e) {
+    log(`copy results failed: ${e.message || e} — falling back to log textarea`);
+    logEl.value += json + "\n";
+    logEl.select();
+    document.execCommand("copy");
+  }
+});
+</script>
+</body>
+</html>

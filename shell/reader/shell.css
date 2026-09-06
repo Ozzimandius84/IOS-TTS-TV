@@ -1,0 +1,408 @@
+/* ENGINE · the reader's own chrome: the stack's box, the head, the scrub's labels, the word's subtitle
+   · bench: word.html · mounted by: see MAP.md (generated -- `python3 map.py`) */
+/* ========================= THE SHELL — one zoom ============================
+   Thirteenth pass, 4 September: book-nav.js's own depth stack, generalised
+   into a real STACK of left panes this pass -- see that file's own long
+   comment for the actual mechanic. This sheet is just where each stop
+   lives: the DASHBOARD (a real grid of cards now, not a Column -- "it will
+   NOT be a collect-page left pane page asset... more like a dashboard"),
+   the LEFT STACK (up to three narrow sidebars sliding OUT from under the
+   reader's own left edge, each one pushing everything closer to the
+   reader over to make room -- not a second page, and not a static overlay
+   either; #contentsbox is level 0's own fixed element, #leftmore is where
+   book-nav.js appends level 1 and 2's own elements on demand), its FULL
+   PAGE (page.css supplies this one entirely -- genuinely page.js, the
+   base layer for the whole left-stack range too, not only dx=0, with its
+   own running head/scrub hidden for one word alone -- and the book's own
+   cover too: chapter zero's own tinted `.opener` slide IS the title
+   screen, there is no separate one), and ONE WORD (right edge, same
+   shape, axes swapped several passes back -- see book-nav.js).
+   Also this pass: `.hint` moved off page.css's own `.runhead` corner (top
+   right) -- the two used to sit on top of each other, confirmed live, not
+   just reasoned from a still. `.hint` is bottom right now; `.runhead`
+   keeps the corner it already had on every other page in this app.
+   tokens.css supplies every colour and face throughout.
+   Fourteenth pass, 4 September: #book.pushed pulls the reading column
+   back off the true centred axis, but ONLY while a pane has actually
+   pushed the reader over -- see the long comment by that rule.
+   Fifteenth pass, 4 September: ONE WORD is no longer a panel of its own --
+   it zooms #readercol itself, in place. contentsbox/collpane widths were
+   already matched to collection-page.html's own scale (also the
+   fourteenth pass); the "pulls out fully" / "keeps snapping" bug that
+   made that hard to see clearly turned out to live entirely in
+   book-nav.js's own dx timing, not here -- see that file's own comment. */
+
+html,body{ margin:0; height:100%; overflow:hidden; background:var(--ground); }
+body{ font-family:var(--serif); color:var(--ink); }
+
+/* -------- THE DASHBOARD -- its own screen, never a point on the book's
+   own depth ("that is just dashboard"). Thirteenth pass: a real CSS grid
+   of cards, several per row, scrolling only up and down -- "it will look
+   like LIBRARY in the app, ALMOST, it will be 4 books left to right, and
+   maybe 2-3 down". Nothing here turns or rides a barrel; that distinction
+   (dashboard vs. every contents pane, which IS still a Wheel, at every
+   depth) is the one book-nav.js draws in code, not only in this comment. */
+/* The library was a screen in this page: a #dashboard behind the reader,
+   with a grid of .libcard buttons built at mount. It is bench-library.html now --
+   its own page, its own styles -- so those rules are gone from here rather
+   than left to rot. Leaving a book navigates; see book-nav.js's own
+   closeToLibrary and shell.html's onLibrary. */
+
+/* -------- THE BOOK -- one open book, its three depths layered on top of
+   each other, crossfaded and slid by book-nav.js's own dx every frame.
+   There used to be a separate #titlescreen here ("sleep/awake and open and
+   close") -- gone, twelfth pass: it duplicated chapter zero's own tinted
+   `.opener` slide (page.css), which was always the real cover, "the
+   purple one". A book now opens straight onto the reader. */
+#book{ position:fixed; inset:0; z-index:3; opacity:0; pointer-events:none; }
+#book.open{ opacity:1; pointer-events:auto; }
+
+/* ---- FULL PAGE (dx=0, the default) -- genuinely page.js; page.css
+   supplies .pane/.column/.chapter/.opener/.runhead/.scrub entirely. Sits
+   UNDER the other two, which slide over it as they open. `left` is a real
+   push, set inline by book-nav.js each frame -- "make MY working page,
+   right pane, slightly smaller" -- not just a box sitting still while
+   something else covers part of it; 0 here is only the resting value
+   before any of that runs. */
+.readerbox{ position:fixed; top:0; right:0; bottom:0; left:0; z-index:1;
+  background:var(--ground); color:var(--ink); }
+
+/* ---- THE LEFT STACK (dx<0) -- "should become MY left pane": up to three
+   narrow sidebars, a Wheel Column each, sliding OUT from under the
+   reader's own left edge, not dropped on top of a page that never moves.
+   The reader underneath is never covered or replaced -- .readerbox stays
+   the visible, live page for this whole range, only pushed over (see its
+   own comment above) to make real room. Eleventh pass: this used to be a
+   static overlay, which is what read as "too far to the left of the
+   screen". Thirteenth pass: generalised from the one pane every book got
+   into a real stack -- "when you scroll left, you will see contents...
+   continue scrolling left, you will see ALL the ACTS... continue... ALL
+   THE PLAYS" -- #contentsbox is level 0 (closest to the reader, every
+   book's own immediate contents, unchanged element since the tenth pass);
+   #leftmore is an empty wrapper book-nav.js appends level 1 and 2's own
+   elements into, lazily, only for a book whose own `structure` reaches
+   that far up the tree. Every pane's own `left` (JS, book-nav.js's own
+   applyDx, no CSS transform any more) and the reader's own push read off
+   the SAME real widths, so the whole stack -- reader included -- stays
+   snug at every point of the slide, at every depth, never gapped, never
+   overlapping. Each level a little narrower than the one before it, "max
+   three in a screen" without one pane crowding the other two out. */
+/* Fourteenth pass, 4 September: "the space here is too large, between the
+   text and the pull out contents" -- confirmed live, real screenshots,
+   not reasoned from a still: page.css's own .chapter centres on the true
+   axis (margin-inline:auto) whether .readerbox is the whole window or, as
+   here, pushed over by an open pane -- correct at dx=0 (that centring IS
+   the reference this was measured off), wrong once pushed, because the
+   pane already reads as that side's own space and a column still centred
+   in what's left of the window puts a SECOND gap, nearly as wide again,
+   between the pane and where the text actually starts -- worse still for
+   a poem's own narrower --w (page.js's classifier), which leaves even
+   more spare width to split evenly on both sides. book-nav.js toggles
+   this class itself, straight off the same pushFromOutside it already
+   pushes .readerbox by, so it is set exactly when and only when a pane
+   is actually open -- reader-only and one word both leave it off. */
+/* THE COLUMN'S OWN PLACE. Osca: "the text only ever goes right, it never
+   goes left beyond a certain point, not SET in, but particular to each book.
+   It is CENTRED to the page, so you can't move the margin any further back."
+   Exactly so -- page.css centres .chapter with margin-inline:auto inside
+   whatever room is left, and its width is var(--w), which page.js sets PER
+   CHAPTER. So the left edge is (box - column)/2: a floor that moves with the
+   book, and nothing could push past it.
+
+   --colnudge is that floor made adjustable. It is padding on #readercol --
+   ONE element, layout only, no transform, no stacking context, no layer --
+   so the chapters centre inside a narrower box and their centre moves left
+   with it. It is written when the slider moves and at no other time; the
+   last two rounds of slowness were both me writing this sort of thing every
+   frame, and it is not going to happen a third time.
+
+   This also retires #book.pushed's own left-alignment, which was the jump:
+   it switched the column from centred to left-aligned in a single frame the
+   moment a pane crossed a threshold. The column is simply always centred
+   now, at whatever offset you choose, so there is no threshold to cross. */
+#readercol{ padding-right: var(--colnudge, 0px); }
+
+/* #book.pushed is gone. It narrowed the column whenever a pane was out, and
+   narrowing a column RE-WRAPS it -- which is what made the text jitter left
+   and right while the first pane was being dragged (measured off a screen
+   recording: 300 -> 340 -> 306 -> 338 -> 300 in a fifth of a second). The
+   reader slides and keeps its measure; nothing re-wraps while anything
+   moves. */
+
+/* THE SCRUB'S OWN LABELS, over a book this size. page.css says
+   `.scrub .g.on .l, .scrub:hover .l{ opacity:1 }` -- hovering ANYWHERE on
+   the bar reveals EVERY chapter's label at once. On the reference book that
+   is a handful; on the complete Shakespeare it is 865 of them stacked into
+   an illegible smear down the right-hand side, most of them reading
+   "Dramatis Personæ" -- Osca's own words, with the cursor sitting on the
+   scrub: "Look at the mess in the right." Only the one actually under the
+   pointer, and the one that is live, from here on. page.css itself is
+   untouched: this is the shell's own book, and the shell's own override. */
+/* Chapters that are off screen skip layout and paint entirely -- what made
+   the complete Shakespeare snappy. `contain-intrinsic-size: auto <fallback>`
+   is the placeholder they stand at until they have been rendered: `auto`
+   means the browser REMEMBERS each one's real size once it has seen it, so
+   the estimate corrects itself as you read. The fallback is one screenful, a
+   plain guess for a chapter nobody has visited yet.
+
+   book-nav.js used to measure all 865 and write each its own height here.
+   That is where the wrong clicks came from -- it was measuring sections the
+   browser had already skipped, so it wrote fictions. Nothing measures now;
+   everything reads the browser's own current geometry instead. Toggleable
+   from the bench so the difference can be felt rather than argued about. */
+/* (the skip is page.css's now -- it is the reading page's own behaviour,
+   and the bench for that page has to be able to show it too.) */
+
+/* WHAT THE READER CATCHES ON. Osca: "in main reader now, scrolling down,
+   snap is too much, but for the contents view it's just right."
+
+   page.css's snap targets are not one per chapter: page.js gives EVERY
+   speaker turn its own <snap>, so in a play the reader is catching every few
+   lines, and `proximity` grabs at whichever is nearest whenever a scroll ends
+   -- which is what makes reading down feel like being handled. The contents
+   wheel snaps on its own physics in book-nav.js and is untouched by any of
+   this, which is why that one already feels right.
+
+   So the pane keeps its snap; what changes is how much of the page is a
+   target. `chapters` -- the default -- leaves only the chapter's own opener
+   and its end, so a chapter still settles when you arrive at one and nothing
+   catches in between; the opener also stops FORBIDDING a skip, so a long
+   flick can pass several. `speeches` is page.css's own behaviour, kept for
+   comparison. `nothing` takes every target out. */
+/* (and so is the snap: see page.css, scoped to .pane so both pages get it.) */
+
+/* --persp lets the tuner flatten the barrel's own foreshortening; wheel.css
+   hardcodes 900px, and this is the shell's own override, not an edit to it. */
+#book .wheel{ perspective: var(--persp, 900px); }
+
+/* A COLOUR FROM THE SECOND CONTENTS ONWARD. Osca: "if a book is MORE than
+   one contents page, I want that one coloured -- I want EVERY other CONTENTS
+   asset to be coloured, starting with the second one."
+
+   So level 0 -- the pane nearest the reader, the one every book has -- keeps
+   the ordinary ink it always had, and is not marked at all. Only a book whose
+   own structure runs deeper ever shows a second pane, and from there each
+   level up the branch takes its own colour, so how far out you are is legible
+   at a glance instead of by counting panes.
+
+   The rows themselves are untouched -- they keep exactly the ink wheel.css
+   gives them. Only the pane's own surface carries the colour. */
+/* BLOCK COLOUR ON THE PANE, AND ONLY ON THE PANE. Osca: "Look you made the
+   text a colour, that is not what I want, I want the whole vertical pane a
+   colour, every other one, as you've done - but NOT the text, the pane behind
+   it." So: a wash on the pane's own surface, and the rows keep exactly the
+   ink wheel.css gives them. The first pane -- closest to the reader, the one
+   every book has -- is not marked at all. */
+/* EVERY OTHER ONE. Osca: "I said EVERY OTHER, that means skip the 1, so
+   colour 2, skip 3, so colour 4. NOT TWO IN A ROW!" -- so it alternates from
+   the second pane out, and the panes between stay on the page's own ground.
+   Counting from the reader: 1st plain, 2nd washed, 3rd plain, 4th washed. */
+/* ON THE WHEEL, NOT THE PANE BOX. Osca: "Second bar isn't lined up
+   correctly." It wasn't: .collpane's own box is the column PLUS --coll-pad,
+   the gutter that holds the live-row marker, so a wash painted on the box
+   started a pad's width to the left of the text it belonged to and read as
+   one column out of step. The wheel inside is inset by exactly that pad, so
+   painting it there lands the colour on the column itself. */
+/* ONE PLACE FOR THE COLOUR. It is the shell's own rust, not the book's:
+   nothing in a book carries a palette -- book.json has none, and the
+   book-data.js the reader actually loads carries neither a palette nor a
+   cover -- so there is nothing per-book to take a colour FROM yet. The
+   cover.jpg sitting in each book's folder is a generated cover, not artwork
+   out of the text (Shakespeare's own book.json records "no images were found
+   in the source"). Sampling that cover for a per-book wash is a real option;
+   it is not what is happening today. */
+/* THE PANES ARE THEIR OWN ASSET. Everything about how a contents pane looks
+   and where it sits is pane.css and pane.js now, dialled on bench-panes.html
+   with no reader on the screen to confuse it -- one implementation, loaded by
+   the bench and by this shell alike. What used to be here (the wash, the
+   widths per level, the z-order, the wheel's own inset) has gone there.
+   Osca: "make sure the .shell calls on THAT asset, the one we are building." */
+
+/* THE TUNER PANEL */
+#tuner{ position:fixed; left:14px; bottom:46px; z-index:60; width:220px;
+  background:var(--ground); border:1px solid var(--rule); border-radius:8px;
+  padding:10px 12px 12px; font:11px/1.5 var(--ui); color:var(--ink);
+  box-shadow:0 6px 24px #0000001f; }
+#tuner .th{ font-weight:600; letter-spacing:.06em; text-transform:uppercase;
+  font-size:9.5px; color:var(--dim); margin:8px 0 4px; display:flex;
+  justify-content:space-between; align-items:center; }
+#tuner .th:first-child{ margin-top:0; }
+#tuner label{ display:block; margin:0 0 6px; color:var(--dim); }
+#tuner i{ font-style:normal; float:right; color:var(--ink); font-variant-numeric:tabular-nums; }
+#tuner input[type=range]{ width:100%; margin:2px 0 0; }
+#tuner .tr{ display:flex; gap:.35rem; margin:2px 0 6px; }
+#tuner button{ font:10px var(--ui); padding:2px 7px; border:1px solid var(--rule);
+  background:transparent; border-radius:4px; color:var(--dim); cursor:pointer; }
+#tuner button:hover{ color:var(--ink); }
+#tuner .th button{ border:0; font-size:14px; line-height:1; padding:0 2px; }
+
+/* the speed row on the bench -- the pressed one reads as pressed */
+#speeds, #turns, #amps{ display:inline-flex; gap:.3rem; }
+#speeds button[aria-pressed="true"], #turns button[aria-pressed="true"], #amps button[aria-pressed="true"]{ color:var(--ink); font-weight:600; }
+
+#book .scrub:hover .l{ opacity:0; }
+#book .scrub .g:hover .l,
+#book .scrub .g.on .l{ opacity:1; }
+
+/* (The stack's own box, its widths per level, the gutter inside each pane and
+   the wheel's inset are all pane.css / pane.js. The measured reasoning behind
+   those numbers -- collection-page.html's own 20vw/17vw column, the marker at
+   left:-1.15rem that the inside gutter exists for -- is written up there.) */
+
+/* THE PUSH OUT, going into one word. Osca: "I want to be ZOOMING into the
+   page, AND pushing away the ext beside / below... just increase spacing as I
+   zoom" / "WOrd and line spacing".
+
+   book-nav.js drives these two off the same eased progress as the zoom, on
+   the ONE chapter that holds the word -- so the words on its line push apart
+   sideways and the lines push apart downward while the page dives in, and
+   what is left in the frame is the word. page.css sets the leading (1.5) and
+   the shell adds to it rather than replacing it, so a chapter that is not
+   spreading is untouched. */
+/* AND IT MUST BE RENDERED WHILE IT IS. content-visibility:auto lets the
+   browser skip a section's contents entirely -- which it does to this one
+   once the zoom scales it past the viewport's own bounds, so the geometry
+   stayed correct (one paragraph reported on screen) and the paint went blank.
+   The chapter being zoomed into is exempt for as long as it is being zoomed
+   into; every other section on the page keeps skipping. THE RULE THAT DOES
+   THAT IS page.css'S, beside the skip it excepts (`.chapter:has(.wordzoom)`)
+   -- it was a sentence here and nothing else until 6 Sep, and the zoomed
+   section measured `content-visibility: auto` at every width. */
+/* THE ZOOM IS THE PAGE'S OWN TYPE. Osca: "NOTHING, lifts from the page, it
+   is a ZOOM... LEAVE IT, ON THE PAGE." So the chapter's type grows -- a zoom
+   the browser LAYS OUT rather than a layer it has to raster, which is why it
+   has no size limit and why the text stays sharp at any size. The column
+   keeps its width, so the lines re-wrap as the type grows and the word you
+   were on ends up alone in the view with the leading opened around it.
+
+   page.css sets the reading sizes in rem, which is root-relative and so would
+   ignore anything set on the chapter -- the multiplier has to be applied to
+   the paragraphs themselves. */
+/* SCOPED TO THE WORD'S OWN PARAGRAPH NOW, not the chapter: opening the gap
+   on a whole chapter re-wraps every line in it and carries the word itself
+   hundreds of pixels down the page, which the zoom then multiplies. Either
+   element can wear the class, so the rules are written for both. */
+.spreading{ word-spacing:var(--wgap, 0px); }
+.chapter.spreading p, p.spreading, .spreading p{ line-height:calc(1.5 + var(--lgap, 0)); }
+
+/* THE CURSOR. One place in the book: where one word view opens, and where
+   the voice is. It is marked wherever you are -- in the page, in the panes,
+   at any depth -- because it is a position in the book rather than an artefact
+   of a view. Double-click any word to move it. */
+::highlight(word-target){ background:#a8522a2e; }
+
+/* ---- ONE WORD (dx>0). Osca: "NO LIFT... NO FADE, all it needs to do is
+   push spacing and zoom in." So there is nothing here any more: no
+   #wordzoom overlay to style, and no ::highlight rule making the real word
+   transparent under a copy of itself. book-nav.js zooms #readerbox and opens
+   the spacing out; the word you are looking at is the one on the page.
+   The spreading rules are up with the reading column, where they belong. */
+
+/* -------- THE READOUT, over the open book, same corner/voice as every
+   other pane's own running head. */
+.head{ position:fixed; top:16px; left:20px; z-index:10; pointer-events:none;
+  font-family:var(--ui); }
+.head b{ display:block; font-size:15px; font-weight:600; letter-spacing:.01em; }
+.head span{ display:block; margin-top:2px; font-size:11.5px; color:var(--dim);
+  letter-spacing:.03em; }
+/* thirteenth pass: this used to sit top right, directly on top of
+   page.css's own `.runhead` (also top right, always-on by that file's own
+   design, "you should always be able to see which book you are in") --
+   confirmed live, genuinely illegible where the two overlapped, not
+   something any earlier still had shown. `.runhead` keeps the corner it
+   already has on every other page in this app; this moves instead. */
+/* `.hint` -- the paragraph in the bottom-right that told you what scrolling
+   did -- left the page on 6 September with the rest of the furniture (Osca:
+   *"it looks like a designer, not a finished reader"*), and its rule goes with
+   it: no page that loads this sheet has the element any more. */
+
+/* -------- THE BAR ROW, AND ITS ONE CONTROL. The way out of the book used to
+   be a text link at the bottom of the bench strip; the strip is gone and the
+   door comes back where the picture puts a control of this kind -- the bar
+   row, which is `search-bar-editor.html`'s own ICONS row (contents, one word, text size,
+   Frank, light/dark, Settings). The ROW's height is the only thing taken from
+   bar.css: 28px, the standard macOS title bar, so the door sits on the line
+   the app's own chrome sits on. The STRIP is not drawn -- Bar.mount() came off
+   these benches on the 5th ("Get rid of the bar") -- and one control needs no
+   strip. It takes the row's centre because that is the part of the row nothing
+   else is in: `.head` holds the left, page.css's `.runhead` the right. The row
+   itself is transparent to the pointer, so it costs the book nothing. */
+.barrow{ position:fixed; top:0; left:0; right:0; height:28px; z-index:41;
+  display:flex; align-items:center; justify-content:center;
+  pointer-events:none; }
+#librarydoor{ pointer-events:auto; display:flex; align-items:center;
+  justify-content:center; width:28px; height:22px; border-radius:5px;
+  color:var(--dim); text-decoration:none; opacity:.5;
+  transition:opacity .18s ease, color .18s ease; }
+#librarydoor:hover, #librarydoor:focus-visible{ opacity:1; color:var(--ink); }
+#librarydoor svg{ width:15px; height:15px; display:block; }
+
+/* -------- WARMTH -- bench-page.html's own big slider, unchanged. */
+.warmth{ position:fixed; top:22px; left:50%; transform:translateX(-50%); z-index:41;
+  display:flex; align-items:center; gap:14px; width:min(460px,44vw);
+  padding:11px 20px; background:var(--ground); border:1px solid var(--rule);
+  border-radius:999px; box-shadow:0 10px 28px rgba(0,0,0,.10); }
+.warmth .end{ font:11px/1 var(--ui); color:var(--dim); letter-spacing:.08em;
+  text-transform:uppercase; flex:0 0 auto; }
+.warmth input[type=range]{ flex:1 1 auto; -webkit-appearance:none; appearance:none;
+  height:14px; border-radius:7px; background:var(--track-grad,var(--rule));
+  border:1px solid var(--rule); cursor:pointer; }
+.warmth input[type=range]::-webkit-slider-thumb{ -webkit-appearance:none;
+  width:26px; height:26px; border-radius:50%; background:var(--ink);
+  border:3px solid var(--ground); box-shadow:0 1px 3px rgba(0,0,0,.35); cursor:pointer; }
+.warmth input[type=range]::-moz-range-thumb{ width:20px; height:20px; border-radius:50%;
+  background:var(--ink); border:3px solid var(--ground);
+  box-shadow:0 1px 3px rgba(0,0,0,.35); cursor:pointer; }
+.warmth input[type=range]::-moz-range-track{ height:14px; border-radius:7px;
+  background:var(--track-grad,var(--rule)); border:1px solid var(--rule); }
+
+.bench{ position:fixed; left:14px; bottom:12px; z-index:40; display:flex; gap:6px;
+  align-items:center; font:11px/1 var(--ui); opacity:.35; transition:opacity .2s; }
+.bench:hover{ opacity:1; }
+.bench button{ font:inherit; padding:6px 9px; border:1px solid var(--rule);
+  background:var(--ground); color:var(--dim); border-radius:6px; cursor:pointer; }
+.bench a{ color:var(--dim); text-decoration:none; padding:6px 3px; }
+.bench .r{ color:var(--dim); padding:6px 3px; }
+
+/* =============== THE LAST PANE'S OWN SUBTITLE ==============================
+   Osca: "I need a small subtitle in the final pane of the one word view, so
+   give me the lines floating in the page, larger than the one view."
+
+   The word alone is the whole of that pane, and the one thing it costs is
+   knowing where the word was standing. This is the line it came out of,
+   floating over the page: small type on a wide measure -- far wider than the
+   word, which is the "larger" -- the word itself in ink and the rest of the
+   line dimmed, so the eye finds it without being told.
+
+   It is FIXED, not part of the zoomed page: at scale(14) anything laid out
+   with the text would be a mile high and half a mile away. Fixed to the
+   viewport, it keeps its own size and its own place, which is what "floating
+   in the page" has to mean once the page itself is fourteen times up.
+
+   Every number is a custom property, so the bench sets one declaration:
+     --sub-bottom how far up from the foot of the view it sits
+     --sub-size   its type size
+     --sub-w      its measure
+     --sub-lines  how many lines of it before it ellipsises   */
+.wordsub{
+  /* ONE LINE, TINY, LONG, AT THE FOOT. Osca: "I just wanted ONE LINE, in the
+     subtitle, a TINY floater, quite long, in the bottom of the page." It sat
+     at 63vh in two lines at 19px, which put a second paragraph across the
+     middle of the view and under the word itself. Anchored to the BOTTOM now,
+     so it stays out of the way of a word of any size. */
+  position:fixed; left:50%; transform:translateX(-50%);
+  bottom:var(--sub-bottom, 4.5vh);
+  width:min(var(--sub-w, 104ch), 92vw);
+  z-index:12; pointer-events:none;
+  text-align:center;
+  font-family:var(--serif); font-size:var(--sub-size, 13px); line-height:1.5;
+  letter-spacing:-.01em;
+  color:var(--dim);
+  opacity:0; transition:opacity .16s ease;
+  display:-webkit-box; -webkit-box-orient:vertical;
+  -webkit-line-clamp:var(--sub-lines, 1); overflow:hidden;
+  white-space:normal; text-overflow:ellipsis;
+}
+/* the word you are on, in the page's own ink -- the same weight, so it is the
+   colour that marks it and not a second typeface */
+.wordsub b{ color:var(--ink); font-weight:inherit; }

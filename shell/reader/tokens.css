@@ -1,0 +1,95 @@
+/* ENGINE · the numbers every page spends -- colour, type, the scale, the measured boxes
+   · bench: bench-panes.html · mounted by: see MAP.md (generated -- `python3 map.py`) */
+/* ============================ FRANK — THE TOKENS =========================
+   ONE definition of every measured constant, linked by every pane AND by the
+   app. Nothing here is a copy of anything: if a number appears twice in this
+   product, one of the two is already wrong, and that is the whole reason this
+   file exists. PLAN.md has it as "the mock is a COPY, and that is why it keeps
+   drifting" -- benches that hold their own numbers drift within a day.
+
+   Every value was measured off book.stevejobsarchive.com and
+   letters.stevejobsarchive.com at 1440 and 2000 and confirmed at both.  */
+
+:root{
+  /* --- the paper ------------------------------------------------------- */
+  /* WARMTH IS ONE NUMBER. Overriding --warm on <html> shifts ground and ink
+     together, so paper and ink never drift apart in temperature.
+     0 = the Archive's own near-neutral. Raise it toward candlelight.        */
+  --warm: 0;
+  --ground: hsl(48 calc(14% + var(--warm) * 9%) calc(98.5% - var(--warm) * 0.6%));
+  --ink:    hsl(42 calc(18% + var(--warm) * 6%) calc(7% + var(--warm) * 1%));
+  --dim:    #7a776d;
+  --rule:   #dedcd4;
+
+  /* --- the type -------------------------------------------------------- */
+  --serif: "Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
+  --ui: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --optical: 1.06;         /* the reference is exactly 1.0; 1.06 was chosen */
+
+  /* --- the measure, and the three standard boxes ------------------------ */
+  /* 865 @1440 · 1145 @2000. 50vw, NOT 0.5vw -- vw is one PERCENT.          */
+  --measure: calc(145px + 50vw);
+  --box-lyric: 22rem;      /* ~47ch  short lyric verse                      */
+  --box-verse: 28rem;      /* ~60ch  pentameter, hexameter, a speech line   */
+                           /* the third box is --measure itself, ~73ch      */
+
+  /* --- the wheel ------------------------------------------------------- */
+  --pitch: 168px;          /* Letters' landing is 120; scaled with R        */
+  /* --radius IS NOT HERE ANY MORE (5 Sep). It was the one number in this
+     "the wheel" group that no stylesheet ever read -- --pitch and --axis are
+     both used by wheel.css, --radius only by wheel.js -- and it sat here at
+     2.6 while shell.html wrote 60 over it, which is this file's own rule
+     broken ("if a number appears twice in this product, one of the two is
+     already wrong"). It lives in wheel.js's Wheel.DEFAULTS now, once.
+     Setting --radius on :root still overrides it live, which is how the
+     tuner and bench-wheel.html's slider work; nothing sets it at rest.          */
+  --axis: 46vh;            /* the barrel's centre line                      */
+  --start: 38vh;           /* the reading line: a piece's first line        */
+}
+
+/* THE FLUID SIZE GOES ON <html>. Every rem in this product resolves against
+   it. Put it on <body> and 1rem silently becomes the browser's 16px -- which
+   has now cost two days, twice. */
+html{ font-size: calc((14.5px + 0.75vw) * var(--optical)); }
+
+/* the reading page's own furniture, measured off the reference at 1440 */
+:root{
+  --scrub-w:150px; --label-w:190px; --label-h:29px; --label-fs:14.67px;
+  --head-w:288px;  --head-h:70px;
+}
+/* DARK IS A PALETTE SWAP AND NOTHING ELSE. Same measures, same rhythm, same
+   boxes -- only the four colours move, which is why it lives beside them.
+   WARMTH REACHES DARK TOO (3 Sep, Osca: "Yes" to wiring it up) -- the same
+   --warm scalar, so the big slider never goes dead just because dark is on.
+   At --warm:0 this is pixel-identical to the hand-picked #131316/#e8e7e6 it
+   replaces (solved for exactly, not eyeballed); the cool end (-2) settles to
+   a slightly deeper, fully neutral near-black -- there is no "whiter" a dark
+   ground can go, so cool reads as the most NEUTRAL black rather than the
+   brightest; the warm end (18) swings the hue itself, 240 (blue-black) down
+   toward 48 (the paper's own amber), the way the light ground never needs
+   to -- a dark ground starts on the opposite side of the wheel from
+   candlelight, so warming it is a hue turn, not just a saturation push. */
+/* AND WHAT SWITCHES IT IS prefs/, ONLY (Osca, 6 Sep: *"I do NOT want a button
+   for light/dark. Settings drives it."*). The three selectors below are the
+   ones settings/settings.js already writes against, so one store paints every
+   surface with no reload and no second copy of the value: an explicit choice
+   stamps html[data-theme="dark"] or ="light", and "system" -- prefs's own
+   default -- stamps nothing at all and leaves the media query in charge.
+   `html[data-dark]` is kept in the first list and NOWHERE ELSE, because
+   bench-panes.html, bench-wheel.html, bench-library.html and bench-page.html still carry
+   their own dark buttons and this pass is not about them; shell.html's own
+   toggle is gone and nothing in the app has ever written that attribute.
+   Note what the media query means for those benches on a machine set to dark:
+   they now open dark, the way the app does. That is the point of it. */
+html[data-theme="dark"], html[data-dark]{
+  --ground: hsl(calc(240 - var(--warm) * 10.667) calc(7.3% + var(--warm) * 1.8%) calc(8.04% + var(--warm) * 0.28%));
+  --ink:    hsl(30 calc(4.17% + var(--warm) * 2.2%) calc(90.59% - var(--warm) * 0.25%));
+  --dim:#8c8a83; --rule:#2e2e33;
+}
+@media (prefers-color-scheme: dark){
+  html:not([data-theme="light"]){
+    --ground: hsl(calc(240 - var(--warm) * 10.667) calc(7.3% + var(--warm) * 1.8%) calc(8.04% + var(--warm) * 0.28%));
+    --ink:    hsl(30 calc(4.17% + var(--warm) * 2.2%) calc(90.59% - var(--warm) * 0.25%));
+    --dim:#8c8a83; --rule:#2e2e33;
+  }
+}

@@ -1,0 +1,40 @@
+/* ===================== LISTEN ALONG — what the two marks look like =======
+   Job 15 Step 3(a). Two CSS Custom Highlights and nothing else: no class is
+   added to any element, no span is wrapped around any word, so page.js's
+   one-text-node-per-line shape (which pane.js, wheel.js and book-nav.js all
+   measure against) is exactly what it was.
+
+   A highlight is painted by the browser over the live text, so `color` and
+   `background-color` are all it will take -- no border, no padding, no
+   transform. That is the whole vocabulary, and it is enough: the sentence is
+   a wash the page's own warmth carries, the word is the ink going solid.
+
+   The colours are tokens.css's own (--ink, --warm-*), never new ones, so
+   the marks follow the warmth slider and dark mode without knowing either
+   exists. */
+
+::highlight(listen-sentence) {
+  background-color: color-mix(in oklab, var(--ink, #17150f) 9%, transparent);
+}
+::highlight(listen-word) {
+  background-color: color-mix(in oklab, var(--ink, #17150f) 26%, transparent);
+}
+
+/* the <audio> is furniture: it plays, it is never seen and it never takes
+   part in the layout the shell measures */
+audio.listen-audio { display: none; }
+
+/* THE ONE LINE THE PAGE SAYS OUT LOUD (job 15b step 5). Created by listen.js
+   only if it is ever needed -- a book folder with no `chapters/` and a
+   `book.json` over the cap -- so at rest the page the shell lays out is
+   exactly the page it laid out before. It is `position: fixed` for the same
+   reason the look-up panel is: it takes part in no layout. */
+#listenwhy {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 30;
+  padding: .5rem .9rem;
+  background: var(--ground, #fbfaf7);
+  color: var(--dim, #7a776d);
+  border-top: 1px solid var(--rule, #dedcd4);
+  font-family: var(--ui, sans-serif); font-size: .78rem;
+}
+#listenwhy[hidden] { display: none; }

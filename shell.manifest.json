@@ -1,0 +1,219 @@
+{
+  "added_here": [
+    "index.html"
+  ],
+  "bytes": 1366671,
+  "count": 51,
+  "files": {
+    "bar/askbar.css": {
+      "bytes": 10053,
+      "sha256": "f12eea5f374843252db5d10b26af5845a7d0c8765812215fd03d8458a535cd21"
+    },
+    "bar/askbar.js": {
+      "bytes": 36071,
+      "sha256": "3f68c747e373058003384cefc7263a8d641e9da1320fc2c9ccb59bc281c2fe63"
+    },
+    "bar/lanes.css": {
+      "bytes": 3061,
+      "sha256": "f2674775bd2f7dcccbb4dc8dabdada0111d06e11174d65d3ada15128a2c12e38"
+    },
+    "bar/lanes.js": {
+      "bytes": 8222,
+      "sha256": "4f4c5a1be7e054a50301eac87b0dc32759e80c7a152e2cf9a44232dbee91acae"
+    },
+    "index.html": {
+      "bytes": 185,
+      "sha256": "899c3ffa9eadbbd0746f7cd112027982db421c2a63102e86b9abe01e91aeede0"
+    },
+    "library/drive.js": {
+      "bytes": 28178,
+      "sha256": "d1dbde07adc37a8e16550708954d3255dd6e84350c7c2ac9069d51a13a935567"
+    },
+    "library/import.js": {
+      "bytes": 23176,
+      "sha256": "3e731b5a2c10b98d64a3e1feacc9e7c8776e5e9d6a786dc100b8fc385606a107"
+    },
+    "library/library.css": {
+      "bytes": 59952,
+      "sha256": "027d5fcac87e45ddfabdb062481fa00b447738d44f42e7f46c6ea0e32a4724fa"
+    },
+    "library/library.html": {
+      "bytes": 241657,
+      "sha256": "fca2f334610d9cd4fd63d58d66216723a64ef08814d0581022cfead7d67154cb"
+    },
+    "library/transfer.js": {
+      "bytes": 11069,
+      "sha256": "1e478c64e120da8d8c627c0ddea1f264dfa183c1dd3b6ed79209a93e1030a345"
+    },
+    "library/unzip.js": {
+      "bytes": 12291,
+      "sha256": "da3d15f0ef120aac304c36f380d69325408aa1d1c6a10fafb2bd4bf90ecafba3"
+    },
+    "prefs/prefs.js": {
+      "bytes": 79699,
+      "sha256": "2b0c86208e4e044b7fec34956b014f34b4837527364a5824910391af43677c9c"
+    },
+    "reader/book-nav.js": {
+      "bytes": 151687,
+      "sha256": "e946cd9452d023da486e7ba1c0859c028c43e5b43abde187d2aa82724696c3d7"
+    },
+    "reader/book.js": {
+      "bytes": 6116,
+      "sha256": "e2148dd4aec33b61bfd2c4e9ea477473a322d759defab133824f383fa2e2f665"
+    },
+    "reader/chrome.css": {
+      "bytes": 6851,
+      "sha256": "4dddb9bf4188833ee52a3b334d8a53c67df2d06dd6a21e3291a186e6b4bd0a03"
+    },
+    "reader/context.js": {
+      "bytes": 4903,
+      "sha256": "36ddf350f68a8c4cf6398841839c49dab38bb101b2bbbf2fc3a10b80214ad3b5"
+    },
+    "reader/cursor.js": {
+      "bytes": 10277,
+      "sha256": "2daf15757b291d967571a9acb4fc97d9f3d588da34e9eda5e4b1466195219ea0"
+    },
+    "reader/icon-192.png": {
+      "bytes": 8537,
+      "sha256": "65415cf8c2cfd614f3f31d5831c082e2f51e4a24cc4d568c6b722a8f81f22d4a"
+    },
+    "reader/icon-512.png": {
+      "bytes": 24470,
+      "sha256": "9fb52cf05668637b6749d8b8e88ca01a35121d5b6258f2448fa6aab30aeee445"
+    },
+    "reader/keys.js": {
+      "bytes": 3275,
+      "sha256": "317a9b563d287e4d06ef6751f1c41b83ed1f01c156e9d85e1744362f30259704"
+    },
+    "reader/listen.css": {
+      "bytes": 1868,
+      "sha256": "395c2839d919863d01e05ee54d141cc2e432d52aa4750ff6e5b8c91fe29c76e8"
+    },
+    "reader/listen.js": {
+      "bytes": 31657,
+      "sha256": "2106ee2a557599f33e22d1f85f6a22918fc0820241dfc877b2732e1ef7f056be"
+    },
+    "reader/lookup.css": {
+      "bytes": 4697,
+      "sha256": "b878d7335e764fcb0315a082037e56fcd48e9a95d4b625df30aa766c1bb0c693"
+    },
+    "reader/lookup.js": {
+      "bytes": 26096,
+      "sha256": "59ecd4d1814d51e652e2664cca7a339ea0a96633284a273e313e52dc42f90a3e"
+    },
+    "reader/manifest.webmanifest": {
+      "bytes": 811,
+      "sha256": "2fee43499f9a4ddee167e63cc07a85b3d7265c16a48a909904e40a63e05c1cab"
+    },
+    "reader/marginalia.css": {
+      "bytes": 1429,
+      "sha256": "ce26e4aae1fa98af3042a5a1ebe2470fb7d12b688d784a8140d2ad3539f237c2"
+    },
+    "reader/marginalia.js": {
+      "bytes": 34281,
+      "sha256": "054ca550167ce5f23985ae2d0b53da7b48ba3927f4290edd726151e0ae096f62"
+    },
+    "reader/page.css": {
+      "bytes": 15910,
+      "sha256": "92672b36aa6de4cfe7a4a74c92f2156badc9e065a2ac3b3091070c6235b07a21"
+    },
+    "reader/page.js": {
+      "bytes": 12734,
+      "sha256": "17254eed93506f5f235c4aac61a38b3caa30c61aa32d5256d3075f65156d4f32"
+    },
+    "reader/pane.css": {
+      "bytes": 2651,
+      "sha256": "e14fe44f2e9e119765d5e3b4d337808da7c8b5a43d1d672b0aa92e5664b11958"
+    },
+    "reader/pane.js": {
+      "bytes": 12456,
+      "sha256": "de1f06384a5ca99fa2b378f534d1e3760e6357840c95b76c81964ca5bf5b134f"
+    },
+    "reader/popover.js": {
+      "bytes": 11571,
+      "sha256": "8a366056a247d2654022d00b11db24eae19a3faaedc7ae7b625ff51165be5635"
+    },
+    "reader/probe.html": {
+      "bytes": 21453,
+      "sha256": "01d0599452f0583b677409bef75c8211aeee66c02d6033831ced4bace0fc37cd"
+    },
+    "reader/reader.html": {
+      "bytes": 42163,
+      "sha256": "ac9cba1bce907b5cf59ce825af267a5d94ec1d4df4207b9bdce5bf3966013c0b"
+    },
+    "reader/shell.css": {
+      "bytes": 25938,
+      "sha256": "61e3c766db4e015c629b5143c550e8190801bc638a9258afbbb158252b023798"
+    },
+    "reader/sw.js": {
+      "bytes": 18224,
+      "sha256": "ab38e335eae2a247890ef28f3d6a19919568c1240b416ac5e388e2438e16ad90"
+    },
+    "reader/tokens.css": {
+      "bytes": 5848,
+      "sha256": "2132267fdb5bd8e7af744bba23be070f7d9ee8ef3e154e8ab14ccd3f2354ab59"
+    },
+    "reader/wheel.css": {
+      "bytes": 2397,
+      "sha256": "ff3a04b9f88f2e4018fea352228896c507144cddeefb4e5ac547a8ff65372166"
+    },
+    "reader/wheel.js": {
+      "bytes": 20225,
+      "sha256": "2926ce71f6ed60b7c36e8ce7db27976d0913d890d3563f3f7f9c68b5280144b4"
+    },
+    "settings/settings.css": {
+      "bytes": 9879,
+      "sha256": "4ff244f4ecabeccad90674a3129bb5e2d30406c6182be54fc0eedaed936667c7"
+    },
+    "settings/settings.html": {
+      "bytes": 12231,
+      "sha256": "d8fa77879ece5ef73d136699f5ec900bb1f8276e49732b557707c2af9299b287"
+    },
+    "settings/settings.js": {
+      "bytes": 224052,
+      "sha256": "fa6df07669fc72113619e6b91b94a58f9ab0269e638c9d4b25adcb6deca6a0a6"
+    },
+    "voiceui/answers.js": {
+      "bytes": 4253,
+      "sha256": "0c55d57f09fe434f21bf4500733fecb86eb18224ce65d0cba9133aae40495a9e"
+    },
+    "voiceui/app.js": {
+      "bytes": 57007,
+      "sha256": "5ab0d259b078d48ea75bb2e43f1c8b8d9b312c49e364d58767e45df5a1ff52e5"
+    },
+    "voiceui/asr.js": {
+      "bytes": 2546,
+      "sha256": "d7318f22cedf53876be23685db7d1baf564f263d39e174523109e46ef4ec2c75"
+    },
+    "voiceui/detour.js": {
+      "bytes": 5457,
+      "sha256": "51e12b00429ffff20fc8bb3651fbcc3d522f649695066d4bf50eed9bd765344e"
+    },
+    "voiceui/grammar.js": {
+      "bytes": 8731,
+      "sha256": "2b8da6309a2dff4d6ef167ce3b70ae3e09e076f79ce6a61da58725253f91fac0"
+    },
+    "voiceui/reader-bridge.js": {
+      "bytes": 6523,
+      "sha256": "46ff799250a6c5325dcc91af2d5ce1c69d9272c3549595a9a695eee64f3f205c"
+    },
+    "voiceui/resolve.js": {
+      "bytes": 4830,
+      "sha256": "3aee744e363d901e5e97f00ff0f8cae89ce3342b3a60d7371952e4538b348132"
+    },
+    "voiceui/trigger.js": {
+      "bytes": 4050,
+      "sha256": "5e7d2903b261afbee8e9d672dfe07a928ef798ae19f0ec2b1166b7869af6f723"
+    },
+    "voiceui/tts.js": {
+      "bytes": 4973,
+      "sha256": "2ff730ea34ad0aa424e70a31008fc85309d2b97b5ef5348c716f2e4cfa44a821"
+    }
+  },
+  "home_page": "library/library.html",
+  "source": {
+    "commit": "2df080e",
+    "repo": "/sessions/rcw-01t1dp4hbtyibvzjuvgs8idj/mnt/TTSTV",
+    "shell_cache": "ttstv-shell-v35"
+  }
+}

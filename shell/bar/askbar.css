@@ -1,0 +1,224 @@
+/* THE LIST UNDER THE BAR (reader/askbar.js).
+ *
+ * The field is in the title-bar strip and this hangs beneath it, in the page's
+ * own webview -- the strip is 28px tall and would clip it, and a list the page
+ * draws is the same list the browser and the phone get, where there is no
+ * strip at all. (It said 46 until 5 Sep; the strip has been 28 since 504e36f.)
+ *
+ * BIGGER AND CALMER (Osca, 5 Sep, through tools/search/bar.html's editor).
+ * 14px, not 13. Rows at 9/11, not 6/9. Radius 12, not 10. It is read now
+ * rather than scanned, and the width is the field's -- see askbar.js::place.
+ *
+ * IT TAKES THE CHROME'S SCALE, NOT THE BOOK'S (reader/design/bar.css's rule):
+ * every measure here is fixed, because it belongs to the window and not to
+ * what is being read. Nothing in it scales with the column.
+ *
+ * The palette is the page's own tokens where the page has them, with a
+ * literal fallback for the pages that do not -- this file is linked by three
+ * surfaces (library, reader, studio) that do not share a variable set.
+ */
+.askList {
+  position: fixed;
+  z-index: 9000;
+  max-height: min(70vh, 520px);
+  overflow: auto;
+  box-sizing: border-box;
+  padding: 6px;
+  border-radius: 12px;
+  background: var(--paper, #fcfcfb);
+  color: var(--ink, #17150f);
+  border: 1px solid rgba(0, 0, 0, .09);
+  box-shadow: 0 10px 34px rgba(0, 0, 0, .17), 0 2px 6px rgba(0, 0, 0, .07);
+  font: 14px/1.4 -apple-system, "Helvetica Neue", sans-serif;
+  -webkit-user-select: none;
+  user-select: none;
+}
+.askList[hidden] { display: none !important; }
+
+.askHead {
+  padding: 9px 11px 4px;
+  font-size: 11px;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  color: var(--dim, #9c988c);
+}
+.askHead:first-child { padding-top: 4px; }
+
+.askRow {
+  display: block;
+  padding: 9px 11px;
+  border-radius: 8px;
+  cursor: default;
+}
+/* Hover and the keyboard's selection are ONE state, deliberately: there is
+   one caret in this list, and it should not be possible to see two. */
+.askRow:hover, .askRow.on { background: rgba(128, 128, 128, .16); }
+.askRow .t {
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.askRow .m {
+  display: block;
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--dim, #9c988c);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* TWO SIDES, TEXT LEFT AND AUDIO RIGHT (askbar.js::webHtml). The split is the
+   data's own -- candidate.py's `Kind` is "text" or "audio" and nothing else --
+   so this is a grid and not a decision taken per row. The rule between them is
+   what says they are two lists and not one wrapped one; the small heads say
+   which is which without spending a row on it. A side with nothing in it is
+   never drawn, so this rule is only ever seen with both halves full. */
+.askCols {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0 12px;
+  align-items: start;
+}
+.askCols .askCol { min-width: 0; }
+.askCols .askCol + .askCol {
+  border-left: 1px solid rgba(128, 128, 128, .18);
+  padding-left: 12px;
+}
+.askSide {
+  padding: 2px 11px 5px;
+  font-size: 10.5px;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--dim, #9c988c);
+  opacity: .8;
+}
+
+/* A LINE THE LIST SAYS ABOUT ITSELF, not about a book: which sources could not
+   be reached, why an item gave nothing, what went wrong staging one. The
+   Library's `adapterNote` writes the first of those as html with these two
+   class names, so they live here -- on every page the bar appears on -- rather
+   than in one page's stylesheet. */
+.askNote {
+  padding: 7px 9px 8px;
+  font-size: 11.5px;
+  line-height: 1.4;
+  color: var(--dim, #9c988c);
+  border-top: 1px solid rgba(128, 128, 128, .18);
+}
+.askNote:first-child { border-top: 0; }
+.askNote code { font-size: 11px; }
+.askBad, .askList .serror { color: #b3382c; }
+/* `adapterNote`'s own markup, verbatim -- one sentence, one owner. */
+.askList .snote {
+  padding: 7px 9px 8px;
+  font-size: 11.5px;
+  line-height: 1.4;
+  color: var(--dim, #9c988c);
+  border-top: 1px solid rgba(128, 128, 128, .18);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .askBad,
+  :root:not([data-theme="light"]) .askList .serror { color: #e0736a; }
+  :root:not([data-theme="light"]) .askList {
+    background: #17171a;
+    color: #e8e7e6;
+    border-color: #2a2a2e;
+    box-shadow: 0 10px 34px rgba(0, 0, 0, .5), 0 2px 6px rgba(0, 0, 0, .35);
+  }
+}
+:root[data-theme="dark"] .askBad,
+:root[data-theme="dark"] .askList .serror { color: #e0736a; }
+:root[data-theme="dark"] .askList {
+  background: #17171a;
+  color: #e8e7e6;
+  border-color: #2a2a2e;
+  box-shadow: 0 10px 34px rgba(0, 0, 0, .5), 0 2px 6px rgba(0, 0, 0, .35);
+}
+
+/* ====================================================================
+ * THE BUTTONS ON A RESULT, AND THE WINDOW THEY OPEN
+ * ====================================================================
+ * Osca, 5 Sep: *"no sample buttons etc, like there is in the .html version ...
+ * it should be the SAME search function."* `tools/search/bar.html` is that
+ * version; these are its rules, in this file's vocabulary.
+ *
+ * The buttons are drawn ALWAYS, never on hover -- a control that appears under
+ * the cursor cannot be found by someone looking for it. Each opens the same
+ * routes studio already answers in-process from `tools/search/serve.py`:
+ * `/sample` reads 64 KB and judges it, `/peek` resolves a place to read or
+ * hear. The answer opens in a window BESIDE the panel, not under the row: the
+ * point of a sample is to see or hear what the file actually is, and that
+ * wants room.
+ */
+.askRow { display: flex; align-items: center; gap: 10px; }
+.askRw { flex: 1 1 auto; min-width: 0; }
+.askAct { flex: 0 0 auto; display: flex; align-items: center; gap: 6px; }
+.askBtn {
+  font: 11.5px/1 inherit; padding: 6px 9px; border-radius: 6px; white-space: nowrap;
+  border: 1px solid rgba(128, 128, 128, .3); background: var(--paper, #fcfcfb);
+  color: var(--dim, #9c988c); cursor: default;
+  transition: border-color .12s, color .12s;
+}
+.askRow:hover .askBtn { border-color: var(--dim, #9c988c); color: var(--ink, #17150f); }
+.askPlay { width: 26px; height: 26px; padding: 0; border-radius: 50%;
+  display: grid; place-items: center; }
+.askPlay svg { width: 11px; height: 11px; display: block; fill: currentColor; stroke: none; }
+.askPlay.playing { background: var(--accent, #b3382c); border-color: var(--accent, #b3382c); color: #fff; }
+
+/* the preview: a window of its own, above the panel that opened it */
+.askPv {
+  position: fixed; z-index: 9100; display: flex; flex-direction: column;
+  box-sizing: border-box; width: 460px; max-width: calc(100vw - 24px);
+  max-height: calc(100vh - 64px);
+  background: var(--paper, #fcfcfb); color: var(--ink, #17150f);
+  border: 1px solid rgba(0, 0, 0, .09); border-radius: 10px; overflow: hidden;
+  box-shadow: 0 18px 54px rgba(0, 0, 0, .24), 0 2px 8px rgba(0, 0, 0, .08);
+  font: 13px/1.4 -apple-system, "Helvetica Neue", sans-serif;
+}
+.askPv[hidden] { display: none !important; }
+.askPvHead { flex: 0 0 auto; display: flex; align-items: flex-start; gap: 10px;
+  padding: 11px 12px 10px; border-bottom: 1px solid rgba(128, 128, 128, .16); }
+.askPvHead .t { display: block; font-size: 13px; white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis; }
+.askPvHead .m { display: block; margin-top: 2px; font-size: 11.5px;
+  color: var(--dim, #9c988c); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.askPvX { flex: 0 0 auto; width: 22px; height: 22px; border: 0; border-radius: 5px;
+  background: transparent; color: var(--dim, #9c988c); font: 15px/1 inherit; cursor: default; }
+.askPvX:hover { background: rgba(128, 128, 128, .18); color: var(--ink, #17150f); }
+.askPvBody { flex: 1 1 auto; min-height: 0; overflow: auto; padding: 11px 12px 13px;
+  font-size: 12.5px; line-height: 1.5; color: var(--dim, #9c988c);
+  -webkit-user-select: text; user-select: text; }
+.askPvBody b { color: var(--ink, #17150f); font-weight: 600; }
+.askPvBody a { color: var(--accent, #b3382c); }
+.askBand { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11px;
+  margin-right: 7px; background: rgba(128, 128, 128, .18); color: var(--ink, #17150f); }
+.askBand.match { background: rgba(40, 140, 70, .18); }
+.askBand.no_match { background: rgba(179, 56, 44, .18); color: #b3382c; }
+.askProse { margin-top: 9px; white-space: pre-wrap; color: var(--ink, #17150f);
+  font-size: 13px; line-height: 1.6; }
+.askPvBody iframe { width: 100%; height: 22rem; border: 1px solid rgba(128, 128, 128, .3);
+  border-radius: 6px; margin-top: 8px; background: #fff; }
+.askPlayer { display: flex; align-items: center; gap: 10px; margin-top: 4px; }
+.askPlayer button { width: 30px; height: 30px; flex: 0 0 auto; border-radius: 50%;
+  display: grid; place-items: center; border: 1px solid rgba(128, 128, 128, .3);
+  background: var(--paper, #fcfcfb); color: var(--dim, #9c988c); cursor: default; }
+.askPlayer button.playing { background: var(--accent, #b3382c);
+  border-color: var(--accent, #b3382c); color: #fff; }
+.askPlayer button svg { width: 11px; height: 11px; fill: currentColor; stroke: none; display: block; }
+.askPlayer .track { flex: 1 1 auto; height: 4px; border-radius: 2px;
+  background: rgba(128, 128, 128, .25); overflow: hidden; cursor: default; }
+.askPlayer .track i { display: block; height: 100%; width: 0; background: var(--accent, #b3382c); }
+.askPlayer .time { flex: 0 0 auto; font-size: 11.5px; color: var(--dim, #9c988c);
+  font-variant-numeric: tabular-nums; }
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .askPv { background: #17171a; color: #e8e7e6; border-color: #2a2a2e; }
+  :root:not([data-theme="light"]) .askBtn,
+  :root:not([data-theme="light"]) .askPlayer button { background: rgba(255,255,255,.05); border-color: #33333a; }
+}
+:root[data-theme="dark"] .askPv { background: #17171a; color: #e8e7e6; border-color: #2a2a2e; }
+:root[data-theme="dark"] .askBtn,
+:root[data-theme="dark"] .askPlayer button { background: rgba(255,255,255,.05); border-color: #33333a; }

@@ -1,0 +1,430 @@
+// library/import.js -- a bundle .zip, opened in the page, becomes a book the
+// installed reader can read with no network and no change to reader.html.
+//
+// The shape of the thing being imported (reader/tools/export_bundle.py): a
+// bundle folder is self-contained -- it carries a copy of reader.html, the
+// nine voiceui scripts, sidebar/settings/manifest/sw and the icons, so that
+// double-clicking it on a laptop opens a working reader -- and beside those
+// it carries the BOOK: book-data.js, chapters/*.txt, book.json,
+// timings/*.json, audio/*.opus, dictionary.json, and align.json /
+// render.json / spans.json when the book has them. A pair bundle puts one
+// such book in each of two subfolders.
+//
+// **book-data.js and chapters/*.txt are the two that make the book OPEN**
+// (6 Sep, with the export side of the same change). reader.html opens a book
+// by injecting `<script src="../books/<slug>/book-data.js">` -- `file://`
+// has no `fetch()` -- and `listen.js` rebuilds the word map per chapter from
+// `chapters/<cid>.txt` (the text, no ids) and `timings/<cid>.json` (the ids,
+// no text), never from book.json. So the cache written here has to answer
+// both, or the phone gets a Library row that opens on nothing. book.json is
+// still imported and is still the thing HASHED below: it is the only file
+// that carries every word id, which is what a version is here, and it is
+// listen.js's capped fallback for a book with no chapters/.
+//
+// **Only the book half is imported.** The shell copy inside the zip is
+// ignored by name (PAYLOAD below is an allowlist, never "everything under
+// the folder"): the installed app already has a reader, it is newer than the
+// one frozen into any bundle on disk, and importing that copy would give the
+// phone two readers with no way to tell which one it is running. So a bundle
+// exported before ⌘F existed still imports, and the book it carries is read
+// by today's reader.
+//
+// Where it goes. One Cache per book, named `ttstv-book-<slug>-<hash>`, where
+// <hash> is core.provenance's own book hash -- sha256 of every word id in
+// order, first 16 hex -- computed here, in the page, from the book.json that
+// just arrived, by the same rule core/provenance.py uses. Two versions of a
+// book therefore have two different cache names, which is the point: an
+// import can tell "this exact book is already here" from "a newer parse of
+// it is here", and the reader can never end up serving half of each.
+// Entries are keyed by the URL the reader will actually ask for --
+// `<shell>/books/<slug>/book.json` and so on -- so reader/sw.js answers them
+// with a plain cache-first match and `reader.html` needs no change at all.
+//
+// Nothing here trusts the zip's filename. The slug is `book.json`'s own
+// `id`, the version is the hash of its word ids; a bundle renamed on the way
+// through AirDrop imports as exactly the same book.
+"use strict";
+
+const TTSTVBundle = (() => {
+  const Unzip = (typeof require === "function" && typeof module !== "undefined")
+    ? require("./unzip.js") : self.TTSTVUnzip;
+
+  const CACHE_PREFIX = "ttstv-book-";           // kept in step with reader/sw.js
+  // The ceiling this shell will import. **7 since 6 September 2026**, and the
+  // sentence that used to stand here is the one it replaces.
+  //
+  // It said: 7 arrives "in the same change that adds `spans.json` to PAYLOAD
+  // and a merge to the reader, never before and never alone" -- because v7
+  // moves the word-level attribution OUT of `book.json` into
+  // `books/<slug>/spans.json`, and importing a v7 book without it would put a
+  // book on the phone with its attribution silently gone.
+  //
+  // **That was wrong about who reads the spans.** Osca, 6 Sep 2026:
+  // *"spans.json is attrib/'s output for voice/'s render -- the reading page
+  // never reads it, so 7 is additive for the phone."* Measured against the
+  // tree on the day: no file in `reader/` or `library/` fetches it,
+  // `core/bookdata.py` does not project it into `book-data.js` (which is what
+  // the page actually draws from), and `core/schema.py::to_dict` writes
+  // `"spans": []` on every paragraph at v7 -- so a reader expecting the field
+  // finds it, empty. There is no merge to write. There was nothing for the
+  // bump to wait for.
+  //
+  // What it was really holding up was the shelf. A reparse raised **29 of the
+  // 31 books in `books/` to 7**, and at 6 this shell refused every one of them
+  // by name -- "update the app", said about books the app reads perfectly.
+  //
+  // `spans.json` rides in `PAYLOAD` on grammar.json's terms and one more:
+  // **OPTIONAL, and nothing merges it.** Bundled when the book folder has one,
+  // absent when it does not, cached beside the rest, reported as `has_spans`
+  // on the row -- carried so a phone can hand a whole book back to a bench or
+  // to `voice/` without a round trip to the parse, never because the page
+  // wants it. If a future reader ever DOES read a span, that is the change
+  // that writes the merge, and it is not this one.
+  //
+  // Still a ceiling, not a whitelist: a v1..v6 book imports, because the
+  // schema is additive by contract and `core` itself still loads one. A book
+  // stamped 8 is refused by name and told "update the app", which is the true
+  // remedy -- and that bump gets this comment's question again first: does the
+  // READING PAGE need what it moved?
+  const SCHEMA_MAX = 7;
+  const AUDIO_EXTS = ["opus", "mp3", "m4a", "wav", "ogg"];   // reader.html's AUDIO_EXTS
+  // Every payload extension gets a real type. `js` and `txt` arrived with
+  // book-data.js and chapters/*.txt: the first is loaded by a `<script src>`
+  // and the second read with `.text()`, and "application/octet-stream" is
+  // the answer that would break both -- a script served as a byte stream is
+  // refused outright under `nosniff`, and a chapter of the Greek Iliad
+  // decoded without a stated charset is mojibake. The reader never sees a
+  // network hop for these; sw.js hands back exactly the Response put here.
+  const TYPES = {
+    json: "application/json", js: "text/javascript",
+    txt: "text/plain; charset=utf-8",
+    opus: "audio/ogg", ogg: "audio/ogg",
+    mp3: "audio/mpeg", m4a: "audio/mp4", wav: "audio/wav",
+  };
+  // The book half of a bundle, by name. Everything else in the zip -- the
+  // shell copy, dictionary/links.json, library.json, .DS_Store -- is counted
+  // and dropped, never stored.
+  // `grammar.json` (dictionary/grammar.py, 30 Aug) rides beside dictionary.json
+  // and is keyed the same way, so tap-to-look-up on the phone shows what the
+  // word IS and not only what it means. +0.13 MB gzipped on eclogues-la
+  // against dictionary.json's 0.78. SCHEMA_MAX is untouched by it: this is a
+  // new file beside the others, not a book.json version bump.
+  // `book-data.js` (6 Sep) is the same kind of arrival as grammar.json --
+  // a new file beside the others, not a book.json version bump, so
+  // SCHEMA_MAX does not move with it. It is the one file whose absence is
+  // fatal rather than degrading: without grammar.json a word has no parse,
+  // without dictionary.json it has no gloss, without book-data.js there is
+  // no page at all.
+  // `spans.json` (6 Sep) is the one entry here that NOTHING READS. It is
+  // `attrib/`'s output, an input to `voice/`'s render, and the reading page
+  // has never fetched it; it is in the allowlist so a book on a phone is a
+  // whole book -- see SCHEMA_MAX above for the decision and its date.
+  const PAYLOAD = new Set(["book.json", "book-data.js", "align.json", "render.json",
+                           "dictionary.json", "names.json", "grammar.json", "spans.json"]);
+  const META_FILE = ".bundle.json";             // this module's own, never fetched by the reader
+
+  function isPayload(rel) {
+    if (PAYLOAD.has(rel)) return true;
+    if (/^timings\/[^/]+\.json$/.test(rel)) return true;
+    // chapters/<cid>.txt -- half the word map, and it travels by the same
+    // one-level-deep rule as timings/, for the same reason: the reader asks
+    // for exactly `books/<slug>/chapters/<cid>.txt` and nothing nested.
+    if (/^chapters\/[^/]+\.txt$/.test(rel)) return true;
+    if (new RegExp("^audio/[^/]+\\.(" + AUDIO_EXTS.join("|") + ")$").test(rel)) return true;
+    return false;
+  }
+
+  function cacheName(slug, hash) { return CACHE_PREFIX + slug + "-" + hash; }
+  function parseCacheName(name) {
+    if (!name.startsWith(CACHE_PREFIX)) return null;
+    const rest = name.slice(CACHE_PREFIX.length);
+    const cut = rest.lastIndexOf("-");
+    if (cut <= 0) return null;
+    return { slug: rest.slice(0, cut), hash: rest.slice(cut + 1) };
+  }
+
+  /** Where an imported book lives, as an absolute URL ending in "/".
+   *  `reader.html?book=books/<slug>` resolves to exactly this (reader.html's
+   *  normalizeBookPath prefixes a bare path with "../", and both pages sit in
+   *  reader/), which is why nothing in reader.html has to change. */
+  function booksBase(href) {
+    return new URL("../books/", href || (typeof location !== "undefined" ? location.href : "http://localhost/reader/"));
+  }
+  function bookUrl(slug, rel, href) { return new URL(slug + "/" + rel, booksBase(href)).href; }
+
+  // ------------------------------------------------------------ book.json
+  /** Every word id in the book, in document order -- the sequence
+   *  core/provenance.py hashes, and the walk that validates the shape. */
+  function walkWordIds(book, errors) {
+    const ids = [];
+    const chapters = book.chapters;
+    for (let ci = 0; ci < chapters.length; ci++) {
+      const c = chapters[ci];
+      if (!c || typeof c.id !== "string" || !Array.isArray(c.paragraphs)) {
+        errors.push(`chapter ${ci} has no id or no paragraphs`); return ids;
+      }
+      for (const p of c.paragraphs) {
+        if (!p || typeof p.id !== "string" || !Array.isArray(p.sentences)) {
+          errors.push(`${c.id}: a paragraph has no id or no sentences`); return ids;
+        }
+        for (const s of p.sentences) {
+          if (!s || typeof s.id !== "string" || !Array.isArray(s.words)) {
+            errors.push(`${p.id}: a sentence has no id or no words`); return ids;
+          }
+          for (const w of s.words) {
+            if (!w || typeof w.id !== "string" || typeof w.text !== "string" || typeof w.raw !== "string") {
+              errors.push(`${s.id}: a word is missing id, text or raw`); return ids;
+            }
+            ids.push(w.id);
+          }
+        }
+      }
+    }
+    return ids;
+  }
+
+  /** core's rules, applied in the page. The schema is additive by contract
+   *  (core/README.md: "a v1..v5 book.json still loads"), so the version test
+   *  is a CEILING, not a v5/v6 whitelist -- refusing a v4 book would refuse
+   *  a book core itself loads. A version above what this shell knows is the
+   *  one that is refused, and it is refused by name so the message can say
+   *  "update the app", which is the true remedy. */
+  function validateBook(obj) {
+    const errors = [];
+    if (!obj || typeof obj !== "object" || Array.isArray(obj)) return { ok: false, errors: ["book.json is not a JSON object"] };
+    for (const k of ["id", "title", "author", "lang", "source", "chapters"]) {
+      if (!(k in obj)) errors.push(`book.json has no "${k}" (core/schema.py Book.from_dict requires it)`);
+    }
+    if (typeof obj.id === "string" && !/^[a-z0-9][a-z0-9-]*$/.test(obj.id)) {
+      errors.push(`"${obj.id}" is not a usable slug (lower-case letters, digits and hyphens)`);
+    }
+    const v = obj.schema_version === undefined ? 1 : obj.schema_version;
+    if (typeof v !== "number" || !Number.isInteger(v) || v < 1) errors.push(`schema_version ${JSON.stringify(obj.schema_version)} is not a version number`);
+    else if (v > SCHEMA_MAX) errors.push(`book.json is schema_version ${v}; this reader knows up to ${SCHEMA_MAX} — update the app`);
+    if (!Array.isArray(obj.chapters)) errors.push("chapters is not a list");
+    else if (!obj.chapters.length) errors.push("the book has no chapters");
+    if (errors.length) return { ok: false, errors };
+    const ids = walkWordIds(obj, errors);
+    if (errors.length) return { ok: false, errors };
+    if (!ids.length) return { ok: false, errors: ["the book has no words"] };
+    return { ok: true, errors: [], wordIds: ids, words: ids.length, chapters: obj.chapters.length };
+  }
+
+  function hex(buf) {
+    return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, "0")).join("");
+  }
+  /** core/provenance.py book_word_id_hash, in the page: sha256 of the word
+   *  ids joined by "|", first 16 hex characters. */
+  async function bookHash(wordIds) {
+    const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(wordIds.join("|")));
+    return hex(digest).slice(0, 16);
+  }
+
+  // --------------------------------------------------------------- the zip
+  /** Group a zip's entries into books. Every `book.json` in the archive is a
+   *  book (root for a single-book bundle, one per subfolder for a pair), and
+   *  a file belongs to the nearest book.json above it. Returns the plan
+   *  without reading a byte of content, so the Library can refuse a zip that
+   *  holds no book before it spends a second on it. */
+  function planBundle(entries) {
+    const prefixes = entries
+      .filter(e => e.name === "book.json" || e.name.endsWith("/book.json"))
+      .map(e => e.name.slice(0, e.name.length - "book.json".length))
+      .sort((a, b) => b.length - a.length);          // deepest first
+    const books = prefixes.map(p => ({ prefix: p, files: new Map(), bytes: 0 }));
+    const ignored = [];
+    for (const e of entries) {
+      const home = books.find(b => e.name.startsWith(b.prefix));
+      const rel = home ? e.name.slice(home.prefix.length) : null;
+      if (!home || !isPayload(rel)) { ignored.push(e.name); continue; }
+      home.files.set(rel, e);
+      home.bytes += e.size;
+    }
+    return { books, ignored };
+  }
+
+  function contentType(rel) {
+    const ext = rel.slice(rel.lastIndexOf(".") + 1).toLowerCase();
+    return TYPES[ext] || "application/octet-stream";
+  }
+
+  /** ONE STORE STEP, TWO DOORS (job 26, 6 Sep). `importBook` is what puts a
+   *  book in its cache: validate book.json BEFORE a byte is stored, hash the
+   *  word ids, open `ttstv-book-<slug>-<hash>`, put every payload file under
+   *  the URL the reader will ask for, write the meta entry, then and only
+   *  then drop the older caches of the same slug. `importZip` reaches it
+   *  with a zip's entries and `Unzip.read`; `importFiles` -- the Sync
+   *  button's pull -- reaches it with a list of rels and a fetch. Same
+   *  function, same cache names, same headers, same meta: a synced book and
+   *  a zip-imported book are the same bytes in the same place, and the
+   *  Library cannot tell which door a book came through.
+   *
+   *  `files` is a Map of rel -> entry (whatever `read(entry)` needs);
+   *  `read(entry)` resolves to a Uint8Array. `prefix` is only for the
+   *  report. `count` is {done, total} shared across the books of one call
+   *  so the progress line counts files, not books. */
+  async function importBook(prefix, files, read, o, count) {
+    const onProgress = o.onProgress || (() => {});
+    const href = o.href;
+    const bookEntry = files.get("book.json");
+    if (!bookEntry) {
+      count.done += files.size;
+      return { ok: false, prefix, slug: null, errors: ["no book.json"] };
+    }
+    onProgress({ done: count.done, total: count.total, label: "reading book.json", slug: null });
+    let book, bookBytes;
+    try {
+      bookBytes = await read(bookEntry);
+      book = JSON.parse(new TextDecoder("utf-8").decode(bookBytes));
+    } catch (e) {
+      count.done += files.size;
+      return { ok: false, prefix, slug: null, errors: ["book.json could not be read: " + e.message] };
+    }
+    const check = validateBook(book);
+    if (!check.ok) {
+      count.done += files.size;
+      return { ok: false, prefix, slug: book && book.id || null, title: book && book.title || null, errors: check.errors };
+    }
+    const slug = book.id;
+    const hash = await bookHash(check.wordIds);
+    const name = cacheName(slug, hash);
+    const already = (await caches.keys()).filter(k => {
+      const p = parseCacheName(k); return p && p.slug === slug;
+    });
+    const replaced = already.filter(k => k !== name);
+
+    const cache = await caches.open(name);
+    let bytes = 0, chaptersTimed = 0, chaptersVoiced = 0, chaptersTexted = 0;
+    for (const [rel, entry] of files) {
+      onProgress({ done: count.done, total: count.total, label: rel, slug });
+      // book.json was read once already, to validate: the same bytes are
+      // stored, not a second read of them (one request fewer over the wire)
+      const data = entry === bookEntry ? bookBytes : await read(entry);
+      await cache.put(bookUrl(slug, rel, href), new Response(data, {
+        headers: { "Content-Type": contentType(rel), "Content-Length": String(data.length) },
+      }));
+      bytes += data.length;
+      if (rel.startsWith("timings/")) chaptersTimed++;
+      if (rel.startsWith("audio/")) chaptersVoiced++;
+      if (rel.startsWith("chapters/")) chaptersTexted++;
+      count.done++;
+    }
+    const meta = {
+      slug, hash, title: book.title, author: book.author || null, lang: book.lang,
+      chapters: check.chapters, words: check.words, bytes,
+      has_timings: chaptersTimed > 0, has_audio: chaptersVoiced > 0,
+      chapters_timed: chaptersTimed, chapters_voiced: chaptersVoiced,
+      chapters_texted: chaptersTexted,
+      // The row's own honesty. `has_book_data` false means this book is on
+      // the device and will not open -- an old bundle, exported before
+      // 6 Sep -- and that is worth a row saying so rather than a tap that
+      // goes nowhere. `has_word_map` needs both halves: the .txt AND the
+      // timings, per chapter, or listen.js refuses the chapter whole.
+      has_book_data: files.has("book-data.js"),
+      has_word_map: chaptersTexted > 0 && chaptersTimed > 0,
+      // Carried, not read. A false here changes nothing about the reading
+      // page; it says the round trip back to a bench would be lossy.
+      has_spans: files.has("spans.json"),
+      has_dictionary: files.has("dictionary.json"),
+      files: files.size, imported: Date.now(), schema_version: book.schema_version || 1,
+    };
+    await cache.put(bookUrl(slug, META_FILE, href), new Response(JSON.stringify(meta), {
+      headers: { "Content-Type": "application/json" },
+    }));
+    // Only once the new cache is complete: a power cut mid-import leaves the
+    // old book whole and the new one partial-but-unreferenced, never a slug
+    // with no book behind it.
+    for (const old of replaced) await caches.delete(old);
+    return { ok: true, prefix, replaced, reimported: already.includes(name), ...meta };
+  }
+
+  /** Read a bundle zip and store every book it holds. `onProgress({done,
+   *  total, label, slug})` is called per file, so the Library can show the
+   *  same greyed row + bar the bench uses for an ingest. Returns one report
+   *  per book; a book that fails validation is reported with its reasons and
+   *  nothing of it is written -- book.json is validated BEFORE any of its
+   *  files are put, so a refused book never leaves a half-cache behind. */
+  async function importZip(buffer, opts) {
+    const o = opts || {};
+    const entries = Unzip.entries(buffer);
+    const plan = planBundle(entries);
+    if (!plan.books.length) throw new Error("no book.json in that .zip — is it a bundle from the bench?");
+    const count = { done: 0, total: plan.books.reduce((n, b) => n + b.files.size, 0) };
+    const read = entry => Unzip.read(buffer, entry);
+    const reports = [];
+    for (const b of plan.books) reports.push(await importBook(b.prefix, b.files, read, o, count));
+    return { books: reports, ignored: plan.ignored };
+  }
+
+  /** The Sync button's door (job 26): one book, named by Studio's manifest
+   *  as a list of rels, fetched one file at a time through `fetchRel(rel)`
+   *  (-> Uint8Array) and stored by `importBook` exactly as a zip's entries
+   *  are. Rels outside the payload allowlist are ignored by name, as a
+   *  zip's shell copy is. book.json is fetched FIRST and validated before
+   *  any other file is asked for, so a refused book costs one request. */
+  async function importFiles(slug, rels, fetchRel, opts) {
+    const o = opts || {};
+    const files = new Map();
+    const ignored = [];
+    for (const rel of rels) {
+      if (isPayload(rel)) files.set(rel, rel); else ignored.push(rel);
+    }
+    if (!files.has("book.json")) return { ok: false, prefix: slug + "/", slug, errors: ["Studio listed no book.json for " + slug], ignored };
+    const count = { done: 0, total: files.size };
+    const report = await importBook(slug + "/", files, rel => fetchRel(rel), o, count);
+    report.ignored = ignored;
+    return report;
+  }
+
+  // ------------------------------------------------------------- the shelf
+  /** What is on the device: one row per book cache, read from the little
+   *  meta entry written at import rather than by re-parsing a 2 MB
+   *  book.json every time the Library paints. */
+  async function listInstalled(href) {
+    const out = [];
+    for (const name of await caches.keys()) {
+      const parsed = parseCacheName(name);
+      if (!parsed) continue;
+      const cache = await caches.open(name);
+      const res = await cache.match(bookUrl(parsed.slug, META_FILE, href));
+      if (!res) { out.push({ slug: parsed.slug, hash: parsed.hash, title: parsed.slug, broken: true, bytes: 0, chapters: 0 }); continue; }
+      out.push(await res.json());
+    }
+    out.sort((a, b) => String(a.title || a.slug).localeCompare(String(b.title || b.slug)));
+    return out;
+  }
+
+  /** Delete one book's cache and nothing else -- not the shell, not another
+   *  book. Returns how many caches went (0 if it was not installed). */
+  async function removeBook(slug) {
+    let gone = 0;
+    for (const name of await caches.keys()) {
+      const parsed = parseCacheName(name);
+      if (parsed && parsed.slug === slug) { if (await caches.delete(name)) gone++; }
+    }
+    return gone;
+  }
+
+  async function estimate() {
+    if (typeof navigator === "undefined" || !navigator.storage || !navigator.storage.estimate) return null;
+    try { return await navigator.storage.estimate(); } catch (e) { return null; }
+  }
+
+  function fmtBytes(n) {
+    if (!isFinite(n) || n < 0) return "";
+    if (n < 1024) return n + " B";
+    if (n < 1024 * 1024) return (n / 1024).toFixed(0) + " KB";
+    if (n < 1024 * 1024 * 1024) return (n / (1024 * 1024)).toFixed(n < 10 * 1024 * 1024 ? 1 : 0) + " MB";
+    return (n / (1024 * 1024 * 1024)).toFixed(1) + " GB";
+  }
+
+  return {
+    CACHE_PREFIX, SCHEMA_MAX, META_FILE, PAYLOAD, AUDIO_EXTS,
+    isPayload, cacheName, parseCacheName, booksBase, bookUrl,
+    validateBook, walkWordIds, bookHash, planBundle, contentType,
+    importBook, importZip, importFiles, listInstalled, removeBook, estimate, fmtBytes,
+  };
+})();
+
+if (typeof module !== "undefined" && module.exports) module.exports = TTSTVBundle;
+if (typeof self !== "undefined") self.TTSTVBundle = TTSTVBundle;

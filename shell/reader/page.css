@@ -1,0 +1,269 @@
+/* ENGINE · a chapter's text on a page: the column, the snap, the skip, the zoom's clip
+   · bench: bench-page.html · mounted by: see MAP.md (generated -- `python3 map.py`) */
+/* ====================== THE READING PAGE — the column =====================
+   Linked by the reading bench and by the app. Every measured constant is in
+   tokens.css; this file is only how they are spent.
+
+   Measured off book.stevejobsarchive.com at 699 / 1000 / 1440, all confirmed:
+     root font-size  14.5px + 0.75vw    19.74 @699 · 22 @1000 · 25.3 @1440
+     column width    145px + 50vw        645 @1000 · 865 @1440
+     line-height     1.5 exactly, everywhere
+     paragraph gap   1em in a run · 1.2em after a heading · 3em before a
+                     standfirst, and margin-bottom is 0 throughout
+     scrollbar       hidden -- their gutter measures 0                     */
+
+.pane{ position:relative; height:100vh; overflow-y:auto; overscroll-behavior:contain;
+  scroll-snap-type: y proximity; scrollbar-width:none; }
+.pane::-webkit-scrollbar{ display:none; }
+/* AND IT MAY BE WIDER THAN THE VIEW WHILE ONE WORD IS OPEN. The zoom scales
+   the word's own paragraph -- its width along with its type, so the lines
+   break where they broke on the page (book-nav.js's `wide`) -- and that box is
+   deliberately wider than the screen. Left to itself the scroller would answer
+   with a sideways scroll range nobody asked for, on the axis a book does not
+   have; book-nav.js hangs this class on the pane for exactly as long as the
+   zoom is on, and the overflow is simply clipped. */
+.pane.zoomed{ overflow-x:hidden; }
+/* AND WHAT IS BEHIND THE ZOOM IS THE PAGE. book-nav.js hangs this on the
+   word's own paragraph for as long as it is zoomed: the rest of the page is
+   still set at reading size underneath, and a word four hundred pixels tall
+   standing over lines of 29 reads as two pages at once. The ground is the
+   page's own, so nothing is added to the picture -- and a bench that wants to
+   watch the lines behind it hands back --zoom-back: transparent. */
+.wordzoom{ background:var(--zoom-back, var(--ground)); }
+
+/* AND IT STAYS HIDDEN. Osca: "ALWAYS HIDE the scroll bar IN SAFARI, that is
+   not the one we want, I mean our PARTICULAR scroll bar." The browser's own
+   bar is never what this page shows -- a book has a scrub, and every setting
+   for it is below. (A `data-scrollbar` switch stood here for one turn and is
+   gone: it turned the wrong bar back on.) */
+html[data-nosnap]   .pane{ scroll-snap-type:none; }
+html[data-hardsnap] .pane{ scroll-snap-type:y mandatory; }
+.column{ width:100%; }
+
+/* THE AXIS NEVER MOVES; THE WIDTH DOES, PER CHAPTER.
+   At 1440 the reference puts 1085 of its 1085 paragraphs in ONE box --
+   L288 W865, text-align:start, text-indent:0 -- and its only two break-out
+   pull-quotes (W1147, W1339) are centred on that same axis:
+   288+865/2 = 147+1147/2 = 51+1339/2 = 720.5, the middle of the viewport.
+   So the axis is the viewport centre and nothing may move it; what varies is
+   the WIDTH standing on it. Inside the block every line is flush left and a
+   short one hangs -- the reference never centres a line, and lets "Steve"
+   sit at 288 under a full-width paragraph. --w is set per section by
+   Page's classifier. */
+.chapter{ width:min(var(--w, var(--measure)), var(--measure));
+          max-width:calc(100% - 3rem);
+          margin-inline:auto; position:relative;
+          padding-bottom:22vh; }
+
+/* A SNAP TARGET IS AN INVISIBLE MARKER, NEVER THE CONTENT. */
+.unit{ position:relative; }
+/* EACH KIND OF TARGET IS ITS OWN TWO NUMBERS. Osca: "I need more control over
+   the SNAP, 'hard' is not enough, I need to select when the snap catches, on
+   leaving/entering beginnings endings and slides."
+
+   Two questions per target, and they are different questions:
+     ALIGN  where it catches -- start, centre, end, or `none`, which takes the
+            target out altogether;
+     STOP   whether a fast flick may fly PAST it (`normal`) or has to stop
+            (`always`). This is the leaving/entering one: a beginning set to
+            `always` announces every chapter whichever way you came at it.
+   Both are custom properties, so a bench sets one declaration on :root and
+   nothing here has to know that a bench exists. The defaults below are the
+   page as it was. */
+.unit > snap{ position:absolute; top:0; height:1px; width:1px;
+  scroll-snap-align:var(--snap-turn, start);
+  scroll-snap-stop:var(--stop-turn, normal); }  /* normal: a flick may pass */
+/* scroll-snap-stop:always forbids SKIPPING a target, not stopping at a nearer
+   one -- which is what makes two hard stops safe. The opener halts a swipe so
+   a chapter announces itself; the text start is the strong stop so scrolling
+   UP from mid-chapter lands there and not back on the divider. */
+.opener > snap{ position:absolute; top:0; height:1px; width:1px;
+  scroll-snap-align:var(--snap-open, start);
+  scroll-snap-stop:var(--stop-open, always); }
+.opener + .unit > snap{ scroll-snap-stop:var(--stop-text, always); }
+/* the reference declares BOTH ends. With starts only, coming off a long
+   chapter at speed you end far from the next opener and proximity finds
+   nothing to catch. */
+.chapter > snapend{ position:absolute; bottom:22vh; height:1px; width:1px;
+  scroll-snap-align:var(--snap-end, end);
+  scroll-snap-stop:var(--stop-end, normal); }
+
+/* A PLATE -- a picture from the book, standing as its own slide in the
+   reading flow, where the book printed it. It is sized to be looked at rather
+   than skimmed past: most of the height, never wider than the column, and the
+   caption (when there is a real one, not the source's page number) sits under
+   it in the running-head's voice. */
+.plate{ position:relative; display:flex; align-items:center; justify-content:center;
+  min-height:82vh; padding:4vh 0; }
+.plate > figure{ margin:0; display:flex; flex-direction:column; align-items:center; gap:1.1rem; }
+.plate img{ display:block; max-width:100%; max-height:var(--plate-h, 72vh);
+  width:auto; height:auto; }
+.plate figcaption{ font-family:var(--ui); font-size:.78rem; letter-spacing:.02em;
+  color:var(--dim); text-align:center; max-width:34ch; }
+.plate > snap{ position:absolute; top:0; height:1px; width:1px;
+  scroll-snap-align:var(--snap-plate, start);
+  scroll-snap-stop:var(--stop-plate, normal); }
+
+/* THE VERTICAL RHYTHM. The reference's 1.5 is the leading INSIDE a wrapped
+   paragraph; its 1em gap is BETWEEN paragraphs. A line of verse is a LINE,
+   not a paragraph -- setting each as a <p> with a 1em margin put them 55px
+   apart where the reference sits at 33. So lines run at leading alone and
+   the 1em opens only at a real break. */
+p{ margin:0; font-size:1rem; line-height:var(--read-line, 1.5); }
+p + p{ margin-top:0; }
+p.line + p.line{ margin-top:0; }
+p.line.stanza{ margin-top:1em; }
+.prose p + p{ margin-top:1em; }
+.sp{ margin-top:1.6em; margin-bottom:.55em; color:var(--dim); font-size:.58rem;
+     letter-spacing:.17em; text-transform:uppercase; }
+p:first-child, .sp:first-child{ margin-top:0; }
+.dir{ color:var(--dim); font-style:italic; margin-top:.4em; }
+
+/* THE OPENER IS A SLIDE: a whole screen, the title alone on it. */
+.opener{ height:100vh; display:flex; flex-direction:column; justify-content:center;
+  position:relative; text-align:left; transition:background-color .25s ease,color .25s ease; }
+
+/* #4b -- the book's own colours, cycled onto the slides only. Set by
+   page.js's tintOpeners() from book.palette (design/reader/palette.py);
+   BODY TEXT GROUND NEVER CHANGES -- this rule reaches .opener and nothing
+   else. small/byline take the tint's own ink at reduced opacity rather than
+   --dim, which is tuned for the paper and can lose contrast on a tint. */
+.opener.tinted{ background:var(--slide-ground); color:var(--slide-ink); }
+.opener.tinted h1 small,
+.opener.tinted .byline{ color:inherit; opacity:.7; }
+.opener + .unit{ padding-top:20vh; margin-top:0; }
+.opener + *{ margin-top:0; }
+h1{ font-size:1.25rem; line-height:1.5; font-weight:500; margin:0; }
+h1.booktitle{ font-size:2.1rem; line-height:1.2; }
+h1 small{ display:block; font-size:.48rem; letter-spacing:.18em;
+  text-transform:uppercase; color:var(--dim); font-weight:600; margin-bottom:1.4em; }
+.byline{ margin-top:1.2em; font-size:.62rem; letter-spacing:.18em;
+  text-transform:uppercase; color:var(--dim); }
+
+/* THE RUNNING HEAD floats; the column does not inset for it, and it never
+   times out -- you should always be able to see which book you are in. */
+/* AND ITS OWN NUMBERS. Osca: "the floating header in the top right, I need to
+   be able to change that." Where it sits, how big it is, which of its two
+   lines are showing -- the book, or where you are in it -- and whether it is
+   there at all. page.js writes <b>book</b><span>chapter</span> into it, so
+   hiding one of them is one rule each. */
+.runhead{ position:fixed;
+  top:var(--head-top, 10px); right:var(--head-right, 37px);
+  width:var(--head-w); height:var(--head-h);
+  pointer-events:none; z-index:20; display:flex; flex-direction:column;
+  align-items:flex-end; justify-content:center;     /* ink centred in the box */
+  text-align:right; font-family:var(--ui);
+  font-size:var(--head-size, 14.5px); line-height:1.5;
+  opacity:var(--head-fade, 1);
+  color:var(--dim); }
+.runhead b{ font-weight:600; color:var(--ink); }
+html[data-runhead="off"]  .runhead{ display:none; }
+html[data-runhead="book"] .runhead span{ display:none; }
+html[data-runhead="here"] .runhead b{ display:none; }
+/* ranged left instead, for a head that has been moved to the other side */
+html[data-head-align="left"] .runhead{ align-items:flex-start; text-align:left; }
+
+/* THE SCRUB: right edge, hidden at rest, and its marks are GAPS in the line
+   rather than dots on it. A mark sits where its chapter ACTUALLY is --
+   spacing them evenly while the fill tracks real scroll is why the bar ran
+   ahead of the dots and then caught up. */
+/* OUR OWN SCROLL BAR, AND ITS SETTINGS. Osca: "I need to have settings on the
+   scroll bar... I mean our PARTICULAR scroll bar." Every number the rail is
+   made of is a custom property now -- how far in from the edge it stands, how
+   thick its line is, how far down it starts and stops, and whether it rests
+   visible or waits to be woken. `data-scrub` is the one switch: `on` keeps it
+   up, `off` takes it away entirely, and unset is the page's own behaviour --
+   asleep until you scroll, awake for a moment, and always awake under the
+   pointer. */
+.scrub{ position:fixed; top:0; right:0; width:var(--scrub-w); height:100%; z-index:15;
+  opacity:0; transition:opacity .45s ease; }
+.scrub.awake{ opacity:1; }
+.scrub:hover{ opacity:1; transition-duration:.12s; }
+html[data-scrub="on"]  .scrub{ opacity:1; }
+html[data-scrub="off"] .scrub{ display:none; }
+.track,.fill{ position:absolute; right:var(--scrub-x, 26px);
+  top:var(--scrub-top, 14vh); width:var(--scrub-line, 1px); }
+/* READ AND UNREAD ARE TWO COLOURS, AND THE LINE HAS A RADIUS. Osca: "I need
+   to be able to set the radius and the colours of read and unread chapters, in
+   the scroll bar." The track is what is still ahead of you and the fill is
+   what you have been through, so they are named for that rather than for
+   which element they are; the radius rounds both ends of a line that is now
+   thick enough to have ends. */
+.track{ bottom:var(--scrub-top, 14vh);
+  background:var(--scrub-unread, var(--rule));
+  border-radius:var(--scrub-r, 0); }
+.fill{ height:0;
+  background:var(--scrub-read, var(--dim));
+  border-radius:var(--scrub-r, 0); }
+.scrub .g{ position:absolute; right:0; width:100%; cursor:pointer; }
+/* a mark is a GAP in the line, not a dot on it -- so it is the ground's
+   colour, and it has to sit over the line wherever the line has been put */
+.scrub .m{ position:absolute; right:calc(var(--scrub-x, 26px) - 3px);
+  width:7px; height:11px;
+  background:var(--ground); transform:translateY(-5px); }
+html[data-scrub-marks="off"] .scrub .m{ display:none; }
+html[data-scrub-labels="off"] .scrub .l{ display:none; }
+.scrub .g.on .m::after{ content:""; position:absolute; right:3px; top:4px;
+  width:1px; height:3px; background:var(--ink); }
+.scrub .l{ position:absolute; right:calc(var(--scrub-x, 26px) + 16px);
+  width:var(--label-w); height:var(--label-h);
+  transform:translateY(-15px); text-align:right; white-space:nowrap; overflow:hidden;
+  text-overflow:ellipsis; color:var(--dim); opacity:0; transition:opacity .2s;
+  font:var(--label-fs)/var(--label-h) var(--ui); }
+.scrub .g.on .l, .scrub:hover .l{ opacity:1; }
+.scrub .g.on .l{ color:var(--ink); }
+.scrub .g.title .m{ height:15px; }
+
+/* ================= WHAT THE PAGE CATCHES ON, AND WHAT IT SKIPS ============
+   Both of these were in shell.css, scoped to #readerpane -- which meant the
+   reading page's own behaviour only existed inside the shell, and
+   bench-page.html, the bench for this very file, could not show it. They
+   are the reading column's, so they live here and are scoped to .pane: the
+   bench and the shell get the same page.
+
+   THE SNAP. page.css gives EVERY speaker turn its own <snap>, so in a play
+   the reader catches every few lines, which Osca read as being handled:
+   "in main reader now, scrolling down, snap is too much". `chapters` -- the
+   default -- leaves only a chapter's own opener and its end as targets, so a
+   chapter settles when you arrive at one and nothing catches in between;
+   `speeches` is this file's own behaviour, kept to compare against; `none`
+   takes every target out. */
+/* The three presets, written in those same variables so a preset and a
+   hand-set target can never mean two different things:
+     speeches (no attribute)  the defaults above -- every speaker turn catches
+     chapters                 only a chapter's own opener and its end, and the
+                              opener no longer forbids a flick from passing it
+     none                     nothing catches at all */
+html[data-catch="chapters"]{ --snap-turn:none; --stop-open:normal; }
+html[data-catch="none"]{ --snap-turn:none; --snap-open:none;
+  --snap-end:none; --snap-plate:none; }
+
+/* THE SKIP. content-visibility lets the browser leave a section it cannot see
+   unrendered -- the difference between a complete Shakespeare that scrolls and
+   one that does not. `contain-intrinsic-size: auto <fallback>` is the size a
+   section stands at until it has been drawn once: `auto` means the browser
+   REMEMBERS its real height afterwards, so the estimate corrects itself as you
+   read, and the fallback is one screenful for a chapter nobody has visited. */
+html[data-skipoff] .chapter{
+  content-visibility:auto;
+  contain-intrinsic-size:auto 900px;
+}
+/* ...AND THE CHAPTER BEING ZOOMED INTO IS EXEMPT, for as long as it is. This
+   is the sentence shell.css has carried since the zoom was written -- "the
+   chapter being zoomed into is exempt ... every other section on the page
+   keeps skipping" -- and until now it was only a sentence: measured in
+   Chromium at 1280x800, 950x800 and 844x390, the section holding the zoom
+   reported `content-visibility: auto` at dx 2 in all three. That is not
+   cosmetic. `auto` skips a section the browser decides is off screen, and the
+   zoom grows this one until its own box is 82,488px tall and mostly is --
+   whereupon the geometry every frame of the zoom reads (the word's rect, the
+   paragraph's width) comes back off contain-intrinsic-size's placeholder
+   rather than off the type, which is the same lie job 27's seat was built to
+   survive. The host wears `.wordzoom` for exactly as long as the zoom is on
+   (book-nav.js::writeWordType/clearWordType), so the chapter that contains
+   one is the chapter to leave rendered -- one selector, and it costs one
+   section's layout, never the book's. */
+html[data-skipoff] .chapter:has(.wordzoom){
+  content-visibility:visible;
+  contain-intrinsic-size:none;
+}

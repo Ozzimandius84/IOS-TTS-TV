@@ -1,0 +1,104 @@
+/* ======================= LOOK UP — what the answer looks like ============
+   Job 15b step 1, 6 September. The panel is the only element this module
+   adds, it is created by lookup.js at mount rather than written into
+   reader.html, and it is `position: fixed` and `hidden` at rest -- so the
+   page the shell lays out is byte-for-byte the page it laid out before
+   (reader/tests/browser/listen_shell.py's 74 boxes).
+
+   NO NEW COLOUR AND NO NEW TYPE. Every value here is tokens.css's own
+   (--ground, --ink, --dim, --rule, --serif, --ui), so the panel follows the
+   warmth slider and dark mode without knowing either exists, exactly as
+   listen.css's two highlights do.
+
+   NOTHING IS WRAPPED AROUND THE WORD. The word being looked up is already
+   marked: a double-click moves the book's ONE cursor (book-nav.js's own
+   dblclick handler, `word-target`), and this panel is the answer to that
+   cursor rather than a second mark of its own. */
+
+#lookuppanel{
+  position: fixed; z-index: 40;
+  box-sizing: border-box;
+  max-height: 46vh; overflow: auto;
+  padding: 1.1rem 1.25rem 1.25rem;
+  background: var(--ground, #fbfaf7);
+  color: var(--ink, #17150f);
+  border-top: 1px solid var(--rule, #dedcd4);
+  box-shadow: 0 -14px 34px -22px rgba(0,0,0,.5);
+  font-family: var(--ui, sans-serif);
+  font-size: .82rem; line-height: 1.5;
+  -webkit-overflow-scrolling: touch;
+}
+#lookuppanel[hidden]{ display: none; }
+
+#lookuppanel .lu-head{
+  display: flex; align-items: baseline; gap: .6rem;
+  margin: 0 0 .55rem;
+}
+#lookuppanel .lu-word{
+  font-family: var(--serif, serif); font-size: 1.5rem; line-height: 1.15;
+}
+#lookuppanel .lu-phon,
+#lookuppanel .lu-pos{ color: var(--dim, #7a776d); font-size: .78rem; }
+#lookuppanel .lu-close{
+  margin-left: auto; border: 0; background: none; cursor: pointer;
+  color: var(--dim, #7a776d); font: inherit; font-size: 1.1rem;
+  line-height: 1; padding: .1rem .2rem;
+}
+#lookuppanel .lu-lemma{ color: var(--dim, #7a776d); margin: 0 0 .5rem; }
+#lookuppanel ol.lu-senses{ margin: 0 0 .6rem; padding-left: 1.15rem; }
+#lookuppanel ol.lu-senses li{ margin: 0 0 .15rem; }
+#lookuppanel .lu-note{ color: var(--dim, #7a776d); margin: 0 0 .6rem; }
+#lookuppanel .lu-ety{
+  margin: 0 0 .6rem; padding-top: .5rem;
+  border-top: 1px solid var(--rule, #dedcd4);
+  color: var(--dim, #7a776d);
+}
+#lookuppanel .lu-rel{ margin: 0 0 .6rem; color: var(--dim, #7a776d); }
+#lookuppanel .lu-links{ display: flex; flex-wrap: wrap; gap: .8rem; }
+#lookuppanel .lu-links a{ color: inherit; text-decoration: none;
+  border-bottom: 1px solid var(--rule, #dedcd4); }
+#lookuppanel .lu-links a:hover{ border-bottom-color: currentColor; }
+
+/* ===================== JOB 15c — the line and the one control ============
+   Osca, 6 September: *"make Safari just pop up so we still get the results in
+   the app."* Two things under the entry, and neither adds a colour or a face:
+   `--dim` and `--rule` are tokens.css's, exactly as everything above is, so
+   both follow the warmth slider and dark mode without knowing they exist.
+
+   The Search control is a BUTTON and looks like the panel's own links do --
+   a word with a rule under it -- because it is the same kind of thing: a way
+   out to somewhere else. It is not a filled button; nothing on this page is.
+   And it is the panel's second control after the close, which is still the
+   whole inventory (reader/README.md: "The page has no control of its own but
+   the library door"). */
+
+/* ONE LINE, and it is allowed to be one line only. Wiktionary's first sense
+   is occasionally a paragraph; the panel is a sheet under the reading pane
+   and a definition that pushes the entry off the top of it is worse than a
+   definition that ends in an ellipsis (lookup.js caps it at 220 characters
+   as well, so this is the second of the two fences). */
+#lookuppanel .lu-wik{
+  margin: 0 0 .6rem; padding-top: .5rem;
+  border-top: 1px solid var(--rule, #dedcd4);
+  color: var(--dim, #7a776d);
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2;
+  overflow: hidden;
+}
+/* WHOSE LINE IT IS, said once and quietly. The book's own dictionary is the
+   answer above; this one came from somewhere else and the reader is told so
+   rather than left to assume the book knew. */
+#lookuppanel .lu-wik .lu-src{
+  margin-left: .5rem; font-size: .72rem; letter-spacing: .02em;
+  opacity: .75;
+}
+
+#lookuppanel .lu-acts{
+  display: flex; align-items: baseline; gap: .8rem;
+  margin-top: .7rem;
+}
+#lookuppanel .lu-search{
+  border: 0; background: none; padding: 0; cursor: pointer;
+  font: inherit; color: inherit;
+  border-bottom: 1px solid var(--rule, #dedcd4);
+}
+#lookuppanel .lu-search:hover{ border-bottom-color: currentColor; }

@@ -1,0 +1,23 @@
+/* =============== MARGINALIA — what a mark looks like =====================
+   Job 15b step 2. Four highlights and nothing else. No class is added to any
+   element and no span is wrapped around any word, so page.js's
+   one-text-node-per-line shape -- which pane.js, wheel.js and
+   book-nav.js::buildWordDomIndex all measure against -- is exactly what it
+   was, and listen.css's two marks and book-nav.js's `word-target` still sit
+   on the same text without a fight.
+
+   THE FOUR COLOURS ARE THE RECORD'S, NOT THIS FILE'S. `MARG_COLOURS` in
+   marginalia.js is the vocabulary -- a colour that is not one of those four
+   is not stored -- and these rules are keyed off it rather than the other
+   way round. They are mixed into the page's own --ground so a mark reads as
+   ink soaked into the paper at whatever warmth the slider is at, and so dark
+   mode needs no second palette.
+
+   A highlight is painted by the browser over live text, so `color` and
+   `background-color` are the whole vocabulary: no border, no underline, no
+   padding. */
+
+::highlight(marg-green)  { background-color: color-mix(in oklab, #4a8f3c 26%, transparent); }
+::highlight(marg-yellow) { background-color: color-mix(in oklab, #d8b431 32%, transparent); }
+::highlight(marg-red)    { background-color: color-mix(in oklab, #c0453a 24%, transparent); }
+::highlight(marg-pink)   { background-color: color-mix(in oklab, #c9558f 24%, transparent); }

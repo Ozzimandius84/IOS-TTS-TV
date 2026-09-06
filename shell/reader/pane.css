@@ -1,0 +1,53 @@
+/* ENGINE · what a pane looks like: a solid column, its text inset, its wash
+   · bench: bench-panes.html · mounted by: see MAP.md (generated -- `python3 map.py`) */
+/* ============================== THE PANES ==================================
+   The look of a pane, shared by bench-panes.html (the bench) and shell.html (the
+   app). Everything that MOVES is in pane.js and arrives as an inline style;
+   what is here is what a pane IS: a solid column, full height, with its text
+   inset by its own gutter.
+
+   Osca: "each contents pane is not transparent, the first is a white block,
+   second full 0 transparency coloured block etc." A pane covers what is behind
+   it. Before this the colour was a translucent film painted on the wheel
+   inside, so the page showed straight through the contents and two sets of
+   type sat on top of one another.
+========================================================================== */
+
+/* The colour is a HUE, held on the pane by pane.js; the saturation and
+   lightness belong to the theme, so one element is right in both light and
+   dark without anything being recomputed when the theme flips. */
+:root{ --pane-s:32%; --pane-l:89%; }
+/* the same three selectors tokens.css uses, and for the same reason: prefs/
+   is the only thing that switches the theme now (Osca, 6 Sep). */
+html[data-theme="dark"], html[data-dark]{ --pane-s:22%; --pane-l:16%; }
+@media (prefers-color-scheme: dark){
+  html:not([data-theme="light"]){ --pane-s:22%; --pane-l:16%; }
+}
+
+.cpane{
+  position:fixed; top:0; bottom:0;
+  background:var(--ground);
+  will-change:left, width;
+}
+.cpane[data-wash]{ background:hsl(var(--pane-h, 25) var(--pane-s) var(--pane-l)); }
+/* a pane standing open with nothing in it still holds its place in the stack,
+   and still covers what is behind it -- it just has no colour of its own */
+.cpane.empty{ background:var(--ground); }
+
+/* THE COLUMN INSIDE. --coll-pad is the room the live-row marker needs
+   (wheel.css puts it at left:-1.15rem); the text column itself is the pane
+   minus that, which is why the pad is part of the measured width in pane.js
+   rather than something added on top of it. */
+.cpane > .wheel{
+  position:absolute !important;
+  inset:0 var(--pane-pr, 0rem) 0 var(--pane-pl, 1.9rem) !important;
+  width:auto !important; height:100% !important;
+  clip-path:inset(0 0 0 0);
+}
+
+/* the pane's own head -- which level of the book this column is */
+.cpane > .panehead{
+  position:absolute; left:var(--pane-pl, 1.9rem); top:14px; z-index:2;
+  font-family:var(--ui); font-size:9.5px; letter-spacing:.14em;
+  text-transform:uppercase; color:var(--dim); pointer-events:none;
+}

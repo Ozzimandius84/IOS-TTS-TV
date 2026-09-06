@@ -1,0 +1,808 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Frank — the shell</title>
+<link rel="stylesheet" href="tokens.css">
+<link rel="stylesheet" href="wheel.css">
+<link rel="stylesheet" href="page.css">
+<link rel="stylesheet" href="pane.css">
+<link rel="stylesheet" href="shell.css">
+<link rel="stylesheet" href="listen.css">
+<link rel="stylesheet" href="lookup.css">
+<link rel="stylesheet" href="marginalia.css">
+
+<!-- THE TWO ROOTS EVERY SURFACE LOADS BEFORE IT PAINTS (job 15 step 3b).
+     keys.js: while the caret is in a field the keyboard belongs to the
+     field -- under ?bench this page still has a file picker and the
+     tuner's ranges, and the listen keys below are bare.
+     prefs/prefs.js: the store, and it must be SYNCHRONOUS and BEFORE
+     the body, or a window opened dark opens light and corrects itself
+     (prefs/prefs.js's own closing comment). It applies the theme, the
+     interface font and the scrollbars by itself; the only thing this
+     page asks it for is the hotkey grammar. -->
+<script src="keys.js"></script>
+<script src="../prefs/prefs.js"></script>
+
+<div id="book">
+  <div class="readerbox" id="readerbox">
+    <div class="pane" id="readerpane"><div class="column" id="readercol"></div></div>
+    <div class="runhead" id="readerhead"></div>
+    <div class="scrub" id="readerscrub"><div class="track"></div><div class="fill" id="readerfill"></div></div>
+  </div>
+
+  <!-- level 0 of the left stack -- the pane closest to the reader, same
+       static element every pass since the tenth has used. Levels 1 and 2
+       (a book whose own `structure` runs deeper -- "up the branch, by
+       scrolling left") are created lazily by book-nav.js itself, appended
+       inside #leftmore below; most books never reach past this one. -->
+  <div class="cpane contentsbox" id="contentsbox">
+    <div id="contentscol"></div>
+  </div>
+  <div id="leftmore"></div>
+
+  <div class="head"><b id="big"></b><span id="small"></span></div>
+</div>
+
+<!-- THE LIBRARY DOOR, and it is the page's ONE control (Osca, 6 September:
+     *"it looks like a designer, not a finished reader. The bar at the top we
+     don't need. I do NOT want a button for light/dark. Settings drives it."*).
+     The way out used to be a text link at the bottom of the bench strip, which
+     went with the strip. It comes back where the picture puts a control of
+     this kind -- the bar row, `bar.html`'s own `ICONS` row (contents, one
+     word, text size, Frank, light/dark, Settings). The row's height is
+     bar.css's 28px, the standard macOS title bar; the STRIP itself is not
+     drawn, because Bar.mount() came off these benches on the 5th ("Get rid of
+     the bar"), and one control does not need a strip to sit in. It takes the
+     row's centre because that is the part of the row nothing else is in --
+     `.head` holds the left and page.css's `.runhead` the right -- and it is
+     where the warmth bar stood until this pass. -->
+<div class="barrow">
+  <a id="librarydoor" href="../library/library.html" title="the library" aria-label="the library">
+    <svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor"
+         stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M3 2.8v10.4M6.1 2.8v10.4M9.2 2.8v10.4"/>
+      <path d="M11.6 3.2l2.4 9.9"/>
+    </svg>
+  </a>
+</div>
+
+<!-- THE TUNER. Osca: "I want to get rid of the convexity in the contents, I
+     just want the option to make them straight, allow me to adjust convexity
+     too and to mess around with spacing... and the speed on the animation of
+     one word view." Every one of these is a live variable already -- --radius
+     IS the convexity (R = pitch * radius; its value is Wheel.DEFAULTS.radius
+     in wheel.js as of 5 Sep, and setting --radius on :root still overrides it
+     live), --pitch IS the row spacing, and wheel.js re-reads both off :root
+     inside its own layout(), so nothing here needs a reload. -->
+<div id="tuner" hidden>
+  <div class="th">going into one word<button id="tuneclose">×</button></div>
+  <label>word spacing pushed out <i id="v-wordgap"></i>
+    <input type="range" id="t-wordgap" min="0" max="400" step="5"></label>
+  <label>line spacing pushed out <i id="v-linegap"></i>
+    <input type="range" id="t-linegap" min="0" max="8" step="0.1"></label>
+  <label>word size <i id="v-fill"></i>
+    <input type="range" id="t-fill" min="0.3" max="1.1" step="0.01"></label>
+  <label>zoom shape <i id="v-curve"></i>
+    <input type="range" id="t-curve" min="0.25" max="3" step="0.05"></label>
+  <div class="th">coming out of it</div>
+  <label>snap back to the page <i id="v-outsnap"></i>
+    <input type="range" id="t-outsnap" min="1" max="14" step="0.5"></label>
+  <div class="tr"><button id="t-reset">reset all</button></div>
+  <div class="th">this browser</div>
+  <div id="diag"></div>
+</div>
+
+<!-- book-data.js: bench only; the app opens a book by slug (below) -->
+<script src="book.js"></script>
+<script src="wheel.js"></script>
+<script src="page.js"></script>
+<script src="pane.js"></script>
+<script src="book-nav.js"></script>
+<script src="listen.js"></script>
+<script src="lookup.js"></script>
+<script src="marginalia.js"></script>
+<script src="cursor.js"></script>
+<script>
+/* THE SHELL -- thirteenth pass, 4 September: book-nav.js owns the mechanic
+   (see that file's own long comment). No more #titlescreen -- chapter
+   zero's own tinted opener, genuinely page.js, is the book's cover now.
+   The library has left this page entirely (library.html), and the left pane
+   can stack up to five deep for a book whose own `structure` runs that far.
+   This file keeps its same two jobs -- how a chosen book actually arrives
+   (a <script src>, file:// having no fetch()) and the warmth slider
+   reading-page.html already proved -- plus wiring book-nav.js's options to
+   this page's real elements. */
+
+/* THE LIBRARY IS library.html NOW. This page no longer carries a shelf: no
+   dashboard screen, no cards, no manifest read at mount. All it needs of the
+   library is the one thing only it can do -- fetch a book's own data by slug
+   (a <script src>, file:// having no fetch()) -- and the way back out. */
+function onOpenBook(slug){
+  return new Promise((resolve, reject)=>{
+    window.__LIB_BOOK = null;
+    const s = document.createElement("script");
+    s.src = "../books/" + encodeURIComponent(slug) + "/book-data.js";
+    s.onload = () => {
+      const b = window.__LIB_BOOK; window.__LIB_BOOK = null; s.remove();
+      if(!b){ reject(new Error("no window.__LIB_BOOK from "+slug)); return; }
+      resolve(b);
+    };
+    s.onerror = () => { s.remove(); reject(new Error("could not load "+slug)); };
+    document.body.appendChild(s);
+  });
+}
+
+function $(id){ return document.getElementById(id); }
+
+const LIBRARY_PAGE = "../library/library.html";
+const nav = BookNav.mount({
+  onOpenBook,
+  /* scrolling left past the last pane leaves the book -- and that now means
+     leaving the page, so the library is read fresh every time you come out */
+  onLibrary: () => { location.href = LIBRARY_PAGE; },
+  bookEl: $("book"),
+  contentsBox: $("contentsbox"),
+  contentsColEl: $("contentscol"),
+  leftMoreEl: $("leftmore"),
+  readerBox: $("readerbox"), readerPane: $("readerpane"), readerCol: $("readercol"),
+  readerScrub: $("readerscrub"), readerFill: $("readerfill"), readerHead: $("readerhead"),
+  big: $("big"), small: $("small"),
+});
+/* ===================== THE BENCH -- ?bench, AND ONLY ?bench ================
+   Osca, 6 September, pressing the reader in Frank Studio: *"it looks like a
+   designer, not a finished reader."* So the page IS the reader now. Every
+   knob below is still in this file, unchanged and reachable -- it just does
+   not EXIST unless the URL says so. `shell.html#book=x` is the picture;
+   `shell.html?bench#book=x` is the workbench it was built on. The app never
+   carries a query, so the app never sees any of it.
+   WHAT IS NOT BEHIND THE GATE, and must not be: the wheel's own SET numbers
+   and the pane tint below. Those are the design, not options -- they were
+   only ever written inside the tuner because that is where their sliders
+   used to be. */
+const BENCH = /(?:^|[?&])bench(?:[=&]|$)/.test(location.search);
+
+/* bench only: the handle, reachable from a console and from anything driving
+   this page from outside (a browser extension's isolated world cannot see a
+   top-level `const`). Nothing in the design reads this. */
+if (BENCH) window.nav = nav;
+/* ================= LISTENING, LOOKING UP, AND THE MARGIN =================
+   Job 15 step 3(a) and job 15b steps 1-2. Three things the picture does not
+   show and the product is not the product without, mounted on the one door
+   every book arrives through.
+
+   THIS BLOCK SITS ABOVE THE OPEN, AND THAT IS A BUG FIX, NOT A TIDY-UP
+   (job 15b step 2, 6 Sep). It was below `openDefault()` and the `?book=`
+   IIFE, which was safe only while `book-data.js` cost a network round-trip:
+   on a RELOAD the file is in the HTTP cache, `s.onload` fires before the
+   browser has parsed the script tag that installed the wrapper, and
+   `nav.openBook` is still the bare one. The page then came up with no audio,
+   no dictionary, no margin and no hands-free -- voiceui printing "the
+   supplied control object is missing: getPosition, ..." -- and only ever on
+   the second visit, which is the visit nobody tests. Measured in
+   reader/tests/browser/lookup_marks.py: undefined at 500 ms and still
+   undefined at 8 s. Installing the wrapper before the open removes the race
+   rather than narrowing it.
+
+   Why nav.openBook is wrapped rather than every call site edited: this page
+   opens a book from four places (the ?book= slug, the file picker, the
+   hashchange, and openDefault) and book-nav.js may open one itself. Wrapping
+   the one function catches all of them and cannot fall out of step with a
+   fifth. */
+let listen = null, lookup = null, marginalia = null, cursor = null;
+try{ (function(){
+  const openBook0 = nav.openBook;
+  nav.openBook = function(b){
+    const r = openBook0.call(nav, b);
+    try{
+      listen = Listen.mount({ nav, col: $("readercol"), pane: $("readerpane"),
+                              slug: b && b.slug, book: b });
+      /* LOOK UP MOUNTS BEFORE THE HOOK IS PUBLISHED, and the order is the
+         whole of it: Lookup.mount hangs `getDictionaryEntry` on the control,
+         and voiceui/app.js reads OPTIONAL_DATA_HOOKS off window.ReaderControl
+         once, at boot. Publish the control first and the boot line would say
+         "dictionary hooks missing" for the rest of the session. */
+      try{
+        lookup = Lookup.mount({ nav, col: $("readercol"), pane: $("readerpane"),
+                                slug: b && b.slug, book: b, control: listen });
+      }catch(e){ console.warn("[lookup] not mounted:", e); }
+      try{
+        marginalia = Marginalia.mount({ nav, col: $("readercol"), pane: $("readerpane"),
+                                        slug: b && b.slug, book: b, control: listen });
+      }catch(e){ console.warn("[marginalia] not mounted:", e); }
+      try{
+        cursor = Cursor.mount({ nav, bookEl: $("book"), slug: b && b.slug,
+                                book: b, control: listen });
+      }catch(e){ console.warn("[cursor] not mounted:", e); }
+      /* bench only, the same handle `window.nav` already is: a browser driver
+         and a console can reach the two mounts. Nothing in the design or the
+         app reads either. */
+      window.lookup = lookup; window.marginalia = marginalia; window.cursor = cursor;
+      window.ReaderControl = listen;      // voiceui/reader-bridge.js's one hook
+    }catch(e){ console.warn("[listen] not mounted:", e); }
+    return r;
+  };
+})(); }catch(e){ console.warn("[listen] wiring failed:", e); }
+
+/* ================= SETTINGS DRIVES THE PAGE, AND NOTHING ELSE DOES ========
+   Osca, 6 September: *"I do NOT want a button for light/dark. Settings drives
+   it."* -- and the same for the other six rows of the Reading tab. The store
+   is `prefs/prefs.js`, loaded in the head; this block is only the two names
+   it cannot write for itself, and the one row that is not a custom property
+   at all.
+
+   WHAT PREFS ALREADY DOES, and is not repeated here (one owner, one write):
+     theme       `data-theme` on <html>. tokens.css and pane.css key their
+                 dark palette on it since 996eae3, so the reader answers it
+                 with no code of its own. The key is below with the others.
+     warmth      `--warm`, which IS tokens.css's own name -- 0..18 since the
+                 one-line fix in prefs/prefs.js's `cssVars` that this session
+                 is the other half of.
+   WHAT PREFS WRITES UNDER A NAME NOTHING HERE READS, which is this block:
+     `--read-family` and `--read-scale` are the OLD reader's names.  The shell
+     spends the reading face as `--serif` (shell.css:34, wheel.css, lookup.css)
+     and the reading size as `--optical`, tokens.css's multiplier on the root
+     font size -- so the two are translated, never copied: a default removes
+     the property and tokens.css's own value stands, exactly the way prefs
+     means "absent at the default".
+     THE 1.06 IS NOT WRITTEN DOWN TWICE. `--optical` is READ off the cascade
+     once, before anything overrides it, so tokens.css stays the only place
+     that number lives (tokens.css's own rule: a number that appears twice is
+     already wrong in one of the two places).
+   AND THE TWO §6s ARE BOTH ANSWERED NOW, six hours apart, so the sentence
+   that named them is deleted rather than left standing beside the code that
+   reversed it (CLAUDE.md's precedence rule 4).
+     line height  was "page.css spends 1.5 as a literal -- there is no token
+                  to write", which is why 22b invented no page-side default
+                  for it. `design/reader` wrote `line-height: var(--read-line,
+                  1.5)` and the re-copy brought it here, so the row prefs was
+                  already writing now lands with nothing translating it and
+                  nothing here to add. `settings_drives.py` §6 is an assert:
+                  23.7578px -> 34.0528px at Airy, x2.15/1.5 exactly.
+     pace         was "the one-word view advances by hand; nothing on this
+                  page reads words-a-minute". 22c is the block directly below
+                  this one: `wpm` is the seventh row and the one that is not a
+                  custom property at all. */
+try{ (function(){
+  const S = window.TTSTVSettings; if(!S) return;
+  const R = document.documentElement;
+  const OPTICAL0 = (getComputedStyle(R).getPropertyValue("--optical") || "").trim();
+
+  function paint(s){
+    /* the reading face */
+    if(s.family === S.DEFAULTS.family) R.style.removeProperty("--serif");
+    else R.style.setProperty("--serif", S.familyById(s.family).stack);
+    /* the reading size, as tokens.css spends it:
+       html{ font-size: calc((14.5px + 0.75vw) * var(--optical)) } */
+    if(s.size === S.DEFAULTS.size || !OPTICAL0) R.style.removeProperty("--optical");
+    else R.style.setProperty("--optical", String(parseFloat(OPTICAL0) * s.size / 100));
+  }
+  /* ONE WORD IS A POSITION, NOT A CLASS. book-nav.js's axis is a short list of
+     places (-n..-1 contents, 0 the book, +1 the word on the page, +2 the word
+     alone); `data-read-view` picks between the two ends of it. Applied only
+     when it is what the reader asked for, so a gesture is never overruled by
+     a value that did not change. */
+  function view(s, force){
+    if(!force && s.view === S.DEFAULTS.view) return;
+    try{ if(typeof nav !== "undefined" && nav.go) nav.go(s.view === "oneword" ? 2 : 0); }catch(e){}
+  }
+  paint(S.read());
+  /* openBook resets the axis to 0 (book-nav.js), and the first book arrives
+     asynchronously -- so the view is re-applied on the way out of every open,
+     for the same reason the block above this one sits above the open. */
+  const open0 = nav.openBook;
+  nav.openBook = function(b){ const r = open0.call(nav, b); view(S.read()); return r; };
+  S.subscribe(s => { paint(s); view(s, true); });
+})(); }catch(e){ console.warn("[settings] not wired:", e); }
+
+/* ======================= PACE — ONE WORD'S OWN CLOCK ======================
+   Osca, 6 September, answering job 22b's §6.2: *"Pace is ONE WORD's
+   auto-advance — when one word view is open and no audio is playing, the
+   cursor advances a word every 60/wpm seconds from the store's pace; space
+   pauses/resumes; any wheel/tap/key stops the auto-advance until the next
+   play. It never touches listen.js's speed."*  So this is the seventh
+   Settings row, and it is the one that is not a CSS custom property: `wpm`
+   is a rate, and what it drives is book-nav.js's ONE cursor.
+
+   IT NEVER TOUCHES `listen.js`. Not `setSpeed`, not `playbackRate`, not
+   `seekWordDelta` — a reader who picks 600 wpm must not find the narration
+   at 2x, which is the reading of §6.2 Osca did NOT take. The only thing this
+   moves is `nav.goTo`, the same door the audio's own highlight uses, so
+   there is still ONE cursor (Osca, 4 Sep) and this is a second driver of it,
+   never a second copy of it.
+
+   THE THREE CONDITIONS, checked every pump and not cached:
+     the axis is at one word   `nav.level === "word"` — the POSITION, not the
+                               store's `view`, because the axis is also
+                               reached by hand and the picture is what counts
+     nothing is playing        `listen.isPaused()`. **While audio plays this
+                               stands down entirely** — the advance is then
+                               the narration's, through listen.js's own
+                               paint, and the two never both drive the cursor
+     armed                     see below
+
+   ARMED, AND WHAT DISARMS IT. Arriving at one word arms it (that is what
+   "when one word view is open ... the cursor advances" says). Any wheel, tap
+   or key EXCEPT the play key disarms it, because those are you moving the
+   word yourself and a timer fighting your hand is the worst of both. The
+   play key toggles it — "space pauses/resumes" — and that is "the next
+   play". Leaving one word disarms it; coming back arms it again.
+
+   WHY A CATCH-UP CLOCK ON A FRAME, and not `setInterval(60000/wpm)`. An
+   interval re-rounds every tick and drifts by its own callback cost. So t0 is
+   anchored ONCE and each frame advances until `floor((now - t0) / step)` words
+   have been taken: the count is then the arithmetic one -- 10 s at 325 wpm is
+   floor(10000 / 184.615) = 54 -- whatever the frame rate. It is a FRAME and
+   not a short interval because the lag between the clock and the cursor is
+   whatever the tick is: a 25 ms interval was tried and left a systematic
+   two-word debt, which measured as 52 in the ten seconds that are 54. And the
+   frame loop runs ONLY while the pace is actually moving words; at rest this
+   costs four wakeups a second and nothing else. A stall longer than a second
+   re-anchors rather than firing a burst of words at a reader who just came
+   back to the tab. */
+try{ (function(){
+  const S = window.TTSTVSettings; if(!S) return;
+  const WATCH_MS = 250;        // how often we ask whether the pace should be running
+  const RESYNC_MS = 1000;      // a stall longer than this drops the missed words
+  let armed = false, wasWord = false, t0 = 0, taken = 0, raf = 0;
+  /* diagnostics, read by reader/tests/browser/pace_one_word.py and by a
+     console; nothing in the page reads them. `anchors` is how a run that came
+     out short says WHY it came out short. */
+  let anchors = 0, worstGap = 0, lastFrame = 0;
+
+  const step = () => {
+    const w = +S.read().wpm;
+    return 60000 / ((isFinite(w) && w > 0) ? w : S.DEFAULTS.wpm);
+  };
+  const atWord = () => { try{ return nav.level === "word"; }catch(e){ return false; } };
+  const playing = () => { try{ return !!listen && !listen.isPaused(); }catch(e){ return false; } };
+
+  function anchor(){ t0 = performance.now(); taken = 0; anchors++; }
+
+  /* ONE WORD ON. `goTo` clamps inside a chapter, so the end of one is where
+     the next begins; `goTo` answering null is the end of the book, and there
+     the pace stops rather than sitting on the last word ticking. */
+  function advance(){
+    let c = null; try{ c = nav.cursor; }catch(e){ return false; }
+    if(!c) return false;
+    if(c.word + 1 < nav.wordCount) return !!nav.goTo(c.chapter, c.word + 1);
+    return !!nav.goTo(c.chapter + 1, 0);
+  }
+
+  /* THE ARMING, and it is the only thing that runs at rest: four wakeups a
+     second, no layout, no advance. The clock re-anchors on every one of them
+     while the pace is not eligible, so the moment it IS eligible the first
+     word is a whole step away and not a burst of the ones it "owed" while the
+     narration had the cursor. */
+  function watch(){
+    const word = atWord();
+    if(word && !wasWord) armed = true;                  // arriving arms it
+    if(!word && wasWord) armed = false;                 // leaving disarms it
+    wasWord = word;
+    if(word && armed && !playing()){ start(); return; }
+    stopFrames(); anchor();
+  }
+
+  /* AND THE FRAME LOOP, which runs ONLY while the pace is actually moving
+     words -- one word view, armed, nothing playing. A `setInterval` was tried
+     first and is wrong: at 325 wpm a word is 184.6 ms and a 25 ms interval
+     leaves the cursor a systematic step or two behind the clock, which shows
+     up as 52 words in the ten seconds that are arithmetically 54. On a frame
+     the lag cannot exceed one frame. Nothing here reads layout. */
+  function start(){ if(!raf) raf = requestAnimationFrame(frame); }
+  function stopFrames(){ if(raf){ cancelAnimationFrame(raf); raf = 0; } lastFrame = 0; }
+
+  function frame(now){
+    raf = requestAnimationFrame(frame);
+    if(lastFrame && now - lastFrame > worstGap) worstGap = now - lastFrame;
+    lastFrame = now;
+    if(!atWord() || !armed || playing()){ stopFrames(); anchor(); return; }
+    const s = step();
+    const due = Math.floor((performance.now() - t0) / s);
+    if((due - taken) * s > RESYNC_MS){ anchor(); return; }
+    let guard = 0;
+    while(taken < due && guard++ < 64){
+      if(!advance()){ armed = false; stopFrames(); break; }
+      taken++;
+    }
+  }
+
+  /* your hand beats the clock, and the play key is not your hand */
+  function stop(e){
+    if(e && e.type === "keydown"){
+      const isPlay = S.hotkeyIs ? S.hotkeyIs(e, "play") : (e.code === "Space");
+      if(isPlay) return;
+    }
+    armed = false; stopFrames();
+  }
+  ["wheel", "pointerdown", "touchstart", "keydown"].forEach(t =>
+    addEventListener(t, stop, { passive: true, capture: true }));
+
+  /* "space pauses/resumes" -- and ONLY where the pace is the thing running.
+     With the audio playing, or anywhere but one word, Space is still
+     `listen.toggle()`'s and this returns false so the key handler below
+     takes it. */
+  window.__pace = {
+    toggle(){
+      if(!atWord() || playing()) return false;
+      armed = !armed;
+      if(armed){ anchor(); start(); } else stopFrames();
+      return true;
+    },
+    /* read-only, for a browser driver and a console: the same handle
+       `window.nav` is under ?bench, and nothing in the page reads it. */
+    get armed(){ return armed; }, get stepMs(){ return step(); },
+    get taken(){ return taken; }, get anchors(){ return anchors; },
+    get running(){ return !!raf; },
+    get debt(){ return Math.floor((performance.now() - t0) / step()) - taken; },
+    get worstGap(){ return worstGap; },
+    resetGap(){ worstGap = 0; },
+  };
+
+  /* CHANGING THE PACE RE-STARTS THE CLOCK, and this is not tidiness. `taken`
+     is counted in WORDS and `due` is derived from t0 in MILLISECONDS, so the
+     two only agree while the step between them is the same number. Move the
+     row from 900 to 325 and the words already taken at 66.7 ms are suddenly
+     read against 184.6 ms: `due` falls BELOW `taken`, the debt goes negative,
+     and the cursor stands still for as many seconds as it takes the slower
+     clock to catch up -- measured, four seconds of nothing after one drag of
+     the Pace slider, and 52 words in the ten seconds that are 54. Anchoring on
+     the change is the whole fix: the new pace starts now. */
+  let lastWpm = S.read().wpm;
+  S.subscribe(st => { if(st.wpm !== lastWpm){ lastWpm = st.wpm; anchor(); } });
+
+  const timer = setInterval(watch, WATCH_MS);
+  addEventListener("pagehide", () => { clearInterval(timer); stopFrames(); });
+})(); }catch(e){ console.warn("[pace] not wired:", e); }
+
+/* WHICH BOOK THIS PAGE OPENS.
+   library.html is its own page now and hands a book over by slug --
+   shell.html#book=<slug> -- so the reader opens straight into the book you
+   picked there. Failing that, book-data.js's own default opens straight away
+   (bench convenience, same as every other page here: this is a workbench, not
+   the product), and failing THAT, the library page. */
+function slugFromUrl(){
+  let m = /(?:^|[#&?])book=([^&]+)/.exec(location.hash || "");
+  if(!m) m = /(?:^|[?&])book=([^&]+)/.exec(location.search || "");
+  let v; try{ v = m ? decodeURIComponent(m[1]) : null; }catch(e){ v = m ? m[1] : null; }
+  if(v && v.indexOf("books/") === 0) v = v.slice(6);      // the app says books/<slug>
+  return v || null;
+}
+function openDefault(){
+  if(window.BOOK && window.BOOK.chapters && window.BOOK.chapters.length) nav.openBook(window.BOOK);
+  else location.href = LIBRARY_PAGE;      // nothing to read: the library is the page for that
+}
+(function(){
+  const slug = slugFromUrl();
+  if(!slug){ openDefault(); return; }
+  onOpenBook(slug).then(b => {
+    if(b && b.chapters && b.chapters.length) nav.openBook(b);
+    else openDefault();
+  }).catch(err => {
+    console.warn("[shell] could not open " + slug + ":", err);
+    openDefault();
+  });
+})();
+/* picking another book in library.html and coming back through history
+   should open THAT book, not leave the last one standing */
+addEventListener("hashchange", () => {
+  const slug = slugFromUrl();
+  if(slug) onOpenBook(slug).then(b => { if(b && b.chapters && b.chapters.length) nav.openBook(b); });
+});
+
+/* THE STRIP ITSELF, built rather than written down. It used to be markup at
+   the bottom of the page and it is gone from there (Osca, 6 Sep); the handlers
+   that hung off it are all still here, so under ?bench they get their buttons
+   back. The three plain LINKS it also carried -- the library, the reading
+   page, the panes, the branch map -- do not come back: the library has a door
+   of its own in the bar row now, and a link is not a handler. */
+function benchStrip(){
+  const el = document.createElement("div");
+  el.className = "bench";
+  el.innerHTML =
+      '<button id="open">open book\u2026</button>'
+    + '<span class="r" id="loaded"></span>'
+    + '<input type="file" id="file" accept=".json,application/json" hidden>'
+    + '<span class="r">\u00b7</span>'
+    + '<span class="r">speed</span><span id="speeds"></span>'
+    + '<span class="r">\u00b7</span>'
+    + '<button id="skipoff"></button>'
+    + '<span class="r">\u00b7</span>'
+    + '<button id="tunebtn">tune\u2026</button>';
+  document.body.appendChild(el);
+}
+
+/* SPEED -- "I need you to give me options, so I can see what's fastest."
+   Four presets, switched live, no reload, remembered. book-nav.js holds the
+   numbers and what each one means; this is only the row of buttons. */
+function mountSpeeds(){ try{ (function(){
+  const box = $("speeds");
+  const mark = () => [...box.children].forEach(b =>
+    b.setAttribute("aria-pressed", b.dataset.sp === nav.speedName));
+  nav.speeds.forEach(name => {
+    const b = document.createElement("button");
+    b.type = "button"; b.textContent = name; b.dataset.sp = name;
+    b.onclick = () => { nav.speed(name); mark(); };
+    box.appendChild(b);
+  });
+  mark();
+})(); }catch(e){ console.warn("[bench] speed row failed:", e); } }
+
+/* SET, THEN THE SETTING GONE, AND NOW THE SET IS GONE TOO. Osca: "please get
+   rid of the page/leaf/ribbon etc - we don't want those any more. Just the
+   block sliding over eachother." So the springs are off -- and as of 5 Sep
+   they are off in wheel.js itself (Wheel.DEFAULTS.turn "none", .amp 0), not
+   turned off from here one mount at a time. The two calls this line used to
+   make are deleted: a wheel already comes up the way this page wanted it,
+   which is what "one set of numbers" means. */
+
+/* skip offscreen chapters -- the one that should actually matter on a book
+   with 865 of them. */
+function mountSkip(){ try{ (function(){
+  const b = $("skipoff");
+  const mark = () => { b.textContent = "skip offscreen: " + (nav.skipping ? "on" : "off");
+                       b.setAttribute("aria-pressed", nav.skipping); };
+  b.onclick = () => { nav.skip(!nav.skipping); mark(); };
+  mark();
+})(); }catch(e){ console.warn("[bench] skip toggle failed:", e); } }
+
+/* THE NUMBERS THE PAGE IS SET TO -- not a bench thing, and so not behind the
+   gate. It sat inside the tuner only because these used to be its sliders. */
+try{ (function(){
+  const R = document.documentElement;
+  /* THE WHEEL'S OWN GEOMETRY, SET. Row spacing, the centre line, the
+     perspective and the reading column's own nudge were sliders; the numbers
+     they were for have been found. Written once here, sliders gone -- this one
+     line is where they move again if they ever need to.
+     THE CONVEXITY IS NOT IN THIS LINE ANY MORE (5 Sep). "--radius":"60" was
+     this page writing over tokens.css's 2.6, so the app and every bench
+     disagreed about the barrel at rest and only this file was right. 60 is
+     Wheel.DEFAULTS.radius now, in wheel.js beside the rest of the wheel's own
+     numbers, and this page simply gets it. */
+  const SET = { "--pitch":"168px", "--axis":"46vh",
+                "--persp":"6000px", "--colnudge":"0px" };
+  Object.keys(SET).forEach(k => R.style.setProperty(k, SET[k]));
+  if(nav.kickWheels) nav.kickWheels();
+
+  /* THE PANES, SET. Their width and the shape of their approach were the
+     last two sliders here; they are numbers in book-nav.js now. The colour
+     alternation is on -- it is the design, not an option. */
+  R.setAttribute("data-tint", "");
+  try{ localStorage.setItem("tint2", "1"); }catch(e){}
+})(); }catch(e){ console.warn("[shell] set numbers failed:", e); }
+
+/* the tuner's own wiring: CSS custom properties for the wheel, nav.setWord
+   for one word. Everything persists, nothing needs a reload. BENCH ONLY. */
+function mountTuner(){
+  const panel = $("tuner");
+  $("tunebtn").onclick = () => { panel.hidden = !panel.hidden; };
+  $("tuneclose").onclick = () => { panel.hidden = true; };
+
+  /* COMING OUT OF ONE WORD. Osca: "I need snap stronger, coming OUT of one
+     word view." Between the word and the page there is nothing worth looking
+     at, so that one stretch of the axis gets its own grip. */
+  try{
+    const inp = $("t-outsnap"), out = $("v-outsnap");
+    inp.value = nav.outSnap; out.textContent = nav.outSnap;
+    inp.oninput = () => { nav.outSnap = +inp.value; out.textContent = inp.value; };
+  }catch(e){ console.warn("[tuner] out-snap:", e); }
+
+  const WK = { wordgap:"wordgap", linegap:"linegap", fill:"fill", curve:"curve" };
+  function putWord(id, v){
+    nav.setWord(WK[id], v);
+    const el = $("v-"+id); if(el) el.textContent = v;
+  }
+  Object.keys(WK).forEach(id => {
+    const inp = $("t-"+id);
+    inp.value = nav.word[WK[id]]; putWord(id, nav.word[WK[id]]);
+    inp.oninput = () => putWord(id, +inp.value);
+  });
+
+  /* WHAT THIS BROWSER ACTUALLY SUPPORTS. "why does it work on chrome but not
+     safari?" -- rather than guess, the page says so. These are the three
+     things the shell now leans on that differ between engines and between
+     file:// and a served origin. */
+  (function(){
+    const tests = [
+      ["skip offscreen", () => CSS.supports("content-visibility","auto")],
+      ["word highlight", () => !!(window.CSS && CSS.highlights && window.Highlight)],
+      ["settings saved", () => { try{ localStorage.setItem("__t","1");
+                                      localStorage.removeItem("__t"); return true; }
+                                catch(e){ return false; } }],
+    ];
+    $("diag").innerHTML = tests.map(([n,f]) => {
+      let ok=false; try{ ok=!!f(); }catch(e){}
+      return '<div style="color:'+(ok?"var(--ink)":"#a8402a")+'">'
+           + (ok?"✓ ":"✗ ") + n + "</div>";
+    }).join("") + '<div style="color:var(--dim);margin-top:3px">'
+      + (location.protocol === "file:" ? "file:// — storage often blocked" : location.protocol)
+      + "</div>";
+  })();
+
+  $("t-reset").onclick = () => {
+    const wd = {wordgap:120, linegap:2.4, fill:0.78, curve:1};
+    Object.keys(wd).forEach(id => { $("t-"+id).value = wd[id]; putWord(id, wd[id]); });
+    nav.outSnap = 4.5; $("t-outsnap").value = 4.5; $("v-outsnap").textContent = "4.5";
+  };
+}
+
+/* ================= THE RECORDER — press R ==================================
+   Osca: "How can I share with you what I see, in the animations - it is
+   causing a lot of noise and drift, that you can't see .mov files."
+
+   A screen recording shows the drift; it cannot say how much, or of what.
+   This does: press R, do the gesture, and every frame of the next four
+   seconds is kept as NUMBERS — the depth, the reader's own edge and
+   transform, its scroll, where each pane is, how far the spacing has opened,
+   how big the zoom is, and how long the frame took. Read back afterwards from
+   window.__rec, which is what makes it shareable: drift becomes a column that
+   either changes when nothing was touched, or doesn't.
+
+   Nothing is recorded unless you ask. It costs one read of values already in
+   hand and no layout at all, so it cannot itself be the jitter. */
+function mountRecorder(){ try{ (function(){
+  let rec = null, t0 = 0;
+  const flash = msg => {
+    let el = document.getElementById("recflash");
+    if(!el){
+      el = document.createElement("div");
+      el.id = "recflash";
+      el.style.cssText = "position:fixed;bottom:10px;left:12px;z-index:99999;"
+        + "font:11px/1.4 var(--ui);background:#a8402a;color:#fff;padding:3px 8px;"
+        + "border-radius:3px;pointer-events:none;transition:opacity .2s";
+      document.body.appendChild(el);
+    }
+    el.textContent = msg; el.style.opacity = "1";
+    clearTimeout(el._t); el._t = setTimeout(()=>{ el.style.opacity = "0"; }, 1200);
+  };
+  function frame(now){
+    if(!rec) return;
+    const rb = $("readerbox"), rp = $("readerpane");
+    const sec = document.querySelector("#readercol .chapter.spreading");
+    rec.push([
+      +(now - t0).toFixed(1),
+      +nav.dx.toFixed(4),
+      rb.style.left || "",
+      rb.style.transform || "",
+      Math.round(rp.scrollTop),
+      [...document.querySelectorAll("#contentsbox,#leftmore .collpane")]
+        .map(e => Math.round(parseFloat(e.style.left || 0))).join("/"),
+      sec ? sec.style.getPropertyValue("--lgap") : "",
+    ]);
+    if(now - t0 < 4000) requestAnimationFrame(frame);
+    else { flash("recorded " + rec.length + " frames — window.__rec"); window.__rec = rec; rec = null; }
+  }
+  addEventListener("keydown", e => {
+    if(e.key !== "r" && e.key !== "R") return;
+    if(e.target && /input|textarea/i.test(e.target.tagName)) return;
+    rec = []; window.__rec = null;
+    flash("recording 4s — go");
+    requestAnimationFrame(n => { t0 = n; frame(n); });
+  });
+})(); }catch(e){ console.warn("[bench] recorder failed:", e); } }
+
+/* NO LIGHT/DARK BUTTON ON THIS PAGE (Osca, 6 September: *"I do NOT want a
+   button for light/dark. Settings drives it."*). The toggle that stood here
+   wrote `data-dark` on <html> -- a second owner of the value, and one the
+   application could not see, which is why a window opened from Settings' own
+   Light/Dark row changed every surface EXCEPT this one. It is deleted, not
+   hidden: tokens.css and pane.css key their dark palette on
+   `[data-theme="dark"]` and, for the system default, on
+   `:root:not([data-theme="light"])` inside `prefers-color-scheme: dark` --
+   the two selectors settings/settings.js already uses -- so the one thing
+   that switches this page is the attribute prefs/prefs.js writes out of the
+   store. Nothing here writes it, and nothing here reads it either. */
+
+/* WARMTH IS READ, NOT DRIVEN (Osca, 6 September: Settings is the one source
+   for theme, warmth, font, size, line height and pace). The big slider that
+   lived here -- reading-page.html's own, with its hslToHex/groundHex track --
+   is deleted along with its input. THE CSS IS UNTOUCHED: tokens.css still
+   mixes --ground and --ink off `--warm`, and the value now arrives the way
+   every other reading setting does, as the custom property prefs/prefs.js
+   writes onto <html> out of the store (`cssVars`, prefs/prefs.js:445). An
+   untouched reader carries no --warm at all and tokens.css's own `--warm: 0`
+   stands, which is exactly what "absent at the default" means there. */
+
+/* ad hoc open, for a book that isn't in the library yet -- same picker
+   every other page here uses. BENCH ONLY. */
+function mountOpen(){
+  const note = $("loaded"), fileEl = $("file");
+  $("open").onclick = () => fileEl.click();
+  function openFile(f){
+    if(!f) return;
+    note.textContent = "reading…";
+    Book.open(f).then(b=>{
+      if(!b.chapters.length){ note.textContent="no chapters in that file"; return; }
+      nav.openBook(b);
+      document.title = (b.title||"a book") + " — the shell";
+      note.textContent = Book.summary(b, "chapters");
+      if(b.dropped.length) console.log("front matter skipped:", b.dropped);
+    }).catch(e=>{ note.textContent = "not a book.json ("+String(e.message).slice(0,40)+")"; });
+  }
+  fileEl.onchange = () => openFile(fileEl.files && fileEl.files[0]);
+}
+
+/* ---- AND THIS IS THE WHOLE OF THE DIFFERENCE between the picture and the
+   workbench it was built on. Without ?bench nothing above is mounted and the
+   tuner's markup leaves the page too -- it stays in the FILE, which is what
+   was asked; it is not in the document. */
+if (BENCH) {
+  benchStrip();
+  mountOpen(); mountSpeeds(); mountSkip(); mountTuner(); mountRecorder();
+} else {
+  const t = $("tuner"); if (t) t.remove();
+}
+</script>
+
+<!-- ================== LISTENING, AND THE HANDS FREE LAYER ==================
+     Job 15 step 3, 5 September. Three things the picture does not show and
+     the product is not the product without: the audio and its highlight
+     (3a), the keys the Settings page edits (3b), and voiceui (3c).
+     Everything visible on this page is unchanged -- no bar, no buttons, no
+     element added to the reader. -->
+<script>
+/* (b) THE KEYS. Two rows of prefs/prefs.js's own table, and only two: `play`
+   (Space) and `word` (the arrows). The rest of that table -- find, lookup,
+   note, sidebar, sync, one-word -- belongs to pages this shell does not
+   mount yet, and a key that answers nothing is the one thing the table must
+   not contain (prefs/prefs.js's own comment on `pace`).
+
+   TTSTVKeys.typing() is keys.js: while the caret is in one of the tuner's
+   ranges (?bench only now), Space is a slider's own key and not ours. */
+addEventListener("keydown", e => {
+  if(window.TTSTVKeys && TTSTVKeys.typing()) return;
+  const S = window.TTSTVSettings;
+  /* LIGHT / DARK, and it is the ONLY door on this page (Osca, 6 Sep: *"I do
+     NOT want a button for light/dark. Settings drives it."*). The page's own
+     `dark` button was deleted in 996eae3; this is the third door onto the one
+     store, beside the Settings row and the bar's own icon, and library.html
+     binds the same key for the same reason. It is above `if(!listen)` because
+     the theme is not a book's -- it works on a reader with nothing open. */
+  if(S && S.hotkeyIs(e, "theme")){ e.preventDefault(); S.toggleTheme(); return; }
+  /* THE PLAY KEY HAS TWO OWNERS NOW, and the pace is asked first because it
+     only answers where it is the thing running: inside one word, with nothing
+     playing (Osca, 6 Sep: "space pauses/resumes"). It returns false anywhere
+     else and `listen.toggle()` below takes the key exactly as it always did.
+     Above `if(!listen)` deliberately -- the pace is book-nav.js's cursor and
+     owes nothing to the audio having mounted. */
+  const playKey = S ? S.hotkeyIs(e, "play") : (e.code === "Space");
+  if(playKey && window.__pace && __pace.toggle()){ e.preventDefault(); return; }
+  if(!listen) return;
+  const is = (id) => S ? S.hotkeyIs(e, id) : false;
+  const which = (id) => S ? S.hotkeyWhich(e, id) : -1;
+  if(is("play") || (!S && e.code === "Space")){ e.preventDefault(); listen.toggle(); return; }
+  const w = which("word");
+  if(w >= 0){ e.preventDefault(); listen.seekWordDelta(null, w === 0 ? 1 : -1); }
+});
+</script>
+
+<!-- (c) HANDS FREE. The same nine files the old reader loaded, in the same
+     order, and the same one-line boot. VoiceUI.boot() calls
+     reader-bridge.js's attachToWindow(window), which reads
+     window.ReaderControl -- set above the moment a book opens -- and throws
+     a named error listing what is missing if the shape is wrong, so a
+     failure here is loud rather than silent. -->
+<script src="../voiceui/grammar.js"></script>
+<script src="../voiceui/detour.js"></script>
+<script src="../voiceui/resolve.js"></script>
+<script src="../voiceui/answers.js"></script>
+<script src="../voiceui/tts.js"></script>
+<script src="../voiceui/trigger.js"></script>
+<script src="../voiceui/asr.js"></script>
+<script src="../voiceui/reader-bridge.js"></script>
+<script src="../voiceui/app.js"></script>
+<script>
+/* boot AFTER the first book has opened, because attachToWindow throws when
+   window.ReaderControl is absent and the pill would come up permanently
+   "unavailable". The book arrives asynchronously (a <script src> per book),
+   so this waits for the mount rather than guessing a delay. */
+(function(){
+  if(!window.VoiceUI) return;
+  let tries = 0;
+  const go = () => {
+    if(window.ReaderControl){ try{ VoiceUI.boot(); }catch(e){ console.warn("[voiceui]", e); } return; }
+    if(++tries > 200) { try{ VoiceUI.boot(); }catch(e){} return; }   // say so in the pill
+    setTimeout(go, 50);
+  };
+  go();
+})();
+</script>
+

@@ -1,0 +1,71 @@
+/* THE LANE STRIP -- what the machine is doing, under the bar (bar/lanes.js).
+ *
+ * Osca, 5 Sep: *"all I'd want is a VERY thin strip of colour, beneath the bar,
+ * one colour strip per book being parsed / audio being given, just make it very
+ * very THIN, different colours, different books/processes."*
+ *
+ * IT REPLACES A SENTENCE THAT COULD ONLY EVER TELL YOU ONE THING.
+ * `library/library.html` said *Parsing "X" -- it will appear on the shelf
+ * shortly* into `#note`. Two problems, and the strip answers both: it lived on
+ * the Library, so it died the moment you went to read something; and studio
+ * runs FIVE parses at once (`INGEST_LANES`) while `/state.job` carries only the
+ * oldest of them, so one sentence could never be more than a fifth of the
+ * truth. One band per lane is the honest shape, and it belongs to the bar
+ * because the bar is on every surface.
+ *
+ * IT COSTS NOTHING WHEN NOTHING RUNS: no height, no border, no paint.
+ */
+#barLanes {
+  position: fixed;
+  left: 0; right: 0;
+  top: var(--lanes-top, 0px);   /* the app's pages start under the strip; a page
+                                   that draws its own bar sets this to its height */
+  z-index: 899;                 /* the bar's layer, under the bar's own panel */
+  display: flex;
+  gap: 1px;
+  height: 0;                    /* nothing running is nothing drawn */
+  overflow: hidden;
+  pointer-events: none;         /* it is a readout, not a control */
+  transition: height .18s ease;
+}
+#barLanes.on { height: var(--lanes-h, 3px); }
+#barLanes .lane {
+  flex: 1 1 0;
+  min-width: 0;
+  position: relative;
+  overflow: hidden;
+  background: rgba(128, 128, 128, .16);
+  pointer-events: auto;         /* ...but the hover still says which book */
+}
+#barLanes .lane i {
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: 0;
+  background: var(--lane, #8c2f2f);
+  transition: width .3s linear;
+}
+/* A KNOWN FRACTION FILLS; AN UNKNOWN ONE SWEEPS. Most of these jobs cannot say
+   how far through they are -- a parse knows its step, not its share -- so the
+   sweep is the honest drawing of "running, and it will not say how long". */
+#barLanes .lane.sweep i {
+  width: 34%;
+  animation: barLaneSweep 1.5s ease-in-out infinite;
+}
+@keyframes barLaneSweep {
+  0%   { transform: translateX(-110%); }
+  100% { transform: translateX(330%); }
+}
+/* MODE IS THE TREATMENT, IDENTITY IS THE HUE. At three pixels a colour can only
+   carry one thing, and the useful one is WHICH BOOK -- two parses at once must
+   not look like one wide parse. So the hue says which, and the weave says what:
+   a parse is solid, a render is striped, because "being read in" and "being
+   voiced" are the two you actually need to tell apart. */
+#barLanes .lane.render i {
+  background: repeating-linear-gradient(
+    115deg, var(--lane, #8c2f2f) 0 6px, rgba(255, 255, 255, .45) 6px 11px);
+}
+#barLanes .lane.failed i { background: #b3382c; width: 100% !important; animation: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  #barLanes .lane.sweep i { animation: none; width: 100%; opacity: .5; }
+}
