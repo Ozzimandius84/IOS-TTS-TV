@@ -234,8 +234,25 @@ debugger attached. It works once `xcodegen generate` has run and the project has
 been closed and reopened.
 
 ### 8b. Commit check
-Pathspec, by file, on `main`; `git show --stat --name-only HEAD` checked after.
-The new files `git add`ed by their own single paths first.
+**`13f1023`**, 5 files, +608/-2; `git show --stat --name-only HEAD` lists
+exactly `PHONE.md`, `STATUS.md`, `src-tauri/gen/apple/project.yml`,
+`tests/test_phone_loop.py`, `tools/phone.sh` and nothing else. Pathspec, on
+`main`; the two new files `git add`ed by their own single paths first (that add
+took on the first try, no lock). This line is a later commit and cannot be in
+the one it names.
+
+**HEAD moved under me once**: `94e7580` at the gate, and job 26b's Google work
+landed as **`c4b9f92`** at ~12:16 — while §2's numbers were being written, not
+before them. It changed `src-tauri/src/lib.rs`, `build.rs`, `Cargo.toml`,
+`capabilities/default.json`, `SYNC.md`, `STATUS.md` and two new files, and
+**none of the five files in this commit**. My `STATUS.md` entry was prepended to
+the file as it stood after their commit, so their entry sits intact beneath mine
+and `git diff -- STATUS.md | grep -c '^-[^-]'` was **0** before I committed.
+
+Locks moved into `_to_delete/`, epoch range **1788694560 – 1788697100**: the
+commit's own `HEAD.lock` and `next-index-11.lock`. `_to_delete/` now holds this
+session's four staging tarballs and every lock it moved; **one `rm _to_delete/*`
+clears the lot.**
 
 ### 9. Status line
 `IOS-TTS-TV · job 27 · 6 Sep · dev over the LAN with --host, ▶ fixed by one PATH line, phone.sh for the rare build — and the plist has been behind project.yml all day: 0 of 3 keys, xcodegen is the step nothing else does`
