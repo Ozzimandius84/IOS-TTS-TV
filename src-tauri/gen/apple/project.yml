@@ -102,7 +102,20 @@ targets:
       - sdk: UIKit.framework
       - sdk: WebKit.framework
     preBuildScripts:
-      - script: npm run -- tauri ios xcode-script -v --platform ${PLATFORM_DISPLAY_NAME:?} --sdk-root ${SDKROOT:?} --framework-search-paths "${FRAMEWORK_SEARCH_PATHS:?}" --header-search-paths "${HEADER_SEARCH_PATHS:?}" --gcc-preprocessor-definitions "${GCC_PREPROCESSOR_DEFINITIONS:-}" --configuration ${CONFIGURATION:?} ${FORCE_COLOR} ${ARCHS:?}
+      # Xcode's ▶ runs this phase with a LOGIN SHELL'S PATH AND NOT YOUR
+      # SHELL'S: no `~/.zshrc`, so no `~/.cargo/bin`, so no cargo and no
+      # rustup -- which is why ▶ died on "Build Rust Code" while the same
+      # command in Terminal worked (6 Sep). `npm` is found because Xcode
+      # inherits /usr/local/bin; cargo is not because rustup installs into
+      # $HOME. One line, before the command, and ▶ is one click again.
+      #
+      # `$HOME/.cargo/bin` and not a hard-coded /Users/... so the file is not
+      # about one Mac; `-` before `bin` deliberately PREPENDS, because a
+      # Homebrew rust would otherwise win and build against a different
+      # toolchain than the terminal does.
+      - script: |
+          export PATH="$HOME/.cargo/bin:$PATH"
+          npm run -- tauri ios xcode-script -v --platform ${PLATFORM_DISPLAY_NAME:?} --sdk-root ${SDKROOT:?} --framework-search-paths "${FRAMEWORK_SEARCH_PATHS:?}" --header-search-paths "${HEADER_SEARCH_PATHS:?}" --gcc-preprocessor-definitions "${GCC_PREPROCESSOR_DEFINITIONS:-}" --configuration ${CONFIGURATION:?} ${FORCE_COLOR} ${ARCHS:?}
         name: Build Rust Code
         basedOnDependencyAnalysis: false
         outputFiles:

@@ -7,7 +7,7 @@ Xcode's free personal team, and the friend gets the Android `.apk`.
 
 ---
 
-## 0. Where the shell comes from, and why that is the only rule here
+## The one rule — where the shell comes from
 
 `shell/` is not this repo's code. It is TTSTV's app shell, arriving by script:
 
@@ -29,6 +29,29 @@ the import end (TTSTV's `publish_shell.py`) and again at this end
 repos and only one of them is on the disk at build time.
 
 ---
+
+## 0. Once, and never again — the keychain
+
+**codesign asks for the login password on every build until you tell the
+keychain to stop asking.** Three prompts a build is what makes a one-click loop
+feel like a chore, and it is one line:
+
+```bash
+security set-key-partition-list -S apple-tool:,apple:,codesign: \
+    -s -k "$(read -rsp 'login keychain password: ' p; echo "$p")" \
+    ~/Library/Keychains/login.keychain-db
+```
+
+What it does, because it deserves a sentence before you type it: every private
+key in the login keychain carries an access-control list of the tools allowed
+to use it without asking. `codesign` is not on that list by default for keys
+Xcode imported, so it prompts. This adds `codesign` (and the two Apple tool
+identifiers it delegates to) to the list **for every key in that keychain**.
+It grants nothing to anything else and no key leaves the Mac.
+
+The click-instead-of-type version, if you would rather see what you are
+allowing: build once, and at the prompt press **Always Allow** rather than
+Allow. Same effect, one key at a time.
 
 ## 1. Re-import the shell — the one command
 
@@ -266,6 +289,150 @@ is no Xcode, no simulator and no camera in a Cowork session.
    from the console above against the Mac's LAN address.
 6. Deleting the app clears `localStorage`, so a re-pair is a re-scan; there is
    no "forget" button in this repo.
+
+---
+
+## 6c. THE DAILY LOOP — the phone loads the Mac, and nothing is built
+
+This is the loop. One command, and then edits appear on the phone with no
+build, no install and no password.
+
+```bash
+npm run -- tauri ios dev "iPhone 2" --host
+```
+
+**`--host` is the whole of the fix.** Without it the built-in dev server binds
+`127.0.0.1`, which on the Mac is the Mac and on the phone is the phone — so the
+phone loads nothing and shows a blank Library, which is exactly what
+`tauri ios dev "iPhone 2"` did on 6 Sep. With it the CLI takes the Mac's LAN
+address (prompting the first time, `--force-ip-prompt` to be asked again),
+binds there, and points the app at it.
+
+Three things have to be true for it, and two of them are one-offs:
+
+1. **The ATS exception.** iOS refuses plain `http://` by default and says
+   nothing about it. `project.yml` carries `NSAppTransportSecurity ›
+   NSAllowsLocalNetworking: true`, which permits http and ws to private
+   addresses — `192.168.x.x`, `10.x.x.x`, `.local` — and to nothing else.
+   **It is written and it is not yet in the app** (see §6e): nothing has run
+   `xcodegen` since it was added.
+2. **macOS must let the phone in.** System Settings → Network → **Firewall**.
+   If it is on, use **Options…** and allow incoming connections for the
+   process that binds the port (`node`, or Xcode when ▶ is what started it) —
+   or turn the firewall off while you work, which is the one toggle and is what
+   most people do. On Sequoia there is a second, newer one that catches people
+   out: System Settings → Privacy & Security → **Local Network** → Terminal (or
+   Xcode) **on**. A refused Local Network permission looks exactly like a
+   firewall block: a blank page and no error.
+3. **Both on the same Wi-Fi**, and not a guest network that isolates clients.
+
+**The proof, and it is worth doing once so you trust the loop:** with the app
+running on the phone, edit `shell/library/library.html` on the Mac — put a `.`
+in the title — and save. The page reloads **on the phone**, by itself, within a
+second. The dev server serves `shell/` straight off disk and injects a
+WebSocket that tells the page to reload; nothing is compiled and nothing is
+installed. That is the loop, and it is why `tools/phone.sh` is for the rare day
+and not the daily one.
+
+Two things it does **not** cover, and both need §6e's real build: a change to
+Rust (the dev server only serves the web half — Rust changes do rebuild and
+relaunch, which takes the minutes a build takes), and a change to `project.yml`
+or a plist key.
+
+---
+
+## 6d. Seeing the console — Safari's inspector
+
+When something is blank or garbled, the app says why in its log, and this is
+how you read it. Two toggles, once each:
+
+* **On the Mac** — Safari → Settings → Advanced → **Show features for web
+  developers**.
+* **On the phone** — Settings → Safari → Advanced → **Web Inspector** on.
+
+Then **Safari → Develop → `iPhone 2` → Frank** while the app is running.
+`console.log`, the network tab, and `TTSTVHost.pairRead()` at a prompt all work
+from there — §6b's console drive is typed into exactly that window.
+
+**No code change was needed for this.** Tauri enables the web inspector on
+`debug_assertions` builds by default (`WebviewWindowBuilder::devtools`, "Enabled
+by default… works in debug builds"), and `tauri ios dev` and
+`tauri ios build --debug` are both debug builds. If Frank is not listed under
+Develop, it is one of the two toggles above, not the app. A **release** build is
+a different matter: it needs tauri's `devtools` feature, and it is deliberately
+not enabled.
+
+On the simulator the same menu says **Simulator** instead of the phone's name.
+
+---
+
+## 6e. `xcodegen` — the step nothing else does
+
+**`project.yml` is a source file, and only `xcodegen` applies it.**
+`tauri ios build` and `tauri ios dev` do not regenerate the Xcode project, so
+every key added to `project.yml` sits there doing nothing until:
+
+```bash
+cd src-tauri/gen/apple && xcodegen generate
+```
+
+Measured on 6 Sep, and it is not a hypothetical: `frank_iOS/Info.plist` carried
+**none** of `NSLocalNetworkUsageDescription`, `NSBonjourServices` or
+`NSAppTransportSecurity` — all three added to `project.yml` that morning — while
+`CFBundleURLTypes` *was* there, because the deep-link plugin's own build script
+writes that one into the plist directly at build time rather than through
+xcodegen. So the ATS exception §6c needs, and the local-network permission
+job 26's Bonjour browse needs, have both been written and neither has ever been
+in a build.
+
+`tools/phone.sh` runs `xcodegen` first, before anything else, for this reason.
+If you build by hand or press ▶, run it yourself after touching `project.yml`.
+**Xcode caches the project**: close and reopen it after a regeneration, or ▶
+builds the old one.
+
+---
+
+## 6f. Xcode's ▶ — one click, and the PATH that stopped it
+
+Open `src-tauri/gen/apple/frank.xcodeproj`, pick the phone in the toolbar, press
+▶. It builds the Rust, signs, installs and launches, and the debugger is
+attached — which is the one thing the terminal loop does not give you.
+
+**Why it died on 6 Sep, and it was not a Rust fault.** The "Build Rust Code"
+phase runs under Xcode's own environment, which is a login shell's PATH and not
+yours: no `~/.zshrc`, so no `~/.cargo/bin`, so no `cargo` and no `rustup`. `npm`
+was found (Xcode inherits `/usr/local/bin`) and `cargo` was not, so the phase
+failed on the first command that needed it while the identical line in Terminal
+worked. `project.yml`'s script phase now begins
+
+```
+export PATH="$HOME/.cargo/bin:$PATH"
+```
+
+and it prepends rather than appends deliberately, so a Homebrew rust cannot win
+and build against a different toolchain than the terminal does.
+
+**It reaches Xcode only through §6e.** Run `xcodegen generate`, then close and
+reopen the project, then ▶.
+
+---
+
+## 6g. `tools/phone.sh` — the rare real build, as one command
+
+```bash
+tools/phone.sh              # xcodegen, build --debug, install on the phone
+tools/phone.sh --shell      # ...and re-import the shell from TTSTV first
+```
+
+Four steps in the order that makes each true: `xcodegen` (§6e — first, because
+it is the one everybody forgets), the shell import only when asked (it replaces
+`shell/` whole and needs TTSTV on the disk), `tauri ios build --debug` (always
+debug: a release build is not inspectable and a free team cannot install one),
+then `devicectl install` onto the one connected phone. It finds the udid itself,
+refuses rather than guesses when two phones are plugged in, and asks nothing.
+
+It does **not** run §0's keychain line for you. That changes a keychain ACL, and
+that is a thing to type once, yourself, having read what it does.
 
 ---
 

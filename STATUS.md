@@ -78,6 +78,170 @@ PKCE needs none. 28 of the repo's tests pass; the one failure
 
 ---
 
+## job 27 · the phone loop is one press — dev over the LAN, ▶, and one script · 6 Sep
+
+**Osca, 6 Sep: *"simpler than the terminal, minutes, and my password three
+times."*** Three separate faults were making it three; none of them was in the
+app, and one of them explains the blank phone.
+
+### 1. Built
+- **`src-tauri/gen/apple/project.yml`** — the "Build Rust Code" phase becomes a
+  block script beginning `export PATH="$HOME/.cargo/bin:$PATH"`. Prepended, not
+  appended, so a Homebrew rust cannot win and build against a different
+  toolchain than the terminal does; `$HOME` and not `/Users/…` so the file is
+  not about one Mac.
+- **`tools/phone.sh`** (new, executable) — the rare real build as one command
+  and no prompts: `xcodegen` → shell import (only with `--shell`) →
+  `tauri ios build --debug` → `devicectl install`. Finds the udid itself,
+  refuses rather than guesses on two phones, never builds release, and
+  deliberately does **not** run the keychain line.
+- **`PHONE.md`** — **§0** the keychain, once (the `security
+  set-key-partition-list` line, what it actually grants, and the Always-Allow
+  click as the alternative); **§6c** the daily loop; **§6d** the Safari
+  inspector and its two toggles; **§6e** `xcodegen`, the step nothing else
+  does; **§6f** Xcode's ▶ and the PATH that stopped it; **§6g** `phone.sh`.
+  The old unnumbered preamble stops being "§0" so that step 0 is step 0.
+- **`tests/test_phone_loop.py`** (new, 8) — the two file-level fixes, held.
+
+### 2. Verified — and how
+**The finding that explains the blank phone, and it is measured, not reasoned:**
+`src-tauri/gen/apple/frank_iOS/Info.plist` carries **none** of
+`NSAppTransportSecurity`, `NSLocalNetworkUsageDescription` or
+`NSBonjourServices` — `grep -c` says **0** — while all three have been in
+`project.yml` since this morning. `CFBundleURLTypes` *is* in the plist, because
+the deep-link plugin's build script writes that one directly at build time
+rather than through xcodegen. So **`project.yml` is a source file that only
+`xcodegen` applies, `tauri ios build` does not regenerate, and nobody has run
+it**: the ATS exception the LAN dev server needs, and the local-network
+permission job 26's Bonjour browse needs, have both been written and neither
+has ever been inside a build. That is one command away and it is §8's first.
+
+| claim | how | what |
+|---|---|---|
+| the CLI has the flag, and what it does | **read**, `@tauri-apps/cli` 2.11.4's own binary | `--host`: *"Use the public network address for the development server… When this is set or when running on an iOS device the CLI sets `TAURI_DEV_HOST`"*; `--force-ip-prompt` to be asked again |
+| a static `frontendDist` really does live-reload | **read**, same binary | the built-in dev server for static files (`--no-dev-server` turns it off, `TAURI_CLI_PORT`, **default port 1430**) injects an autoreload script — `{"reload": true}` over a WebSocket, `window.location.reload()`, adapted from trunk's `autoreload.js`. So an edit to `shell/library/library.html` reloads the phone with nothing built |
+| the ATS exception covers it | **read**, Apple's rule for `NSAllowsLocalNetworking` | http **and ws** to private literals and `.local`, and to nothing else — so it covers the page load and the reload socket both |
+| the plist is behind its source | **live**, `grep` on the generated file | 0 of 3 keys, above |
+| the ▶ fault | **read**, and it matches the symptom exactly | the phase runs under Xcode's environment: a login shell's PATH, no `~/.zshrc`, so no `~/.cargo/bin`. `npm` resolves (Xcode inherits `/usr/local/bin`), `cargo` does not (rustup installs into `$HOME`) — which is why the same line worked in Terminal |
+| the inspector needs no code | **read**, `tauri` 2.11.3 `src/webview/mod.rs:1108` | *"Whether web inspector… is enabled or not. **Enabled by default**… works in **debug** builds, but requires `devtools` feature flag in release"*, and `— iOS: Open Safari > Develop > [Your Device Name]`. `ios dev` and `ios build --debug` are both debug builds |
+| the files hold | **unit** | `tests` **37 passed, 1 skipped, 1 failed** — the skip is the plist drift, reported with its remedy rather than as a red; the fail is the same pre-existing `asr.js` one named in the entries below |
+| `phone.sh` is syntactically a program | **live** | `bash -n` clean, and a test that keeps it so |
+
+**Not verified — everything with a Mac or a phone in it.** No `xcodegen` run, no
+`tauri ios dev`, no ▶, no `phone.sh` executed, no simulator build, no
+`simctl install`, no Safari inspector opened. There is no Xcode, no simulator,
+no cargo and no macOS in a Cowork session. §8 is the run sheet, and the
+`--host` loop is a claim about a flag's documented behaviour until it is pressed.
+
+### 3. Judgment calls
+- *"`build.devUrl` / the CLI's `--host`" — which* → **`--host`, and `devUrl`
+  stays unset.** A LAN address pinned in `tauri.conf.json` is right until the
+  DHCP lease moves, and then it is a blank screen with a config file that looks
+  correct. `--host` resolves it per run. It also keeps the file honest: a set
+  `devUrl` makes tauri-codegen embed no assets at all, which this repo's own
+  `lib.rs` head already has a paragraph about.
+- *the blank `ios dev` screen — one cause or two* → **at least two, and both are
+  fixed here**: nothing was listening on an address the phone could reach
+  (`--host`), and iOS would have refused the load anyway (no ATS key in the
+  plist). I cannot say which bit first without pressing it, and §2 says so
+  rather than picking the tidier story.
+- *the "one System Settings toggle"* → **there are two on a current macOS**, and
+  saying one would waste an afternoon: Network → Firewall (allow incoming for
+  the process, or off), and — Sequoia and later — Privacy & Security → **Local
+  Network** → Terminal/Xcode. A denied Local Network permission looks exactly
+  like a firewall block.
+- *the inspector's `isInspectable` / `devtools(true)`* → **not written**, and
+  this is the one place I did less than the go asked. It is already on for debug
+  builds by Tauri's own default (§2), so the line would be a no-op that reads
+  like a fix — **and `src-tauri/src/lib.rs` was being written by another lane
+  seven minutes before I started** (+253 lines of Google OAuth, `11:23:12`).
+  Adding a probably-redundant line to a hot file is the wrong trade. If Frank
+  still does not appear under Develop **after** §6d's two toggles, that is when
+  it is worth an explicit `.devtools(true)` — §7.
+- *the simulator reproduction of the blank built app* → **not attempted**, for
+  the same reason it could not be attempted last time: no simulator here. What
+  changed is that it is no longer a silent failure — addendum 2's read-back
+  guard turns a bad unpack into one log line, and §6d is how to read it.
+- *`phone.sh` and the keychain* → the script does not run `set-key-partition-list`.
+  It changes a keychain ACL; that is a thing to type once, having read it.
+
+### 4. Boundary check
+Touched, all in this repo: `src-tauri/gen/apple/project.yml`, `tools/phone.sh`
+(new), `PHONE.md`, `tests/test_phone_loop.py` (new), `STATUS.md`. TTSTV not
+read and not written.
+
+**Left alone, and this matters more than usual today — another lane was live in
+`src-tauri/` while I worked**: `src-tauri/src/lib.rs`, `build.rs`, `Cargo.toml`,
+`capabilities/default.json` (+253 lines of a Google sign-in deep link, last
+written `11:23:32`), plus `google.json`, `tests/test_google_link.py`,
+`SYNC.md`. They **landed as `c4b9f92` at ~12:16, while this entry was being
+written**, so HEAD moved under me once — see §8b. My STATUS.md entry was
+prepended to the file as it stood *after* their commit, so job 26b's entry is
+intact beneath it and my diff deletes no line. Untracked `scratch26b/` is
+theirs too. Also the four generated Apple files
+Osca's build and Xcode keep dirty: `frank.xcodeproj/project.pbxproj`, the
+xcscheme, `frank_iOS/Info.plist`, `frank_iOS.entitlements`. **Nothing of mine
+touches any of them** — note that the plist finding in §2 is a *read*.
+
+### 5. Footprint
+Nothing added but source. `_to_delete/` still holds this session's four staging
+tarballs and its git locks; one `rm _to_delete/*` clears the lot.
+
+### 6. Requests to core / other modules
+None. Everything here is this repo's.
+
+### 7. Known gaps
+- **Nothing in this entry has been run.** It is three file changes and a run
+  sheet; the loop is proved when Osca presses it.
+- **`.devtools(true)` is not written** (§3). If §6d's toggles are not enough,
+  that line is the next thing, and it wants a quiet `lib.rs`.
+- **The blank built-app Library is diagnosed, not fixed.** Addendum 2 made it
+  speak; §6d is how to hear it. If the line says `does not begin with '<'` the
+  Brotli fix did not take; anything else is a new fault.
+- `phone.sh`'s device detection parses `devicectl list devices` column-wise. It
+  refuses on two phones rather than guessing, but it has never been run against
+  real output — the shape of that table is the one thing in the script I could
+  not check.
+- **Xcode caches the project.** After `xcodegen generate`, close and reopen it
+  or ▶ builds the old one. Said in §6e and §6f; not enforceable from here.
+- The daily loop does not cover Rust changes (those rebuild, which is minutes)
+  or plist changes (those need §6e then a build).
+
+### 8. The three commands Osca ever types again, in order
+
+**Once, today** — press the keys that have been written and never applied
+(§6e), and then §0's keychain line if codesign is still asking:
+
+```bash
+cd "$HOME/Documents/RUNNERS/TTSTV_IOS/IOS TTS TV/src-tauri/gen/apple" && xcodegen generate
+```
+
+**Every day after that** — the loop. Edit a shell file, watch it change on the
+phone; nothing is built, nothing is installed, nothing asks for a password:
+
+```bash
+npm run -- tauri ios dev "iPhone 2" --host
+```
+
+**Rarely** — a Rust change, a plist change, or an app to hand to somebody:
+
+```bash
+tools/phone.sh            # add --shell to take a new shell from TTSTV first
+```
+
+And the fourth thing, which is not a command: **▶ in Xcode**, when you want the
+debugger attached. It works once `xcodegen generate` has run and the project has
+been closed and reopened.
+
+### 8b. Commit check
+Pathspec, by file, on `main`; `git show --stat --name-only HEAD` checked after.
+The new files `git add`ed by their own single paths first.
+
+### 9. Status line
+`IOS-TTS-TV · job 27 · 6 Sep · dev over the LAN with --host, ▶ fixed by one PATH line, phone.sh for the rare build — and the plist has been behind project.yml all day: 0 of 3 keys, xcodegen is the step nothing else does`
+
+---
+
 ## job 23d · addendum 2 — the Library was Brotli, and the guard that says so · 6 Sep
 
 **Osca's first `ios build --debug` drew the Library as a page of glyphs.** He
