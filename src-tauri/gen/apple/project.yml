@@ -154,8 +154,16 @@ targets:
       # about one Mac; `-` before `bin` deliberately PREPENDS, because a
       # Homebrew rust would otherwise win and build against a different
       # toolchain than the terminal does.
+      #
+      # /opt/homebrew/bin AND /usr/local/bin, 7 Sep: the 6 Sep note said "npm
+      # is found because Xcode inherits /usr/local/bin" -- MEASURED FALSE on
+      # this Mac. Press ▶ with only the cargo line and the phase dies at
+      # `line 3: npm: command not found`, 0.1 s in (Xcode build log, 15:42).
+      # Node is Homebrew's and this is an arm64 Mac, so it lives in
+      # /opt/homebrew/bin, which no login shell gives Xcode. Both roots are
+      # named so the file still works on an Intel Mac.
       - script: |
-          export PATH="$HOME/.cargo/bin:$PATH"
+          export PATH="$HOME/.cargo/bin:/opt/homebrew/bin:/usr/local/bin:$PATH"
           npm run -- tauri ios xcode-script -v --platform ${PLATFORM_DISPLAY_NAME:?} --sdk-root ${SDKROOT:?} --framework-search-paths "${FRAMEWORK_SEARCH_PATHS:?}" --header-search-paths "${HEADER_SEARCH_PATHS:?}" --gcc-preprocessor-definitions "${GCC_PREPROCESSOR_DEFINITIONS:-}" --configuration ${CONFIGURATION:?} ${FORCE_COLOR} ${ARCHS:?}
         name: Build Rust Code
         basedOnDependencyAnalysis: false

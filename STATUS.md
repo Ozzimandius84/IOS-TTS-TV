@@ -4,6 +4,131 @@ Newest first. `REPORT_PROTOCOL.md` (TTSTV), nine headings. `README.md` says what
 
 ---
 
+## THE SIMULATOR LOOP IS BACK — ▶ needed a wider PATH, `ios dev` is what starts it, and the three doors landed on the first press ever · 7 Sep
+
+**Osca, 7 Sep:** *"take over for phone / IOS, we need to get it running / establish the loop again — I don't want to use my phone right now. Just the simulator."*
+
+The lane ran from Cowork with **no macOS shell**: Terminal and Xcode resolve at
+computer-use's `click` tier (see and left-click, never type), the bridge VM is
+Linux, and full-screen control was declined. So ▶ is a click, the Simulator is
+tap-and-screenshot, and every file edit is the bridge's.
+
+### 1. Built
+- **`src-tauri/gen/apple/project.yml`, the `Build Rust Code` phase** — one line
+  widened, `export PATH="$HOME/.cargo/bin:/opt/homebrew/bin:/usr/local/bin:$PATH"`,
+  with the comment that says why the 6 Sep note was wrong. The same string is
+  patched into `frank.xcodeproj/project.pbxproj`'s `shellScript` by hand, because
+  **`xcodegen` cannot be run from here** and the generated file is what ▶ executes.
+- **`src-tauri/gen/apple/frank_iOS/Info.plist`** — `UIBackgroundModes: [audio]`
+  written in with `plistlib`. It has been in `project.yml` since 6 Sep 15:20 and
+  had never reached a build: xcodegen last ran at 14:21 that day (`pbxproj` mtime),
+  so job 8b's key was 6½ hours younger than the project it was supposed to be in.
+  Xcode now shows **Background Modes ▸ Audio, AirPlay, and Picture in Picture**
+  ticked, and this is the first build the float's plist half has ever been inside.
+- **No `.rs` and no `shell/` change.** `library/library.html` was instrumented for
+  one measurement and restored byte-for-byte from a copy outside the repo.
+
+### 2. Verified — and how
+- **live, Xcode build log, 15:42**: with only the cargo line, the phase dies in
+  **0.1 s** at `Script-41C9B6A4A06D8F2870160E52.sh: line 3: npm: command not found`.
+  The 6 Sep claim that "npm is found because Xcode inherits `/usr/local/bin`" is
+  **measured false on this Mac**: `/usr/local/bin` does not exist (the bridge
+  refuses the path outright), `/opt/homebrew/bin` does — this is an arm64 Mac and
+  node is Homebrew's.
+- **live, Xcode build log, 15:44**, after the PATH fix: the phase gets as far as
+  `> frank@0.1.0 tauri` and `tauri ios xcode-script`, then panics —
+  `crates/tauri-cli/src/mobile/mod.rs:386:59: failed to read missing addr file
+  /var/folders/…/T/com.ttstv.frank-server-addr`. **▶ alone cannot do a debug
+  build**: in a Debug configuration the phase assumes a dev build and looks for
+  the address file `tauri ios dev` writes. ▶ is a participant in the loop, not
+  the start of it.
+- **live, the simulator, 15:59** (Osca ran `npm run -- tauri ios dev "iPhone 17"`,
+  no `--host` — the simulator shares localhost with the Mac): Frank installs,
+  launches, and draws the Library. `scratch-probe/probe.log`, this run:
+  `cssW=402 cssH=874 cssScreenW=402 cssScreenH=874 band=0 phone=1 fills=1
+  safeTop=62 safeBottom=34` — a3ce862's frame still holds at iOS 26.5.
+- **THE DOORS' FIRST PRESS.** A tap on a book on the shelf, and the two lines the
+  7 Sep run sheet asked for, in order, in `probe.log`:
+
+      frank: page /library/library.html
+      frank: page /reader/reader.html?book=books/hamlet
+
+  and the reader drew Hamlet's title pane (Folger credit, `Hamlet r 1` in the
+  header). `92efd6e` was proved in Chromium and in cargo and pressed on nothing;
+  it is pressed now.
+- **The page's own probe reaches Rust in dev.** `PROBE_JS` fetches a RELATIVE
+  `/__probe`, and the lines arrive, so `ios dev` is serving this webview through
+  the `frank://` scheme handler and not from an http origin — which is also why
+  `is_document`'s line fires at all. The dev server's watcher is live: a save in
+  `shell/` reloads the phone with nothing rebuilt.
+- **not verified**: the library door (a horizontal gesture; the Simulator window
+  moved to another Space mid-session and background drags are refused there),
+  the float's audio now that the key is in, WebKit outside the simulator.
+
+### 3. Judgment calls
+- **The plist key by hand rather than a Release build.** Flipping the scheme to
+  Release would have dodged the addr-file panic without a CLI, and it would have
+  taken `debug_assertions` — and with it every probe line — out of the binary.
+  The probe log is the only eye this lane has; Debug plus one typed command is
+  the cheaper trade.
+- **`xcodegen` not run, and not worked around.** Its two other outputs are the
+  `AVFoundation`/`SafariServices` `sdk:` lines, and those turn out **not to be
+  load-bearing**: all three `.m` files use `#import <Framework/…>` and `build.rs`
+  compiles them with `-fmodules`, so clang autolinks both frameworks. That is why
+  the 6 Sep 20:20 build linked with neither named in the `pbxproj`.
+- **The instrumentation was reverted before it proved anything**, because the
+  doors answered first. It is worth keeping as a technique: a `fetch("/__probe?…")`
+  added to a handler in `shell/` is a measurement the bridge can read, and the
+  watcher delivers it without a build.
+
+### 4. Boundary check
+- Touched: `src-tauri/gen/apple/project.yml`, `STATUS.md`. Patched but LEFT
+  UNCOMMITTED because they were already dirty before this session (Osca's Xcode):
+  `frank.xcodeproj/project.pbxproj`, `frank_iOS/Info.plist`. Untouched:
+  `frank_iOS.entitlements` (dirty, not mine), all of `src-tauri/src/`, all of
+  `shell/`, TTSTV.
+- `xcodegen generate` regenerates both patched files from the committed
+  `project.yml`, so the fix survives the next run; the plist key does too.
+
+### 5. Footprint
+Nothing added to the repo. One copy of `library/library.html` under the bridge's
+own `$HOME` for the revert; nothing written to the SSD.
+
+### 6. Requests to core / other modules
+None. `tools/phone.sh` and `PHONE.md` §0 still describe the real-device loop and
+are unchanged by this.
+
+### 7. Known gaps
+- **The reader's header is drawn under the Dynamic Island.** `safeTop=62` is
+  reported by the probe and the Library's header respects it; the reader's does
+  not — "Hamlet", the Folger line and `Hamlet r 1` all sit in the status bar's
+  band. First sighting; nobody has looked at the reader's phone header on a
+  device before today.
+- **The shelf is one book per row at 402 px.** `library.css` line 287,
+  `@container shelf (max-width: 620px) { #shelf[data-zoom="4"] .shelfgrid
+  { --cols: 1 } }`, and the phone has no zoom bar to change it — so the phone is
+  pinned to the widest tile the grid can draw. Not a fight between two grids
+  (that one is fixed); a decision that reads wrong on a phone.
+- The library door, `openStudio`/`openSettings`/`openPair`/`reveal` (still absent),
+  and the float's audio are all still unpressed.
+
+### 8. Next
+1. The library door and a second book, once the Simulator window is on the
+   current Space (a horizontal swipe cannot be delivered off-Space in the
+   background).
+2. The reader's phone header against `safeTop` — the fix belongs in TTSTV's
+   `design/`, not in `shell/`.
+3. The float: the key is in the build now, so play a chapter and switch away.
+
+### 8b. Commit check
+`git add -- src-tauri/gen/apple/project.yml STATUS.md` then a pathspec commit of
+exactly those two. No `--amend`. HEAD at the gate: `4c49fb1`.
+
+### 9. Status line
+`IOS-TTS-TV · the loop is back · 7 Sep · ▶ needed /opt/homebrew/bin, the debug build needs `ios dev` running, and the three doors landed on the simulator on their first press — library.html → reader.html?book=books/hamlet in probe.log`
+
+---
+
 ## THE THREE DOORS — `openReader` / `openLibrary` / `openWindow` were absent, so a tap on a book did nothing · 7 Sep
 
 **Osca, 7 Sep:** *"Checked disk 7 Sep: none are present (count 0), so a tap on a book on the phone does nothing (`window.open` is inert in a WKWebView). Add them as same-webview navigations … No `window.open` anywhere on the phone."*
