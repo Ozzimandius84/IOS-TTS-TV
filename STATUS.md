@@ -4,6 +4,98 @@ Newest first. `REPORT_PROTOCOL.md` (TTSTV), nine headings. `README.md` says what
 
 ---
 
+## THE THREE DOORS — `openReader` / `openLibrary` / `openWindow` were absent, so a tap on a book did nothing · 7 Sep
+
+**Osca, 7 Sep:** *"Checked disk 7 Sep: none are present (count 0), so a tap on a book on the phone does nothing (`window.open` is inert in a WKWebView). Add them as same-webview navigations … No `window.open` anywhere on the phone."*
+
+Confirmed at the gate, `HEAD` = `2b365cd`: in `src-tauri/src/` the count of `openReader`, `openLibrary` and `openWindow` was **0, 0, 0**; in `shell/` it was **13, 2, 12**. `shell/library/library.html::openReader` asks the host first and falls through to `window.open`, and on the phone **both ends were dead** — the shelf reached for a call a WKWebView ignores silently, and nothing moved.
+
+### 1. Built
+- **`src-tauri/src/lib.rs`, `HOST_JS`** — three doors, all navigations of THIS webview (`go(url)` → `window.location.assign(url)`), and one place that builds a URL:
+  - `urlFor(kind, slug, unit)` — `desktop/src-tauri/src/tabs.rs::url_for`'s shape, absolute because `frank://localhost/`'s paths are the site's paths: `/library/library.html` · `/settings/settings.html` · `/reader/reader.html[?book=books/<slug>[&ch=<unit>]]` · studio = the base (`/` or `/?slug=<slug>`).
+  - `TTSTVHost.openReader(slug, unit?) -> Promise<string>`, `TTSTVHost.openLibrary()`, `TTSTVHost.openWindow(kind, slug)` — the last keeping `desktop/src/host.js`'s rule that a first argument which is not a kind (`reader`/`studio`/`library`) is a reader slug, because `library.html` calls `openWindow(slug)`.
+  - `enc = encodeURIComponent` on the slug and the unit only, exactly as `url_for` percent-encodes them and not the `books/` prefix.
+  - **No door is a command**: `invoke(` is still 2 in the whole object (`sync_discover`, `frank_search`).
+- **`src-tauri/src/lib.rs`, the scheme handler** — a debug-only probe line for every DOCUMENT request: `frank: page /reader/reader.html?book=books/<slug>`. Recorded in the handler and not from the page, because a page that is navigating away is being torn down and a `fetch` it started is not owed a delivery. `fn is_document(path)` — the index or `.html`, so it is one line per page and not one per asset.
+- **`tests/doors_are_navigations.mjs`** (new, 241 lines) — six cases, `HOST_JS` read out of `lib.rs` verbatim and never retyped, `shell/` served as `search_lands_once.mjs` serves it.
+- **`src-tauri/src/lib.rs` tests** — `the_three_doors_are_navigations_of_this_webview` and `a_document_is_what_the_doors_probe_line_counts` added; 25 → 27 `#[test]` in the file.
+
+### 2. Verified — and how
+Numbers, `HEAD` → now:
+
+| | `HEAD` (`2b365cd`) | now |
+|---|---|---|
+| `lib.rs` | 2 171 lines, 102 891 B | 2 305 lines, 110 956 B |
+| `HOST_JS` | 21 lines, 1 180 B | 64 lines, 3 794 B |
+| `openReader` / `openLibrary` / `openWindow` in `HOST_JS` | 0 / 0 / 0 | 2 / 2 / 3 |
+| `window.open` in `HOST_JS` | 0 | **0** |
+| `location.` in `HOST_JS` | 0 | **1** (`go`) |
+| `invoke(` in `HOST_JS` | 2 | 2 |
+
+- **live, Chromium in the cloud container** (`node tests/doors_are_navigations.mjs`, the real `shell/`, book `eclogues-virgil`) — **all six cases pass**:
+  1. `HOST_JS` absent: a `dblclick` on the tile makes the shelf reach for `window.open` — *that is the bug, reproduced*;
+  2. `HOST_JS` present, desktop viewport, double-click: **navigations requested to the reader = 1**, the URL `= /reader/reader.html?book=books/eclogues-virgil`, the webview ends there, **popups = 0, `window.open` calls = 0, page errors = 0**;
+  3. phone viewport (393×852), one tap (`isPhone()` — "ON A PHONE A TAP OPENS"): the same one URL, popups 0;
+  4. the doors called against `url_for`'s own table, `HOST_JS` run as `new Function("window", HOST_JS)` over a stand-in window (a real page will not let `window.location` be redefined) — 8 of 8 exact:
+     `openReader("poems")` → `/reader/reader.html?book=books/poems` · `openReader("poems","c018")` → `…&ch=c018` · `openReader("a b/c")` → `…?book=books/a%20b%2Fc` · `openLibrary()` → `/library/library.html` · `openWindow("poems")` and `openWindow("reader","poems")` → the reader URL · `openWindow("library")` → the Library · `openWindow("studio","poems")` → `/?slug=poems`;
+  5. `window.open` calls from the host object = 0, and the literal string is absent from `HOST_JS`;
+  6. from the reader: `#librarydoor` is still `href="../library/library.html"` (a plain link, which a WKWebView follows), and `TTSTVHost.openLibrary()` lands on `/library/library.html`, popups 0. **The Library door returns.**
+- **unit, cargo in the cloud container** — `lib.rs` and `search.rs` items extracted **by regex, verbatim** into a dependency-free crate (`HOST_JS`, `PROBE_PATH`, `is_document`, `search::CMD`, `search::DOOR` + the four tests); the extractor asserts every non-comment line it emitted is present verbatim in the sources (0 missing), then `cargo test --offline`: **4 pass, 0 fail**.
+- **unit, python** — `python3 -m pytest tests` on the tree in the container: **82 pass, 2 skip, 1 fail**. The failure is `test_phone_shell.py::test_the_app_names_no_shell_file_of_its_own`, on `scratch26b/sync_md_patch.py` naming `drive.js` — **another session's untracked scratch folder, red before this step and untouched by it**.
+- **live, the bridge VM** — `python3 tools/prebuild.py --dev`: `shell/` verified, 51 files, 1 395 469 B, `ttstv-shell-v35`; 6 dev books. Unchanged by this step.
+- **not verified: the phone.** No cargo, no Xcode and no simulator is reachable from Cowork (`ttstv-where-things-build`), so `cargo test` on the real crate, the rebuild and the simulator press are Osca's — the run sheet is §8.
+- **Invariant**: `shell/` untouched (prebuild's byte count and manifest identical); `invoke(` still 2, so no new command and no capability needed; `build.rs` and `capabilities/default.json` unchanged.
+
+### 3. Judgment calls
+- **The prompt says "Add them … No `window.open` anywhere on the phone", and `lib.rs` carried a test asserting `!HOST_JS.contains("location.")`.** Those cannot both stand. `CLAUDE.md`: *the newer dated line wins, and a `> go` from Osca is dated today.* So the blanket form (written 6 Sep, when `search` was the whole object) is **deleted in this commit** and replaced by the half that still holds: `window.open` is still banned outright, and `location.` is pinned to **exactly one** occurrence, `go`'s. The old line is quoted in the new test's comment rather than left on disk beside its reversal.
+- **A comment cannot name the banned string.** The ban is a dumb literal check and its value is that it is dumb, so `HOST_JS`'s own comment says "the `open()` a page calls on `window`" instead — and says why.
+- **The probe line is the crate's, not the page's.** Osca asked for a probe.log line on the tap. A `fetch` fired from a page that is navigating away can be cancelled, so the line is written where the navigation must arrive anyway: the `frank://` scheme handler, on any document request, debug only.
+- **Studio, on a phone with no Studio page.** `url_for`'s Studio is the base itself; here `/` is `index.html`, which redirects to the Library. Kept `url_for`'s shape (Osca: *"per the desktop `url_for` shape"*) rather than inventing a phone-only answer, and said so in the code. No caller reaches it today.
+- **`openStudio` and `openSettings` were not added.** Osca named three; `library.html`'s Studio button still falls through to `window.open` and is therefore still dead on the phone. Named in §7, not fixed silently.
+- **Absolute paths, not relative.** `frank://localhost/` is a real origin whose paths are the site's paths (the `lib.rs` module header), so one string works from `/library/` and from `/reader/` both, and behind a dev server too.
+
+### 4. Boundary check
+Touched, all inside this repo: `src-tauri/src/lib.rs`, `tests/doors_are_navigations.mjs` (new), `STATUS.md`. TTSTV untouched by the code change (`desktop/src/host.js` and `tabs.rs` were **read only**, as the source of the URL shape). `shell/` untouched. Not a move and not a re-wire — one folder, so the standard confirmation stands.
+
+**Found dirty and LEFT ALONE** (another session's; not staged, not read for content): `src-tauri/gen/apple/frank.xcodeproj/project.pbxproj`, `src-tauri/gen/apple/frank_iOS/Info.plist`, `src-tauri/gen/apple/frank_iOS/frank_iOS.entitlements`, and the untracked `scratch-float/`, `scratch-j13/`, `scratch26b/`.
+
+### 5. Footprint
+Nothing added to the repo but the one new test file (11 KB). In `_to_delete/`: `doors-repo.tgz` **12.3 MB** (the tree minus `node_modules`, `target`, `gen/apple/build`, `gen/apple/Externals`, staged so the container could run pytest and Chromium) and two now-empty files, `doors-proof.tgz` and `doors-tools.tgz` — **this shell cannot delete inside the repo**, so they were truncated to 0 B instead; Osca empties the folder. Cloud container only: `/root/doors`, `/root/repo`, and a scratch crate `rscheck` — none of it on the Mac. No venv, no model, no download onto the Mac. The SSD was not touched and is not needed.
+
+### 6. Requests to core / other modules
+None. If TTSTV's `desktop/src-tauri/src/tabs.rs::url_for` ever changes shape, `HOST_JS`'s `urlFor` is the one place here that must follow — a comment says so at both ends of the copy, but nothing tests across the two repos and nothing can.
+
+### 7. Known gaps
+- **`openStudio`, `openSettings`, `openPair`, `reveal`, `setContext`, `setTarget`, `studioToggle`, `themeToggle` are still absent.** `desktop/src/host.js` has them; the shell guards on each by name and falls back to `window.open` or its own `location.href`. The `location.href` fallbacks work on the phone; the `window.open` ones (the Studio button, `openPair`, `openReader`'s cmd-click branch) do not, and stay dead until asked for.
+- **The probe line fires for the Library and every other page too**, not only the reader — one line per document, by design. It is debug-only and simulator-only for the file half.
+- **The reader may still refuse the book it is handed** for reasons that are not this door's: a `book-data.js` that will not load leaves the reader on its "nothing to read" path back to the Library. Case 2 above proves the URL and that the page loaded with **0 page errors** on `eclogues-virgil`, not that every book opens.
+- **Not proved in WebKit.** `--engine webkit` needs a Mac; only Chromium ran. The doors touch nothing engine-specific (`location.assign`), but that is an argument, not a measurement.
+
+### 8. Next — the run sheet, and it is Osca's
+In `~/Documents/RUNNERS/TTSTV_IOS/IOS TTS TV`:
+
+```
+cd src-tauri && cargo test          # 27 tests; the 2 new ones are string asserts
+cd .. && npm run -- tauri ios dev "iPhone 17"
+```
+
+Then, in the simulator: **double-tap a book on the shelf** → the reader opens on that book; **scroll left past the last pane / the library door** → the Library returns. Both lines land in `scratch-probe/probe.log` where the bridge can read them:
+
+```
+frank: page /library/library.html
+frank: page /reader/reader.html?book=books/<slug>
+frank: page /library/library.html
+```
+
+The single question that blocks anything after this: **do you want `openStudio` and `openSettings` too** (§7)? Then stop.
+
+### 8b. Commit check
+Pathspec, two paths, one commit; `git add -- tests/doors_are_navigations.mjs` first because a pathspec refuses an untracked path. No `--amend`. `git show --stat HEAD` confirmed below. `HEAD` did not move under me during the session (gate `2b365cd`, still `2b365cd` at the commit). No `.git/*.lock` was hit and none was moved into `_to_delete/`.
+
+### 9. Status line
+`IOS-TTS-TV · the three doors done · 7 Sep · openReader/openLibrary/openWindow are same-webview navigations, proved in Chromium and cargo, unpressed on the simulator`
+
+
 ## THE WEBVIEW FRAME — the window was 1100×800 because `inner_size` said so; now the screen's, proved 402×874 on the iPhone 17 simulator · 6 Sep (`a3ce862`)
 
 **Osca, 6 Sep:** *"The WKWebView is 1024×768 and never resizes to the screen … a 560px card centred at x≈262 … an 84pt black band at the bottom."*

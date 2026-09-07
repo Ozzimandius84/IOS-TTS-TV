@@ -241,7 +241,7 @@ fn studio_name(fullname: &str, txt: Option<&str>) -> String {
 }
 
 /// `window.TTSTVHost`, injected into every page this app opens -- the
-/// desktop app's shape (`desktop/src/host.js`), two methods wide. The shell
+/// desktop app's shape (`desktop/src/host.js`), five methods wide. The shell
 /// checks for it and works without it: a page that is not in Frank simply
 /// finds no Studios and offers the address field instead, and its look-up
 /// panel's Search shows one sentence rather than moving anything.
@@ -263,6 +263,22 @@ fn studio_name(fullname: &str, txt: Option<&str>) -> String {
 /// door reads (`SEARCH_JS`: `open(args && args.query)`). The call is made at
 /// the press, through `TAURI.invoke` as it is THEN, which is how the plugin's
 /// wrapper (installed at `load`, after this script) gets to answer it.
+///
+/// **The three doors (Osca, 7 September): `openReader`, `openLibrary`,
+/// `openWindow`.** They were absent -- the count on disk was 0 -- and
+/// `window.open` is inert in a WKWebView, so a tap on a book in the shelf did
+/// nothing whatever: `library/library.html::openReader` asks the host first and
+/// falls back to `window.open`, and on the phone neither end existed. They are
+/// added here as **navigations of this same webview**, which is the only kind
+/// of door a phone has. The URLs are `desktop/src-tauri/src/tabs.rs::url_for`'s
+/// -- `/library/library.html`, `/reader/reader.html?book=books/<slug>[&ch=<unit>]`
+/// -- so the desktop and the phone send one shell to one set of paths, and the
+/// crate's job is the shape, not a second opinion about it. `openWindow` keeps
+/// `host.js`'s rule that a first argument which is not a kind is a reader slug.
+/// This reverses the older blanket line "HOST_JS never touches location"
+/// (6 Sep, written when `search` was the whole object): `location` is now
+/// exactly one call, `go`, and **`window.open` appears nowhere** -- which is
+/// the half of that rule that still holds, and the half the tests keep.
 pub const HOST_JS: &str = r#"(function () {
   "use strict";
   var TAURI = window.__TAURI__ && window.__TAURI__.core;
@@ -282,6 +298,49 @@ pub const HOST_JS: &str = r#"(function () {
     if (!query) return Promise.resolve(null);
     const web = webQuery(query);
     return TAURI.invoke("frank_search", { query: web }).then(() => "sheet");
+  };
+  /* --------------------------------------------------------- the doors (7 Sep)
+     the `open()` a page calls on `window` is INERT in a WKWebView -- no window,
+     no tab, no error, and nothing in the console -- so until now a tap on a
+     tile in the shelf did nothing at all: library.html asks the host first and
+     falls back to that call, and on the phone both ends were dead. (The name
+     itself is not written in this string: a test asserts the literal is absent,
+     which is a dumb check and stays true.) Every door here is a
+     navigation of THIS webview, and the paths are not invented: they are
+     `desktop/src-tauri/src/tabs.rs::url_for`'s, spelt once in `urlFor` below,
+     so one shell reaches one set of URLs on the desktop and on the phone.
+     Absolute, because `frank://localhost/` is a real origin whose paths are the
+     site's paths (see the module header) -- the same strings work behind a dev
+     server. No door is a command: the two `invoke`s above are still the whole
+     of what this object asks the crate for. */
+  var KINDS = { reader: 1, studio: 1, library: 1 };
+  var enc = encodeURIComponent;
+  var urlFor = function (kind, slug, unit) {
+    if (kind === "library") return "/library/library.html";
+    if (kind === "settings") return "/settings/settings.html";
+    /* url_for's Studio is the base itself. There is no Studio page in the
+       phone shell, so `/` is index.html and index.html goes to the Library --
+       which is the truthful landing here, not a stub pretending otherwise. */
+    if (kind === "studio") return slug ? "/?slug=" + enc(slug) : "/";
+    var u = "/reader/reader.html";
+    if (slug) {
+      u += "?book=books/" + enc(slug);
+      if (unit) u += "&ch=" + enc(unit);
+    }
+    return u;
+  };
+  var go = function (url) { window.location.assign(url); return Promise.resolve(url); };
+  // TTSTVHost.openReader(slug: string, unit?: string) -> Promise<string>
+  window.TTSTVHost.openReader = function (slug, unit) { return go(urlFor("reader", slug, unit)); };
+  // TTSTVHost.openLibrary() -> Promise<string>
+  window.TTSTVHost.openLibrary = function () { return go(urlFor("library")); };
+  /* host.js's own rule, kept word for word: the prompt's shape is
+     openWindow(kind, slug), library.html calls openWindow(slug), and a first
+     argument that is not a kind is the slug of a reader. There is no second
+     window on a phone, so "window" here means the same door as the others. */
+  window.TTSTVHost.openWindow = function (kind, slug) {
+    if (!KINDS[kind]) { slug = kind; kind = "reader"; }
+    return go(urlFor(kind, slug));
   };
 })();
 "#;
@@ -879,6 +938,13 @@ fn nothing_anywhere(dev_url: Option<&str>, path: &str) -> String {
 /// lookup cannot come to disagree about which file was asked for. Percent-
 /// decoding is the small decoder and not a dependency because the shell's own
 /// names are ASCII; a book slug with a space in it later is the case it is for.
+/// A top-level page rather than a script, a style, a book file or an icon.
+/// The doors' probe line (7 Sep) is one per page, and this is the whole of
+/// what "a page" means here: the index, or something ending `.html`.
+fn is_document(path: &str) -> bool {
+    path.is_empty() || path == "/" || path.ends_with(".html")
+}
+
 fn site_path(request_path: &str) -> String {
     let rel = request_path.trim_start_matches('/');
     let rel = if rel.is_empty() { "index.html" } else { rel };
@@ -1570,6 +1636,25 @@ pub fn run() {
                 return http_response(204, "text/plain; charset=utf-8", Vec::new());
             }
 
+            // A DOCUMENT REQUEST IS THE DOOR'S OWN PROOF (7 Sep). The three
+            // openers in `HOST_JS` navigate this webview, so the thing that
+            // shows a tap opened the right book is the request the navigation
+            // makes -- recorded HERE rather than from the page, because a page
+            // that is navigating away is being torn down and a `fetch` it
+            // started is not owed a delivery. Debug only, like the probe above;
+            // documents only, so it is one line per page and not one per asset.
+            if cfg!(debug_assertions) && is_document(&path) {
+                probe_note(&format!(
+                    "frank: page {}{}",
+                    path,
+                    request
+                        .uri()
+                        .query()
+                        .map(|q| format!("?{q}"))
+                        .unwrap_or_default()
+                ));
+            }
+
             let disk = resolve(&root, &path);
 
             if let Some(p) = &disk {
@@ -1847,11 +1932,60 @@ mod tests {
         // and it is `web`, not the bare word, that crosses to the sheet
         assert!(!HOST_JS.contains(r#"invoke("frank_search", { query })"#));
         assert!(!HOST_JS.contains(r#"invoke("frank_search", { query: query })"#));
-        // HOST_JS never touches location or window.open: the sheet is the
-        // wrapper's (search.rs), reached through invoke and nothing else
-        assert!(!HOST_JS.contains("location."));
-        assert!(!HOST_JS.contains("window.open"));
+        // The sheet is the wrapper's (search.rs), reached through invoke and
+        // nothing else -- `search` still touches neither location nor a door.
+        // The blanket form of this ("HOST_JS never touches location", 6 Sep,
+        // when search was the whole object) is REVERSED by Osca, 7 Sep: "Add
+        // them as same-webview navigations ... No window.open anywhere on the
+        // phone." So the ban is kept where it still holds, and `location` is
+        // pinned to the one call the doors go through.
+        assert_eq!(
+            HOST_JS.matches("location.").count(),
+            1,
+            "one navigation in the whole object, and it is go()'s"
+        );
+        assert!(HOST_JS.contains("var go = function (url) { window.location.assign(url);"));
+        assert!(!HOST_JS.contains("window.open"), "no window.open anywhere on the phone");
         assert!(!HOST_JS.contains(search::DOOR), "door one is search.rs's, not the host's");
+    }
+
+    #[test]
+    fn the_three_doors_are_navigations_of_this_webview() {
+        // Osca, 7 Sep: the count on disk was 0 for all three, so a tap on a
+        // book did nothing -- window.open is inert in a WKWebView. The names
+        // are the ones the shell already guards on (library/library.html
+        // `openReader`/`openWindow`, bar/askbar.js `openReader`/`openLibrary`).
+        assert!(HOST_JS.contains("window.TTSTVHost.openReader = function (slug, unit)"));
+        assert!(HOST_JS.contains("window.TTSTVHost.openLibrary = function ()"));
+        assert!(HOST_JS.contains("window.TTSTVHost.openWindow = function (kind, slug)"));
+        // ...and the URLs are tabs.rs::url_for's, built in ONE place. These are
+        // the same four strings that file's own `url_for` test asserts, minus
+        // the desktop's `http://127.0.0.1:5555` base -- here the base is the
+        // origin, so the paths are absolute.
+        assert!(HOST_JS.contains(r#"if (kind === "library") return "/library/library.html";"#));
+        assert!(HOST_JS.contains(r#"if (kind === "settings") return "/settings/settings.html";"#));
+        assert!(HOST_JS.contains(r#"if (kind === "studio") return slug ? "/?slug=" + enc(slug) : "/";"#));
+        assert!(HOST_JS.contains(r#"var u = "/reader/reader.html";"#));
+        assert!(HOST_JS.contains(r#"u += "?book=books/" + enc(slug);"#));
+        assert!(HOST_JS.contains(r#"if (unit) u += "&ch=" + enc(unit);"#));
+        // host.js's rule, kept: a first argument that is not a kind is a slug
+        assert!(HOST_JS.contains(r#"if (!KINDS[kind]) { slug = kind; kind = "reader"; }"#));
+        assert!(HOST_JS.contains(r#"var KINDS = { reader: 1, studio: 1, library: 1 };"#));
+        // a door is not a command: still two invokes, still the two commands
+        assert_eq!(HOST_JS.matches("invoke(").count(), 2, "the doors invoke nothing");
+    }
+
+    #[test]
+    fn a_document_is_what_the_doors_probe_line_counts() {
+        assert!(is_document("/reader/reader.html"));
+        assert!(is_document("/library/library.html"));
+        assert!(is_document("/"));
+        assert!(is_document(""));
+        // not one line per asset
+        assert!(!is_document("/reader/lookup.js"));
+        assert!(!is_document("/books/eclogues-virgil/book-data.js"));
+        assert!(!is_document("/reader/reader.css"));
+        assert!(!is_document(PROBE_PATH));
     }
 
     // ------------------------------------------------- Google (job 26b)
