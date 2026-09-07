@@ -90,7 +90,11 @@ frank: page /library/library.html
 The single question that blocks anything after this: **do you want `openStudio` and `openSettings` too** (§7)? Then stop.
 
 ### 8b. Commit check
-Pathspec, two paths, one commit; `git add -- tests/doors_are_navigations.mjs` first because a pathspec refuses an untracked path. No `--amend`. `git show --stat HEAD` confirmed below. `HEAD` did not move under me during the session (gate `2b365cd`, still `2b365cd` at the commit). No `.git/*.lock` was hit and none was moved into `_to_delete/`.
+`92efd6e`, pathspec, three paths, one commit — `git show --stat HEAD` lists exactly `STATUS.md` (+92), `src-tauri/src/lib.rs` (+144 −5), `tests/doors_are_navigations.mjs` (new, 240). `git add -- tests/doors_are_navigations.mjs` first, because a pathspec refuses an untracked path. No `--amend`. **`HEAD` did not move under me**: gate `2b365cd`, still `2b365cd` when the commit was made, so every control in §2 was taken on this side of it.
+
+**Locks — four moved into `_to_delete/`, and Osca clears them.** `.git/index.lock` was already there at the gate, **52 498 s old** (6 Sep 21:49, the minute of `2b365cd`) and it made the first `git add` fail outright; it went to `_to_delete/index.lock.1788783858`. After the commit git could not unlink its own three: `_to_delete/HEAD.lock.1788783879`, `index.lock.1788783879`, `next-index-7.lock.1788783879`. This shell cannot delete inside the repo, so a `.lock` git leaves behind is moved, never removed — and it is recreated by the next read command, so the last thing this session did was move it out of the way again.
+
+Left unstaged, another session's, not read for content: `src-tauri/gen/apple/frank.xcodeproj/project.pbxproj`, `src-tauri/gen/apple/frank_iOS/Info.plist`, `src-tauri/gen/apple/frank_iOS/frank_iOS.entitlements`; untracked `scratch-float/`, `scratch-j13/`, `scratch26b/`.
 
 ### 9. Status line
 `IOS-TTS-TV · the three doors done · 7 Sep · openReader/openLibrary/openWindow are same-webview navigations, proved in Chromium and cargo, unpressed on the simulator`
