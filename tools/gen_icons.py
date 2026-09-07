@@ -80,9 +80,11 @@ import json
 import os
 import re
 import shutil
+import struct
 import subprocess
 import sys
 import tempfile
+import zlib
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -211,6 +213,154 @@ def wanted() -> dict:
     return out
 
 
+# --------------------------------------------------------------------------
+# READING A PNG WITH NO THIRD-PARTY ANYTHING
+#
+# `tools/prebuild.py` calls `icon_problems()` on every build and every dev run,
+# so the guard has to hold on a machine where Pillow was never installed -- a
+# guard that skips itself when an import fails is the shape of bug this whole
+# lane exists to fix.  Pillow is still needed to WRITE (the alpha flatten) and
+# to run the two comparison proofs; it is not needed to CHECK.
+#
+# This reads enough of PNG for the question being asked: 8-bit, non-interlaced,
+# colour type 2 (RGB) or 6 (RGBA).  That is everything this generator writes and
+# everything `tauri ios init` wrote before it.  Anything else raises rather than
+# guessing, and a raise is a build failure, not a shrug.
+# --------------------------------------------------------------------------
+PNG_MAGIC = b"\x89PNG\r\n\x1a\n"
+
+
+def _png_read(path: Path):
+    """-> (width, height, channels, pixel bytes).  Standard library only."""
+    raw = path.read_bytes()
+    if raw[:8] != PNG_MAGIC:
+        raise ValueError("not a PNG")
+    pos, idat, hdr = 8, [], None
+    while pos + 8 <= len(raw):
+        (ln,) = struct.unpack(">I", raw[pos:pos + 4])
+        typ = raw[pos + 4:pos + 8]
+        body = raw[pos + 8:pos + 8 + ln]
+        pos += 12 + ln                       # 4 length + 4 type + body + 4 CRC
+        if typ == b"IHDR":
+            hdr = struct.unpack(">IIBBBBB", body)
+        elif typ == b"IDAT":
+            idat.append(body)
+        elif typ == b"IEND":
+            break
+    if hdr is None:
+        raise ValueError("no IHDR")
+    w, h, depth, ctype, _comp, _filt, interlace = hdr
+    if depth != 8 or interlace != 0 or ctype not in (2, 6):
+        raise ValueError(f"unsupported PNG: {depth}-bit, colour type {ctype}, "
+                         f"interlace {interlace}")
+
+    ch = 3 if ctype == 2 else 4
+    data = zlib.decompress(b"".join(idat))
+    stride = w * ch
+    out = bytearray(h * stride)
+    prev = bytes(stride)
+    p = 0
+    for y in range(h):
+        f = data[p]; p += 1
+        line = bytearray(data[p:p + stride]); p += stride
+        if f == 0:
+            pass
+        elif f == 1:                                            # Sub
+            for i in range(ch, stride):
+                line[i] = (line[i] + line[i - ch]) & 0xFF
+        elif f == 2:                                            # Up
+            for i in range(stride):
+                line[i] = (line[i] + prev[i]) & 0xFF
+        elif f == 3:                                            # Average
+            for i in range(stride):
+                a = line[i - ch] if i >= ch else 0
+                line[i] = (line[i] + ((a + prev[i]) >> 1)) & 0xFF
+        elif f == 4:                                            # Paeth
+            for i in range(stride):
+                a = line[i - ch] if i >= ch else 0
+                b = prev[i]
+                c = prev[i - ch] if i >= ch else 0
+                pa, pb, pc = abs(b - c), abs(a - c), abs(a + b - 2 * c)
+                pr = a if (pa <= pb and pa <= pc) else (b if pb <= pc else c)
+                line[i] = (line[i] + pr) & 0xFF
+        else:
+            raise ValueError(f"unknown PNG filter {f} on row {y}")
+        out[y * stride:(y + 1) * stride] = line
+        prev = bytes(line)
+    return w, h, ch, bytes(out)
+
+
+def _placeholder_pixels(px: bytes, ch: int) -> int:
+    """Count saturated non-red pixels.
+
+    Tauri's placeholder is a yellow ring and a cyan one.  The only saturated
+    colour anywhere in the Frank mark is #c8102e, so a saturated pixel that is
+    not red cannot be Frank's -- which makes this a test the placeholder cannot
+    pass and the mark cannot fail.
+    """
+    hits = 0
+    for i in range(0, len(px), ch):
+        r, g, b = px[i], px[i + 1], px[i + 2]
+        if max(r, g, b) - min(r, g, b) < 60:
+            continue                             # near-grey: the field or the ink
+        if r > g + 40 and r > b + 40:
+            continue                             # the mark's own red
+        hits += 1
+    return hits
+
+
+def inspect(files: dict | None = None):
+    """Re-open every file the catalogue names.  -> (rows, problems)
+
+    rows: (name, w, h, "RGB"/"RGBA"/"?", placeholder pixels, ok)
+    Both `check()` (which prints) and `icon_problems()` (which does not) read
+    this, so there is one definition of what "correct" means.
+    """
+    files = files or wanted()
+    on_disk = {p.name for p in APPICON.glob("*.png")}
+    rows, problems = [], []
+
+    for name in sorted(set(files) - on_disk):
+        problems.append(f"{name}: named by Contents.json, absent from the catalogue")
+    for name in sorted(on_disk - set(files)):
+        problems.append(f"{name}: in the catalogue, named by nothing in Contents.json")
+
+    for name, px in sorted(files.items(), key=lambda kv: kv[1]):
+        p = APPICON / name
+        if not p.exists():
+            continue
+        try:
+            w, h, ch, pixels = _png_read(p)
+        except (ValueError, zlib.error) as e:
+            rows.append((name, 0, 0, "?", -1, False))
+            problems.append(f"{name}: unreadable -- {e}")
+            continue
+        mode = "RGB" if ch == 3 else "RGBA"
+        hits = _placeholder_pixels(pixels, ch)
+        ok = (w == px and h == px and ch == 3 and hits == 0)
+        rows.append((name, w, h, mode, hits, ok))
+        if w != px or h != px:
+            problems.append(f"{name}: {w}x{h}, Contents.json says {px}x{px}")
+        if ch != 3:
+            problems.append(f"{name}: {mode} -- an app icon may not carry an alpha channel")
+        if hits:
+            problems.append(f"{name}: {hits} saturated non-red pixels -- "
+                            f"this is not the Frank mark")
+    return rows, problems
+
+
+def icon_problems() -> list:
+    """Every reason the catalogue is not the Frank mark, as lines.  Empty is good.
+
+    This is `tools/prebuild.py`'s entry point.  It prints nothing, imports
+    nothing outside the standard library, and is the whole of the build guard.
+    """
+    try:
+        return inspect()[1]
+    except FileNotFoundError as e:
+        return [f"the app icon catalogue could not be read: {e}"]
+
+
 def generate(ttstv: Path, verify: bool = False) -> int:
     masters = {
         "dock": (ttstv / "Frank" / "frank-mark-dock.svg").read_text(),
@@ -253,53 +403,16 @@ def generate(ttstv: Path, verify: bool = False) -> int:
 
 
 def check(files: dict | None = None) -> int:
-    """Re-open every written file and prove what was asked for."""
-    from PIL import Image
+    """Print the table, then the verdict.  Same rules as `icon_problems()`."""
     files = files or wanted()
-    on_disk = {p.name for p in APPICON.glob("*.png")}
-    bad = []
-
-    missing = set(files) - on_disk
-    extra = on_disk - set(files)
-    if missing:
-        bad.append(f"missing, but named by Contents.json: {sorted(missing)}")
-    if extra:
-        bad.append(f"present, but named by nothing: {sorted(extra)}")
-
-    for name, px in sorted(files.items(), key=lambda kv: kv[1]):
-        p = APPICON / name
-        if not p.exists():
-            continue
-        im = Image.open(p)
-        w, h = im.size
-        mode = im.mode
-        # Tauri's placeholder is a yellow (#FBC02D-ish) and cyan (#29B6D8-ish)
-        # ring on white. Nothing in the Frank mark is saturated except #c8102e,
-        # so any strongly saturated non-red pixel is the placeholder.
-        rgb = im.convert("RGB")
-        raw = rgb.tobytes()                    # not getdata(): deprecated, and slow
-        hits = 0
-        for i in range(0, len(raw), 3):
-            r, g, b = raw[i], raw[i + 1], raw[i + 2]
-            if max(r, g, b) - min(r, g, b) < 60:
-                continue                       # near-grey: the field or the ink
-            if r > g + 40 and r > b + 40:
-                continue                       # the mark's own red, #c8102e
-            hits += 1
-        im.close(); rgb.close()
-        ok = (w == px and h == px and mode == "RGB" and hits == 0)
-        print(f"  {name:<32} {w}x{h} {mode:<5} placeholder-px={hits}  "
+    rows, problems = inspect(files)
+    for name, w, h, mode, hits, ok in rows:
+        size = f"{w}x{h}" if w else "unreadable"
+        print(f"  {name:<32} {size:<11} {mode:<5} placeholder-px={hits}  "
               f"{'ok' if ok else 'FAIL'}")
-        if w != px or h != px:
-            bad.append(f"{name}: {w}x{h}, Contents.json says {px}x{px}")
-        if mode != "RGB":
-            bad.append(f"{name}: mode {mode} -- an app icon may not carry alpha")
-        if hits:
-            bad.append(f"{name}: {hits} saturated non-red pixels -- placeholder?")
-
-    if bad:
+    if problems:
         print("\nFAILED:")
-        for b in bad:
+        for b in problems:
             print("  -", b)
         return 1
     print(f"\n{len(files)} files, every one square at its Contents.json size, "
@@ -394,8 +507,10 @@ def check_parity(ttstv: Path) -> int:
 
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("--ttstv", type=Path, required=True,
-                    help="path to the TTSTV checkout that holds Frank/")
+    ap.add_argument("--ttstv", type=Path, default=None,
+                    help="path to the TTSTV checkout that holds Frank/. Required for "
+                         "everything except --check-only, which reads only this repo -- "
+                         "so a build machine with no TTSTV on it can still run the guard.")
     ap.add_argument("--verify", action="store_true",
                     help="after writing, re-open every file and check it")
     ap.add_argument("--check-derivation", action="store_true",
@@ -405,13 +520,15 @@ def main(argv=None) -> int:
     ap.add_argument("--check-only", action="store_true",
                     help="check what is already on disk; write nothing")
     a = ap.parse_args(argv)
+    if a.check_only:
+        return check()
+    if a.ttstv is None:
+        ap.error("--ttstv is required (everything but --check-only reads Frank/)")
     root = _ttstv(a.ttstv)
     if a.check_derivation:
         return check_derivation(root)
     if a.check_parity:
         return check_parity(root)
-    if a.check_only:
-        return check()
     return generate(root, verify=a.verify)
 
 
