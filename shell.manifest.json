@@ -2,7 +2,7 @@
   "added_here": [
     "index.html"
   ],
-  "bytes": 1400957,
+  "bytes": 1402845,
   "count": 52,
   "files": {
     "bar/askbar.css": {
@@ -34,8 +34,8 @@
       "sha256": "3e731b5a2c10b98d64a3e1feacc9e7c8776e5e9d6a786dc100b8fc385606a107"
     },
     "library/library.css": {
-      "bytes": 66142,
-      "sha256": "b1b4929859784ca8a2cd260cbb0e590331dd42a66de423318e4b88c7b81eec40"
+      "bytes": 67323,
+      "sha256": "3e76024a83058817c994b68ad79db01bffd4722663375a4013d82c452ee16c25"
     },
     "library/library.html": {
       "bytes": 243260,
@@ -138,8 +138,8 @@
       "sha256": "25a1ce8fbe98c084884a98eefda0c0cb98381feb6b7626e8f11f2af31bd7d01c"
     },
     "reader/shell.css": {
-      "bytes": 25348,
-      "sha256": "c94969e982a3770a0e182a62db3c88079335d983ac0ec8fa46c395796e7be423"
+      "bytes": 26055,
+      "sha256": "00e9bc70b935c91c94badd8d6830122015b44d68914f187fded03dc182175c76"
     },
     "reader/sw.js": {
       "bytes": 18855,
@@ -216,8 +216,8 @@
   },
   "home_page": "library/library.html",
   "source": {
-    "commit": "9f309da",
-    "repo": "/sessions/rcw-014znjshtv9fiwdhf3vc1gjl/mnt/TTSTV",
+    "commit": "f8df4c6",
+    "repo": "/sessions/rcw-019kcdm9g6c4sizk8icb7y72/mnt/TTSTV",
     "shell_cache": "ttstv-shell-v36"
   }
 }

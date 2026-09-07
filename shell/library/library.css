@@ -1037,4 +1037,18 @@
   html[data-phone] body .ttstv-settings.fr-gate .fr-sheet .set-row { flex-direction: column; align-items: stretch; gap: 8px; }
   html[data-phone] body .ttstv-settings.fr-gate .fr-sheet .set-c { width: 100%; justify-content: stretch; }
   html[data-phone] body .ttstv-settings.fr-gate .fr-sheet .kag-btn { width: 100%; min-height: var(--ph-tap); }
+  /* ONE SIZE MEANS THE TILE, NOT ONLY THE GRID. PHONE FIT pins the GRID for
+     whichever zoom the shelf remembers (`#shelf[data-zoom] .shelfgrid`), but
+     the ladder sizes the TILE and the JACKET too and those stayed keyed on the
+     step: `[data-zoom="1"]` gives the jacket `height: min(88vh, 1000px)` and
+     the tile a 100vh minimum. A shelf that remembered 1 therefore drew a
+     546x820 tile inside a 150px column on the iPhone 17 simulator (7 Sep) --
+     one book across, clipped both sides, and no zoom bar on the phone to get
+     out of it. So the tile is the app's own at every remembered step. */
+  html[data-phone] #shelf[data-zoom] { scroll-snap-type: none; }
+  html[data-phone] #shelf[data-zoom] .railrow.tile { min-height: 0; padding: 0; justify-items: normal; align-content: normal; }
+  html[data-phone] #shelf[data-zoom] .railrow.tile { grid-template-rows: auto 2.5em 1.4em; row-gap: 0.75rem; }
+  html[data-phone] #shelf[data-zoom] .railrow.tile .tilecov { width: 100%; height: auto; }
+  html[data-phone] #shelf[data-zoom] .railrow.tile .railrow-title { display: block; }
+  html[data-phone] #shelf[data-zoom] .railrow.tile .railrow-by { display: block; }
 }

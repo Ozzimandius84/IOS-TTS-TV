@@ -4,6 +4,79 @@ Newest first. `REPORT_PROTOCOL.md` (TTSTV), nine headings. `README.md` says what
 
 ---
 
+## THE SHELL RE-IMPORTS WITH TWO REGRESSIONS FIXED — 2 across again, and the reader's header out from under the island · 7 Sep
+
+**Osca, 7 Sep:** *"two phone regressions found in the simulator, log both as lost/broken functionality. Repo TTSTV (FRANK), fix in design/ where the loop puts it … Prove both via the phone lane's probe loop."*
+
+The fixes are TTSTV's (`7c41ac9`, and `design/phone/STATUS.md` there carries the
+full report, the provenance and the judgment calls). This repo's part is the
+proof — the loop that made both measurable — and the re-import.
+
+### 1. Built
+Nothing of this repo's own. `tools/import_shell.py --ttstv …` re-imported
+`shell/` whole from TTSTV `f8df4c6` + the uncommitted fix, **52 files,
+1 402 845 B, `ttstv-shell-v36`** (was v35 at `2b365cd`). The only files that
+moved are the two the fixes are in, plus `shell.manifest.json`.
+
+### 2. Verified — and how
+Live, on the iPhone 17 simulator (iOS 26.5), through the probe loop: a
+`fetch("/__probe?…")` added to `shell/library/library.html` and
+`shell/reader/reader.html`, read out of `scratch-probe/probe.log` by the bridge,
+each page reloaded by pressing a door. **Both probes were removed before the
+import and `shell/` carries none of them.**
+
+- **shelf**, before → after: tile **546×820 → 150×225**, jacket **564×769 →
+  149×203**, in a grid that was `150px 150px` / 314 wide both times.
+- **reader header**, inset 62: `.head` top **16 → 78**, `.runhead` **10 → 72**,
+  `.barrow` 62 throughout. The before column was measured with
+  `HEAD:reader/shell.css` put back on the phone, not read off the diff.
+- **after the whole import**, both again by eye: the shelf draws two books
+  across with their captions, and the reader's title, credit and `<book> r N`
+  sit clear of the status bar.
+- **The doors keep working across all of it** — `frank: page /library/library.html`
+  and `frank: page /reader/reader.html?book=books/<slug>` for `hamlet`, `ethics`
+  and `eclogues-virgil`, and the Library door (`.barrow`) pressed by tap.
+
+### 3. Judgment calls
+- **The import was run rather than the two files copied.** `shell/` is TTSTV's
+  tree written whole, and a hand-copied pair would have been a second source of
+  truth. It was safe to run because the tree was already at TTSTV's shell
+  (`git status` showed only the two fixed files afterwards).
+- **The probes were reverted from a copy kept outside the repo**, so `shell/`
+  never carried a measurement into a commit.
+
+### 4. Boundary check
+Touched: `shell/library/library.css`, `shell/reader/shell.css`,
+`shell.manifest.json`, `STATUS.md`. Still dirty and not mine:
+`gen/apple/project.pbxproj`, `frank_iOS/Info.plist`, `frank_iOS.entitlements`,
+`xcschemes/frank_iOS.xcscheme`, and untracked `tools/gen_icons.py`,
+`scratch-float/`, `scratch-j13/`, `scratch26b/`.
+
+### 5. Footprint
+`_to_delete/shell.1788794523` — the previous `shell/`, moved there because this
+shell cannot delete inside the repo. Osca empties it.
+
+### 6. Requests to core / other modules
+`design/ship.py`'s lane: re-ship root `clean/`, which the desktop Frank loads and
+which still has both regressions.
+
+### 7. Known gaps
+`test-phone.mjs --pages` not run (no browser on the bridge); landscape (3 across)
+unproved; the float still unpressed though its plist key is in the build.
+
+### 8. Next
+Rotate the simulator for landscape; then the float — play a chapter and switch away.
+
+### 8b. Commit check
+`git add --` then a pathspec commit of exactly `shell/library/library.css`,
+`shell/reader/shell.css`, `shell.manifest.json`, `STATUS.md`. No `--amend`.
+Gate: `94eea4c`.
+
+### 9. Status line
+`IOS-TTS-TV · shell v36, two regressions fixed · 7 Sep · tile 546→150 in its 150px column, header 16→78 over a 62 inset, both measured on the simulator and re-proved after the whole import`
+
+---
+
 ## THE SIMULATOR LOOP IS BACK — ▶ needed a wider PATH, `ios dev` is what starts it, and the three doors landed on the first press ever · 7 Sep
 
 **Osca, 7 Sep:** *"take over for phone / IOS, we need to get it running / establish the loop again — I don't want to use my phone right now. Just the simulator."*

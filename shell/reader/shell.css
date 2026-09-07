@@ -348,6 +348,15 @@ body{ font-family:var(--serif); color:var(--ink); }
      the safe inset, as library.css and settings.css read it (`--safe-top` is
      the bench's word for env(); the phone answers env() itself) */
   html[data-phone] .barrow{ top:var(--safe-top, env(safe-area-inset-top, 0px)); }
+  /* ...and so do the two blocks of running head, which were left behind when
+     the door moved. `.head` is fixed 16px from the top and page.css's
+     `.runhead` at `--head-top` (10px), both written for a Mac window with
+     nothing above them; on the phone that puts the title, the credit line and
+     "<book> r N" INSIDE the status bar and under the island. Measured on the
+     iPhone 17 simulator, 7 Sep: inset 62, `.head` top 16. Each keeps its own
+     offset and starts from the inset. */
+  html[data-phone] .head{ top:calc(16px + var(--safe-top, env(safe-area-inset-top, 0px))); }
+  html[data-phone] .runhead{ top:calc(var(--head-top, 10px) + var(--safe-top, env(safe-area-inset-top, 0px))); }
   /* ...and the hands-free pill's mic (voiceui/app.js draws it 34px, a mask
      the size of its box) is a thumb's target too. voiceui's element, this
      page's phone layout; voiceui is asked to carry the line itself (§6). */
