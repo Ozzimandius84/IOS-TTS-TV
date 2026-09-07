@@ -1,0 +1,136 @@
+/* ENGINE · the last pane -- the line the word came from, and the rail under it
+   · bench: word.html · mounted by: book-nav.js (WordPane.mount) */
+/* ====================== THE ONE-WORD PANE ================================
+   Osca, 6 September: "THE LAST PANE IS ITS OWN ASSET: the one-word pane (far
+   right, sleeps, scrubs, sideways) becomes its own file pair... mounted by
+   book-nav.js, not written inside shell.css/book-nav.js; at +2 it is a
+   separate layer over the zoomed column, not part of the zoom."
+
+   So this file is the pane's whole appearance and nothing else's. It was
+   written inside shell.css, which meant word.html and the app could only have
+   it by loading the entire shell -- and it is not the shell's, it is the last
+   pane's.
+
+   IT IS A LAYER OVER THE ZOOM, NOT PART OF IT. Both elements are
+   `position:fixed`, appended beside the reading box rather than inside
+   #readercol, so the css `zoom` that grows the page by twelve does not touch
+   them: measured at 1710x951, the caption's rect is the same rectangle at
+   position 0 and at position +2, to the pixel. That is the whole reason it is
+   fixed -- at a factor of fourteen anything laid out with the text would be a
+   mile high and half a mile away.
+
+   Every number is a custom property, so a bench sets one declaration.
+     --sub-bottom     how far up from the foot of the view the line sits
+     --sub-size       its type size
+     --sub-w          its measure (in `ch`, so the rail must share its font)
+     --sub-lines      how many lines before it ellipsises
+     --subrail-bottom / --subrail-w / --subrail-hit  the rail's own three
+============================================================================ */
+
+/* =============== THE LAST PANE'S OWN SUBTITLE ==============================
+   Osca: "I need a small subtitle in the final pane of the one word view, so
+   give me the lines floating in the page, larger than the one view."
+
+   The word alone is the whole of that pane, and the one thing it costs is
+   knowing where the word was standing. This is the line it came out of,
+   floating over the page: small type on a wide measure -- far wider than the
+   word, which is the "larger" -- the word itself in ink and the rest of the
+   line dimmed, so the eye finds it without being told.
+
+   It is FIXED, not part of the zoomed page: at scale(14) anything laid out
+   with the text would be a mile high and half a mile away. Fixed to the
+   viewport, it keeps its own size and its own place, which is what "floating
+   in the page" has to mean once the page itself is fourteen times up.
+
+   Every number is a custom property, so the bench sets one declaration:
+     --sub-bottom how far up from the foot of the view it sits
+     --sub-size   its type size
+     --sub-w      its measure
+     --sub-lines  how many lines of it before it ellipsises   */
+.wordsub{
+  /* ONE LINE, TINY, LONG, AT THE FOOT. Osca: "I just wanted ONE LINE, in the
+     subtitle, a TINY floater, quite long, in the bottom of the page." It sat
+     at 63vh in two lines at 19px, which put a second paragraph across the
+     middle of the view and under the word itself. Anchored to the BOTTOM now,
+     so it stays out of the way of a word of any size. */
+  position:fixed; left:50%; transform:translateX(-50%);
+  bottom:var(--sub-bottom, 4.5vh);
+  width:min(var(--sub-w, 104ch), 92vw);
+  z-index:12; pointer-events:none;
+  text-align:center;
+  font-family:var(--serif); font-size:var(--sub-size, 13px); line-height:1.5;
+  letter-spacing:-.01em;
+  color:var(--dim);
+  opacity:0; transition:opacity .16s ease;
+  display:-webkit-box; -webkit-box-orient:vertical;
+  -webkit-line-clamp:var(--sub-lines, 1); overflow:hidden;
+  white-space:normal; text-overflow:ellipsis;
+}
+/* the word you are on, in the page's own ink -- the same weight, so it is the
+   colour that marks it and not a second typeface */
+.wordsub b{ color:var(--ink); font-weight:inherit; }
+
+/* ---- AND THE RAIL UNDER IT (job 24). Osca: "you can use it to scrub."
+   It is the BOOK, end to end, along the foot of the view: the filled part is
+   how far in the cursor is, and dragging anywhere along it puts the cursor
+   there. The reader's own scrub (page.css's `.scrub`, down the right edge) is
+   hidden at this level and would be the wrong control anyway -- it moves the
+   SCROLL, and in one word view the scroll is a consequence of the cursor, not
+   the thing you are holding.
+   Fixed and its own element, not part of `.wordsub`: the line above is
+   `pointer-events:none` because it is a caption, and a caption you can grab is
+   a caption that eats double-clicks meant for the page.
+   A hairline, and 20px of it is reachable -- the strip is the target, the
+   2px is the picture (the same trick every thin control on a phone uses). */
+.wordsubrail{
+  position:fixed; left:50%; transform:translateX(-50%);
+  bottom:var(--subrail-bottom, 2.2vh);
+  /* THE SAME MEASURE AS THE LINE, AND `ch` IS WHY THIS LINE IS HERE. `--sub-w`
+     is in `ch` -- the width of a "0" in the element's OWN font -- so the rail
+     and the caption resolve the same declaration to different widths unless
+     they are set in the same type. Measured at 1280x800 before this: caption
+     589px, rail 791.5px, the rail two centimetres wider than the line it
+     belongs to at each end. */
+  font:var(--sub-size, 13px)/1 var(--serif);
+  width:min(var(--sub-w, 104ch), 92vw);
+  height:var(--subrail-hit, 20px);
+  z-index:12; opacity:0; transition:opacity .16s ease;
+  pointer-events:none;                      /* book-nav.js turns it on */
+  display:flex; align-items:center; cursor:ew-resize; touch-action:none;
+}
+.wordsubrail::before{
+  content:""; position:absolute; left:0; right:0;
+  height:var(--subrail-w, 2px); border-radius:2px;
+  background:var(--rule);
+}
+.wordsubrail i{
+  position:relative; display:block; width:0;
+  height:var(--subrail-w, 2px); border-radius:2px;
+  background:var(--dim);
+}
+
+/* ---- LANDSCAPE, AND IT IS ONE DECISION (job 24 ss2). At 844x390 / 932x430 --
+   a phone on its side -- the subtitle stays a ROW along the bottom edge and
+   does not become a column beside the word. The word is the whole of the
+   view's height by then (its type is scaled by the SHORT side, book-nav.js's
+   `WORD.shortside`, so it is the same word it was in portrait), and the only
+   room left on that screen is the strip under it. A column at the right would
+   take a fifth of the width from a view that has 844px and 390 of height, and
+   put the caption BESIDE the word rather than under the line it came from.
+   So: a row, closer to the edge, one line, and the rail directly beneath it.
+   The mark is the SHORT side (500px), the same test pane.js uses for
+   `narrowH`, so a phone is a phone whichever way up it is held. */
+@media (max-height: 500px) and (orientation: landscape){
+  .wordsub{
+    bottom:var(--sub-bottom-land, 2.6vh);
+    width:min(var(--sub-w, 104ch), 96vw);
+    font-size:var(--sub-size-land, 12px);
+    -webkit-line-clamp:1;                   /* one line, whatever the setting */
+  }
+  .wordsubrail{
+    bottom:var(--subrail-bottom-land, 0.9vh);
+    font-size:var(--sub-size-land, 12px);      /* `ch`, again: same type, same measure */
+    width:min(var(--sub-w, 104ch), 96vw);
+    height:var(--subrail-hit-land, 16px);
+  }
+}

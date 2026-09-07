@@ -542,10 +542,34 @@
   var TABS = [
     { id: "general", label: "General", sub: "the app itself",
       cards: [
+        /* WARMTH IS HERE NOW (Osca, 7 Sep: "MOVE WARMTH TO GENERAL"). The
+         * field, the store and the gradient rail moved unchanged -- one line
+         * out of one table and into another -- so `--warm`, `cssVars`, the
+         * reader and every other surface see exactly what they saw when the
+         * row was drawn on Reading. Which TAB it is drawn on was only ever a
+         * question of where a person looks for it, and a ground that repaints
+         * the WHOLE application is a thing about the app.
+         *
+         * TWO THINGS CHANGED WITH IT, BOTH MEASURED, and both are in
+         * settings/STATUS.md under "Warmth → General" rather than only here:
+         *
+         * 1. **Its grey line became the card's note.** `warmth` is a SLIDER,
+         *    and the rule this file already wrote down for slider rows (see
+         *    `VOICE_ROWS.window`) is a SHORT NAME AND A LONG RULER, no `sub`:
+         *    the name column is fixed so the rulers share an x, and a
+         *    two-line explanation in that column is not two lines. Measured
+         *    in the bench, on this card: keeping the `sub` costs 75.4 px of
+         *    row at a 190 px name column and 125.8 px at 90 px, against the
+         *    44 px that Size and Line stand at. The sentence is not lost --
+         *    it is the card's note, under the row it explains, which is what
+         *    that rule says to do with it.
+         * 2. **It is second, under the font.** So the note lands directly
+         *    beneath the row it belongs to rather than under a menu.        */
         { head: "Appearance", rows: [
           { field: "uiFamily", label: "Interface font", control: "menu",
             sub: "The app's own text — sidebars, menus, this window. Never the book." },
-        ] },
+          { field: "warmth", label: "Warmth", control: "slider" },
+        ], note: "Ground and ink together, so paper and ink never drift apart." },
         /* THE MOCK'S OTHER TWO ROWS (reader-sweep §4). Reported absent twice
          * because each needed a new stored field; both fields now exist, and
          * both default to what the reader already did. */
@@ -584,9 +608,15 @@
          * three doors onto ONE store, which was always the thing that
          * mattered. What that call was really against was a second COPY of
          * the value, and there still is not one. */
+        /* WARMTH LEFT THIS CARD FOR GENERAL ▸ Appearance (Osca, 7 Sep:
+         * "MOVE WARMTH TO GENERAL"). The reason it can go without anything
+         * following it is the one already written above: the store is the one
+         * owner and every surface follows it, so which TAB the row is drawn on
+         * was only ever a question of where a person would look for it -- and
+         * a ground that repaints the whole application is a thing about the
+         * app, which is what General is. Light/dark stays, and the head stays
+         * with it: dark IS the other paper. */
         { head: "The paper", rows: [
-          { field: "warmth", label: "Warmth", control: "slider",
-            sub: "Ground and ink together, so paper and ink never drift apart." },
           { field: "theme", label: "Light / dark", control: "seg",
             sub: "The whole application, every window. \u2318\u21e7L, and the \u25d0 in the bar." },
         ] },
@@ -3303,6 +3333,16 @@
     // tracks start at one x rather than each at the end of its own word
     '.ttstv-settings .set-row[data-field="size"] .set-l,',
     '.ttstv-settings .set-row[data-field="line"] .set-l,',
+    /* WARMTH WAS NEVER IN THIS LIST, and that is what the comment below
+       predicted: measured in the bench on 7 September, its rail was **2 px**
+       wide where Size's and Line's are 350, with all five ticks stacked
+       inside those 2 px. It read as a gradient chip with a thumb on it. It
+       measured the same 2 px on the Reading tab it has just left, so this is
+       a defect the move UNCOVERED and did not cause -- said plainly because
+       the brief that moved it said the row already worked. 90 px, with the
+       other two, because "Warmth" is one short word and this card's ruler
+       still wants to start where a ruler starts. */
+    '.ttstv-settings .set-row[data-field="warmth"] .set-l,',
     // Listening window joined them on 5 Sep. A slider row that is NOT in this
     // list keeps `.set-l { flex: 1 1 auto }` and `.set-c { flex: 0 0 auto }`,
     // which for a control that is a LENGTH means a 16 px stub where the ruler
@@ -3319,6 +3359,7 @@
     // thing on the right; a ruler is the one control that is a LENGTH.
     '.ttstv-settings .set-row[data-field="size"] .set-c,',
     '.ttstv-settings .set-row[data-field="line"] .set-c,',
+    '.ttstv-settings .set-row[data-field="warmth"] .set-c,',
     '.ttstv-settings .set-row[data-field="listenWindow"] .set-c,',
     '.ttstv-settings .set-row[data-field="wpm"] .set-c { flex: 1 1 auto; }',
     // -- the range: the one continuous control
@@ -3895,6 +3936,13 @@
       var box = kEl(doc, "div", "set-card");
       card.rows.forEach(function (r) { box.appendChild(rowEl(r)); });
       out.push(box);
+      /* A CARD MAY CARRY A NOTE (7 Sep). `rowEl` has honoured `spec.note`
+       * since the faces row, but only on that one control -- it returns
+       * early -- so a sentence about a card had nowhere to be put and the
+       * Voice group appended its own by hand. This is the same `.set-note`
+       * in the same place, declared instead of built: the one sentence a
+       * card needs and no single row owns. */
+      if (card.note) out.push(kEl(doc, "div", "set-note", card.note));
       return out;
     }
 

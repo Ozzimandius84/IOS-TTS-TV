@@ -52,6 +52,45 @@ html[data-nosnap]   .pane{ scroll-snap-type:none; }
 html[data-hardsnap] .pane{ scroll-snap-type:y mandatory; }
 .column{ width:100%; }
 
+/* ==================== THE READING COLUMN IS NORMAL TEXT ===================
+   Osca, 7 September: *"highlight, Look Up, Translate, Copy, Speech must work
+   on the reading column the OS way -- right-click / three-finger on the Mac,
+   press-and-hold on iPhone -- same as Apple Books."*
+
+   THE DEFAULT IS NOT GOOD ENOUGH, AND THAT IS THE WHOLE REASON THESE THREE
+   LINES EXIST. Measured in Chromium at 1280x800 before they went in:
+   `getComputedStyle(p).userSelect` was `auto`, not `text`. In Chromium `auto`
+   on a non-editable box behaves as `text` and a drag does select -- the
+   three-word drag passed on the bare page. But `auto` is not a value, it is
+   "ask my parent", and the two engines this book is actually read in do not
+   answer it the same way: WKWebView (the Mac app is a webview, and iOS is
+   nothing else) has resolved `auto` to `none` inside fixed, transformed and
+   zoomed subtrees for years, which is exactly the shape of this page --
+   `#book` is `position:fixed`, and the column carries a css `zoom` the moment
+   one word view opens. `text` is not "ask", it is the answer, and it costs
+   one declaration.
+
+   The prefixed spelling is here for the same reason and not as belt-and-
+   braces: Safari and every WKWebView still read `-webkit-user-select`, and a
+   page that sets only the unprefixed one is a page whose selection depends on
+   the Safari version.
+
+   `-webkit-touch-callout:default` is the iPhone half of the sentence. It is
+   the property that decides whether a press-and-hold raises the OS menu --
+   Look Up, Translate, Copy, Speech -- or does nothing, and its default is
+   only `default` when nothing in the tree has said otherwise. Saying it here
+   means no ancestor can quietly take the long-press away later.
+
+   THE SCOPE IS THE COLUMN AND WHAT IS IN IT, and it stops there on purpose:
+   the wheel, the panes, the scrub and the bar are controls, and a control you
+   can accidentally select the label of is a control that feels broken. This
+   is the one region of the page that is a document. */
+.column, .column .chapter, .column p, .column .opener, .column h1, .column h2{
+  user-select:text;
+  -webkit-user-select:text;
+  -webkit-touch-callout:default;
+}
+
 /* THE AXIS NEVER MOVES; THE WIDTH DOES, PER CHAPTER.
    At 1440 the reference puts 1085 of its 1085 paragraphs in ONE box --
    L288 W865, text-align:start, text-indent:0 -- and its only two break-out

@@ -2642,49 +2642,137 @@ function mount(o){
   }
   requestAnimationFrame(tick);
 
-  // DOUBLE-CLICK A WORD, ANYWHERE IN THE BOOK. Osca: "Let me double click a
-  // word, to bring one word view endpoint/origin AND the voice to there (just
-  // connect it with the book."
+  // ================= THE CURSOR IS PLACED BY A PLAIN CLICK =================
+  // Osca, 7 September: *"the app's own single click still places the reading
+  // cursor, but it must be non-blocking: a plain click sets the cursor and
+  // yields instantly to a drag or a right-click/hold, never cancelling
+  // selection or the OS menu."*
   //
-  // The browser's own double-click already selects the word under the pointer,
-  // which is exactly the range wanted -- no hit-testing of our own, and it
-  // agrees with what the reader saw highlighted for that instant. It is then
-  // matched back to this chapter's word index so the cursor is a POSITION in
-  // the book rather than a range that a re-render would invalidate.
-  if(o.readerCol) o.readerCol.addEventListener("dblclick", e => {
-    if(!book) return;
-    const sel = window.getSelection && window.getSelection();
-    if(!sel || !sel.rangeCount || sel.isCollapsed) return;
-    const node = sel.anchorNode;
-    const p = node && (node.nodeType===3 ? node.parentNode : node);
-    const sec = p && p.closest && p.closest(".chapter");
-    if(!sec || sec.classList.contains("titlepage")) return;
+  // WHAT WAS HERE, AND WHY IT HAD TO GO. The cursor was placed by a
+  // DOUBLE-click, and the handler ended with `sel.removeAllRanges()` -- "leave
+  // the mark, not a selection". A double-click is the OS's own select-a-word
+  // gesture and the first half of select-by-word-dragging, so this page was
+  // taking the reader's selection away at the exact instant they made it:
+  // double-click a word, and the highlight vanished before Look Up, Translate,
+  // Copy or Speech could be reached. One line, and it made the reading column
+  // feel like a picture of text.
+  //
+  // So: a SINGLE click places the cursor, the double-click keeps working (it
+  // is still a click, and Osca asked for it on 4 Sep -- "let me double click a
+  // word, to bring one word view endpoint/origin AND the voice to there"), and
+  // NEITHER touches the selection. Nothing here calls preventDefault, and
+  // nothing here calls removeAllRanges.
+  //
+  // THE FOUR WAYS IT YIELDS, all of them measured off the event rather than
+  // guessed at from a timer:
+  //   1. a drag. `pointerdown` records where the press started; if the pointer
+  //      travelled more than SEL_SLOP px the gesture was a selection, not a
+  //      click, and the cursor is left alone. 4px is one hair of hand-shake at
+  //      a trackpad's resolution and a tenth of a word's width at reading size.
+  //   2. a selection by any route -- word-drag, triple-click, Shift-click,
+  //      Select All. If the selection is not collapsed when the click lands,
+  //      the reader is selecting, so this stands aside.
+  //   3. a right-click, a ctrl-click, a two-finger or three-finger tap. Any
+  //      button but the primary is the OS menu's, and `contextmenu` is never
+  //      prevented anywhere in this file.
+  //   4. a press-and-hold on iPhone, which raises the callout menu and either
+  //      leaves a selection behind (case 2) or never fires `click` at all.
+  const SEL_SLOP = 4;
+  let downAt = null;
+  // WHICH WORD IS UNDER A POINT. `caretRangeFromPoint` is WebKit's and
+  // Chromium's; `caretPositionFromPoint` is the standard one Firefox has. Both
+  // answer with a text node and an offset inside it, which is the same
+  // identity `buildWordDomIndex` files every word under -- so the point is
+  // matched to a word by the index, never by hit-testing a box of our own.
+  function caretAt(x, y){
+    const d = document;
+    if(d.caretRangeFromPoint){
+      const r = d.caretRangeFromPoint(x, y);
+      return r ? { node: r.startContainer, offset: r.startOffset } : null;
+    }
+    if(d.caretPositionFromPoint){
+      const c = d.caretPositionFromPoint(x, y);
+      return c ? { node: c.offsetNode, offset: c.offset } : null;
+    }
+    return null;
+  }
+  // ...AND WHICH WORD THAT IS, IN THE BOOK. Shared by the click and the
+  // double-click so the two can never disagree about what a point means.
+  // Returns the chapter and the word index, and leaves the chapter's index
+  // built as a side effect exactly as it was built before.
+  function wordAt(node, offset){
+    if(!book || !node) return null;
+    const el = node.nodeType === 3 ? node.parentNode : node;
+    const sec = el && el.closest && el.closest(".chapter");
+    if(!sec || sec.classList.contains("titlepage")) return null;
     const ch = +sec.getAttribute("data-ch");
-    if(!(ch >= 0)) return;
-    // build (or reuse) that chapter's own index and find the word by its own
-    // text node and offset -- the same identity buildWordDomIndex uses.
+    if(!(ch >= 0)) return null;
     if(ch !== wordChapterIdx){
       wordChapterIdx = ch;
       wordWords = wordsOf(book.chapters[ch]);
       wordDomIndex = buildWordDomIndex(ch);
     }
-    const start = sel.anchorOffset;
-    let hit = -1;
     for(let i=0;i<wordDomIndex.length;i++){
       const w = wordDomIndex[i];
-      if(w.node === node && start >= w.start && start < w.end){ hit = i; break; }
+      if(w.node === node && offset >= w.start && offset < w.end) return { ch: ch, wi: i };
     }
-    if(hit < 0){                       // a click between words: nearest in that <p>
-      for(let i=0;i<wordDomIndex.length;i++)
-        if(wordDomIndex[i].p === (p.closest && p.closest("p"))){ hit = i; break; }
-    }
-    if(hit < 0) return;
-    wordIdx = hit;
-    setCursor(ch, hit, "double-click");
+    // between two words, or on the punctuation after one: the first word of
+    // the paragraph that was actually hit, which is what the double-click has
+    // always done and is never wrong by more than a line.
+    const par = el.closest && el.closest("p");
+    for(let i=0;i<wordDomIndex.length;i++)
+      if(wordDomIndex[i].p === par) return { ch: ch, wi: i };
+    return null;
+  }
+  function placeCursorAt(hit, why){
+    if(!hit) return false;
+    wordIdx = hit.wi;
+    setCursor(hit.ch, hit.wi, why);
     paintWordHighlight();
-    if(sel.removeAllRanges) sel.removeAllRanges();   // leave the mark, not a selection
     markPaint();
-  });
+    return true;
+  }
+  if(o.readerCol){
+    // passive: this listener exists to REMEMBER, never to prevent
+    o.readerCol.addEventListener("pointerdown", e => {
+      downAt = { x: e.clientX, y: e.clientY, button: e.button };
+    }, {passive:true});
+
+    o.readerCol.addEventListener("click", e => {
+      if(!book) return;
+      if(e.button !== 0) return;                       // yield: not the primary button
+      if(e.detail > 1) return;                         // the double-click's own handler owns this
+      if(downAt && (Math.abs(e.clientX - downAt.x) > SEL_SLOP ||
+                    Math.abs(e.clientY - downAt.y) > SEL_SLOP)) return;   // yield: a drag
+      const sel = window.getSelection && window.getSelection();
+      if(sel && sel.rangeCount && !sel.isCollapsed) return;               // yield: a selection
+      placeCursorAt(wordAt2(e), "click");
+    });
+
+    // DOUBLE-CLICK A WORD, ANYWHERE IN THE BOOK. Osca, 4 Sep: "Let me double
+    // click a word, to bring one word view endpoint/origin AND the voice to
+    // there (just connect it with the book."
+    //
+    // The browser's own double-click has already selected the word under the
+    // pointer, and that selection is now LEFT WHERE IT IS -- it is what Look
+    // Up, Translate, Copy and Speech act on. The cursor is read from the same
+    // point the reader pressed, so the word the book moves to and the word the
+    // OS menu is about are the same word by construction.
+    o.readerCol.addEventListener("dblclick", e => {
+      if(!book) return;
+      placeCursorAt(wordAt2(e), "double-click");
+    });
+  }
+  // the point a mouse event happened at, resolved to a word. Falls back to the
+  // live selection's own anchor when the engine has no caret-from-point at all
+  // (which is the case the double-click used to rely on exclusively).
+  function wordAt2(e){
+    const c = caretAt(e.clientX, e.clientY);
+    if(c) return wordAt(c.node, c.offset);
+    const sel = window.getSelection && window.getSelection();
+    if(sel && sel.rangeCount) return wordAt(sel.anchorNode, sel.anchorOffset);
+    return null;
+  }
 
   // ...AND ANY TAP. The third of the three doors job 24 names, and the only
   // one this file did not already have a listener for: it does nothing but

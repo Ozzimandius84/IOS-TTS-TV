@@ -14,7 +14,6 @@
 <link rel="stylesheet" href="wordpane.css">
 <link rel="stylesheet" href="shell.css">
 <link rel="stylesheet" href="listen.css">
-<link rel="stylesheet" href="lookup.css">
 <link rel="stylesheet" href="marginalia.css">
 
 <!-- THE TWO ROOTS EVERY SURFACE LOADS BEFORE IT PAINTS (job 15 step 3b).
@@ -219,15 +218,18 @@ try{ (function(){
     try{
       listen = Listen.mount({ nav, col: $("readercol"), pane: $("readerpane"),
                               slug: b && b.slug, book: b });
-      /* LOOK UP MOUNTS BEFORE THE HOOK IS PUBLISHED, and the order is the
-         whole of it: Lookup.mount hangs `getDictionaryEntry` on the control,
-         and voiceui/app.js reads OPTIONAL_DATA_HOOKS off window.ReaderControl
-         once, at boot. Publish the control first and the boot line would say
-         "dictionary hooks missing" for the rest of the session. */
+      /* THE DICTIONARY MOUNTS BEFORE THE HOOK IS PUBLISHED, and the order is
+         the whole of it: Lookup.mount hangs `getDictionaryEntry` on the
+         control, and voiceui/app.js reads OPTIONAL_DATA_HOOKS off
+         window.ReaderControl once, at boot. Publish the control first and the
+         boot line would say "dictionary hooks missing" for the rest of the
+         session.
+         `col` and `pane` are no longer passed: the panel that needed them is
+         gone (7 Sep -- the OS owns look-up now, reader/lookup.js's own
+         comment), and this module no longer touches the page at all. */
       try{
-        lookup = Lookup.mount({ nav, col: $("readercol"), pane: $("readerpane"),
-                                slug: b && b.slug, book: b, control: listen });
-      }catch(e){ console.warn("[lookup] not mounted:", e); }
+        lookup = Lookup.mount({ slug: b && b.slug, book: b, control: listen });
+      }catch(e){ console.warn("[dictionary] not mounted:", e); }
       try{
         marginalia = Marginalia.mount({ nav, col: $("readercol"), pane: $("readerpane"),
                                         slug: b && b.slug, book: b, control: listen });
@@ -262,7 +264,7 @@ try{ (function(){
                  is the other half of.
    WHAT PREFS WRITES UNDER A NAME NOTHING HERE READS, which is this block:
      `--read-family` and `--read-scale` are the OLD reader's names.  The shell
-     spends the reading face as `--serif` (shell.css:34, wheel.css, lookup.css)
+     spends the reading face as `--serif` (shell.css:34, wheel.css, listen.css)
      and the reading size as `--optical`, tokens.css's multiplier on the root
      font size -- so the two are translated, never copied: a default removes
      the property and tokens.css's own value stands, exactly the way prefs

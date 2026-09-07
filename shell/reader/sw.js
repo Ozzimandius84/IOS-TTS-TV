@@ -19,7 +19,7 @@
 // fetched and the answer arrives from disk instead of from a server that is
 // not there. `.opus` is served through a Range-aware path because a media
 // element asks for bytes, not for files.
-const SHELL_CACHE = "ttstv-shell-v35";   // job 26b: library/drive.js joins the shell (6 Sep)
+const SHELL_CACHE = "ttstv-shell-v36";   // 7 Sep: lookup.css LEAVES the shell (the OS owns look-up)
 const BOOK_PREFIX = "ttstv-book-";        // kept in step with library/import.js
 const SHARE_CACHE = "ttstv-share";
 const SHARE_KEY = "share-bundle";         // one entry, replaced each share
@@ -69,8 +69,16 @@ const SHELL_FILES = [
   "./pane.css",              // a contents pane, as a solid column
   "./shell.css",             // the shell around them
   "./listen.css",            // ...and the two marks the audio moves (job 15 step 3a)
-  "./lookup.css",           // ...and the sheet the dictionary answers on (job 15b step 1)
   "./marginalia.css",       // ...and the four colours a mark wears (job 15b step 2)
+  /* JOB 24 LANDED THESE AND NEVER LISTED THEM. reader.html has asked for
+     both since the one-word subtitle and its scrub rail arrived; the shell
+     did not carry them, so an exported bundle and the phone shell shipped a
+     reader.html with two 404s in its head -- one word view with no caption
+     and no rail, offline. Found by reader/tests/test_shell_files.py and
+     test_export_bundle.py, both of which were already red on it before this
+     job touched anything; fixed here because it is one line each and this
+     turn is already in this file. */
+  "./wordpane.css",         // the one-word caption and its scrub rail (job 24)
   "./chrome.css",            // library.html and settings.html both link it
   "./keys.js",               // typing is not a hotkey -- all three pages load it (3 Sep)
   "./book.js",               // Book.open / Book.normalise
@@ -78,6 +86,7 @@ const SHELL_FILES = [
   "./page.js",               // Page.mount -- the column, the scrub, the runhead
   "./pane.js",               // Panes.measure/apply -- where a pane goes
   "./book-nav.js",           // the axis, the reader, one word
+  "./wordpane.js",           // ...and the caption under it (job 24)
   "./listen.js",             // the audio, the highlight, and window.ReaderControl
   "./lookup.js",             // the word under the finger, and voiceui's getDictionaryEntry
   "./marginalia.js",         // the record, re-anchored on listen.js's map

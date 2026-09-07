@@ -207,11 +207,25 @@ function mount(opts){
     ORDER.length=0;
     for(let i=0;i<ROWS.length;i++){
       const r=ROWS[i], y=wrap(i*p-off), th=y/R;
+      /* A ROW OFF THE BARREL IS OUT OF THE PAGE, NOT MERELY UNPAINTED.
+         `visibility:hidden` leaves a box: on les-pensees, 222 of 227 rows kept
+         one, parked at the same spot with no transform on them, and 51 of those
+         boxes overlapped each other inside the viewport. Nothing showed -- and
+         the first measurement of "do the entries jam together" counted them and
+         reported 51 touching pairs at -57.66px, because by every number a page
+         can be asked for, they WERE jammed. `display:none` takes the box away
+         with the paint, so a row that is not on the barrel is not in the layout
+         either, and the only rows with a rect are the rows the wheel placed.
+         It is also less work, not more: an element with no box is not laid out
+         at all, and this is 222 of them. */
       if(th>EDGE||th<-EDGE){
-        if(r.style.visibility!=="hidden") r.style.visibility="hidden";
+        if(r.style.display!=="none") r.style.display="none";
         r._a=0; r._v=0; continue;
       }
-      if(r.style.visibility==="hidden") r.style.visibility="";
+      /* ...and it comes back in the same pass it is placed in: display first,
+         then the transform below, so the frame it returns on is the frame it
+         is already in its right place for. */
+      if(r.style.display==="none") r.style.display="";
       ORDER.push({r, y});
       const c=Math.cos(th), a=r._a||0;
       r.style.transform="translate3d(0,"+(R*Math.sin(th)-half)+"px,"+(R*(c-1))+"px)"
