@@ -53,8 +53,10 @@
     gap:      18,     // px between one pane and the next
     overlap:  0,    // px each pane sits OVER the one in front of it
     cap:      2,      // HOW MANY PANES WIDE THE STACK IS ALLOWED TO BE
-    travel:   2,      // how far a closed pane waits off its own resting place
-    ease:     2.15,   // the shape of its approach: 1 is a straight line
+    travel:   0.5,    // how far a closed pane waits off its own resting place
+                      //   (Osca, 9 Sep, on the bench: 2 -> 0.7 -> 0.5)
+    ease:     3,      // the shape of its approach: 1 is a straight line
+                      //   (Osca, 9 Sep, on the bench: 2.15 -> 3)
     hueStep:  66,     // degrees between one pane's colour and the next
     sat:      80,     // % -- the coloured panes
     light:    50,     // %

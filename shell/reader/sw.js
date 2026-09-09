@@ -30,7 +30,7 @@
 // that is not the current SHELL_CACHE, so changing this string IS the eviction
 // -- and changing it changes sw.js's own bytes, which is the only thing that
 // makes a browser run `install` and `activate` at all.
-const SHELL_CACHE = "ttstv-shell-v40";   // 7 Sep: transport.js joins the shell -- a NEW name in
+const SHELL_CACHE = "ttstv-shell-v41";   // 7 Sep: transport.js joins the shell -- a NEW name in
                                          // SHELL_FILES is only fetched by an install, so the
                                          // string has to move or an installed app never caches
                                          // it (v37: the shell moved to clean/)

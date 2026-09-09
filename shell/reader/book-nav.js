@@ -305,7 +305,57 @@
 const esc = s => String(s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
 
 const DX_REST=0.0001;
-let OUT_SNAP=6;          // how hard that switch throws, either way -- a
+/* LEAVING THE BOOK HAS ITS OWN SPEED. Osca, 9 Sep, on the old cut: *"rn it
+   just shoots out, little too fast, and no animation."* The animation is the
+   travel `closeToLibrary` now runs; this is its DURATION, in the same units as
+   OUT_SNAP -- higher is shorter. 6 (the word's own value) came out at 15 frames
+   / ~250ms and is the "little too fast" he named before he had even seen it;
+   3 is ~28 frames / ~470ms. `nav.leaveSnap` reads and writes it, and the value
+   is remembered, so it is dialled once from the console or a bench and stays. */
+let LEAVE_SNAP=3;
+/* HOW FAR OUT OF THE BOOK COUNTS AS LEAVING IT, decided on release exactly as
+   WORD_COMMIT decides the word. Half of the rung past the last pane. */
+const LEAVE_COMMIT=0.5;
+/* ...and how far ONE event may carry you into it. The zone has resistance: a
+   single push -- however big -- moves you a step of it, so getting out of a
+   book is always a TRAVEL of several, never one flick that happened to be hard.
+   That is the other half of "do not push me": momentum cannot spend the whole
+   zone, and neither can one clumsy swipe. */
+const LEAVE_STEP=0.12;
+/* HOW FAR INTO A RUNG A PUSH MUST GET FOR THE RELEASE TO COMMIT TO IT.
+   0.5 is the old rule (ease to whichever rung is nearest). Lower is stickier:
+   at 0.2, a fifth of a pane's worth of scroll takes you to the next pane. */
+let STICK=0.5;
+/* ============ THE RUNG IS CHOSEN BEFORE THE ANIMATION ============
+   Osca, 9 September: *"it should round up or down a movement, depending on how
+   much it is -- calculate BEFORE the animation and move accordingly. Because
+   right now it's impossible to move through it smoothly: everything involves
+   pushing too far, or pushing too little, nothing actually hits the mark to a
+   particular pane arrangement."*
+
+   The pane ladder was the last stretch of this axis that still moved WITH the
+   hand and only rounded once the hand stopped (the rest branch of stepDx). So
+   every gesture overshot a real arrangement and then crawled back out of it,
+   and it was the visible correction that felt inexact. Both word stretches and
+   the way out of the book already work the other way round -- decide on the
+   push, then TRAVEL (snapStart) -- and the ladder now joins them.
+
+   Dialled on design/reader/bench-panes.html, 9 Sep, and these are his numbers:
+
+     STICK      where the rounding line sits. 0.5 is round-up/round-down.
+     OPEN       how much a rung resists being opened PAST. Directional: Osca,
+                *"a PANE shouldn't hold you, i.e. stop you from scrolling out of
+                it. It should only hold from moving PAST it... leaving is VERY
+                easy, no controls on that."* It is SPENT, not held, so the
+                travel starts where the resistance ended.
+     OPENS      how many panes one gesture may OPEN. The ceiling is on DEPTH
+                only -- a gesture may always come all the way home in one move.
+     PAST_AT    ...unless you scroll very very fast, when the ceiling lifts.
+     PANE_SNAP  how fast the ladder runs to the rung it chose, in OUT_SNAP's own
+                units (higher = shorter). 7 is ~12 frames / ~200ms; the bench's
+                equivalent fraction was 0.26. */
+let OPEN=0.18, OPENS=1, PAST_AT=0.075, PANE_SNAP=7;
+let OUT_SNAP_=6;         // how hard that switch throws, either way -- a
                          // DURATION since 8 Sep (see THE SWITCH IS A TRAVEL,
                          // by stepDx): higher = shorter. 9 was the old
                          // fraction's number and lands on 50ms, which is a cut
@@ -375,7 +425,6 @@ try{
 }catch(_){}
 
 const WORD_PX=42;        // px of accumulated VERTICAL delta per word now, not horizontal
-const EXIT_PUSH=320;     // a deliberate push, not one wheel tick
 const MAX_LEFT_LEVELS=5; // How far UP THE BRANCH you can travel -- NOT how many panes fit on a
                           // screen. Those two got conflated at 3 ("about max three in a screen",
                           // Osca's own words, thirteenth pass), and on a book whose trail runs
@@ -451,7 +500,6 @@ function mount(o){
   let pinchFrom=1;
   // where the zoom left the page sideways -- the pan's own nought point.
   let panBase=0;
-  let exitAccum=0;
   let chIndexById=new Map();
 
   // -------- THE LEFT STACK -- a book's own structure, walked generically.
@@ -2510,7 +2558,7 @@ function mount(o){
 
   function openBook(bk){
     focusPath=null; programmaticTop=null; lastGoodLevels=null; lastGoodPath=null; heldDepth=0;
-    book=bk; dx=0; dxVel=0; dxInput=0; dxIdle=0; wordWasOn=false; exitAccum=0;
+    book=bk; dx=0; dxVel=0; dxInput=0; dxIdle=0; wordWasOn=false; exitArmed=false;
     pinching=false; pinchHold=false; pinchEntering=false; pinchK=0; pinchFrom=1;
     wheelPinch=false; tp=null; panFrom=null; panBase=0;
     exitWord();
@@ -2576,12 +2624,89 @@ function mount(o){
   // what makes it fresh every time -- a real load, reading a manifest that
   // may have gained books since you last looked. Without an onLibrary the
   // old behaviour stands, so nothing else that mounts this is broken by it.
+  /* ============ LEAVING IS A SLIDE, NOT A CUT (9 September) ==============
+     Osca's third symptom on the ladder: past the deepest pane the app LEAVES
+     THE PAGE. Proved rather than read -- a headless probe's own execution
+     context was destroyed mid-gesture, twice, "most likely because of a
+     navigation". `closeToLibrary` reset the axis to 0, swapped the screen and
+     set `location.href` in the same tick, so the book vanished on one frame
+     and the library arrived on another: a cut, where every other move on this
+     axis is a travel.
+
+     Asked which shelf a library PANE should show, Osca chose to keep the page:
+     *"keep the page load, make it slide."* That is the right call and it is the
+     morning's lesson again -- `library/library.html` owns the shelf, its store,
+     its imported books, its pairing and its reading positions, and a second
+     grid inside `book-nav.js` (the dormant `buildDashboardGrid`, still in this
+     file) would be a second implementation of one thing, which is the bug we
+     have spent today removing twice.
+
+     So the LEAVING is what changes, and only that. The axis travels one rung
+     past the deepest pane -- the stack keeps coming, the reader keeps sliding
+     right, at the same speed and easing every other rung uses -- and the
+     navigation happens when that travel lands. Nothing is reset until then, so
+     there is no frame with no book on it. `T.anim` is the speed the panes
+     already move at, so the exit cannot feel like a different mechanism. */
+  try{ const v = localStorage.getItem("leavesnap");
+       if(v != null && +v > 0) LEAVE_SNAP = +v; }catch(_){}
+  let leavingBook = false;
+  /* THE EXIT ANIMATION IS ITS OWN, NOT THE GESTURE'S LEFTOVERS. First version
+     re-used the axis: commit, then travel dx to one rung past the last pane.
+     But the HAND has usually already spent that rung getting to the commit
+     point -- measured, a sustained push left dx at -2.96 of a -3, so the
+     "slide" was three frames and a page load. `leaveT` is a travel of its own,
+     0 -> 1 over a fixed number of frames whatever the gesture did, and it is
+     what carries the book AND its contents off the right edge. */
+  let leaveT = 0, leaveDur = 28, leaveFrom = 0;
+  /* HOW FAR OUT OF THE BOOK THE HAND HAS TRAVELLED, 0..1 of the leaving zone.
+     THIS IS THE FEEDBACK, and it was missing: the axis moved through the zone
+     while nothing on screen did, because at dx past the deepest pane every
+     pane is already fully open and the layout has nothing left to say. So the
+     gesture showed you nothing and the animation only began once you let go --
+     Osca: *"the animation essentially is queued, until I lift my fingers, SO
+     actually I don't know what I'm doing/done until I lift my fingers. The
+     animation should be there straight away, without any delay. Because that's
+     the user feedback loop."* Right, and it is the difference between a gesture
+     you can steer and one you can only submit. The book and its contents now
+     leave WITH the hand, and come back with it. */
+  function handOver(){ return clamp(-dx - currentMaxLeft(), 0, 1); }
   function closeToLibrary(){
+    if(leavingBook) return;
+    if(!book || screen !== "open" || !o.onLibrary){ leaveNow(); return; }
+    leavingBook = true;
+    leaveT = 0;
+    /* the exit travel picks up exactly where the hand left off, so committing
+       is a continuation and not a jump back to the start of the movement. */
+    leaveFrom = handOver();
+    leaveDur = clamp(85 / Math.max(0.25, LEAVE_SNAP), 6, 90);
+    snapCancel();
+    dxInput = 0; dxVel = 0;
+    pinching = false; pinchHold = false;
+    setDx(-(currentMaxLeft() + 1));      // the axis is out; the travel is leaveT's
+    markPaint();
+  }
+  /* stepped from tick(), beside stepDx, so it runs on the same clock as every
+     other movement on this page. */
+  function stepLeave(dt){
+    if(!leavingBook) return;
+    leaveT += (dt || 1) / leaveDur;
+    if(leaveT >= 1){ leaveT = 1; markPaint(); applyDx(true); leaveNow(); return; }
+    markPaint();
+  }
+  function leaveEase(){ const x = clamp(leaveT, 0, 1); return x*x*(3-2*x); }
+  /* one number for both halves of the movement: the hand's while a hand is on
+     it, and the hand's plus what the travel has added once it has let go. */
+  function leaveShift(){
+    return leavingBook ? leaveFrom + (1 - leaveFrom) * leaveEase() : handOver();
+  }
+
+  function leaveNow(){
+    leavingBook = false; leaveT = 0; leaveFrom = 0;
     exitWord();
     for(let i=1;i<MAX_LEFT_LEVELS;i++) destroyPane(i);   // every deeper pane, not just two
     resetReaderChrome();
     book=null;
-    dx=0; dxVel=0; dxInput=0; dxIdle=0; exitAccum=0;
+    dx=0; dxVel=0; dxInput=0; dxIdle=0;
     pinching=false; pinchHold=false; pinchEntering=false; pinchK=0; pinchFrom=1;
     wheelPinch=false; tp=null; panFrom=null; panBase=0;
     swipeDrop();
@@ -2605,7 +2730,42 @@ function mount(o){
   // between 0 and 1, the spacing between 1 and 2. Nothing re-flows before you
   // ask for it, and each slide is a place you can stop.
   const DX_MAX = 2;
-  function setDx(v){ dx=clamp(v,-currentMaxLeft(),DX_MAX); }
+  /* THE AXIS STOPS AT THE DEEPEST PANE -- except on the way out. The exit
+     slide (see closeToLibrary) travels one rung further, and without this the
+     clamp swallowed it: `snapStart(-(maxLeft+1))` set a goal the axis could
+     never reach, `snapStep` wrote it and `setDx` put it straight back, so the
+     "slide" was 14 frames of standing still followed by a page load. Measured
+     exactly that: 58 frames, deepest dx -2, 0 frames past the last pane. */
+  /* THE LEAVING ZONE. One rung past the deepest pane, and the axis may stand
+     anywhere in it while your hand is still on the glass -- Osca, 9 Sep:
+     *"do NOT push me, do NOT stop me from scrolling very slowly, scrolling out
+     then scrolling back. Right now, past a certain point, even if I don't lift
+     my fingers, it just snaps me back to library. I don't want to be snapped
+     before I lift my fingers."*
+
+     The floor is therefore open whenever the axis is ALREADY in the zone, or a
+     gesture is running, or the exit travel is under way -- and closed at rest,
+     so nothing can be left standing in it. */
+  function inLeavingZone(){ return dx < -currentMaxLeft() - DX_REST; }
+
+  /* YOU HAVE TO ARRIVE BEFORE YOU CAN LEAVE. The zone opens only once the axis
+     has come to REST on the deepest pane -- which is the rule the arrow key has
+     always had here ("the press that arrives at the deepest pane stops there,
+     and only a SECOND one...") and the trackpad never did. Without it one hard
+     flick runs the whole ladder and straight out of the book, which is the
+     overshoot Osca asked to be rid of; with it, a flick lands on the last pane
+     and stops, and going further is a gesture of its own. Disarmed the moment
+     the axis leaves that rest, so it cannot be spent twice. */
+  let exitArmed = false, armedAt = 0;
+  function dxFloor(){
+    const m = currentMaxLeft();
+    const open = leavingBook || exitArmed || inLeavingZone();
+    return -(m + (open ? 1 : 0));
+  }
+  function setDx(v){
+    dx = clamp(v, dxFloor(), DX_MAX);
+    if(dx > -currentMaxLeft() + DX_REST) exitArmed = false;   // moved back in
+  }
   function levelOf(v){ return v<=-0.5?"contents":(v>=0.5?"word":"reader"); }
   function dxTargets(){ return positions(); }
 
@@ -2649,7 +2809,7 @@ function mount(o){
   }
   // move to a position: the axis goes there and the gesture state is cleared,
   // so the spring is carrying it and nothing is still pushing.
-  function goPos(p){ setDx(p); dxVel = 0; dxInput = 0; detent = false; pinchHold = false; snapCancel(); }
+  function goPos(p){ setDx(p); dxVel = 0; dxInput = 0; detent = false; pinchHold = false; snapCancel(); paneEnd(); }
 
   /* ================== ONE PUSH ON THE AXIS, AND ONE ONLY ==================
      Osca, 8 September: *"the phone reader navigates panes the SAME way the
@@ -2664,21 +2824,37 @@ function mount(o){
        * the pinch's rest point is over the moment the axis is pushed;
        * inside one word view a push only LEAVES the view (the reading is on
          the other axis), so there is no exit gate to consider;
-       * past the deepest pane this book's own trail actually has, a
-         DELIBERATE push -- EXIT_PUSH's worth, not one tick -- goes back to
-         the library, and anything short of it is not an exit and re-arms.
+       * past the deepest pane the axis simply keeps travelling, into the
+         LEAVING ZONE, under the hand -- and whether that was an exit is
+         decided on RELEASE (LEAVE_COMMIT), like everything else here.
 
-     THE GATE IS MEASURED IN dx, NOT IN PIXELS, and that is the only change to
-     the wheel: `EXIT_PUSH * T.gain` is exactly what `EXIT_PUSH` px of wheel
-     becomes after `deltaX * T.gain`, so for the wheel the threshold is the
-     same number it always was, at any T.gain (both sides scale together, so
-     the comparison is the identical one). A driver whose input is not px of
-     wheel -- a finger on glass -- can then mean the same thing by it: "as far
+     THE OLD GATE WAS AN ACCUMULATOR AND IT FIRED MID-GESTURE. `exitAccum`
+     counted the push past the last pane and called `closeToLibrary()` the
+     moment it crossed `EXIT_PUSH * T.gain` -- with the fingers still moving.
+     Osca, 9 Sep: *"past a certain point, even if I don't lift my fingers, it
+     just snaps me back to library. I don't want to be snapped before I lift my
+     fingers."* He is right, and it was the one commitment on this axis taken
+     while a hand was still on it. Both the accumulator and the constant are
+     gone. A driver whose input is not px of wheel -- a finger on glass -- means
      as the axis would have travelled", not "as many pixels as a trackpad
      would have sent".
 
      Returns what it did, so a driver can tell a push that landed from one the
      gate swallowed. */
+  /* THE HAND'S REACH, ON THE PANE SIDE. `paneReach` is what the hand has asked
+     for -- a real number of rungs, never drawn. `paneRung` rounds it to a WHOLE
+     rung, and that is the only thing the ladder is ever told to be: a half-open
+     stack is passed THROUGH, on the way to a whole one chosen before the
+     movement started. Null between gestures. */
+  let paneReach = null, paneFrom = 0, panePress = 0, paneLast = 0;
+  function paneRung(v, floor){
+    const deep  = -clamp(v, floor, 0);
+    const whole = Math.floor(deep + 1e-9);
+    return -Math.min(-floor, whole + ((deep - whole) >= STICK ? 1 : 0));
+  }
+  /* the gesture is over: its ceiling and its unspent pressure go with it. */
+  function paneEnd(){ paneReach = null; panePress = 0; paneLast = 0; }
+
   function axisPush(d){
     pinchHold = false;
     /* ============ ONE WORD IS THE PINCH'S, AND ONLY THE PINCH'S ===========
@@ -2701,14 +2877,64 @@ function mount(o){
        stay) and it may still close a pane back toward the book; what it may
        never do is cross 0 upward. stepDx holds the same line against the
        momentum of a push already made, which is the other half of this rule. */
-    if(d > 0 && dx >= -DX_REST){ exitAccum = 0; return "held"; }
+    if(d > 0 && dx >= -DX_REST){ return "held"; }
     if(levelOf(dx) === "word"){ dxInput += d; return "word"; }
-    if(dx <= -currentMaxLeft() && d < 0){
-      exitAccum += -d;
-      if(exitAccum > EXIT_PUSH * T.gain){ closeToLibrary(); exitAccum = 0; return "library"; }
-      return "gate";
+    /* PAST THE DEEPEST PANE THE AXIS FOLLOWS YOUR HAND (9 Sep). It used to
+       count the push into `exitAccum` and, the moment that crossed EXIT_PUSH,
+       call `closeToLibrary()` -- MID-GESTURE, with the fingers still moving.
+       That is Osca's "it just snaps me back to library" and it is the one thing
+       this axis does nowhere else: every other commitment on it is taken on
+       RELEASE, by where the gesture got to (see WORD_COMMIT below). The exit
+       takes it the same way now, in `stepDx`'s rest branch, so scrolling slowly
+       out and back again is just a move. `exitAccum` is gone with the rule it
+       served. */
+    if(dx <= -currentMaxLeft() + DX_REST && d < 0 && !leavingBook){
+      /* ARRIVE FIRST; THIS PUSH STOPS AT THE PANE. And the refusal keeps the
+         GESTURE alive -- the hand is still on the axis, so it must not be
+         counted as idle. Before 9 Sep it was: the ladder took long enough to
+         travel that the tail of one hard swipe was still arriving after the
+         axis had stood at the deepest pane for T.grace, which armed the exit
+         and let that SAME swipe carry on out of the book. Measured, real
+         Chromium at 1440x900: one 14-tick swipe at 160 opened both panes and
+         then closed the book. */
+      if(!exitArmed){ dxIdle = 0; return "gate"; }
+      dxInput += Math.max(d, -LEAVE_STEP);   // a step of the zone, not all of it
+      return "leaving";
     }
-    exitAccum = 0;
+    /* THE PANE LADDER. Not `dxInput += d` any more: the push moves the hand's
+       REACH, the reach is rounded to a rung, and the axis TRAVELS there. Above
+       the book (a page left part-zoomed) the old path still runs -- that
+       stretch is the pinch's and has its own commit. */
+    if(dx <= DX_REST && !leavingBook){
+      const floor = -currentMaxLeft();
+      if(paneReach === null){ paneReach = dx; paneFrom = Math.round(dx); }
+      paneLast = Math.abs(d);
+      /* LEAVING IS FREE: a push toward the reader passes straight through and
+         drops any pressure built against the rung, so a hand that changes its
+         mind is not still paying for the push it abandoned. */
+      if(d > 0){ panePress = 0; }
+      else if(OPEN > 0 && Math.abs(paneReach - Math.round(paneReach)) < 0.02
+              && Math.abs(panePress) < OPEN){
+        panePress += d;
+        if(Math.abs(panePress) < OPEN){ dxIdle = 0; return "hold"; }
+        d = panePress + OPEN;            // what is left of it (both negative)
+      }
+      paneReach = clamp(paneReach + d, floor, 0);
+      /* THE CEILING IS ON DEPTH ONLY, and it lifts above PAST_AT. */
+      if(paneLast <= PAST_AT) paneReach = Math.max(paneReach, paneFrom - OPENS);
+      const goal = paneRung(paneReach, floor);
+      if(snapTo == null || Math.abs(snapTo - goal) > DX_REST) snapStart(goal, PANE_SNAP);
+      /* NO SYNTHETIC TAIL HERE, and that is deliberate. bench-panes.html adds
+         one because nothing else in that page supplies it; a real trackpad and
+         a real phone send their OWN momentum, as further wheel events after the
+         fingers lift, and every one of them arrives HERE and extends the reach
+         exactly as a push does. Synthesising a second tail on top of the real
+         one made the axis run past its own ceiling and cost 19 checks across
+         the leaving zone, the word detent and the margin -- measured, this
+         file, 9 Sep. The dials are the same; only the source of the tail is. */
+      dxVel = 0; dxIdle = 0;
+      return "push";
+    }
     dxInput += d;
     return "push";
   }
@@ -2854,9 +3080,21 @@ function mount(o){
     }) : { panes: [], right: 0 });
     let stackRight = laid.right;
     let pushFromOutside = 0;
+    /* ON THE WAY OUT, THE WHOLE BOOK LEAVES -- ITS CONTENTS INCLUDED. Osca,
+       9 Sep: *"the text slides, as it should, and the contents pane should
+       slide too, because THE WHOLE book, I'm leaving."* Right: the panes are
+       this book's own directory, not furniture that belongs to the app, so
+       they go with it. Every pane is carried to the right edge in the same
+       proportion the reader is, off the same `over`, so the stack and the text
+       leave together and the library arrives on an empty stage. */
+    const leaveOver = leaveShift();
     for(let i=n-1;i>=0;i--){
-      const p = laid.panes[i];
+      let p = laid.panes[i];
       if(!p) continue;
+      if(leaveOver > 0){
+        const vw = window.innerWidth || 0;
+        p = Object.assign({}, p, { left: p.left + leaveOver * Math.max(0, vw - p.left) });
+      }
       // A level this branch does not reach still keeps its place in the
       // stack -- an empty pane, not a closed one, so nothing slides.
       const el = ensurePane(i, levelsCache[i], null, false) || emptyPane(i);
@@ -2891,13 +3129,68 @@ function mount(o){
     // line covered. So the push is worked out from where the text has to
     // start, not from how wide the panes are: colLeft = marginW + P/2, and it
     // has to reach the stack's own right edge.
+    /* THE PUSH IS NO LONGER DOUBLED, because nothing is being narrowed any
+       more (9 Sep -- see THE READER SLIDES below). The doubling was correct
+       while the reader's own LEFT was being moved: that took width out of its
+       box, the reading column is centred in what is left, so the column moved
+       by only half the push. A TRANSLATE moves the box whole -- the column
+       goes exactly as far as the box does -- so the shift the column needs is
+       simply the distance from where it starts to where the stack ends. */
+    /* THE PUSH IS MEASURED FROM WHERE THE TEXT REALLY STARTS, not from
+       `marginW` (9 Sep). `marginW` is the FIRST PANE'S WIDTH and carries a floor
+       of 120px so that pane is usable; on a 402px phone the reading column's
+       own margin is 28px, so the two are different numbers and the push came
+       out 92px short -- the text stayed under the panes at every rung.
+       Measured: at the second rung on the phone the text started at 219 while
+       the stack reached 311.
+
+       `textLeft` is the column's true left at rest, unfloored, and the rule is
+       one line: THE TEXT CLEARS THE STACK. On the desk that reproduces the
+       step-1 hard stop as a CONSEQUENCE rather than as an exception -- at
+       1440x900 the margin pane reaches 286 and the text already starts at
+       287.5, so the push is zero and the book does not move, which is exactly
+       what UI-PLAN §3 asks for and what the old code special-cased. */
+    const textLeft = Math.round(Math.max(0,
+      ((window.innerWidth || 0) - readerColumnWidth()) / 2));
     if(stackRight > 0){
-      const need = 2 * (stackRight - marginW);
+      const need = stackRight - textLeft;
       if(need > pushFromOutside) pushFromOutside = need;
     }
+    /* ...AND ON THE WAY OUT THE BOOK KEEPS GOING. There is no pane past the
+       deepest one to push it -- the stack is as deep as the branch is -- so on
+       the exit rung the reader is carried the rest of the way off the right
+       edge itself, in proportion to how far past the last pane the axis has
+       travelled. At the end of it the book is gone and the library arrives, so
+       the page change lands on an empty stage instead of cutting across a
+       full one. */
+    {
+      const lv = leaveShift();
+      if(lv > 0){
+        const vw = window.innerWidth || 0;
+        pushFromOutside += lv * Math.max(0, vw - pushFromOutside);
+      }
+    }
     pushFromOutside = Math.round(Math.max(0, pushFromOutside));
-    const room = (window.innerWidth || 0) - readerMinWidth();
-    if(room > 0 && pushFromOutside > room) pushFromOutside = room;
+    /* THE CONTENTS PUSH THE TEXT OFF THE SCREEN, AND THAT IS ALLOWED (9 Sep).
+       Osca, asked what a phone should do -- where there is no empty margin for
+       a pane to appear in: *"slide the text off-screen. DRAG columns/panes ONTO
+       screen, pushes text off screen. MEANS that text doesn't have to change
+       AND be visible. Contents pull PUSHES text off screen."*
+
+       There WAS a clamp here -- `readerMinWidth()` of the column had to stay in
+       view -- and its reason is written a few lines up: widen the panes enough
+       and the push passed the viewport, "the reader's own box had no width
+       left, its scrollable height went with it, and the browser clamped the
+       reading position to ZERO -- the book jumped back to its first page".
+       **Every word of that belonged to moving the reader's own `left`.** A
+       translate takes no width out of the box, so the box keeps its width and
+       its scroll height, nothing collapses, and there is nothing to clamp
+       against. The reader can travel as far as the stack needs and comes back
+       to the same word, which is the whole point of not re-wrapping.
+
+       On a 402px phone this is the difference between the pane covering the
+       words (measured 9 Sep: text at 28, the first pane reaching 118) and the
+       words moving out from under it. */
     for(let i=n;i<MAX_LEFT_LEVELS;i++) destroyPane(i);
 
     spreadNow = spreadF;
@@ -2919,15 +3212,33 @@ function mount(o){
     // its real edge move, once, with the reading line pinned across the
     // re-wrap so the same words stay under it. Lines still break to fit the
     // view, which was the ask; they just stop doing it mid-slide.
+    /* IT SLIDES, AND IT NEVER NARROWS -- Osca, 9 September, asked directly:
+       *"slide, don't narrow -- as §3 says."* `UI-PLAN.md` §3 has said so since
+       it was written: *"From step 2 the reader slides, it does not narrow. It
+       keeps its measure and moves right; its right-hand side leaves the screen.
+       No re-wrap, no reflow, nothing thrown away."*
+
+       What the code did instead: it translated WHILE moving (good) and then, on
+       the frame the movement stopped, moved the reader's real `left` -- which
+       takes width out of the box and re-wraps the column once. Measured on
+       Walden at 1440x900, going to the second rung:
+
+           column width   1440 -> 846      a line's width   865 -> 765.5
+           scrollTop     78387 -> 87878    (a 9,491px jump)
+
+       The jump is the re-wrap's: a width change makes the browser throw away
+       every height it had learned under `content-visibility`, and the scroll
+       position is clamped against a column that has momentarily collapsed.
+       `commitReaderEdge` carried a whole apparatus for surviving that --
+       an anchor section, a reading-line offset, `holdOn` re-pinning the scroll
+       for as many frames as the re-wrap took. **None of it is needed once
+       nothing re-wraps.** The translate that was the mid-slide behaviour is now
+       the resting behaviour too, so there is one state instead of two and no
+       frame on which the text moves under the reader's eye. */
     if(o.readerBox){
-      if(pushFromOutside === lastPush && readerRestLeft !== pushFromOutside){
-        commitReaderEdge(pushFromOutside);
-        edgePending = false;
-      }else{
-        readerShift = pushFromOutside - readerRestLeft;
-        writeReaderTransform();
-        edgePending = readerShift !== 0;
-      }
+      readerShift = pushFromOutside - readerRestLeft;
+      writeReaderTransform();
+      edgePending = false;
       lastPush = pushFromOutside;
       // live under the sidebar for the whole contents range -- only one
       // word actually covers and stops it.
@@ -3009,10 +3320,14 @@ function mount(o){
      instant there is a hand on the axis again -- any push, any pinch --
      exactly as startPull is. */
   let snapFrom = 0, snapTo = null, snapT = 0, snapDur = 0;
-  function snapStart(goal){
+  /* `power` is OUT_SNAP unless a caller has its own: the exit out of the book
+     travels the same SHAPE as every other rung and at its own SPEED, so tuning
+     the way out cannot change the way home from one word. */
+  function snapStart(goal, power){
     const d = Math.abs(goal - dx);
     if(d <= DX_REST){ setDx(goal); snapTo = null; return; }
     snapFrom = dx; snapTo = goal; snapT = 0;
+    const OUT_SNAP = (power == null ? OUT_SNAP_ : power);
     // root-of-distance, startPull's own shape and for the same reason: a
     // release close to the end must not crawl and a long one must not race.
     // At OUT_SNAP 6, half the stretch is 10 frames (167ms) and a third of it
@@ -3031,8 +3346,12 @@ function mount(o){
   }
   function snapCancel(){ snapTo = null; }
 
-  let dxIdle=0;
+  let dxIdle=0, dxWent=0;    // which way the last push was going
   function stepDx(dt){
+    /* ONCE THE BOOK IS LEAVING, THE AXIS IS NOT DRIVING ANY MORE -- `leaveT`
+       is. Without this the rest-easing pulls dx back toward the nearest rung
+       under the exit, which is movement nobody asked for on the way out. */
+    if(leavingBook){ dxInput = 0; dxVel = 0; return; }
     if(dxInput || pinching) snapCancel();
     if(dxInput){
       // THE DETENT AT THE READER. Coming home from the word, the same gesture
@@ -3046,6 +3365,7 @@ function mount(o){
         detent = false;
       }
       const wasIn = dx;
+      if(dxInput) dxWent = dxInput;      // remembered for the release (STICK)
       setDx(dx+dxInput);
       if(wasIn > 0 && dx < 0){
         setDx(0); dxVel = 0; dxInput = 0; dxIdle = 0; detent = true;
@@ -3078,6 +3398,8 @@ function mount(o){
       if(was > 0 && dx < 0){ setDx(0); dxVel = 0; dxInput = 0; dxIdle = 0; detent = true; }
       if(was <= 0 && dx > 0){ setDx(0); dxVel = 0; dxInput = 0; dxIdle = 0; }
       dxVel *= Math.pow(T.decay, dt);
+      /* MOMENTUM STOPS AT THE LAST PANE. Only a hand may enter the leaving
+         zone -- a flick's tail must not spend it. */
       if(dx<=-currentMaxLeft() || dx>=1) dxVel=0;
       dxIdle=0;
     } else {
@@ -3099,6 +3421,7 @@ function mount(o){
       // wherever that snap had already moved dx to.
       dxIdle += dt;
       if(dxIdle < T.grace) return;
+      paneEnd();                 // the hand is off; its ceiling goes with it
       // Real wheel gestures routinely die out somewhere like 0.7, not a
       // clean 1 -- past WORD's own threshold functionally, but visually
       // still short of fully open, which is exactly the kind of gap a
@@ -3107,7 +3430,30 @@ function mount(o){
       // reader/word, or however many left-stack stops this book's own
       // trail currently has -- was already closest.
       const targets = dxTargets();
-      const target = targets.reduce((a,b)=>Math.abs(b-dx)<Math.abs(a-dx)?b:a);
+      /* WHICH REST POINT A RELEASE RUNS TO. It was always the NEAREST, which is
+         why "a small scroll moves them halfway and then gives up": a push that
+         got 0.4 of the way to the next pane fell back to the one behind it, so
+         the ladder only answered gestures big enough to pass the midpoint.
+         With STICK above 0 the axis commits in the DIRECTION IT WAS TRAVELLING
+         once it is that far into the rung -- a small scroll from pane one still
+         drags pane two out. STICK 0.5 is the old behaviour exactly. */
+      let target = targets.reduce((a,b)=>Math.abs(b-dx)<Math.abs(a-dx)?b:a);
+      if(STICK > 0 && STICK < 0.5){
+        const dir = dxWent < 0 ? -1 : (dxWent > 0 ? 1 : 0);
+        if(dir){
+          let ahead = null;
+          for(const p of targets){
+            if(dir < 0 ? p < dx - 1e-6 : p > dx + 1e-6){
+              if(ahead == null || Math.abs(p - dx) < Math.abs(ahead - dx)) ahead = p;
+            }
+          }
+          if(ahead != null){
+            const behind = dir < 0 ? Math.ceil(dx - 1e-6) : Math.floor(dx + 1e-6);
+            const into = Math.abs(dx - behind);
+            if(into >= STICK) target = ahead;
+          }
+        }
+      }
       // COMING OUT OF ONE WORD SNAPS HARD. Osca: "I need snap stronger,
       // coming OUT of one word view." Between the word and the reader there
       // is nothing to look at -- a half-zoomed page is not a place to be --
@@ -3138,6 +3484,39 @@ function mount(o){
       // eases while the gesture is still running.
       if(pinching) return;
       if(pinchHold && dx > 0 && dx < PINCH.gate) return;
+      /* AND THE SAME RULE AT THE OTHER END OF THE AXIS. Past the deepest pane
+         there is nothing to rest on either -- you are either in the book or out
+         of it -- so the stretch is decided on release, by where the gesture
+         got to. Past LEAVE_COMMIT of the way out it goes; short of it, it comes
+         back to the last pane and no book was closed. Nothing fires while a
+         hand is still moving. */
+      /* arming: the axis is idle and standing on the deepest pane */
+      /* ...AND NOTHING ARMS WHILE A GESTURE IS STILL RUNNING. `paneReach` is
+         non-null for exactly as long as the ladder has a hand on it, so this
+         is the same rule as above from the other end: you arrive, you let go,
+         and THEN going further is a gesture of its own. */
+      if(!leavingBook && paneReach === null
+         && Math.abs(dx + currentMaxLeft()) <= DX_REST){
+        exitArmed = true; armedAt = currentMaxLeft();
+      }
+      if(!leavingBook && inLeavingZone()){
+        /* ...AND ONLY IF YOU PUT IT THERE. `currentMaxLeft()` is not a
+           constant -- opening a row rebuilds the trail, and a shallower one
+           leaves the axis standing past a deepest pane that no longer exists.
+           Without `exitArmed` that reads as a leaving gesture and closes the
+           book on its own: measured in the harness, selecting a play inside a
+           four-deep directory shut the book. The arm is only ever set by the
+           axis coming to REST on the deepest pane, so a trail that moved under
+           it eases back instead. */
+        const over = clamp(-dx - currentMaxLeft(), 0, 1);
+        /* the arm belongs to the trail it was taken on: if the directory has
+           been rebuilt shallower underneath the axis, this is not a gesture. */
+        if(exitArmed && armedAt === currentMaxLeft() && over >= LEAVE_COMMIT){
+          closeToLibrary(); return;
+        }
+        if(snapTo == null) snapStart(-currentMaxLeft(), LEAVE_SNAP);
+        snapStep(dt); return;
+      }
       if(dx > 0 && dx < 1){
         if(snapTo == null) snapStart(dx >= WORD_COMMIT ? 1 : 0);
         snapStep(dt); return;
@@ -3166,6 +3545,7 @@ function mount(o){
         if(wheelPinchIdle > 8){ wheelPinch = false; endPinch(); }
       }
       stepDx(dt);
+      stepLeave(dt);
       if(levelOf(dx)==="word") coastWord(dt);
       stepPull(dt);                        // the travel toward an off-screen word
       applyDx(false);
@@ -3538,8 +3918,8 @@ function mount(o){
      the detent at the reading page still holds, however many panes this book's
      trail has are each a position, the release still eases to whichever rest
      point `dxTargets()` says is nearest, a flick still carries (dxVel), and
-     past the deepest pane the same EXIT_PUSH gate hands you to
-     `closeToLibrary()`. There is no phone copy of any of that to drift.
+     past the deepest pane the same LEAVING ZONE takes the finger and the same
+     release decides it. There is no phone copy of any of that to drift.
 
      THE FINGER'S SIGN. The panes come out as dx goes NEGATIVE and the finger
      travels the other way, so a rightward drag pushes dx down and a leftward
@@ -3780,8 +4160,8 @@ function mount(o){
       if(dx > 0){ goPos(posStep(-1)); e.preventDefault(); return; }
       if(dx<=-currentMaxLeft()){
         // ONE MORE PRESS SHOULD NOT THROW YOU OUT OF THE BOOK. The trackpad
-        // has always had a gate here -- a deliberate push past the last pane,
-        // measured against EXIT_PUSH -- and the arrow key had none: whichever
+        // has always had a gate here -- past the last pane it travels into the
+        // leaving zone and the release decides -- and the arrow key had none: whichever
         // press happened to be the one that reached the end took you straight
         // to the library, which from the inside looks like the book closing
         // itself at random. The key gets the same gate: the press that
@@ -3812,6 +4192,52 @@ function mount(o){
        inside its own layout(), so it only needs a frame to run. */
     kickWheels(){ leftPanes.forEach(p=>{ if(p&&p.wheel&&p.wheel.mode) p.wheel.mode(p.wheel.mode()); }); },
     snap:setSnap, get snapNow(){return {snap:T.snap, grace:T.grace};},
+    /* ================= THE MOVEMENT, AS NUMBERS ==========================
+       Osca, 9 Sep, after driving the panes on his phone: *"the first contents
+       pane doesn't exist RIGHT AT THE EDGE of the screen... it feels 2 inches
+       further out, so it's not responsive to small movements. Then there is
+       jitter, the panes aren't sticky enough, a small scroll moves them /
+       doesn't move them / moves them halfway... I believe the movement should
+       be PUSHED to bench-panes, then give me controls over the scroll and the
+       animations."*
+
+       Right, and bench-panes.html had its OWN toy physics -- `dx += (dxTarget
+       - dx) * snap` and a pointer drag that rounded on release -- so nothing
+       dialled there had ever described what the app does. That is the same
+       fault as the two rails, in the panes. The bench mounts THIS file now,
+       and these are the numbers it moves.
+
+         gain     how much dx one px of wheel is worth
+         vmax     the ceiling on coasting speed
+         coast    how much of a push becomes momentum
+         decay    how fast that momentum dies
+         couple   how much of it the panes take
+         snap     how hard the rest-easing pulls
+         grace    dt-units of idle before that easing may start at all
+         swipeGain  POSITIONS PER SCREEN-WIDTH of finger travel. 1.15 means a
+                    full sweep of the phone is one pane and a sixth -- which is
+                    the "2 inches further out" above, in one number.
+         swipeSlop  px of travel before a finger gesture is claimed
+         stick    how far into a rung a push must get for the RELEASE to commit
+                  to it. 0 is the old rule -- ease to whichever rung is
+                  NEAREST, so a push of 0.4 falls back and "a small scroll
+                  doesn't move them". Above 0 the axis commits in the direction
+                  you were travelling. */
+    tune(k, v){
+      if(k === "swipeGain"){ SWIPE.gain = +v || SWIPE.gain; return SWIPE.gain; }
+      if(k === "swipeSlop"){ SWIPE.slop = +v; return SWIPE.slop; }
+      if(k === "stick"){ STICK = clamp(+v || 0, 0, 0.99); return STICK; }
+      if(k in T){ T[k] = +v; return T[k]; }
+      return null;
+    },
+    get tuneNow(){
+      return { gain:T.gain, vmax:T.vmax, coast:T.coast, decay:T.decay,
+               couple:T.couple, snap:T.snap, grace:T.grace,
+               swipeGain:SWIPE.gain, swipeSlop:SWIPE.slop, stick:STICK,
+               outSnap:OUT_SNAP_, leaveSnap:LEAVE_SNAP,
+               stick:STICK, open:OPEN, opens:OPENS, pastAt:PAST_AT,
+               paneSnap:PANE_SNAP };
+    },
     /* THE RAIL, for the bench and for the headless checks -- `rail.set(k,v)` is
        the same call bench-page.html makes, so a number proved on the bench is
        the number the app runs. */
@@ -3890,7 +4316,14 @@ function mount(o){
        it is at 0. */
     get wordPane(){ return pane(); },
     /* how much harder the axis pulls home from inside one word */
-    get outSnap(){ return OUT_SNAP; }, set outSnap(v){ OUT_SNAP = +v || 1; },
+    get outSnap(){ return OUT_SNAP_; }, set outSnap(v){ OUT_SNAP_ = +v || 1; },
+    /* HOW LONG LEAVING THE BOOK TAKES -- its own number, so tuning the way out
+       cannot change the way home from one word. Higher is shorter: 6 is ~250ms,
+       3 is ~470ms, 1.5 is ~940ms. */
+    get leaveSnap(){ return LEAVE_SNAP; },
+    set leaveSnap(v){ LEAVE_SNAP = Math.max(0.25, +v || 3);
+      try{ localStorage.setItem("leavesnap", String(LEAVE_SNAP)); }catch(_){}
+      return LEAVE_SNAP; },
     skip:setSkipOffscreen, get skipping(){return skipOffscreen;},
     /* THE ACTUAL ANIMATION. Osca: "YOU DID NOT FIX the animations, I CAN'T
        change the animation... that's just speed." Correct -- setSpeed only
@@ -3917,7 +4350,7 @@ function mount(o){
       return n;
     },
     get turnName(){ try{ return localStorage.getItem("turn")||"paper"; }catch(_){ return "paper"; } },
-    get ampLevel(){ try{ return +(localStorage.getItem("amp")??1); }catch(_){ return 1; } }, get speedName(){return speedName;}, speeds:Object.keys(SPEEDS), get dx(){return dx;}, get screen(){return screen;},
+    get ampLevel(){ try{ return +(localStorage.getItem("amp")??1); }catch(_){ return 1; } }, get speedName(){return speedName;}, speeds:Object.keys(SPEEDS), get dx(){return dx;}, /* THE MARK, BEFORE THE MOVEMENT. Where the axis has DECIDED to be, as against `dx`, where it currently is. Null when nothing is travelling. */ get snapGoal(){return snapTo;}, get screen(){return screen;},
            get maxLeft(){return currentMaxLeft();},
            // read-only, for this file's own tests: ONE WORD no longer mounts
            // a Wheel of its own to introspect (see the fifteenth pass's own

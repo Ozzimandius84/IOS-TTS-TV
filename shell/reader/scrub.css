@@ -1,0 +1,181 @@
+/* ENGINE · the rail down the right edge: capsules, fill, labels
+   · bench: bench-page.html · mounted by: see MAP.md (generated -- `python3 map.py`) */
+/* ============================== THE SCRUB ==================================
+   The look of the rail; scrub.js puts the numbers on it and works out how far
+   into each chapter you have read. Every length below is one of those numbers,
+   so nothing here is decided in this file -- it is decided on the bench and
+   pasted into scrub.js's own DEFAULTS.
+
+   The shape, from the recording: a column of capsules down the right edge, one
+   per chapter, a hairline at rest and a proper bar once woken, each one filled
+   from the top by how far into that chapter you are, with its name beside it.
+========================================================================== */
+
+/* IN FROM THE EDGE IS THE RAIL'S OWN `right`. It was the host's WIDTH, which
+   moved nothing: the capsules sit at right:0 inside it, so widening the box
+   only added empty space on the far side of them and the rail stayed welded to
+   the window's edge. (Osca: "The setting 'in from edge' doesn't do anything.")
+   It is the offset itself now. */
+.scrub2{
+  position:fixed; right:var(--sc-inset, 26px); z-index:16;
+  top:var(--sc-top, 14vh); bottom:var(--sc-bottom, 14vh);
+  width:var(--sc-w-awake, 9px);
+  /* the rail is a control, so it takes the pointer; nothing else here does */
+  cursor:pointer; touch-action:none;
+  font-family:var(--ui); }
+
+/* AND SOMETHING TO AIM AT. Nine pixels of rail, held off the edge, is a hard
+   thing to hit with a mouse -- so the strip between it and the edge of the
+   screen belongs to it too: invisible, but it wakes the rail and takes a drag.
+   Nothing else lives out there. */
+.scrub2::after{ content:""; position:absolute; top:0; bottom:0;
+  right:calc(-1 * var(--sc-inset, 26px));
+  width:var(--sc-inset, 26px); }
+
+/* ---- A CHAPTER. The box is the whole chapter's share of the book; the
+   capsule inside it is that box less the gap, so the gaps come out of the
+   chapters rather than being added between them -- which keeps the rail
+   exactly as long as the book however many chapters it has. */
+/* NO `min-height` HERE, 9 September. A segment is positioned `top:<cumulative>%`
+   and sized `height:<share>%`, so a CSS minimum made one segment taller without
+   moving the ones below it -- it overlapped its neighbour, and the rail stopped
+   being exactly as long as the book. Measured on Walden: the title page's
+   floored stub stood at y 126.00 and chapter one's capsule at 126.08, one over
+   the other, and the stub's 6px radius scaled down to about 2px on a 4px box --
+   which is the "the blue radius BEGINNING is wrong" Osca saw. `minSeg` is
+   applied to the SHARES now (scrub.js `build`), where a floor can be taken out
+   of the other chapters instead of out of the next one. */
+.scrub2 .seg{ position:absolute; right:0;
+  width:var(--sc-w-awake, 9px);
+  padding:0 0 var(--sc-gap, 6px); box-sizing:border-box; }
+/* i is the capsule -- the chapter as a whole. u is inside it, and is how far
+   into that chapter you have read: a child, not a sibling, so its height is a
+   percentage of the CAPSULE and the gap below stays a gap however much of the
+   book is behind you. */
+/* THE CAPSULE PAINTS ITS OWN FILL, 9 September, and that is the whole point of
+   this rule. It used to hold a `u` child -- the blue -- cut to shape by
+   `overflow:hidden` on the rounded parent. The parent also carries an `opacity`
+   and a `transition`, which makes it a COMPOSITED layer, and a composited
+   layer's rounded clip is honoured by Chromium but not reliably by WebKit --
+   which is every surface this app ships on. So a short fill's square top
+   corners hung outside the 6px curve. Osca, seeing it in the Mac app: "it has
+   STARTED outside of the capsule... the corners are blue, not the centre." Every
+   headless check passed, because this container is Chromium.
+
+   A BACKGROUND IS CLIPPED BY ITS OWN BORDER-RADIUS IN EVERY ENGINE. Two colour
+   stops at the same position -- `--f`, written by scrub.js -- give a hard edge
+   with no second element, no clip, and nothing that can escape the curve. */
+.scrub2 .seg > i{
+  position:absolute; right:calc((var(--sc-w-awake, 9px) - var(--sc-w, 2px)) / 2);
+  top:0; bottom:var(--sc-gap, 6px);
+  width:var(--sc-w, 2px); border-radius:var(--sc-r, 6px);
+  background:linear-gradient(to bottom,
+              var(--sc-read, #0a84ff) 0 var(--f, 0%),
+              var(--sc-unread, #d9d6d0) var(--f, 0%) 100%);
+  opacity:var(--sc-dim, .55);
+  transition:width .18s ease, right .18s ease, opacity .18s ease; }
+
+/* awake: the hairline becomes a bar, and the pale capsules come up to full */
+.scrub2.awake .seg > i{ width:var(--sc-w-awake, 9px); right:0; opacity:1; }
+
+/* ---- THE NAMES. Beside the rail, ranged right, and only once it is awake --
+   the ones behind you in the read colour, the one you are in solid. */
+.scrub2 .seg > span{
+  position:absolute; right:calc(var(--sc-w-awake, 9px) + var(--sc-lab-gap, 14px));
+  top:0; width:var(--sc-lab-w, 190px);
+  text-align:right; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  font-size:var(--sc-lab, 12px); line-height:1.2;
+  color:var(--sc-unread, #d9d6d0);
+  opacity:0; transition:opacity .18s ease;
+  /* THE NAMES ARE HOVERABLE. They had pointer-events:none, so passing over a
+     chapter's name in the rail did nothing at all -- and a name is the most
+     obvious thing on it to point at. Osca: "hovering doesn't work, hovering
+     over chapter headings, in the bar." */
+  pointer-events:none; cursor:pointer; }
+/* AWAKE AND NAMED ARE TWO DIFFERENT STATES, 9 September. Osca:
+   *"when I scroll EVERYTHING comes up, I don't want it to... when I'm just
+   normally scrolling, I only want to see the bar expand and come into stronger
+   colours -- NO words/names. Only when hovering over. Otherwise it's just a
+   second floating header."*
+
+   `.awake`  the bar widens and the colours come up. A scroll does this, and so
+             does the pointer.
+   `.named`  the chapter names are on. **ONLY the pointer does this** -- resting
+             on the rail, or dragging it. Never a scroll.
+
+   Both used to be `.awake`, so every scroll threw nineteen chapter titles across
+   the page beside a running head that was already saying the same thing. */
+.scrub2.named .seg > span{ pointer-events:auto; opacity:1; }
+.scrub2.nolabels .seg > span{ display:none; }
+/* a capsule too short to hold a name does not get one -- and that includes the
+   one you are in: the running head says where you are, all the time, and this
+   rail is not a second one. */
+.scrub2 .seg.tiny > span{ display:none; }
+.scrub2.named .seg.tiny.here > span{ display:block; }
+/* ...AND WHATEVER YOU ARE POINTING AT. A book of sixty-seven chapters gives
+   every capsule about nine pixels, so almost none of them can carry a name --
+   but the rail is still a map, and pointing at a place should tell you what
+   place it is. The name comes up over its neighbours, on the page's own
+   ground so it stays legible against them. */
+.scrub2 .seg:hover > span{ display:block; opacity:1; z-index:2;
+  background:var(--ground); box-shadow:0 0 0 6px var(--ground);
+  color:var(--sc-read, #0a84ff); }
+.scrub2 .seg{ z-index:1; }
+.scrub2 .seg:hover{ z-index:3; }
+/* A READ CHAPTER'S NAME IS A DIFFERENT COLOUR, NOT A DIFFERENT VISIBILITY.
+   This rule carried `opacity:.85` UNSCOPED, which beat the base `opacity:0` --
+   so every chapter behind you had its name on the page at all times, scroll or
+   no scroll, hover or none. That is most of what Osca was seeing when he said
+   "when I scroll EVERYTHING comes up". Colour here, opacity only under
+   `.named`, like every other name. */
+.scrub2 .seg.done > span{ color:var(--sc-read, #0a84ff); }
+.scrub2 .seg.here > span{ color:var(--sc-read, #0a84ff); font-weight:600; }
+.scrub2.named .seg.done > span{ opacity:.85; }
+
+/* a chapter you have finished is the read colour outright, and the one you
+   are in is never dimmed -- it is the one you are asking about */
+.scrub2 .seg.done > i, .scrub2 .seg.here > i{ opacity:1; }
+
+/* ============================ THE ONE FILL ================================
+   Osca, 9 Sep: "capsules, but keep the single fill." The two readings of that
+   sentence differ only in whether the GAPS are filled, so both are here and a
+   knob on bench-page.html picks between them. Both are driven by the SAME
+   number out of scrub.js's `progress()` -- how far through the book you are, in
+   the capsules' own character units -- so neither can disagree with the rail it
+   sits in.
+
+   "capsules" (the default, the recording's look): nothing below applies; each
+   capsule's own `u` is filled and the gaps stay gaps.
+
+   "bar": ONE unbroken track down the rail, filled to where you are, with the
+   chapter boundaries notched across it. This is the shape the app has today,
+   made proportional -- and it is the shape a comment in scrub.js once called a
+   bug ("four read chapters came out as one unbroken bar"), which it was, when
+   it happened by accident to a rail that meant to draw capsules. Asked for on
+   purpose it is a different thing, and it is drawn on purpose here rather than
+   by letting a fill leak through a gap. */
+.scrub2 .track{
+  display:none; position:absolute; z-index:0;
+  right:calc((var(--sc-w-awake, 9px) - var(--sc-fill-w, 9px)) / 2);
+  top:0; bottom:0; width:var(--sc-fill-w, 9px);
+  border-radius:var(--sc-r, 6px);
+  background:linear-gradient(to bottom,
+              var(--sc-fill, #0a84ff) 0 var(--f, 0%),
+              var(--sc-unread, #d9d6d0) var(--f, 0%) 100%);
+  opacity:var(--sc-dim, .55);
+  transition:opacity .18s ease, width .18s ease, right .18s ease; }
+.scrub2.awake .track{ opacity:1; }
+/* the bar is one element for the same reason the capsule is */
+.scrub2.barfill .track{ display:block; }
+.scrub2 .seg{ z-index:1; }
+
+/* in bar shape the capsules stop painting themselves -- the track IS the paint
+   -- and every chapter shows as a notch cut across it, which is what keeps the
+   rail a map of the book rather than a thermometer. */
+.scrub2.barfill .seg > i{ background:none; opacity:1; }
+.scrub2.barfill .seg::before{
+  content:""; position:absolute; top:0;
+  right:calc((var(--sc-w-awake, 9px) - var(--sc-fill-w, 9px)) / 2);
+  width:var(--sc-fill-w, 9px); height:var(--sc-notch, 2px);
+  background:var(--sc-notch-c, var(--bg, #ffffff)); }
+.scrub2.barfill .seg:first-of-type::before{ display:none; }

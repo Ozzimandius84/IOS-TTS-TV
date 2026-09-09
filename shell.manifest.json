@@ -2,7 +2,7 @@
   "added_here": [
     "index.html"
   ],
-  "bytes": 1816529,
+  "bytes": 1843458,
   "count": 57,
   "files": {
     "bar/askbar.css": {
@@ -54,8 +54,8 @@
       "sha256": "2b0c86208e4e044b7fec34956b014f34b4837527364a5824910391af43677c9c"
     },
     "reader/book-nav.js": {
-      "bytes": 215261,
-      "sha256": "5f185e7cf514aa22dd1779c0841ac483e7eef0f76806a2187fffdddde3526412"
+      "bytes": 242052,
+      "sha256": "949d5a6b616fa345312eb7183dc1e27cdf49eb0cde947f9d6187483db3107979"
     },
     "reader/book.js": {
       "bytes": 6116,
@@ -122,8 +122,8 @@
       "sha256": "e14fe44f2e9e119765d5e3b4d337808da7c8b5a43d1d672b0aa92e5664b11958"
     },
     "reader/pane.js": {
-      "bytes": 15541,
-      "sha256": "6158921849f69fb40f11bfee7f0141bde7b2bb944933673ab9757afabb44d086"
+      "bytes": 15679,
+      "sha256": "1b2beb465d6d2acbd08d66c00eeaa2b6c5d45298598116ee3c443f93a92a2ef0"
     },
     "reader/popover.js": {
       "bytes": 11571,
@@ -159,7 +159,7 @@
     },
     "reader/sw.js": {
       "bytes": 21563,
-      "sha256": "71db01dc1294220998f2e4083aec249a662d44cb2e73e518d13b2d09b700d640"
+      "sha256": "8e3f6be66f7f79cbc836b9eaab8b63b5c63800ebc4fe46ee5344b3ffaea853f6"
     },
     "reader/tokens.css": {
       "bytes": 5848,
@@ -236,8 +236,8 @@
   },
   "home_page": "library/library.html",
   "source": {
-    "commit": "241b6fa",
+    "commit": "e49a618",
     "repo": "/sessions/rcw-015zjidp98vb9wek89gfgy4j/mnt/TTSTV",
-    "shell_cache": "ttstv-shell-v40"
+    "shell_cache": "ttstv-shell-v41"
   }
 }
