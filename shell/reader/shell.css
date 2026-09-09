@@ -218,27 +218,6 @@ body{ font-family:var(--serif); color:var(--ink); }
    widths per level, the z-order, the wheel's own inset) has gone there.
    Osca: "make sure the .shell calls on THAT asset, the one we are building." */
 
-/* THE TUNER PANEL */
-#tuner{ position:fixed; left:14px; bottom:46px; z-index:60; width:220px;
-  background:var(--ground); border:1px solid var(--rule); border-radius:8px;
-  padding:10px 12px 12px; font:11px/1.5 var(--ui); color:var(--ink);
-  box-shadow:0 6px 24px #0000001f; }
-#tuner .th{ font-weight:600; letter-spacing:.06em; text-transform:uppercase;
-  font-size:9.5px; color:var(--dim); margin:8px 0 4px; display:flex;
-  justify-content:space-between; align-items:center; }
-#tuner .th:first-child{ margin-top:0; }
-#tuner label{ display:block; margin:0 0 6px; color:var(--dim); }
-#tuner i{ font-style:normal; float:right; color:var(--ink); font-variant-numeric:tabular-nums; }
-#tuner input[type=range]{ width:100%; margin:2px 0 0; }
-#tuner .tr{ display:flex; gap:.35rem; margin:2px 0 6px; }
-#tuner button{ font:10px var(--ui); padding:2px 7px; border:1px solid var(--rule);
-  background:transparent; border-radius:4px; color:var(--dim); cursor:pointer; }
-#tuner button:hover{ color:var(--ink); }
-#tuner .th button{ border:0; font-size:14px; line-height:1; padding:0 2px; }
-
-/* the speed row on the bench -- the pressed one reads as pressed */
-#speeds, #turns, #amps{ display:inline-flex; gap:.3rem; }
-#speeds button[aria-pressed="true"], #turns button[aria-pressed="true"], #amps button[aria-pressed="true"]{ color:var(--ink); font-weight:600; }
 
 #book .scrub:hover .l{ opacity:0; }
 #book .scrub .g:hover .l,
@@ -269,19 +248,27 @@ body{ font-family:var(--serif); color:var(--ink); }
    -- it was a sentence here and nothing else until 6 Sep, and the zoomed
    section measured `content-visibility: auto` at every width. */
 /* THE ZOOM IS THE PAGE'S OWN TYPE. Osca: "NOTHING, lifts from the page, it
-   is a ZOOM... LEAVE IT, ON THE PAGE." So the chapter's type grows -- a zoom
-   the browser LAYS OUT rather than a layer it has to raster, which is why it
-   has no size limit and why the text stays sharp at any size. The column
-   keeps its width, so the lines re-wrap as the type grows and the word you
-   were on ends up alone in the view with the leading opened around it.
+   is a ZOOM... LEAVE IT, ON THE PAGE." So the chapter's type grows -- a css
+   `zoom` on the reading column, which the browser LAYS OUT rather than
+   rasters, which is why it has no size limit and why the text stays sharp at
+   any size.
 
-   page.css sets the reading sizes in rem, which is root-relative and so would
-   ignore anything set on the chapter -- the multiplier has to be applied to
-   the paragraphs themselves. */
-/* SCOPED TO THE WORD'S OWN PARAGRAPH NOW, not the chapter: opening the gap
-   on a whole chapter re-wraps every line in it and carries the word itself
-   hundreds of pixels down the page, which the zoom then multiplies. Either
-   element can wear the class, so the rules are written for both. */
+   AND NOTHING RE-WRAPS. This paragraph said the opposite until 8 September
+   ("the column keeps its width, so the lines re-wrap as the type grows") --
+   that was the font-size multiplier this replaced, and it is the fault Osca
+   has been looking at, not the design. A layout zoom multiplies every length
+   in the subtree, the column's own width with them, so every line break is
+   the one it was: MEASURED in Chromium at 402x874, chapter rect 346 ->
+   3642.88 at zoom 10.5286 (ratio 10.5286 exactly) and the paragraph line
+   counts 8,4,4,4,4,4,4,6,9,4,8,7 unchanged. page.css's two rules and
+   book-nav.js's freezeMeasure (which pins --measure's vw term in px for the
+   length of the zoom, so no engine may re-resolve it) are the whole of what
+   that costs. */
+/* THE SPACING IS ON THE COLUMN, NOT ON ONE PARAGRAPH. It was the word's own
+   paragraph until 6 September; "the zoom is the whole page" made every
+   paragraph in view part of the same thing, so the spacing is the page's too
+   (test-book-nav.js: "+2 spreads the page, not a paragraph in it"). Either
+   element can still wear the class, so the rules are written for both. */
 .spreading{ word-spacing:var(--wgap, 0px); }
 .chapter.spreading p, p.spreading, .spreading p{ line-height:calc(1.5 + var(--lgap, 0)); }
 
@@ -298,97 +285,498 @@ body{ font-family:var(--serif); color:var(--ink); }
    the spacing out; the word you are looking at is the one on the page.
    The spreading rules are up with the reading column, where they belong. */
 
-/* -------- THE READOUT, over the open book, same corner/voice as every
-   other pane's own running head. */
-.head{ position:fixed; top:16px; left:20px; z-index:10; pointer-events:none;
-  font-family:var(--ui); }
-.head b{ display:block; font-size:15px; font-weight:600; letter-spacing:.01em; }
-.head span{ display:block; margin-top:2px; font-size:11.5px; color:var(--dim);
-  letter-spacing:.03em; }
-/* thirteenth pass: this used to sit top right, directly on top of
-   page.css's own `.runhead` (also top right, always-on by that file's own
-   design, "you should always be able to see which book you are in") --
-   confirmed live, genuinely illegible where the two overlapped, not
-   something any earlier still had shown. `.runhead` keeps the corner it
-   already has on every other page in this app; this moves instead. */
+/* -------- THE READOUT IS GONE FROM THE TOP LEFT (Osca, 7 Sep: *"Remove the
+   top-left running header entirely (title / author / chapter). Gone on Mac
+   and phone."*).
+
+   WHAT `.head` CARRIED, so the record is not only a deletion: a fixed block
+   at top:16px/left:20px holding two lines -- `#big`, the book's title, written
+   once when the book opens; and `#small`, the book's author at open and then
+   the CURRENT CHAPTER's label from applyDx() onwards ("II  Alexis", and
+   "<chapter>  ·  one word" while one word view was up). It was the
+   thirteenth pass's answer to an overlap: it began top RIGHT, on top of
+   page.css's own `.runhead`, and moved left rather than fight it.
+
+   IT SAID WHAT `.runhead` ALREADY SAYS. page.css keeps that element current in
+   the top right -- the book, then the chapter (the author on the cover) -- on
+   every page in this app, and the phone bar's centre mirrors it. So the
+   duplication ends here and the readout survives once, where it always was.
+   `book-nav.js` still writes `o.big`/`o.small` behind `if(o.big)` guards; the
+   mount simply stops passing them, and there is no element to write to. */
 /* `.hint` -- the paragraph in the bottom-right that told you what scrolling
    did -- left the page on 6 September with the rest of the furniture (Osca:
    *"it looks like a designer, not a finished reader"*), and its rule goes with
    it: no page that loads this sheet has the element any more. */
 
-/* -------- THE BAR ROW, AND ITS ONE CONTROL. The way out of the book used to
-   be a text link at the bottom of the bench strip; the strip is gone and the
-   door comes back where the picture puts a control of this kind -- the bar
-   row, which is `search-bar-editor.html`'s own ICONS row (contents, one word, text size,
-   Frank, light/dark, Settings). The ROW's height is the only thing taken from
-   bar.css: 28px, the standard macOS title bar, so the door sits on the line
-   the app's own chrome sits on. The STRIP is not drawn -- Bar.mount() came off
-   these benches on the 5th ("Get rid of the bar") -- and one control needs no
-   strip. It takes the row's centre because that is the part of the row nothing
-   else is in: `.head` holds the left, page.css's `.runhead` the right. The row
-   itself is transparent to the pointer, so it costs the book nothing. */
-.barrow{ position:fixed; top:0; left:0; right:0; height:28px; z-index:41;
-  display:flex; align-items:center; justify-content:center;
-  pointer-events:none; }
-#librarydoor{ pointer-events:auto; display:flex; align-items:center;
-  justify-content:center; width:28px; height:22px; border-radius:5px;
-  color:var(--dim); text-decoration:none; opacity:.5;
-  transition:opacity .18s ease, color .18s ease; }
-#librarydoor:hover, #librarydoor:focus-visible{ opacity:1; color:var(--ink); }
-#librarydoor svg{ width:15px; height:15px; display:block; }
-/* THE PHONE (design/phone/reader.html, 6 Sep): the door is a thumb's target,
-   44 square, and the row it sits in is not made taller for it -- the extra
-   is margin the row's own 28px absorbs. The same query the shell files use,
-   and the same flag -- `html[data-phone]`, reader.html's <head> sets it for
-   a coarse pointer with no hover, or for ?phone -- so a small Mac window is
-   not a phone. Nothing above it changes. */
+/* -------- THE BAR ROW IS GONE, AND WITH IT THE PAGE'S LAST BUTTON (Osca,
+   7 Sep: *"Remove the Library button/tab everywhere."*).
+
+   WHAT `.barrow` CARRIED: one control, `#librarydoor` -- a 28x22 anchor at the
+   centre of a 28px pointer-transparent row pinned to the top of the window,
+   drawn as three shelved spines, href `../library/library.html`. It was the
+   6 September answer to "the bar at the top we don't need": the strip went and
+   the one door in it stayed.
+
+   THE WAY OUT IS THE SCROLL NOW, on both platforms (Osca, 8 September: *"the
+   scroll is the way out now, so there's no separate button"*). Push the axis
+   past the deepest contents pane this book's own trail has -- a trackpad's
+   two-finger swipe on the Mac, one finger on the glass -- and it goes to the
+   library. It is one continuous gesture from the reading page, through the
+   panes, out; there is nothing to aim at and so nothing to draw here.
+
+   WHAT THIS BLOCK HELD, 7-8 September: `.paneexit` -- "leave the book", a
+   44-high row pinned to the foot of pane 0 with a left chevron, its bottom
+   inset its own (18px plus the home indicator's). It existed because the
+   phone's gesture stopped at pane 0 and could go no further, and it went when
+   the gesture reached the library. Removing it costs the Mac its one visible
+   way back; Escape, the push past the deepest pane, and a second ArrowLeft
+   there are all still `closeToLibrary()`.
+
+   The Mac's TAB STRIP still carries its own pinned Library tab. That is
+   `desktop/src-tauri/src/tabs.rs`, not this sheet, and there is no cargo on
+   the bridge to change it -- see this lane's report, §6. */
+/* ====================== THE PHONE BAR — ONE BAR, NOT THREE =================
+   Osca, 7 September: *"THE PHONE BAR, its own design ... Today the phone's top
+   chrome is three Mac fragments: `.barrow` (#librarydoor), `.head`
+   (book/chapter top-left), page.css's `.runhead` (book/chapter top-right,
+   duplicated) -- all offset below the Island. Replace them with ONE phone
+   bar."*
+
+   THE MAC IS NOT IN THIS BLOCK. Every rule here is inside the phone query AND
+   keyed on `html[data-phone]`, so the three Mac fragments above keep their own
+   rules word for word -- the tab strip, the centred door, the two corners of
+   running head. Same shell, two bars. What changed on the phone is that the
+   three are switched OFF and one bar is drawn instead; the fragments are still
+   in the document (the Mac's markup is the phone's markup), they simply do not
+   paint, and the bar takes their three jobs into one row:
+
+     <- the Library      the book · chapter      Settings   the mic
+
+   The MARKUP and the BEHAVIOUR are reader.html's own, mounted only when the
+   flag is set (so the Mac's DOM gains nothing) -- the same division as the
+   viewport meta and the `data-phone` head script, which are also that page's.
+   This sheet is the picture; that script is the hand.
+
+   The bar's BOX starts at 0 and pads itself by the top inset, so the fill runs
+   under the Island the way a reading app's does, and every CONTROL sits under
+   the inset -- which is the number design/phone/bar.html measures ("every
+   control's top >= the safe inset"), not the box's own top.
+
+   AUTO-HIDE IS THE DEFAULT AND IT IS A SWITCH. Scroll down and the bar goes
+   (the page is full-bleed); scroll up, or touch the top edge, and it comes
+   back -- Apple Books. `--pbar-autohide: 0` makes it stay, and that is the
+   switch on the bench Osca dials. The peek strip is the top-edge tap target;
+   it is a plain div (not a control) and it only takes the pointer while the
+   bar is away, so it costs the page nothing while the bar is up.
+
+   The dials, all of them, one property each -- design/phone/bar.html:
+     --pbar-h         the row's height, the thumb's target (44)
+     --pbar-autohide  1 = it hides as you read; 0 = it stays
+     --pbar-chapter   `inline` = the book AND the chapter; `none` = the book
+     --pbar-mic       `bar` = the hands-free mic sits in the bar; `float` =
+                      voiceui's own pill, where voiceui puts it (read by the
+                      mount, which moves the one element between the two)
+     --pbar-pad --pbar-gap --pbar-type   the side margin, the gap, the type */
 @media (max-width: 600px), (max-height: 500px){
-  html[data-phone] #librarydoor{ min-width:44px; min-height:44px; margin:-8px 0; opacity:.7; }
-  /* ...and the row it sits in starts under the phone's island, not under it:
-     the safe inset, as library.css and settings.css read it (`--safe-top` is
-     the bench's word for env(); the phone answers env() itself) */
-  html[data-phone] .barrow{ top:var(--safe-top, env(safe-area-inset-top, 0px)); }
-  /* ...and so do the two blocks of running head, which were left behind when
-     the door moved. `.head` is fixed 16px from the top and page.css's
-     `.runhead` at `--head-top` (10px), both written for a Mac window with
-     nothing above them; on the phone that puts the title, the credit line and
-     "<book> r N" INSIDE the status bar and under the island. Measured on the
-     iPhone 17 simulator, 7 Sep: inset 62, `.head` top 16. Each keeps its own
-     offset and starts from the inset. */
-  html[data-phone] .head{ top:calc(16px + var(--safe-top, env(safe-area-inset-top, 0px))); }
-  html[data-phone] .runhead{ top:calc(var(--head-top, 10px) + var(--safe-top, env(safe-area-inset-top, 0px))); }
-  /* ...and the hands-free pill's mic (voiceui/app.js draws it 34px, a mask
-     the size of its box) is a thumb's target too. voiceui's element, this
-     page's phone layout; voiceui is asked to carry the line itself (§6). */
+  /* THE ONE FRAGMENT LEFT, OFF. There were three -- `.barrow`, `.head` and
+     `.runhead`. Two of them left the app entirely on 7 September (above), so
+     only page.css's own top-right running head is switched off here, and it is
+     switched off for the same reason it always was: the bar's centre mirrors
+     it, and the book and the chapter are said once. */
+  html[data-phone] .runhead{ display:none; }
+
+  html[data-phone]{
+    --pbar-h:44px;            /* the row the thumb hits */
+    --pbar-pad:8px;           /* the side margin */
+    --pbar-gap:2px;
+    --pbar-type:13px;
+    /* the inset the centre is measured from, BOTH SIDES, and the number is
+       the RIGHT group's: two 44s and the gap between them -- Settings and the
+       mic. The left held two as well until the Library door came off it
+       (7 Sep, "no Library button"), and it holds one now, the search door.
+       THE NUMBER DOES NOT MOVE FOR THAT, and that is the point of measuring
+       it from the wider group: the title's box is the bar minus the SAME
+       inset at each end, so the book's name stays on the screen's centre line
+       whatever is beside it. The left simply has room to spare. */
+    --pbar-side:calc(var(--pbar-pad) + 88px + var(--pbar-gap) * 2);
+    --pbar-autohide:1;        /* read by the mount, not by a rule here */
+    --pbar-chapter:inline;    /* `none` -> the book alone */
+    --pbar-mic:bar;           /* `float` -> voiceui's own pill */
+  }
+
+  html[data-phone] .pbar{
+    position:fixed; top:0; left:0; right:0; z-index:60; box-sizing:border-box;
+    padding:0 var(--pbar-pad);
+    padding-top:var(--safe-top, env(safe-area-inset-top, 0px));
+    height:calc(var(--pbar-h) + var(--safe-top, env(safe-area-inset-top, 0px)));
+    display:flex; align-items:center; gap:var(--pbar-gap);
+    font-family:var(--ui); color:var(--ink);
+    background:var(--ground);
+    background:color-mix(in srgb, var(--ground) 86%, transparent);
+    -webkit-backdrop-filter:saturate(1.6) blur(14px);
+    backdrop-filter:saturate(1.6) blur(14px);
+    border-bottom:1px solid var(--rule);
+    transform:translateY(0); transition:transform .22s ease; will-change:transform; }
+  /* AWAY. -101% clears the hairline as well as the box, so nothing of it is
+     left on the screen to draw a line across the top of the page. */
+  html[data-phone] .pbar[data-shown="off"]{ transform:translateY(-101%); }
+
+  /* THE THREE CONTROLS. Two are DOORS and are `<a href>`: a door on the phone
+     is a navigation (the Library's `#settingsDoor` is the same shape), and a
+     link keeps them out of the header-button press test, which exists to
+     catch a control that does nothing.
+     THE THIRD IS NOT A DOOR AND MUST NOT BE A LINK. `#pbarfind` opens the
+     search surface OVER what you are reading and closes without moving you
+     (reader/surface.js) -- there is nowhere to navigate to, so it is a
+     <button>, and it answers the press test by doing something. 44 square,
+     all three. */
+  html[data-phone] .pbar-b{
+    flex:0 0 auto; display:flex; align-items:center; justify-content:center;
+    width:44px; height:44px; min-width:44px; min-height:44px;
+    padding:0; border:0; background:none; border-radius:11px;
+    color:var(--ink); text-decoration:none; opacity:.78;
+    -webkit-tap-highlight-color:transparent;
+    transition:opacity .18s ease, background-color .18s ease; }
+  html[data-phone] .pbar-b:active{ opacity:1; background:var(--rule); }
+  html[data-phone] .pbar-b svg{ width:20px; height:20px; display:block; }
+
+  /* THE CENTRE, AND IT IS SAID ONCE. page.js keeps page.css's `.runhead`
+     current -- <b>the book</b><span>the chapter</span> -- so the bar mirrors
+     that one element rather than inventing a second source of the same two
+     strings. `.runhead` itself is off above; this is where it went. */
+  /* IT IS CENTRED ON THE BAR, NOT ON WHAT IS LEFT OVER. Flexed between the
+     doors it would sit 23px left of centre, because the right holds two
+     controls and the left one -- measured, and the reason this is absolute:
+     the title's box is the bar minus the SAME inset on both sides, so the
+     book's name is on the screen's centre line whatever is beside it. */
+  html[data-phone] .pbar-title{
+    position:absolute; left:var(--pbar-side); right:var(--pbar-side);
+    top:var(--safe-top, env(safe-area-inset-top, 0px)); height:var(--pbar-h);
+    min-width:0; pointer-events:none;
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    text-align:center; line-height:1.15; }
+  html[data-phone] .pbar-title b{
+    display:block; max-width:100%; font-size:var(--pbar-type); font-weight:600;
+    color:var(--ink); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  html[data-phone] .pbar-title span{
+    display:var(--pbar-chapter); max-width:100%; margin-top:1px;
+    font-size:calc(var(--pbar-type) - 2px); color:var(--dim);
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+
+  /* THE RIGHT: Settings, then the hands-free mic. The mic is voiceui's OWN
+     element, moved into this slot by the mount -- one mic on the page, not a
+     second button wired to the first -- so its state colours still come from
+     voiceui's sheet. The pill's other children (the listen chip, the pocket
+     button, the last thing heard) are the pill's, not the bar's. */
+  html[data-phone] .pbar-right{
+    flex:0 0 auto; margin-left:auto; display:flex; align-items:center; gap:var(--pbar-gap); }
+  html[data-phone] .pbar-mic{ display:flex; align-items:center; justify-content:center; }
+  html[data-phone] .pbar-mic .voiceui-pill{
+    position:static; right:auto; bottom:auto; z-index:auto;
+    background:none; box-shadow:none; border:0; padding:0; gap:0; }
+  html[data-phone] .pbar-mic .voiceui-listen,
+  html[data-phone] .pbar-mic .voiceui-pocket-btn,
+  html[data-phone] .pbar-mic .voiceui-last{ display:none; }
+  /* ...and the mic is a thumb's target wherever it is sitting (voiceui/app.js
+     draws it 34px, a mask the size of its box). voiceui's element, this page's
+     phone layout; voiceui is asked to carry the line itself (§6). */
   html[data-phone] .voiceui-pill .voiceui-toggle{ width:44px; height:44px; }
+
+  /* THE TOP EDGE. A strip the height of the inset plus a thumb's edge, which
+     takes the pointer ONLY while the bar is away -- so a tap at the top brings
+     it back and nothing is intercepted while it is up. Not a control: it has
+     no href and no role, so it is not a tap target to be measured and not a
+     button to be pressed. */
+  html[data-phone] .pbar-peek{
+    position:fixed; top:0; left:0; right:0; z-index:59;
+    height:calc(var(--safe-top, env(safe-area-inset-top, 0px)) + 18px);
+    pointer-events:none; }
+  html[data-phone] .pbar[data-shown="off"] + .pbar-peek{ pointer-events:auto; }
 }
 
-/* -------- WARMTH -- bench-page.html's own big slider, unchanged. */
-.warmth{ position:fixed; top:22px; left:50%; transform:translateX(-50%); z-index:41;
-  display:flex; align-items:center; gap:14px; width:min(460px,44vw);
-  padding:11px 20px; background:var(--ground); border:1px solid var(--rule);
-  border-radius:999px; box-shadow:0 10px 28px rgba(0,0,0,.10); }
-.warmth .end{ font:11px/1 var(--ui); color:var(--dim); letter-spacing:.08em;
-  text-transform:uppercase; flex:0 0 auto; }
-.warmth input[type=range]{ flex:1 1 auto; -webkit-appearance:none; appearance:none;
-  height:14px; border-radius:7px; background:var(--track-grad,var(--rule));
-  border:1px solid var(--rule); cursor:pointer; }
-.warmth input[type=range]::-webkit-slider-thumb{ -webkit-appearance:none;
-  width:26px; height:26px; border-radius:50%; background:var(--ink);
-  border:3px solid var(--ground); box-shadow:0 1px 3px rgba(0,0,0,.35); cursor:pointer; }
-.warmth input[type=range]::-moz-range-thumb{ width:20px; height:20px; border-radius:50%;
-  background:var(--ink); border:3px solid var(--ground);
-  box-shadow:0 1px 3px rgba(0,0,0,.35); cursor:pointer; }
-.warmth input[type=range]::-moz-range-track{ height:14px; border-radius:7px;
-  background:var(--track-grad,var(--rule)); border:1px solid var(--rule); }
+/* ================== THE MAC'S PLAYBACK BAR — a floating capsule ============
+   Osca, 7 September: *"a SEPARATE PLAYBACK bar -- the TTS transport
+   (play/pause, scrub the chapter, speed) -- on BOTH platforms. Same shell,
+   two distinct bars: the phone's and the Mac's are NOT based on each other."*
 
-.bench{ position:fixed; left:14px; bottom:12px; z-index:40; display:flex; gap:6px;
-  align-items:center; font:11px/1 var(--ui); opacity:.35; transition:opacity .2s; }
-.bench:hover{ opacity:1; }
-.bench button{ font:inherit; padding:6px 9px; border:1px solid var(--rule);
-  background:var(--ground); color:var(--dim); border-radius:6px; cursor:pointer; }
-.bench a{ color:var(--dim); text-decoration:none; padding:6px 3px; }
-.bench .r{ color:var(--dim); padding:6px 3px; }
+   SO THIS IS NOT THE PHONE'S BAR AT A DIFFERENT WIDTH, and the difference is
+   not decoration. The phone's is a full-width strip at the foot of the screen
+   because a thumb needs 44 square and the screen has one edge worth spending.
+   The Mac has a pointer, a keyboard and a window: it does not need 44, it
+   does not need the whole width, and a strip across the foot of a reading
+   window would take a band of paper away from the book for a control that is
+   idle most of the time. So the Mac's is a CAPSULE -- the same shape the
+   warmth slider already uses on these benches -- floating clear of the page,
+   quiet until the pointer comes near it, and gone when there is nothing to
+   play. It sits on `.mplay`; the phone's sits on `.pplay`; no rule is shared
+   and neither can move the other.
+
+   BOTH READ ONE TRANSPORT. `reader/transport.js` is the only thing either bar
+   says to the voice -- play, pause, seek, speed -- so the two pictures differ
+   and the behaviour cannot.
+
+   IT IS NOT ON THE PHONE, and that is this file's own `html:not([data-phone])`
+   rather than a width: the flag is what the shell splits on everywhere else
+   (the nav bar's whole block above is keyed the same way), and a Mac window
+   dragged narrow is still a Mac.
+
+   NO CAPSULE WITHOUT A VOICE. The bar is `hidden` until the transport says
+   there is a rendered master for the chapter -- Osca's rule of 1 September,
+   *"no playback or volume control shows when the chapter has no audio"*.
+   `--mplay-when` is the dial that says otherwise, and the mount reads it.
+
+   The dials, one property each -- design/reader/bench-playbar.html:
+     --mplay-place  how far off the foot of the window it floats
+     --mplay-h      the row (26 is a pointer's target, not a thumb's)
+     --mplay-rail   the chapter, as a line, in px
+     --mplay-rest   how quiet it is until the pointer comes near
+     --mplay-skip   the seconds the two arcs move (read by the mount)
+     --mplay-times  `inline` = elapsed and remaining; `none` = the line alone
+     --mplay-when   `voice` = only with a master; `timings`; `always`        */
+:root{
+  --mplay-place:22px;
+  --mplay-h:26px;
+  --mplay-rail:190px;
+  --mplay-rest:.52;
+  --mplay-skip:15;
+  --mplay-times:inline;
+  --mplay-when:voice;
+}
+html:not([data-phone]) .mplay{
+  position:fixed; z-index:58; left:50%; bottom:var(--mplay-place);
+  transform:translate(-50%,0);
+  display:flex; align-items:center; gap:9px;
+  padding:7px 13px; box-sizing:border-box;
+  font:12px/1 var(--ui); color:var(--ink);
+  background:var(--ground);
+  border:1px solid var(--rule); border-radius:999px;
+  box-shadow:0 10px 28px rgba(0,0,0,.14);
+  opacity:var(--mplay-rest);
+  transition:opacity .18s ease, transform .22s ease; }
+html:not([data-phone]) .mplay:hover,
+html:not([data-phone]) .mplay:focus-within{ opacity:1; }
+/* NO CHAPTER, NO CAPSULE. `hidden` has to beat the display above, which is
+   more specific than the UA's `[hidden]` rule and would otherwise draw an
+   empty capsule over a book with no voice. */
+html:not([data-phone]) .mplay[hidden]{ display:none; }
+/* AWAY. One state for three reasons -- the page is zoomed into one word, the
+   search surface is over it, or nothing is playing and the pointer has been
+   elsewhere for a while -- because a reader does not care which. */
+html:not([data-phone]) .mplay[data-shown="off"]{
+  opacity:0; pointer-events:none;
+  transform:translate(-50%, calc(100% + var(--mplay-place))); }
+
+html:not([data-phone]) .mplay-b{
+  flex:0 0 auto; display:flex; align-items:center; justify-content:center;
+  width:var(--mplay-h); height:var(--mplay-h); padding:0; border:0;
+  background:none; border-radius:50%; color:var(--ink); opacity:.7;
+  cursor:pointer; transition:opacity .15s ease, background-color .15s ease; }
+html:not([data-phone]) .mplay-b:hover{ opacity:1; background:var(--rule); }
+html:not([data-phone]) .mplay-b svg{ width:15px; height:15px; display:block; }
+/* the one filled control: play is the thing you came for */
+html:not([data-phone]) .mplay-go{
+  width:calc(var(--mplay-h) + 6px); height:calc(var(--mplay-h) + 6px);
+  background:var(--ink); color:var(--ground); opacity:1; }
+html:not([data-phone]) .mplay-go:hover{ background:var(--ink); opacity:.86; }
+html:not([data-phone]) .mplay-go svg{ width:14px; height:14px; }
+/* THE TWO ARCS CARRY THEIR OWN NUMBER, and it is a <text> inside the svg
+   rather than a span over it: the seconds are a dial (`--mplay-skip`), so the
+   glyph has to be able to say 10 or 30 as readily as 15, and a number that
+   travels with the drawing cannot come unstuck from it at any size. */
+
+/* THE CHAPTER, AS A LINE. `--mplay-f` is where the voice is, 0..1, written by
+   the mount on this element -- so the fill is one custom property and not a
+   second element to keep in step with the thumb. */
+html:not([data-phone]) .mplay-rail{
+  flex:0 0 auto; width:var(--mplay-rail); height:18px; margin:0;
+  -webkit-appearance:none; appearance:none; background:none; cursor:pointer; }
+html:not([data-phone]) .mplay-rail::-webkit-slider-runnable-track{
+  height:3px; border-radius:2px;
+  background:linear-gradient(to right, var(--ink) calc(var(--mplay-f,0) * 100%),
+                             var(--rule) 0); }
+html:not([data-phone]) .mplay-rail::-webkit-slider-thumb{
+  -webkit-appearance:none; width:11px; height:11px; margin-top:-4px;
+  border-radius:50%; background:var(--ink); border:2px solid var(--ground);
+  box-shadow:0 1px 3px rgba(0,0,0,.3); }
+html:not([data-phone]) .mplay-rail::-moz-range-track{
+  height:3px; border-radius:2px;
+  background:linear-gradient(to right, var(--ink) calc(var(--mplay-f,0) * 100%),
+                             var(--rule) 0); }
+html:not([data-phone]) .mplay-rail::-moz-range-thumb{
+  width:11px; height:11px; border-radius:50%; background:var(--ink);
+  border:2px solid var(--ground); box-shadow:0 1px 3px rgba(0,0,0,.3); }
+
+html:not([data-phone]) .mplay-t{
+  display:var(--mplay-times); flex:0 0 auto; min-width:34px;
+  font:11px/1 var(--ui); color:var(--dim);
+  font-variant-numeric:tabular-nums; }
+html:not([data-phone]) .mplay-t.left{ text-align:right; }
+/* SPEED IS A WORD, not a slider: the Mac has room to say "1.5x" and a reader
+   who wants a number wants to read it, not to aim at it. */
+html:not([data-phone]) .mplay-speed{
+  flex:0 0 auto; min-width:34px; height:var(--mplay-h); padding:0 7px;
+  border:1px solid transparent; border-radius:8px; background:none;
+  font:11px/1 var(--ui); color:var(--dim); cursor:pointer;
+  font-variant-numeric:tabular-nums;
+  transition:color .15s ease, border-color .15s ease; }
+html:not([data-phone]) .mplay-speed:hover{ color:var(--ink); border-color:var(--rule); }
+/* the phone never draws the Mac's capsule, whatever its width */
+html[data-phone] .mplay{ display:none; }
+
+/* ==================== THE PHONE'S PLAYBACK BAR — its own strip =============
+   Osca, 7 September: *"Two bars on the phone, same shell, distinct: (1) the
+   existing NAV bar -- keep and refine it. (2) a NEW, SEPARATE playback bar --
+   the TTS transport: play/pause, scrub the chapter, speed. Its own strip, NOT
+   folded into the nav bar. Design them to coexist (stack, auto-hide together)
+   so they don't crowd."*
+
+   TWO EDGES, ONE GESTURE. The nav bar (`.pbar`) owns the TOP of the phone and
+   the playback bar owns the FOOT, so neither is ever over the other and the
+   page between them is the book. That is the whole of "stack": they are not
+   stacked on one edge, they are one at each, which is what a phone reader
+   does (Apple Books, Kindle, Books' own player) and what makes "auto-hide
+   together" honest -- one scroll down takes both away and the page is
+   full-bleed; one scroll up, or a tap at the top edge, brings both back. The
+   mount drives them from ONE state for exactly that reason; `--pplay-autohide`
+   is the dial that unpicks it and lets the player stay while the nav bar goes.
+
+   HIDDEN WHILE ZOOMED. One-word view is becoming pinch-zoom (Lane A), and in
+   that state the page IS the control: both bars go, and neither auto-hide nor
+   a tap at the top brings them back until the zoom is out. That is a forced
+   state, not the auto-hide, so it overrides `--pplay-autohide: 0` too.
+
+   NO STRIP WITHOUT A VOICE. `--pplay-when: voice` (the default) is Osca's
+   rule of 1 September: a chapter with timings and no rendered master runs the
+   highlight and shows NO player, because offering to play a silence is the
+   regression that rule was written about. `timings` and `always` are the two
+   other settings and the bench dials them.
+
+   IT DOES NOT PUSH THE PAGE. The strip floats over the foot of the column the
+   way the nav bar floats over its head -- no bottom padding is added to the
+   reading pane, because the pane is Lane A's and because a bar that hides as
+   you read must not leave a band of blank paper behind when it goes. The last
+   line of a chapter is reachable by the same scroll that takes the bar away.
+
+   The dials, one property each -- design/phone/playbar.html:
+     --pplay-h        the control row's height, the thumb's target (56)
+     --pplay-autohide 1 = it goes with the nav bar; 0 = it stays
+     --pplay-scrub    `flex` = the rail and the two clock faces; `none` = the
+                      transport alone
+     --pplay-speed    `flex` = the speed button; `none` = no speed on the phone
+     --pplay-skip     the seconds the two arcs move (read by the mount)
+     --pplay-when     `voice` = only with a rendered master; `timings`; `always`
+     --pplay-pad      the side margin                                        */
+@media (max-width: 600px), (max-height: 500px){
+  html[data-phone]{
+    --pplay-h:56px;           /* the row the thumb hits */
+    --pplay-pad:10px;
+    --pplay-gap:4px;
+    --pplay-rail-h:44px;      /* the rail is a tap target: 44, like the rest */
+    --pplay-type:12px;
+    --pplay-autohide:1;       /* read by the mount, not by a rule here */
+    --pplay-scrub:flex;       /* `none` -> the transport row alone */
+    --pplay-speed:flex;       /* `none` -> no speed button on the phone */
+    --pplay-skip:15;          /* read by the mount */
+    --pplay-when:voice;       /* `timings` | `always` -- read by the mount */
+  }
+
+  html[data-phone] .pplay{
+    position:fixed; left:0; right:0; bottom:0; z-index:60; box-sizing:border-box;
+    padding:2px var(--pplay-pad) 0;
+    padding-bottom:var(--safe-bottom, env(safe-area-inset-bottom, 0px));
+    display:flex; flex-direction:column;
+    font-family:var(--ui); color:var(--ink);
+    background:var(--ground);
+    background:color-mix(in srgb, var(--ground) 86%, transparent);
+    -webkit-backdrop-filter:saturate(1.6) blur(14px);
+    backdrop-filter:saturate(1.6) blur(14px);
+    border-top:1px solid var(--rule);
+    transform:translateY(0); transition:transform .22s ease; will-change:transform; }
+  /* AWAY, and 101% clears the hairline as well as the box -- the same number
+     the nav bar uses at the other edge, for the same reason. */
+  html[data-phone] .pplay[data-shown="off"]{ transform:translateY(101%); }
+  /* ...and GONE is not the same as away: `hidden` is "this chapter has no
+     voice", and it has to beat the display above exactly as the Mac's does. */
+  html[data-phone] .pplay[hidden]{ display:none; }
+
+  /* ---- THE SCRUB ROW: where you are, the chapter, and what is left ------- */
+  html[data-phone] .pplay-scrub{
+    display:var(--pplay-scrub); align-items:center; gap:8px;
+    height:var(--pplay-rail-h); }
+  html[data-phone] .pplay-t{
+    flex:0 0 auto; min-width:38px;
+    font-size:calc(var(--pplay-type) - 1px); color:var(--dim);
+    font-variant-numeric:tabular-nums; }
+  html[data-phone] .pplay-t.left{ text-align:right; }
+  /* THE RAIL IS 44 TALL AND THE LINE INSIDE IT IS 4. A range input is a tap
+     target and is measured as one (design/phone/frame.js counts `input`), so
+     the BOX is a thumb's target while the PICTURE stays a hairline -- which is
+     the only way to have both. `--pplay-f` is where the voice is, 0..1,
+     written on this element by the mount. */
+  html[data-phone] .pplay-rail{
+    flex:1 1 auto; min-width:0; height:var(--pplay-rail-h); margin:0;
+    -webkit-appearance:none; appearance:none; background:none;
+    -webkit-tap-highlight-color:transparent; }
+  html[data-phone] .pplay-rail::-webkit-slider-runnable-track{
+    height:4px; border-radius:2px;
+    background:linear-gradient(to right, var(--ink) calc(var(--pplay-f,0) * 100%),
+                               var(--rule) 0); }
+  html[data-phone] .pplay-rail::-webkit-slider-thumb{
+    -webkit-appearance:none; width:14px; height:14px; margin-top:-5px;
+    border-radius:50%; background:var(--ink); border:2px solid var(--ground);
+    box-shadow:0 1px 4px rgba(0,0,0,.35); }
+  html[data-phone] .pplay-rail::-moz-range-track{
+    height:4px; border-radius:2px;
+    background:linear-gradient(to right, var(--ink) calc(var(--pplay-f,0) * 100%),
+                               var(--rule) 0); }
+  html[data-phone] .pplay-rail::-moz-range-thumb{
+    width:14px; height:14px; border-radius:50%; background:var(--ink);
+    border:2px solid var(--ground); box-shadow:0 1px 4px rgba(0,0,0,.35); }
+
+  /* ---- THE TRANSPORT ROW ------------------------------------------------- */
+  /* FIVE CONTROLS, SPREAD. Back fifteen · the sentence behind · play · the
+     sentence ahead · the speed. The two sentence steps are the phone's
+     "previous/next" and they are SENTENCES rather than chapters, because on a
+     reading page the thing you have just missed is a sentence -- the chapter
+     is the nav bar's centre and the rail's whole length. */
+  html[data-phone] .pplay-row{
+    display:flex; align-items:center; justify-content:space-between;
+    gap:var(--pplay-gap); height:var(--pplay-h); }
+  html[data-phone] .pplay-b{
+    flex:0 0 auto; display:flex; align-items:center; justify-content:center;
+    width:44px; height:44px; min-width:44px; min-height:44px;
+    padding:0; border:0; background:none; border-radius:12px;
+    color:var(--ink); opacity:.8;
+    -webkit-tap-highlight-color:transparent;
+    transition:opacity .18s ease, background-color .18s ease; }
+  html[data-phone] .pplay-b:active{ opacity:1; background:var(--rule); }
+  html[data-phone] .pplay-b svg{ width:22px; height:22px; display:block; }
+  /* the one filled control, and it is the biggest thing on the strip */
+  html[data-phone] .pplay-go{
+    width:56px; height:56px; min-width:56px; border-radius:50%;
+    background:var(--ink); color:var(--ground); opacity:1; }
+  html[data-phone] .pplay-go:active{ background:var(--ink); opacity:.85; }
+  html[data-phone] .pplay-go svg{ width:24px; height:24px; }
+  html[data-phone] .pplay-speed{
+    display:var(--pplay-speed); align-items:center; justify-content:center;
+    flex:0 0 auto; width:44px; height:44px; min-width:44px; min-height:44px;
+    padding:0; border:0; background:none; border-radius:12px;
+    font:600 var(--pplay-type)/1 var(--ui); color:var(--dim);
+    font-variant-numeric:tabular-nums;
+    -webkit-tap-highlight-color:transparent; }
+  html[data-phone] .pplay-speed:active{ color:var(--ink); background:var(--rule); }
+
+  /* COEXISTENCE, and it is one number. voiceui's floating pill parks itself
+     at the foot of the screen (`--pbar-mic: float`, and that is a dial on the
+     nav bar's own bench); with the player there it would land on top of it.
+     `data-pplay` is written on <html> by the mount while the strip is up, so
+     the pill steps over exactly the height that is actually there and steps
+     back the moment the strip goes. */
+  html[data-phone][data-pplay="on"] .voiceui-pill{
+    bottom:calc(var(--safe-bottom, env(safe-area-inset-bottom, 0px))
+                + var(--pplay-h) + var(--pplay-rail-h) + 14px); }
+}
+
 
 /* ---- THE LAST PANE IS ITS OWN ASSET (6 Sep). The line the word came from and
    the rail under it moved out whole to wordpane.css, mounted by book-nav.js

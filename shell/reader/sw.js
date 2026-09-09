@@ -19,7 +19,21 @@
 // fetched and the answer arrives from disk instead of from a server that is
 // not there. `.opus` is served through a Range-aware path because a media
 // element asks for bytes, not for files.
-const SHELL_CACHE = "ttstv-shell-v36";   // 7 Sep: lookup.css LEAVES the shell (the OS owns look-up)
+// v37, 7 Sep: THE SHELL MOVED HOUSE, so the old cache has to be evicted and not
+// merely out-voted. Frank loads `clean/` now (`tabs::SHELL`), and on any origin
+// that survives a restart -- the PWA, a static host, the bundle -- the worker
+// registered at the OLD scope is still installed with `ttstv-shell-v36` full of
+// module-tree bytes. Network-first hides that while the network is quick and
+// stops hiding it in exactly the case this file exists for: past TIMEOUT_MS the
+// fetch loses the race and `shellNetworkFirst` returns `hit`, which would be a
+// page out of a tree the app no longer ships. `activate` deletes every cache
+// that is not the current SHELL_CACHE, so changing this string IS the eviction
+// -- and changing it changes sw.js's own bytes, which is the only thing that
+// makes a browser run `install` and `activate` at all.
+const SHELL_CACHE = "ttstv-shell-v40";   // 7 Sep: transport.js joins the shell -- a NEW name in
+                                         // SHELL_FILES is only fetched by an install, so the
+                                         // string has to move or an installed app never caches
+                                         // it (v37: the shell moved to clean/)
 const BOOK_PREFIX = "ttstv-book-";        // kept in step with library/import.js
 const SHARE_CACHE = "ttstv-share";
 const SHARE_KEY = "share-bundle";         // one entry, replaced each share
@@ -79,18 +93,38 @@ const SHELL_FILES = [
      job touched anything; fixed here because it is one line each and this
      turn is already in this file. */
   "./wordpane.css",         // the one-word caption and its scrub rail (job 24)
+  "./scrub.css",            // ...and the rail's own look (9 Sep, with scrub.js)
+  "./surface.css",           // THE SEARCH SURFACE: reader.html and library.html
+                             // both link it, and the phone opens it from its
+                             // own bar -- so it is shell, not a bench prop
   "./chrome.css",            // library.html and settings.html both link it
   "./keys.js",               // typing is not a hotkey -- all three pages load it (3 Sep)
   "./book.js",               // Book.open / Book.normalise
   "./wheel.js",
-  "./page.js",               // Page.mount -- the column, the scrub, the runhead
+  "./page.js",               // Page.mount -- the column, the measured boxes, the runhead
+  "./scrub.js",              // THE RAIL, 9 Sep. It was never in this list, because
+                             // until today the app drew its own rail inside page.js
+                             // and scrub.js -- the capsule rail with the bench and a
+                             // slider for every number of it -- was mounted by
+                             // bench-page.html and by nothing the reader loaded. One
+                             // rail now; page.js's half is deleted.
   "./pane.js",               // Panes.measure/apply -- where a pane goes
   "./book-nav.js",           // the axis, the reader, one word
   "./wordpane.js",           // ...and the caption under it (job 24)
   "./listen.js",             // the audio, the highlight, and window.ReaderControl
+  "./transport.js",          // ...and THE ONE TRANSPORT over it (7 Sep): the
+                             // play/pause/seek/speed both playback bars say,
+                             // guarded, so neither bar guesses at listen.js.
+                             // reader.html loads it, so an installed app
+                             // without it has two bars that do nothing offline.
   "./lookup.js",             // the word under the finger, and voiceui's getDictionaryEntry
   "./marginalia.js",         // the record, re-anchored on listen.js's map
   "./cursor.js",             // one position, written once a sentence (job 15b step 3)
+  "./surface.js",            // ...and the surface itself: the query, the one
+                             // list, and the works. Both pages load it and the
+                             // phone bar's search door calls into it, so an
+                             // installed app that had not cached it would open
+                             // its own search into nothing, offline.
   // ============================ THE BAR ===================================
   "../bar/askbar.js",        // the bar's answers; the field itself is the shell's (4 Sep)
   "../bar/askbar.css",       // ...and since 5 Sep they are `bar/`'s own, not the reader's:

@@ -1,3 +1,9 @@
+/* THIS FILE IS A MASTER, NOT A BENCH. design/library/ mirrors library/ and
+   `design/export.py --shell` builds clean/library/library.css from it
+   (design/LOOP.md). The Library's bench is design/reader/bench-library.html;
+   this file ships the numbers it settled on and carries none of its dials, so
+   there is nothing here to cut and the loop's own word for that is one
+   marker: */
   :root {
     --bg: #fcfcfb;
   /* ---- THE RADIUS SCALE (Osca, 30 Aug: "all boxes across all pages are just
@@ -286,10 +292,51 @@
   @container shelf (max-width: 1290px) { #shelf[data-zoom="4"] .shelfgrid { --cols: 2; } }
   @container shelf (max-width: 620px) { #shelf[data-zoom="4"] .shelfgrid { --cols: 1; } }
 
-  /* ====================================================================
-     THE LADDER -- FOUR ZOOMS, AND ONE DIMENSION: how much of the pane a
-     single book is given. Out to in (design/reader/library.html, 6 Sep):
+  /* ---- THE SORT BAR, AND THE BANDS IT SORTS (design/reader/bench-library.html).
+     Osca: "I need a small drop down in library, to change how the books are
+     ordered. Alphabetically by title, and by author and most recent. Put newly
+     added in its own section too."
 
+     THE BENCH'S THREE DIALS ARE NOT HERE, and that is the foot's own rule
+     said again: the bench sets where the bar stands across the page, how big
+     it is and whether it is at the top of the shelf or down in the foot, and
+     the app SHIPS the numbers that came out of it -- at the start of the
+     shelf, left, 12px. A dial in the app would be a second place to set one
+     number, which is the drift the loop exists to end. */
+  .sortbar { --sortsize: 12px;
+    display: flex; align-items: center; gap: 9px;
+    width: 94%; margin: 0 auto; padding: 1.1rem 0 0.2rem;
+    justify-content: flex-start; }
+  .sortbar label { font: 600 calc(var(--sortsize) - 1px)/1 var(--ui-font);
+    letter-spacing: 0.12em; text-transform: uppercase; color: var(--fg-dim); }
+  .sortbar select { font: var(--sortsize)/1.2 var(--ui-font); color: var(--fg);
+    background: var(--control-bg); border: 1px solid var(--border);
+    border-radius: var(--r-pill); padding: 0.42em 0.8em; cursor: pointer;
+    -webkit-appearance: none; appearance: none;
+    background-image: linear-gradient(45deg, transparent 50%, currentColor 50%),
+      linear-gradient(135deg, currentColor 50%, transparent 50%);
+    background-position: calc(100% - 14px) 55%, calc(100% - 9px) 55%;
+    background-size: 5px 5px, 5px 5px; background-repeat: no-repeat;
+    padding-right: 2em; }
+  .sortbar select:hover { border-color: var(--fg); }
+
+  /* A BAND IS A HEADING AND A SHELF, sized to the shelf so the heading lines
+     up with the first book's left edge instead of floating in the margin.
+     `.shelfgrid` is `width: fit-content` centred on `margin: 4px auto`, so a
+     band has to be the same or the two are centred on different boxes. */
+  .band { width: fit-content; max-width: 100%; margin: 0 auto; }
+  .band[hidden] { display: none; }
+  .bandhead { margin: 0; padding: 1.4rem 0 0; font: 600 12px/1.4 var(--ui-font);
+    letter-spacing: 0.13em; text-transform: uppercase; color: var(--fg-dim); }
+
+  /* ====================================================================
+     THE LADDER -- FIVE ZOOMS, AND ONE DIMENSION: how much of the pane a
+     single book is given. Out to in (design/reader/bench-library.html):
+
+      16   the whole library on one screen. Covers only, and they do not step
+           down until the shelf is under 1100px, where they go to eight rather
+           than shrink past reading (Osca, 6 Sep: "a new view in library on 16
+           book rows, larger than 8 -- keep all others, just add a 16 row view")
        8   the whole shelf at a glance. Covers only -- the caption IS the
            cover, and the title/byline rows are taken away rather than shrunk,
            because a two-line title at 150px is a smear
@@ -297,7 +344,7 @@
        2   two books, the covers given the room the caption was using
        1   one jacket, and the shelf snaps book to book
 
-     One attribute on `#shelf` and every difference between the four is CSS off
+     One attribute on `#shelf` and every difference between the five is CSS off
      it. Nothing is re-rendered when it changes -- the tiles are already whole
      -- so zooming keeps the book under the cursor rather than jumping to the
      top of the shelf.
@@ -312,6 +359,26 @@
      them: `gap:<row> <column>`, each pane keeping its own row-to-column ratio
      so its character survives. 4's pair is the app's and is written on the
      base rule above rather than repeated here. ==================== */
+
+  /* ---------------- 16 UP: sixteen across, covers only ------------------- */
+  /* 75px: 16 x 75 + 15 x 0.90rem (14.4) = 1416, the same width 8's row takes
+     (8 x 150 + 7 x 1.90rem = 1413) and 4's (1406) -- so the shelf keeps its
+     edge and the covers halve, which is the whole of the step out. The row
+     gap keeps 8's own ratio to the column gap (1.70 / 1.90 = .895), so the
+     pane's character survives the step. Under 1100px sixteen 75px covers
+     would have to shrink past reading, so the row goes to eight -- the same
+     width 8 up steps to four at -- and to four under 620. */
+  #shelf[data-zoom="16"] .shelfgrid { --cols: 16; --bookw: 75px;
+    gap: 0.80rem 0.90rem; }
+  #shelf[data-zoom="16"] .railrow.tile { grid-template-rows: auto; row-gap: 0; }
+  #shelf[data-zoom="16"] .railrow.tile:hover,
+  #shelf[data-zoom="16"] .railrow.tile:focus-visible { transform: translateY(-2px); }
+  /* a 75px board with an 11px corner reads as a lozenge, not a book */
+  #shelf[data-zoom="16"] .tilecov { border-radius: 3px; }
+  #shelf[data-zoom="16"] .railrow.tile .railrow-title,
+  #shelf[data-zoom="16"] .railrow.tile .railrow-by { display: none; }
+  @container shelf (max-width: 1100px) { #shelf[data-zoom="16"] .shelfgrid { --cols: 8; } }
+  @container shelf (max-width: 620px) { #shelf[data-zoom="16"] .shelfgrid { --cols: 4; } }
 
   /* ---------------- 8 UP: covers only, and they do not step down --------- */
   #shelf[data-zoom="8"] .shelfgrid { --cols: 8; --bookw: 150px;

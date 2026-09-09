@@ -276,11 +276,16 @@
    non-speaker, non-direction block exactly one <p class="line"> with
    exactly one text-node child, so a word's own character offset is all a
    Range needs -- nothing rewritten, no word individually wrapped).
-   updateWordZoom() scales o.readerCol itself, transform-origin planted on
-   that word's own on-screen box, driven straight off wordF (0 at the
-   reader, 1 fully zoomed) every frame the zoom is live -- scrolling right
-   zooms the page that was already there onto wherever the word actually
-   is, "ON the page", rather than opening a second one elsewhere. The zoom
+   updateWordZoom() grows o.readerCol itself -- a css `zoom`, a LAYOUT zoom
+   the browser lays out rather than a layer it rasters (writePageZoom; the
+   scale()/transform-origin this paragraph described until 8 September was
+   retired on the 6th, and WHY is written at writeReaderTransform: at
+   scale(16) WebKit never re-rasters and the one word you are reading is
+   pixelated). It is driven straight off wordF (0 at the reader, 1 fully
+   zoomed) every frame the zoom is live, and the word is held still by
+   measurement, not by an origin -- one rect a frame, the gap closed on the
+   column's own `left` and on the scroller. Since 8 September the axis above
+   0 is the PINCH's alone: a sideways push cannot enter it (axisPush). The zoom
    itself now starts the instant dx leaves 0 (not only once lvl flips to
    "word" at the 0.5 boundary further in) so the early part of a rightward
    push already has something real to aim at rather than nothing happening
@@ -300,9 +305,19 @@
 const esc = s => String(s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
 
 const DX_REST=0.0001;
-let OUT_SNAP=9;          // how hard that switch throws, either way
+let OUT_SNAP=6;          // how hard that switch throws, either way -- a
+                         // DURATION since 8 Sep (see THE SWITCH IS A TRAVEL,
+                         // by stepDx): higher = shorter. 9 was the old
+                         // fraction's number and lands on 50ms, which is a cut
+                         // with one frame in the middle of it.
 const WORD_COMMIT=0.5;   // past here on release, it commits to the word
-const SPREAD_FROM=0.86;  // the zoom is done by here; only then do words part        // how much harder the pull home is, leaving one word
+/* SPREAD_FROM is GONE (8 Sep). It said "the zoom is done by here; only then do
+   words part" and NOTHING in this file read it -- the rule it names is spelled
+   by the axis itself (`spreadF = clamp(dx - 1, 0, 1)` in applyDx) and by the
+   second lock in updateWordZoom. A constant that states a rule it does not
+   enforce is the older half of a reversed rule still written down, so it goes
+   in the commit that finds it (CLAUDE.md, "Precedence"). Its trailing comment
+   belonged to OUT_SNAP two lines up and had drifted off it. */
 
 /* ---- HOW FAST THE WHOLE THING MOVES -------------------------------------
    Osca: "WE need to reduce the animations now, it's too slow, can't move
@@ -424,6 +439,18 @@ function mount(o){
   // STATE
   let book=null, screen="dashboard";
   let dx=0, dxVel=0, dxInput=0, wordWasOn=false;
+  // THE PINCH'S OWN THREE FLAGS, beside the axis they drive. `pinching` is a
+  // gesture on the glass right now; `pinchHold` is the page left standing
+  // zoomed inside the band, which is the one thing on this axis that rests
+  // between two positions; `pinchEntering` is the one sentence enterWord needs
+  // to hear -- do not travel to the cursor, the fingers are already on it.
+  let pinching=false, pinchHold=false, pinchEntering=false;
+  // the factor the page stood at when the gesture began. Every engine reports
+  // a pinch as a RATIO against its own start, so this is what that ratio is a
+  // ratio OF, and it is read once, before anything moves.
+  let pinchFrom=1;
+  // where the zoom left the page sideways -- the pan's own nought point.
+  let panBase=0;
   let exitAccum=0;
   let chIndexById=new Map();
 
@@ -856,9 +883,24 @@ function mount(o){
   // IS the book's cover now -- there is no separate title screen any more
   // for it to sit behind.
   const readerPage = (o.readerPane && o.readerCol && window.Page) ? window.Page.mount({
-    pane:o.readerPane, column:o.readerCol,
-    scrub:o.readerScrub, fill:o.readerFill, runhead:o.readerHead,
+    pane:o.readerPane, column:o.readerCol, runhead:o.readerHead,
   }) : null;
+
+  /* THE RAIL IS `scrub.js`, AND IT IS THE ONLY ONE (9 Sep). Until today there
+     were two: `page.js` drew ticks and one whole-book fill into `#readerscrub`
+     for the app and the shell, while `scrub.js` -- the capsule rail, with a
+     bench and a slider for every number of it -- was mounted by
+     `bench-page.html` and `pair.html` and by nothing the reader ever loaded.
+     So every number Osca dialled on that bench adjusted a rail the app does not
+     run, which is his "the bench is behind... I can't edit it", and the app's
+     rail was never dialled at all. `page.js` no longer takes a `scrub` or a
+     `fill`; its half is gone from that file. See design/reader/STATUS.md. */
+  const readerRail = (o.readerPane && o.readerCol && o.readerScrub && window.Scrub)
+    ? window.Scrub.mount({ pane:o.readerPane, column:o.readerCol, host:o.readerScrub })
+    : null;
+  /* one word hides the rail; `wakeSub`/`goTo` still ask the PAGE to wake, so the
+     page keeps a `wake` that now reaches the rail rather than its own ticks. */
+  function railWake(){ if(readerRail) readerRail.wake(); }
   function scrollReaderTo(idx){
     if(!readerPage || !o.readerCol) return;
     const sec = o.readerCol.querySelector('.chapter[data-ch="'+idx+'"]');
@@ -900,7 +942,7 @@ function mount(o){
       };
       requestAnimationFrame(settle);
     }
-    readerPage.wake();
+    railWake();
   }
   // THE CHAPTER LIST, MEASURED ONCE. Osca: "it is still too slow... Can you
   // think of other things that are impacting the speed?"
@@ -1262,7 +1304,13 @@ function mount(o){
     // not on the screen means turning the page about a point outside it,
     // which puts the reader's own pane off the top of the screen and paints
     // nothing. So the book arrives at the word before the zoom starts.
-    if(useCursor) seatOnWord();
+    // ...UNLESS THE FINGERS ARE ALREADY ON IT. A pinch NAMES its word -- the
+    // one under the point the gesture started at -- so travelling to the cursor
+    // would move the page out from under the hand that is pointing at it, which
+    // is the one thing a pinch must never do. The anchor is planted where that
+    // word already is instead (computeArrived reads its live rect), and the
+    // push's own behaviour is untouched: it still seats, exactly as before.
+    if(useCursor && !pinchEntering) seatOnWord();
   }
   // ...AND ARRIVING AT IT IS NOT ARITHMETIC. Measured live, 6 September, at
   // position +1 on Blood Meridian: the cursor sat in chapter I (section 2, its
@@ -1619,12 +1667,144 @@ function mount(o){
     // up. Above it -- every desk -- nothing changes: 1280x800's short side is
     // 800. Same mark as pane.js's `narrowH`, and the same idea: this is a
     // phone.
-    shortside: 500
+    shortside: 500,
+    // WHICH LAW THE FACTOR FOLLOWS between the page and the word. See THE
+    // PINCH below: "power" is z = k^dx, a constant zoom RATE per unit of the
+    // axis, which is what a zoom control is and what the pinch needs; "smooth"
+    // is the smoothstep this file ran on until 7 September, kept dialable
+    // rather than deleted so the two can be watched against each other. Both
+    // land on exactly the same two ends -- 1 at dx 0, k at dx +1.
+    law:     "power",
   };
   try{
     const saved = JSON.parse(localStorage.getItem("ttstv_word")||"null");
-    if(saved) Object.keys(WORD).forEach(k=>{ if(typeof saved[k]==="number") WORD[k]=saved[k]; });
+    if(saved) Object.keys(WORD).forEach(k=>{
+      if(typeof saved[k]==="number") WORD[k]=saved[k];
+      else if(k==="law" && (saved[k]==="power"||saved[k]==="smooth")) WORD[k]=saved[k];
+    });
   }catch(_){}
+  /* ================= THE PINCH IS THE WHOLE CONTINUUM =====================
+     Osca, 7 September: "the pinch zoom should zoom into the page, then past a
+     certain point, opens in one word view."
+
+     ONE GESTURE, AND THERE IS ONLY ONE FACTOR TO DRIVE. Nothing new is opened
+     here and nothing is replaced: the axis already grows the reading page from
+     its reading size (dx 0) to one word (dx +1) by writing ONE css `zoom` on
+     ONE element, and a pinch is simply a second driver of that same dx -- the
+     first one that is a zoom control rather than a push. What the pinch brings
+     with it is three things the push never needed:
+
+       WHERE IT GROWS FROM. The push has to choose a word for you (the cursor,
+       or the one nearest the reading line). A pinch is POINTING at something,
+       so the word under the point the fingers started at becomes the cursor,
+       and the anchor is planted where that word already is -- the page grows
+       about your own hand, and does not travel to a word somewhere else first.
+
+       A PLACE TO REST INSIDE THE STRETCH. 0 < dx < 1 has never been somewhere
+       you could stop: "between the word and the reader there is nothing to
+       look at" (the fifteenth pass), so the snap has always thrown it to one
+       end or the other. A page held at three or four times reading size IS
+       something to look at -- it is the first half of what was asked for -- so
+       while the pinch holds it, it rests exactly where the fingers left it.
+
+       A PAN. "you drag to pan around it, exactly like zooming a photo."
+
+     THE THRESHOLD IS THE ONE THE FILE ALREADY HAD, and that is the point of
+     putting it there: `PINCH.gate` is 0.5, which is levelOf()'s own word
+     boundary and WORD_COMMIT's own release rule, both of them written long
+     before this. Below it the page is a page you are zooming and looking
+     around -- the running head and the scrub are still up, the reader still
+     takes a pointer, nothing about the screen says "one word". At it, one word
+     begins, and on release past it the same hard snap that has always carried
+     the second half of that push carries this one. Half the axis, and a
+     quadrupling of the page, is not something you cross by accident; pinching
+     back out is the same gesture backwards, and it clamps at 1x -- there is no
+     zooming out of a page.
+
+     THE FACTOR LAW CHANGED, AND IT IS LOGGED (the only change to what one word
+     view does, and nothing is lost). The zoom ran 1 -> k over dx 0 -> 1 through
+     a smoothstep, which puts EIGHT AND A HALF times reading size at the
+     half-way mark on a k of 16 -- so with the threshold there, "zoom into the
+     page" would have meant a page already far too big to read before one word
+     ever opened. The law is now z = k^dx: the same two ends (1 at dx 0, k at
+     dx +1), a constant zoom rate in between, and sqrt(k) at the gate -- four
+     times reading size at k=16, which is a page you can still read and look
+     around. WORD.curve bends it exactly as before, and WORD.law = "smooth" is
+     the old curve, dialable from the tuner rather than deleted.                */
+  const PINCH = {
+    gate:   0.5,   // the dx at which one word begins -- levelOf's own boundary
+    spread: 2.0,   // a further doubling of the pinch past the arrival opens +2
+    assume: 16,    // the factor to reckon with before a word has been measured
+    pan:    1,     // 1 = a drag pans the page held zoomed, 0 = it never does
+    wheel:  0.01,  // ctrl+wheel (Chromium's own pinch): factor per px of deltaY
+  };
+  try{
+    const saved = JSON.parse(localStorage.getItem("ttstv_pinch")||"null");
+    if(saved) Object.keys(PINCH).forEach(k=>{ if(typeof saved[k]==="number") PINCH[k]=saved[k]; });
+  }catch(_){}
+  function setPinch(k, v){
+    if(!(k in PINCH)) return PINCH[k];
+    v = +v;
+    // the gate may not be pushed past the level boundary: above 0.5 it would
+    // hold the page at rest inside the band levelOf() already calls "word",
+    // with one word's own chrome on and a whole page still on the screen.
+    if(k === "gate") v = clamp(v, 0.05, 0.5);
+    PINCH[k] = v;
+    try{ localStorage.setItem("ttstv_pinch", JSON.stringify(PINCH)); }catch(_){}
+    markPaint();
+    return PINCH[k];
+  }
+
+  // ---- THE LAW, AND THE SAME LAW BACKWARDS. One function says what factor
+  // the page is at for a place on the axis; the other says which place on the
+  // axis a factor is. The pinch needs both -- it is handed a factor by the
+  // fingers and has to put the axis where that factor lives -- and they must
+  // be each other's inverse or a pinch would drift away from itself over a
+  // long gesture. `arrivalFactor` is the k the arrival measured for THIS word,
+  // held still for the length of one gesture so a measurement landing mid-pinch
+  // cannot move the ground under it.
+  let pinchK = 0;
+  function arrivalFactor(){
+    if(pinching && pinchK > 1) return pinchK;
+    return (arrived && arrived.k > 1) ? arrived.k : PINCH.assume;
+  }
+  function factorAtDx(f, k){
+    const K = (k > 1) ? k : arrivalFactor();
+    const t = f <= 0 ? 0 : (f >= 1 ? 1 : (WORD.curve === 1 ? f : Math.pow(f, WORD.curve)));
+    if(WORD.law === "smooth") return 1 + (t*t*(3-2*t))*(K - 1);
+    return Math.pow(K, t);
+  }
+  function dxAtFactor(Z){
+    const K = arrivalFactor();
+    if(!(Z > 1) || !(K > 1)) return 0;
+    if(Z >= K){
+      // PAST THE ARRIVAL THE FACTOR STOPS MEANING MAGNIFICATION. +1 to +2 is
+      // the SPACING opening -- the neighbours driven off the screen -- not more
+      // zoom, and spreadPage is what draws it. So the last stretch is bought
+      // with a further doubling of the pinch rather than measured in factors
+      // the page never actually reaches.
+      const t = Math.log(Z / K) / Math.log(Math.max(1.0001, PINCH.spread));
+      return 1 + clamp(t, 0, 1);
+    }
+    let t;
+    if(WORD.law === "smooth"){
+      // smoothstep, inverted: e = 3t^2 - 2t^3  ->  t = 1/2 - sin(asin(1-2e)/3)
+      const e = clamp((Z - 1) / (K - 1), 0, 1);
+      t = 0.5 - Math.sin(Math.asin(clamp(1 - 2*e, -1, 1)) / 3);
+    } else {
+      t = Math.log(Z) / Math.log(K);
+    }
+    t = clamp(t, 0, 1);
+    return WORD.curve === 1 ? t : Math.pow(t, 1 / WORD.curve);
+  }
+  // where the page actually is now, as a factor -- the number a pinch grows
+  // from and the one the bench prints.
+  function pinchLevel(){
+    if(dx <= 0) return 1;
+    if(dx <= 1) return factorAtDx(dx, arrivalFactor());
+    return arrivalFactor() * Math.pow(Math.max(1.0001, PINCH.spread), clamp(dx - 1, 0, 1));
+  }
+
   let wordSlideX = 0;         // a step's own lateral push, decayed per frame
   // The lifted-word overlay is gone (Osca: "NO LIFT"), and with it the element
   // it lived in, the highlight that hid the real word underneath it, and the
@@ -1695,9 +1875,66 @@ function mount(o){
   let shiftX = 0;             // ...and the sideways offset that holds the word
   let anchor = null;          // where on the screen the word stays
   let spreadQ = -1, lastWgap = "", lastLgap = "";
+  /* ============ THE MEASURE IS FROZEN FOR THE LENGTH OF THE ZOOM ==========
+     Osca, 8 September: *"the +1 zoom is the whole page, nothing re-wraps."*
+
+     `zoom` multiplies every LENGTH in the subtree, which is exactly why
+     nothing re-wraps -- but the column's own width does not come from a
+     length in the subtree. tokens.css: `--measure: calc(145px + 50vw)`, and a
+     viewport unit is measured against the WINDOW, outside the zoom. Blink
+     resolves it once at computed-value time and holds it: MEASURED here,
+     headless Chromium at 402x874, chapter rect 346 -> 3642.88 at zoom
+     10.5286, ratio 10.5286 exactly, and every paragraph's line count
+     unchanged. That is the right answer -- but it is ONE engine's answer to a
+     question this page should not be asking, and the book is read in
+     WKWebView on the Mac and on the phone. "Nothing re-wraps" must not depend
+     on which engine resolved a vw.
+
+     So the three lengths `.chapter`'s width can come from are read ONCE,
+     unzoomed, in px, and written on the column for exactly as long as the
+     zoom is on. Inside the zoomed subtree they are then plain px -- the one
+     kind of length every engine multiplies -- and the chapter is k times the
+     width it had, by construction, in any browser. Three custom properties,
+     one probe, once a visit; removed with the zoom.
+
+     (It freezes the measure against a resize DURING the zoom, which is the
+     right trade: a window resized mid-pinch re-wrapping the page under the
+     word is the fault, not the fix.) */
+  const MEASURED = ["--measure", "--box-lyric", "--box-verse"];
+  let measureFrozen = false;
+  function freezeMeasure(){
+    const col = o.readerCol;
+    if(measureFrozen || !col) return;
+    measureFrozen = true;              // once a visit, whether or not it lands
+    try{
+      const doc = col.ownerDocument;
+      if(!doc || !doc.createElement) return;
+      const probe = doc.createElement("div");
+      probe.style.cssText = "position:absolute;left:-99999px;top:0;height:0;"
+        + "padding:0;border:0;visibility:hidden;pointer-events:none";
+      col.appendChild(probe);
+      const px = {};
+      MEASURED.forEach(k => {
+        probe.style.width = "var(" + k + ")";
+        const w = probe.offsetWidth;
+        if(w > 0) px[k] = w;
+      });
+      if(probe.remove) probe.remove();
+      else if(probe.parentNode) probe.parentNode.removeChild(probe);
+      Object.keys(px).forEach(k => col.style.setProperty(k, px[k].toFixed(2) + "px"));
+    }catch(_){}
+  }
+  function thawMeasure(){
+    const col = o.readerCol;
+    measureFrozen = false;
+    if(!col || !col.style) return;
+    try{ MEASURED.forEach(k => col.style.removeProperty(k)); }catch(_){}
+  }
   function writePageZoom(z, dx){
     const col = o.readerCol;
     if(!col) return;
+    // BEFORE the first factor goes on, while the page is still its own size.
+    freezeMeasure();
     pageZ = z; shiftX = dx;
     // `left` is a length INSIDE the zoomed subtree, so the browser multiplies
     // it by the same factor: to move the page dx on the screen, write dx/z.
@@ -1742,7 +1979,15 @@ function mount(o){
     // on is put back under it, in the page's own units, first.
     if(col && pane && pageZ > 1.0001){
       const py = pane.getBoundingClientRect ? pane.getBoundingClientRect().top : 0;
-      const at = anchor ? anchor.y : py + (pane.clientHeight || 0)/2;
+      // THE POINT THE PAGE IS PUT BACK ABOUT HAS TO BE ON THE PAGE. It is a
+      // viewport coordinate by construction, so anything outside the view is a
+      // rect that lied (a section content-visibility had stopped rendering, a
+      // word panned off the edge) and the middle of the pane is the honest
+      // answer. Without this the subtraction below can go negative and the
+      // reader is clamped to the top of the book.
+      const mid = py + (pane.clientHeight || 0)/2;
+      let at = anchor ? anchor.y : mid;
+      if(!(at >= py - 2 && at <= py + (pane.clientHeight || 0) + 2)) at = mid;
       const content = pane.scrollTop + (at - py);
       const max = (pane.scrollHeight || 0)/pageZ - (pane.clientHeight || 0);
       let to = content/pageZ - (at - py);
@@ -1750,9 +1995,11 @@ function mount(o){
       if(max > 0 && to > max) to = max;
       pane.scrollTop = to;
       programmaticTop = to;
+      leaving = to;
     }
     pageZ = 1; shiftX = 0;
     clearZoomedChapter();
+    thawMeasure();
     if(col){
       col.style.removeProperty("zoom");
       col.style.removeProperty("left");
@@ -1760,6 +2007,35 @@ function mount(o){
       if(col.classList) col.classList.remove("zoomed");
     }
     if(o.readerPane && o.readerPane.classList) o.readerPane.classList.remove("zoomed");
+    // ...AND THE PLACE HAS TO BE HELD WHILE THE BROWSER RELEARNS THE PAGE.
+    // Taking the factor off is a size change of the whole column, and under
+    // content-visibility a size change makes the browser throw away every
+    // height it had learned: the column's total height collapses for a moment
+    // and the scroll position is clamped against it. The same lie
+    // commitReaderEdge already has holdOn() for, from the other direction --
+    // and measured here, coming out of a pinch at 2.88x on the complete
+    // Shakespeare, the reader went from 94,195 to 0. The cover. The number
+    // above is right; it just has to be re-asserted until the heights are back.
+    if(leaving != null){ holdTop(leaving); leaving = null; }
+  }
+  // Pin the scroller to one place for a few frames, abandoning the moment
+  // there is any input of the reader's own. holdOn()'s own shape, against an
+  // absolute position rather than a section -- there is no section to hold to
+  // here, because what moved is every height in the column at once.
+  let leaving = null;
+  function holdTop(want){
+    const pane = o.readerPane;
+    if(!pane) return;
+    const mine = inputTick;
+    let tries = 0, stable = 0;
+    const step = () => {
+      if(!o.readerPane || inputTick !== mine) return;
+      if(Math.abs(pane.scrollTop - want) > 1){ pane.scrollTop = want; stable = 0; }
+      else stable++;
+      programmaticTop = pane.scrollTop;
+      if(stable < 4 && ++tries < 45) requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
   }
   // ---- WHERE THE WORD IS, RIGHT NOW. One rect, off the live page.
   function wordRectNow(){
@@ -2070,14 +2346,94 @@ function mount(o){
     if(!o.readerCol) return;
     if(wordF <= 0){ clearWordZoom(); return; }
 
+    // ---- INSIDE THE PINCH'S OWN BAND THE PAGE IS FREE, AND THE ANCHOR
+    // FOLLOWS. Below the gate the page is a page you are looking around --
+    // scrolled, panned, read -- and the loop at the foot of this function
+    // exists to hold ONE word perfectly still, which is the opposite thing. So
+    // while the factor is not actually changing, the anchor is moved to
+    // wherever the word now IS: every correction below then comes out zero,
+    // the scroller and the pan are yours, and the instant the pinch moves
+    // again the hold is back with the word exactly where the pan left it.
+    //
+    // ONLY A RECTANGLE THAT IS ON THE SCREEN, though. `anchor` is a point on
+    // the VIEWPORT, and a word panned out of the view -- or one whose section
+    // content-visibility has stopped rendering -- answers with a box that is
+    // nothing of the kind: measured after a pan of -450px, anchor.y 177,984,
+    // which clearPageZoom then subtracted from the position it was putting the
+    // reader back at, sending the reader to 0. The cover.
+    //
+    // AND WHAT YOU HAVE PANNED TO IS WHAT YOU ARE LOOKING AT. When the word
+    // really has gone off the screen, the page is not pointing at anything you
+    // can see -- the next pinch would haul it back, and one word view would
+    // open on a word from before the pan. The word in the middle of what is on
+    // the screen NOW takes over. It is done HERE, once a frame, and not inside
+    // panBy: a burst of drags between two frames would otherwise re-choose a
+    // word per drag, against rects from before the drag before it (measured:
+    // a 200-drag burst moved the reader 61,626px, because one of those choices
+    // landed on a word already off screen and the arrival SEATED to it).
+    if(pinchHold && !pinching){
+      const f = wordRectNow(), vh = window.innerHeight || 0, vw = window.innerWidth || 0;
+      const on = f && f.width > 0 && f.bottom > 0 && f.top < vh && f.right > 0 && f.left < vw;
+      // A RECT THAT IS MERELY JUST OFF THE SCREEN IS STILL A RECT. Within a
+      // couple of viewports it is the word's real box and the anchor may
+      // follow it out of view, which is what stops the hold hauling the page
+      // back while you are still panning; beyond that it is a lie (a section
+      // content-visibility has stopped rendering answers in the tens of
+      // thousands) and nothing is written from it.
+      const sane = f && f.width > 0 && Math.abs(f.top) < vh*3 && Math.abs(f.left) < vw*3;
+      if(on || (sane && pinchHold)) anchor = { x: f.left + f.width/2, y: f.top + f.height/2 };
+      if(!on){
+        const hit = wordUnder(Math.round(vw/2), Math.round(vh/2));
+        if(hit && (hit.ch !== wordChapterIdx || hit.wi !== wordIdx)){
+          wordIdx = hit.wi;
+          setCursor(hit.ch, hit.wi, "pan");
+          paintWordHighlight();
+          // ONLY THE ANCHOR MOVES. `arrived` is NOT thrown away, and that is
+          // the whole of what stops this being a page that bolts: computeArrived
+          // measures the word with the zoom taken OFF, which only tells the
+          // truth while the scroller is in the page's own units -- at rest. Ask
+          // it in the middle of a zoom and the browser clamps the scroll to the
+          // unzoomed height for the length of the measurement, the word reads
+          // as off the screen, and the arrival answers by SEATING to it.
+          // Measured on the complete Shakespeare, one drag: seating true and
+          // stuck, k 0, and the reader 271,760 -> 94,030. The factor on the
+          // page is a function of the k already in hand, so keeping it is also
+          // what makes the re-anchor invisible; the new word's own arrival is
+          // measured the next time the page is genuinely at rest.
+          const nb = wordRectNow();
+          if(nb && nb.width > 0) anchor = { x: nb.left + nb.width/2, y: nb.top + nb.height/2 };
+        }
+      }
+    }
+
     if(!arrived){ arrived = computeArrived(); lastDy = Infinity; stuckY = 0; }
+    // AND THE GESTURE ADOPTS THE MEASUREMENT THE MOMENT THERE IS ONE. beginPinch
+    // measures the word it is starting on, but there are states where it cannot
+    // -- the reader still settling from a chapter jump, a section the browser
+    // has not laid out yet -- and it falls back to PINCH.assume. Left there for
+    // the length of the gesture, the fingers and the page would be reckoning in
+    // two different k's: measured on a 393x852 phone, where the arrival is
+    // 10.935 and the assumption 16, a pinch to 1.25x wrote 1.21 and the first
+    // two steps of the gesture wrote nothing at all. What is on the screen is
+    // factorAtDx(dx, arrived.k) either way, so adopting it moves nothing --
+    // only the mapping from how far apart the fingers are, and only once.
+    if(pinching && arrived && arrived.k > 1) pinchK = arrived.k;
     if(!arrived || !anchor) return;
 
-    const wc = WORD.curve === 1 ? wordF : Math.pow(wordF, WORD.curve);
-    const e  = wc<=0 ? 0 : (wc>=1 ? 1 : wc*wc*(3-2*wc));
-    const z  = 1 + e*(arrived.k - 1);
+    // ONE LAW, AND IT IS NOT WRITTEN TWICE. factorAtDx is what the pinch
+    // inverts to find its place on the axis, so the number it returns is the
+    // number this writes -- the two can never disagree about where the page is.
+    const z  = factorAtDx(wordF, arrived.k);
     writePageZoom(z, shiftX);
-    spreadPage(spreadNow);            // position +2's own progress, quantised
+    // POSITION +2'S OWN PROGRESS, QUANTISED -- AND IT MAY NOT START UNTIL +1
+    // IS ACTUALLY ARRIVED AT. Osca, 8 September: *"the word-parting/spacing
+    // must be strictly the +2 step and must NEVER reflow the +1 zoom."*
+    // `spreadF` is clamp(dx - 1, 0, 1) already, so this is a second lock on
+    // the same door rather than a new rule -- but the spacing is a
+    // word-spacing on the COLUMN and it re-wraps every line it touches, so it
+    // is the one thing on this page that must never be able to leak below the
+    // arrival by a rounding, a stale frame or a driver yet to be written.
+    spreadPage(wordF >= 1 ? spreadNow : 0);
 
     // ---- AND THE WORD DOES NOT MOVE. One rect a frame, and the gap between
     // where the word IS and where it stays is closed: sideways on the column's
@@ -2087,13 +2443,22 @@ function mount(o){
     // under content-visibility is not something arithmetic gets right twice,
     // and both ends are fixed points (e=0 the page exactly as it was, e=1 the
     // word at the same place k times bigger), so it cannot drift.
+    // ---- AND INSIDE THE PINCH'S OWN BAND THE PAGE IS FREE. Below the gate
+    // the page is a page you are looking around -- scrolled, panned, read --
+    // and the loop below exists to hold ONE word perfectly still, which is the
+    // opposite thing. So while the factor is not actually changing, the anchor
+    // FOLLOWS the word rather than holding it: every correction below then
+    // comes out zero, the scroller and the pan are yours, and the instant the
+    // pinch moves again the hold is back, with the word exactly where the pan
+    // left it. (The anchor is a point on the SCREEN, so this is the whole of
+    // what "let go of it" means -- nothing is cleared and nothing re-measured.)
     const b = wordRectNow();
-    let moved = false;
+    let moved = false, heldSide = false;
     if(b && b.width > 0 && !seating){
       // a step's own lateral push, so reading on reads as the words moving
       // sideways past a fixed point rather than one word blinking into another
       const dx = (anchor.x + wordSlideX) - (b.left + b.width/2);
-      if(Math.abs(dx) > 0.5){ writePageZoom(z, shiftX + dx); moved = true; }
+      if(Math.abs(dx) > 0.5){ writePageZoom(z, shiftX + dx); moved = true; heldSide = true; }
       const dy = (b.top + b.height/2) - anchor.y;
       // AND IT GIVES UP RATHER THAN CHASING. If the gap stops shrinking, the
       // thing being measured is not answering -- a section still skipped, a
@@ -2113,6 +2478,16 @@ function mount(o){
         moved = true;
       }
     }
+    // THE PAN'S NOUGHT POINT IS WHEREVER THE HOLD IS STANDING. Not zero: the
+    // offset that keeps an off-centre word under the anchor is routinely
+    // further across than the whole pan budget (measured: shiftX -1475 against
+    // a budget of 317), and clamping a pan against zero then yanks the page
+    // back the moment you touch it. So it tracks every write the HOLD makes --
+    // while the fingers are pinching, and on any frame the closing loop moved
+    // the page sideways itself -- and freezes for the pans, which are the only
+    // other thing that writes it. Panning is then a budget either way from
+    // wherever the zoom actually left the page, which is what it means.
+    if(pinching || heldSide) panBase = shiftX;
     if(wordSlideX){
       wordSlideX *= WORD.decay;
       if(Math.abs(wordSlideX) < 0.5) wordSlideX = 0;
@@ -2136,10 +2511,16 @@ function mount(o){
   function openBook(bk){
     focusPath=null; programmaticTop=null; lastGoodLevels=null; lastGoodPath=null; heldDepth=0;
     book=bk; dx=0; dxVel=0; dxInput=0; dxIdle=0; wordWasOn=false; exitAccum=0;
+    pinching=false; pinchHold=false; pinchEntering=false; pinchK=0; pinchFrom=1;
+    wheelPinch=false; tp=null; panFrom=null; panBase=0;
     exitWord();
     chIndexById = new Map((book.chapters||[]).map((c,i)=>[c.id,i]));
     destroyPane(1); destroyPane(2);      // a previous book's own deeper panes, if any
     if(readerPage){ o.readerPane.scrollTop=0; readerPage.render(book); }
+    /* AFTER the page, never before: the rail measures the chapters the page has
+       just laid out, and a rail built against the previous book's DOM is the
+       "wrong chapter names on the bar" bug in its purest form. */
+    if(readerRail) readerRail.render(book);
     invalidateSections(); applyOffscreenSkip(); curChapterIdx=0; readerFloor=0;
     loadCursor();                    // where this book was last left
     if(cursor && book.chapters && book.chapters[cursor.ch]){
@@ -2201,6 +2582,9 @@ function mount(o){
     resetReaderChrome();
     book=null;
     dx=0; dxVel=0; dxInput=0; dxIdle=0; exitAccum=0;
+    pinching=false; pinchHold=false; pinchEntering=false; pinchK=0; pinchFrom=1;
+    wheelPinch=false; tp=null; panFrom=null; panBase=0;
+    swipeDrop();
     lastGoodLevels=null; lastGoodPath=null; heldDepth=0; focusPath=null;
     showScreen("dashboard");
     if(o.onLibrary) o.onLibrary();
@@ -2265,7 +2649,69 @@ function mount(o){
   }
   // move to a position: the axis goes there and the gesture state is cleared,
   // so the spring is carrying it and nothing is still pushing.
-  function goPos(p){ setDx(p); dxVel = 0; dxInput = 0; detent = false; }
+  function goPos(p){ setDx(p); dxVel = 0; dxInput = 0; detent = false; pinchHold = false; snapCancel(); }
+
+  /* ================== ONE PUSH ON THE AXIS, AND ONE ONLY ==================
+     Osca, 8 September: *"the phone reader navigates panes the SAME way the
+     Mac does ... Reuse the Mac's logic; do not reinvent a gesture."*
+
+     Everything the sideways wheel did to dx used to live inside the wheel
+     handler, so a second driver could only ever be a COPY of it -- and a copy
+     is where "the same, except" comes from. It is one function now, in dx's
+     own units, and the wheel is its first caller rather than its owner. What
+     it holds is the whole of the axis's grammar and nothing else:
+
+       * the pinch's rest point is over the moment the axis is pushed;
+       * inside one word view a push only LEAVES the view (the reading is on
+         the other axis), so there is no exit gate to consider;
+       * past the deepest pane this book's own trail actually has, a
+         DELIBERATE push -- EXIT_PUSH's worth, not one tick -- goes back to
+         the library, and anything short of it is not an exit and re-arms.
+
+     THE GATE IS MEASURED IN dx, NOT IN PIXELS, and that is the only change to
+     the wheel: `EXIT_PUSH * T.gain` is exactly what `EXIT_PUSH` px of wheel
+     becomes after `deltaX * T.gain`, so for the wheel the threshold is the
+     same number it always was, at any T.gain (both sides scale together, so
+     the comparison is the identical one). A driver whose input is not px of
+     wheel -- a finger on glass -- can then mean the same thing by it: "as far
+     as the axis would have travelled", not "as many pixels as a trackpad
+     would have sent".
+
+     Returns what it did, so a driver can tell a push that landed from one the
+     gate swallowed. */
+  function axisPush(d){
+    pinchHold = false;
+    /* ============ ONE WORD IS THE PINCH'S, AND ONLY THE PINCH'S ===========
+       Osca, 8 September: *"one-word is PINCH ONLY ... a drag from the right
+       must do nothing toward one-word."*
+
+       The push and the pinch had both been driving the same dx, so a sideways
+       swipe ran the whole word axis -- and because a push carries momentum it
+       did not stop at +1 either. MEASURED, this file, headless Chromium at
+       402x874: ONE sixty-tick sideways wheel took dx 0 -> 2, which puts
+       word-spacing 143.73px on the column and re-wraps every paragraph in the
+       book (line counts 8,4,4,4,... -> 33,16,11,17,...) WHILE the page is
+       still visibly zooming. That is the re-wrap in the screen recording, and
+       this is the half of it that is a gesture rather than a stylesheet.
+
+       So the axis is cut in two at 0. Everything at and below it -- the panes,
+       the book, the library, the deliberate push out -- is the push's, exactly
+       as it was and untouched. Everything above it is the pinch's. A push may
+       still travel DOWN out of the word (that is the way home, and it has to
+       stay) and it may still close a pane back toward the book; what it may
+       never do is cross 0 upward. stepDx holds the same line against the
+       momentum of a push already made, which is the other half of this rule. */
+    if(d > 0 && dx >= -DX_REST){ exitAccum = 0; return "held"; }
+    if(levelOf(dx) === "word"){ dxInput += d; return "word"; }
+    if(dx <= -currentMaxLeft() && d < 0){
+      exitAccum += -d;
+      if(exitAccum > EXIT_PUSH * T.gain){ closeToLibrary(); exitAccum = 0; return "library"; }
+      return "gate";
+    }
+    exitAccum = 0;
+    dxInput += d;
+    return "push";
+  }
 
   // ONE WRITER FOR THE READER'S OWN TRANSFORM -- and since 6 Sep the panes'
   // push is the only thing left on it.
@@ -2541,8 +2987,53 @@ function mount(o){
     return (ch.n?ch.n+" ":"")+(ch.t||"chapter "+(i+1));
   }
 
+  /* ================= THE SWITCH IS A TRAVEL, NOT A CUT ==================
+     Osca, 8 September: *"works both ways but isn't smooth"*.
+
+     The stretch between the page and the word was closed by a fraction of the
+     remaining distance per frame, `Math.min(1, T.snap * OUT_SNAP * dt)`. With
+     the shipped numbers that product is 0.576 x 9 = 5.184, so at any ordinary
+     frame the min() saturates at 1 and the WHOLE remaining distance is closed
+     in a SINGLE FRAME. There was no arrival to be smooth: releasing a pinch at
+     the gate cut straight to one word and leaving it cut straight back. A
+     spring that always saturates is not a spring, which is also why the
+     bench's own "snap back to the page" slider could not be felt at any value
+     -- even 1 x 0.576 saturates at dt >= 1.74.
+
+     So the two word stretches TRAVEL: a smoothstep from wherever the gesture
+     left the axis to whichever end the release committed to, over a duration
+     taken from the distance and from OUT_SNAP -- which keeps its meaning
+     ("how hard that switch throws": higher = shorter) and becomes a control
+     that can be felt, ~750ms at 1 down to ~72ms at 14. Zero velocity at both
+     ends, which is the whole of "smooth both ways". It is abandoned the
+     instant there is a hand on the axis again -- any push, any pinch --
+     exactly as startPull is. */
+  let snapFrom = 0, snapTo = null, snapT = 0, snapDur = 0;
+  function snapStart(goal){
+    const d = Math.abs(goal - dx);
+    if(d <= DX_REST){ setDx(goal); snapTo = null; return; }
+    snapFrom = dx; snapTo = goal; snapT = 0;
+    // root-of-distance, startPull's own shape and for the same reason: a
+    // release close to the end must not crawl and a long one must not race.
+    // At OUT_SNAP 6, half the stretch is 10 frames (167ms) and a third of it
+    // 7.8 (130ms); at 14 it is 4.3 (72ms), at 1 it clamps at 45 (750ms) -- the
+    // whole range is reachable from the bench and every part of it is felt.
+    snapDur = clamp(85 / Math.max(0.25, OUT_SNAP) * Math.sqrt(d), 3, 45);
+  }
+  function snapStep(dt){
+    if(snapTo == null) return false;
+    snapT += (dt || 1);
+    const t = Math.min(1, snapT / snapDur);
+    setDx(snapFrom + (snapTo - snapFrom) * (t*t*(3-2*t)));
+    if(t >= 1){ setDx(snapTo); snapTo = null; }
+    markPaint();
+    return true;
+  }
+  function snapCancel(){ snapTo = null; }
+
   let dxIdle=0;
   function stepDx(dt){
+    if(dxInput || pinching) snapCancel();
     if(dxInput){
       // THE DETENT AT THE READER. Coming home from the word, the same gesture
       // used to carry straight through the page and open the contents --
@@ -2561,6 +3052,15 @@ function mount(o){
         markPaint();
         return;
       }
+      // ...AND THE MIRROR OF IT, 8 Sep. axisPush refuses a push that would
+      // cross 0 upward; this is the same line held against what is left over
+      // of one already made, so a pane closed with a flick stops at the book
+      // rather than carrying on into a zoom nobody pinched.
+      if(wasIn <= 0 && dx > 0){
+        setDx(0); dxVel = 0; dxInput = 0; dxIdle = 0;
+        markPaint();
+        return;
+      }
       dxVel = dxVel*Math.pow(T.decay,dt) + dxInput*T.couple;
       if(dxVel>T.vmax) dxVel=T.vmax; else if(dxVel<-T.vmax) dxVel=-T.vmax;
       dxInput=0;
@@ -2576,11 +3076,18 @@ function mount(o){
       // lands ON zero, with nothing left over. Going the other way needs its
       // own push, which is what "sticks to the main reader tab" means.
       if(was > 0 && dx < 0){ setDx(0); dxVel = 0; dxInput = 0; dxIdle = 0; detent = true; }
+      if(was <= 0 && dx > 0){ setDx(0); dxVel = 0; dxInput = 0; dxIdle = 0; }
       dxVel *= Math.pow(T.decay, dt);
       if(dx<=-currentMaxLeft() || dx>=1) dxVel=0;
       dxIdle=0;
     } else {
       dxVel *= Math.pow(T.decay, dt);
+      // A TRAVEL ALREADY UNDER WAY IS NOT WAITING FOR ANYTHING. T.grace below
+      // exists to bridge the gaps inside a real trackpad's momentum TAIL; a
+      // switch that has already been thrown has no tail to bridge, and making
+      // it sit out the grace put ~130ms of nothing between the release and the
+      // page moving -- dead time, which is half of what "isn't smooth" is.
+      if(snapTo != null){ snapStep(dt); return; }
       // Coasting has genuinely stopped -- but a REAL wheel gesture (a
       // trackpad's own momentum tail, not this file's own synthetic test
       // events) keeps sending small events with real gaps between them,
@@ -2616,15 +3123,31 @@ function mount(o){
       // the nearest end regardless was what once made the word impossible to
       // leave -- fourteen pushes and dx never moved off 1. A switch has a
       // direction; this one takes it from you, once, when you let go.)
-      let goal = target, grip = T.snap;
+      // A PAGE HELD ZOOMED IS A PLACE TO BE, and it is the only one this axis
+      // has between two positions. Everywhere else in 0 < dx < 1 there is
+      // genuinely nothing to look at, which is why the switch below exists --
+      // but the pinch's own band IS the thing that was asked for ("zoom into
+      // the page... you drag to pan around it"), so while the hold stands the
+      // page stays exactly where the fingers left it. Any push of the axis
+      // itself -- a wheel, an arrow -- drops the hold and the switch is back.
+      //
+      // AND FINGERS ON THE GLASS OWN THE AXIS (8 Sep). A live pinch writes dx
+      // straight and resets dxIdle every time it moves -- but a gesture that
+      // PAUSES past the gate for T.grace frames used to have this branch throw
+      // the page to one word out from under the hand still holding it. Nothing
+      // eases while the gesture is still running.
+      if(pinching) return;
+      if(pinchHold && dx > 0 && dx < PINCH.gate) return;
       if(dx > 0 && dx < 1){
-        goal = dx >= WORD_COMMIT ? 1 : 0;
-        grip = T.snap * OUT_SNAP;
-      }else if(dx > 1 && dx < 2){
-        goal = (dx - 1) >= WORD_COMMIT ? 2 : 1;
-        grip = T.snap * OUT_SNAP;
+        if(snapTo == null) snapStart(dx >= WORD_COMMIT ? 1 : 0);
+        snapStep(dt); return;
       }
-      if(Math.abs(dx-goal) > DX_REST) setDx(dx + (goal-dx)*Math.min(1, grip*dt));
+      if(dx > 1 && dx < 2){
+        if(snapTo == null) snapStart((dx - 1) >= WORD_COMMIT ? 2 : 1);
+        snapStep(dt); return;
+      }
+      const goal = target;
+      if(Math.abs(dx-goal) > DX_REST) setDx(dx + (goal-dx)*Math.min(1, T.snap*dt));
     }
   }
 
@@ -2633,6 +3156,15 @@ function mount(o){
     const dt = lastT ? Math.min(3,(now-lastT)/16.667) : 1;
     lastT=now;
     if(screen==="open") {
+      // A CTRL+WHEEL PINCH HAS NO END EVENT -- Chromium sends a stream of
+      // wheels and then simply stops -- so the gesture ends when the stream
+      // does, counted in the same dt-units the whole of this file's physics
+      // already run in rather than off a wall clock the harness would have to
+      // learn about.
+      if(wheelPinch){
+        wheelPinchIdle += dt;
+        if(wheelPinchIdle > 8){ wheelPinch = false; endPinch(); }
+      }
       stepDx(dt);
       if(levelOf(dx)==="word") coastWord(dt);
       stepPull(dt);                        // the travel toward an off-screen word
@@ -2780,11 +3312,433 @@ function mount(o){
   // so that touching the PAGE wakes the line that says where you are.
   addEventListener("pointerdown", () => { wakeSub(); }, {passive:true});
 
+  // ============================ THE PINCH ==================================
+  // The gesture in three calls -- start, scale, end -- and three engines'
+  // worth of events funnelled into them below. Everything the pinch does to
+  // the page it does by moving `dx`; there is no second zoom, no second mode
+  // and no second painter. See THE PINCH IS THE WHOLE CONTINUUM above.
+
+  // WHICH WORD IS UNDER THE FINGERS. The same caret-from-a-point the click has
+  // used since 7 Sep, asked the same way -- not a second route to a word.
+  function wordUnder(x, y){
+    if(x == null || y == null) return null;
+    const c = caretAt(x, y);
+    const hit = c ? wordAt(c.node, c.offset) : null;
+    if(hit) return hit;
+    // ...AND A POINT THAT IS NOT ON A WORD IS STILL ON A PAGE. The gap between
+    // two lines, the gutter beside the measure, a point that lands on a
+    // speaker or a stage direction (neither is in the word index) -- all of
+    // them answer nothing, and the cost of nothing is high: with no word
+    // named, enterWord falls back to the one nearest the reading line, and if
+    // THAT one is off the screen the arrival SEATS to it, which is the page
+    // bolting out from under two fingers that were only pinching. So the point
+    // is asked again a little way around itself -- the paragraph the fingers
+    // are over is never wrong by more than a line, and it is on the screen,
+    // which is the whole requirement.
+    const el = (typeof document !== "undefined" && document.elementFromPoint)
+             ? document.elementFromPoint(x, y) : null;
+    const par = el && el.closest ? el.closest("p.line") : null;
+    const tn = par && par.firstChild;
+    if(tn && tn.nodeType === 3){
+      const near = wordAt(tn, 0);
+      if(near) return near;
+    }
+    // A SMALL GRID AND NOT THE WHOLE PAGE. The complete Shakespeare lays out
+    // 115,032 line boxes; asking every one of them for a rectangle to find the
+    // nearest is a layout of the entire book, sixty times a second away from a
+    // gesture that has to start NOW. Nine caret reads cost nothing and answer
+    // the same question about the only part of the page that is on the screen.
+    const vh = window.innerHeight || 0, vw = window.innerWidth || 0;
+    for(const dy of [-14, 14, -28, 28, -44, 44]){
+      for(const ax of [x, Math.round(vw*0.5), Math.round(vw*0.35)]){
+        const py = y + dy;
+        if(py < 4 || py > vh - 4) continue;
+        const c2 = caretAt(ax, py);
+        const h2 = c2 ? wordAt(c2.node, c2.offset) : null;
+        if(h2) return h2;
+      }
+    }
+    // ...AND LAST, THE WORD THE READER IS ALREADY LOOKING AT -- if it is on the
+    // screen. Not every point on a page of text is on a word this book counts:
+    // a speaker's name and a stage direction are neither in wordsOf() nor
+    // rendered as `p.line`, and on the complete Shakespeare a good half of the
+    // view can be one or the other, so a pinch aimed squarely at the page could
+    // resolve nothing at all and refuse. The word nearest the reading line is
+    // what the eye is on in that case. It is measured, not assumed: off the
+    // screen it is refused, because zooming about a point outside the view is
+    // the seat, and the seat is the page bolting from under two fingers.
+    const ch = currentReaderChapter();
+    if(book && book.chapters && book.chapters[ch] && o.readerPane){
+      const keep = { c: wordChapterIdx, i: wordIdx, d: wordDomIndex, w: wordWords };
+      wordChapterIdx = ch;
+      wordWords = wordsOf(book.chapters[ch]);
+      wordDomIndex = buildWordDomIndex(ch);
+      wordIdx = clamp(wordIdxNearLine(ch), 0, Math.max(0, wordTotal()-1));
+      const r = wordRectNow(), vh = window.innerHeight || 0;
+      if(r && r.width > 0 && r.bottom > 8 && r.top < vh - 8) return { ch: ch, wi: wordIdx };
+      wordChapterIdx = keep.c; wordIdx = keep.i; wordDomIndex = keep.d; wordWords = keep.w;
+    }
+    return null;
+  }
+  function beginPinch(x, y){
+    if(screen !== "open" || !book) return false;
+    inputTick++;
+    wakeSub();
+    pinchFrom = pinchLevel();
+    pinching = true;
+    // AT REST THE GESTURE NAMES ITS OWN WORD, and only at rest: a pinch that
+    // carries on from a page already zoomed is the same gesture continuing,
+    // and re-choosing the word half way through it would move the ground.
+    // A GESTURE THAT NAMES NO POINT IS A GESTURE AT THE MIDDLE OF THE SCREEN.
+    // Every engine here sends one, but a handle called from a bench (or from
+    // this file's own checks) need not, and refusing it would make the gesture
+    // untestable without a pair of fingers.
+    if(x == null || y == null){
+      x = (window.innerWidth || 0) / 2;
+      y = (window.innerHeight || 0) / 2;
+    }
+    if(dx <= DX_REST){
+      // THE WHOLE GESTURE IS AN ENTERING, whether or not a word was named. It
+      // is the flag that stops enterWord travelling to the cursor, and a pinch
+      // that could not resolve a word needs that MORE than one that could, not
+      // less: the fallback word is the one nearest the reading line, and
+      // seating to it is the page moving under two fingers that only pinched.
+      pinchEntering = true;
+      const hit = wordUnder(x, y);
+      // A PINCH ANCHORS ON A WORD, AND WHERE THERE IS NONE IT DOES NOT START.
+      // The reader opens on chapter zero's own tinted opener -- the cover, the
+      // book's title and its author, and NO running text on the screen at all:
+      // measured on the complete Shakespeare at scrollTop 0, 0 of 115,032
+      // p.line boxes intersect the view. There is nothing there to zoom INTO,
+      // and the nearest word in the book is thousands of pixels below, so
+      // taking it would seat the reader to it -- a cover that answers a pinch
+      // by bolting into chapter one. It answers by doing nothing instead, and
+      // the page underneath is left exactly as it was.
+      if(!hit){ pinching = false; pinchEntering = false; return false; }
+      wordIdx = hit.wi;
+      setCursor(hit.ch, hit.wi, "pinch");
+      paintWordHighlight();
+      anchor = null; arrived = null;
+      // measured NOW, once, off the word the fingers are on -- so the factor
+      // the whole gesture is reckoned against cannot change under it when the
+      // arrival would otherwise land a frame or two later.
+      const a = computeArrived();
+      if(a) arrived = a;
+    }
+    pinchK = (arrived && arrived.k > 1) ? arrived.k : PINCH.assume;
+    return true;
+  }
+  function pinchTo(Z){
+    if(!pinching) return dx;
+    // CLAMPED AT 1x. There is no zooming OUT of a page, and a pinch must never
+    // be a way into the contents: the left half of the axis is the left hand's,
+    // and this gesture stops dead at the page it started on.
+    const to = dxAtFactor(Z < 1 ? 1 : Z);
+    snapCancel();
+    setDx(to < 0 ? 0 : to);
+    dxVel = 0; dxInput = 0; dxIdle = 0; detent = false;
+    pinchHold = dx > DX_REST && dx < PINCH.gate;
+    markPaint();
+    return dx;
+  }
+  function endPinch(){
+    if(!pinching) return dx;
+    pinching = false; pinchEntering = false; pinchK = 0;
+    // WHAT THE RELEASE DECIDES, and it is the rule this file already had: past
+    // the gate the snap commits to the word (stepDx, WORD_COMMIT), short of it
+    // the page simply stays where you left it, which is what the hold is.
+    pinchHold = dx > DX_REST && dx < PINCH.gate;
+    // AND THE TRAVEL BEGINS AT THE RELEASE (8 Sep). Left to stepDx's own rest
+    // branch it could not start until dxIdle had cleared T.grace -- eight
+    // dt-units, ~130ms of the page doing nothing at all while your fingers are
+    // already off the glass. The grace is for a momentum tail; a lifted pinch
+    // has none.
+    if(!pinchHold){
+      if(dx > 0 && dx < 1) snapStart(dx >= WORD_COMMIT ? 1 : 0);
+      else if(dx > 1 && dx < 2) snapStart((dx - 1) >= WORD_COMMIT ? 2 : 1);
+    }
+    markPaint();
+    return dx;
+  }
+  // ---- THE PAN. Osca: "you drag to pan around it, exactly like zooming a
+  // photo or a webpage." Sideways is the column's own offset -- the same
+  // `left` the zoom writes, so there is still only ONE thing moving the page
+  // across the screen -- and up and down is the scroller, which is what it has
+  // always been. Both are clamped to the page itself: a zoomed column overhangs
+  // the window by exactly (its width x the factor - the window), half each
+  // side, and you may reach either edge of that and no further.
+  function panBy(px, py){
+    if(!PINCH.pan || !pinchHold) return false;
+    let moved = false;
+    if(px){
+      // THE BUDGET IS THE OVERHANG THE FACTOR MADE, AND IT IS MEASURED FROM
+      // WHERE THE ZOOM LEFT THE PAGE -- not from the middle of the window.
+      // The offset the zoom itself is standing on is not a pan: it is what
+      // keeps the word where it was standing while the page grew around it,
+      // and on a word near one edge of the measure that offset is large and
+      // entirely correct. Counting it against the pan clamped a page that had
+      // never been panned, and yanked it back the moment you touched it
+      // (measured: shiftX -582 against a budget of 317, so the first drag
+      // LEFT moved the page RIGHT by 265px). So `panBase` is that resting
+      // offset, and the pan may travel the overhang either way from it.
+      const vw = window.innerWidth || 0;
+      const over = Math.max(0, readerColumnWidth()*pageZ - vw) / 2;
+      let to = shiftX + px;
+      if(to > panBase + over) to = panBase + over;
+      else if(to < panBase - over) to = panBase - over;
+      // half a pixel, not a hundredth: a drag that has reached the edge of the
+      // page must SAY it has reached it, because the wheel above reads this
+      // answer to decide whether there is any page left to pan -- and a hair
+      // of movement per event would keep the hold alive for ever.
+      if(Math.abs(to - shiftX) > 0.5){ writePageZoom(pageZ, to); moved = true; }
+    }
+    if(py && o.readerPane){
+      const max = (o.readerPane.scrollHeight || 0) - (o.readerPane.clientHeight || 0);
+      let to = o.readerPane.scrollTop - py;
+      if(to < 0) to = 0; else if(max > 0 && to > max) to = max;
+      if(to !== o.readerPane.scrollTop){
+        o.readerPane.scrollTop = to; programmaticTop = to; moved = true;
+      }
+    }
+    if(moved) markPaint();
+    return moved;
+  }
+
+  // ---- THE THREE WAYS A PINCH ARRIVES. The phone sends touches. Safari and
+  // every WKWebView -- which is what Frank's window and the whole of iOS are --
+  // send GestureEvents for the same two fingers, on glass or on a trackpad, and
+  // they arrive ALONGSIDE the touches, so where they exist they win and the
+  // touch route stands down. Chromium's own pinch is a wheel with ctrl held,
+  // and so is ctrl+scroll on a mouse, which is the same intention said another
+  // way. Three engines, one pair of calls.
+  let sawGesture = false, tp = null, panFrom = null;
+  let wheelPinch = false, wheelPinchIdle = 0;
+
+  /* ====================== THE SWIPE IS THE WHEEL ===========================
+     Osca, 8 September: *"the phone reader navigates panes the SAME way the Mac
+     does: touch drives the wheel/dx pane scroll, continuously through to the
+     library ... reading -> scroll reveals the contents panes (scroll up/down
+     through the chapters) -> keep scrolling past the deepest pane -> back to
+     the library. One continuous touch scroll, mirroring the Mac's wheel
+     exactly. Reuse the Mac's logic; do not reinvent a gesture."*
+
+     WHAT WAS HERE BEFORE, AND WHY IT WAS THE WRONG SHAPE. A drag that armed
+     only inside 26px of the left edge, only on a page at rest, and only
+     rightwards. It could open pane 0 and it could open nothing else: the
+     moment a pane was under your finger the gesture was disarmed, so the way
+     from the contents to the library was not a scroll at all -- it was a
+     button in the pane's foot ("leave the book"), and a button is not what the
+     Mac does. The Mac has ONE continuous axis and one gesture that rides it
+     the whole way. So has this now.
+
+     IT IS NOT A SECOND WAY OF OPENING THE CONTENTS. It opens nothing, animates
+     nothing, and knows nothing about a pane: it calls `axisPush`, which is the
+     sideways wheel's own function. Every behaviour along the axis therefore
+     arrives for free and IDENTICALLY -- the panes come out under the finger,
+     the detent at the reading page still holds, however many panes this book's
+     trail has are each a position, the release still eases to whichever rest
+     point `dxTargets()` says is nearest, a flick still carries (dxVel), and
+     past the deepest pane the same EXIT_PUSH gate hands you to
+     `closeToLibrary()`. There is no phone copy of any of that to drift.
+
+     THE FINGER'S SIGN. The panes come out as dx goes NEGATIVE and the finger
+     travels the other way, so a rightward drag pushes dx down and a leftward
+     drag pushes it up -- one inversion, here and nowhere else. In wheel terms
+     a rightward finger IS a negative deltaX, which is exactly the Mac's own
+     two-finger swipe toward the contents.
+
+     THE THREE GESTURES CANNOT COLLIDE, and it is decided by COUNT and by
+     AXIS, never by a timer or a zone:
+       * TWO fingers is the pinch, anywhere on the glass. The second finger's
+         own touchstart drops the swipe before beginPinch runs, the same way a
+         `gesturestart` (Safari, and every WKWebView, which is what iOS is)
+         drops it.
+       * ONE finger, held mostly SIDEWAYS, is this.
+       * ONE finger, held mostly UP AND DOWN, is reading: the reader's own
+         scroll on the page, wheel.js's own drag inside a contents pane. It is
+         never taken -- exactly wheel.js's `if(dx > dy) return`, which is how
+         the Mac has always partitioned these two, said for a finger.
+     A page held zoomed by the pinch is panned by one finger (`panFrom`), and
+     that still wins: while `pinchHold` stands the swipe does not arm at all.
+
+     IT IS NOT CLAIMED UNTIL IT IS HORIZONTAL. Nothing is preventDefault-ed and
+     nothing is pushed until the finger has travelled `SWIPE.slop` and travelled
+     it mostly sideways, so an ordinary read is never interrupted to find out
+     what it was. Once claimed it stays claimed for that touch, and a swipe
+     that starts vertical never becomes one.
+
+     PHONE ONLY. `html[data-phone]` is read once, at mount: the Mac's window is
+     a WKWebView too, and "Mac untouched" means untouched. */
+  const SWIPE = {
+    slop: 10,     // px of travel before the gesture is claimed at all
+    gain: 1.15,   // positions per screen-width of travel: one full sweep is one
+                  //    pane and a sixth, so a pane is open before the finger
+                  //    reaches the far side and the last of the push is a flick
+  };
+  const PHONE = (() => { try{ return !!(document.documentElement
+    && document.documentElement.hasAttribute("data-phone")); }catch(_){ return false; } })();
+  let swipe = null;
+  function swipeArm(x, y){
+    if(!PHONE) return false;
+    if(screen !== "open" || !book) return false;
+    if(tp || pinching || pinchHold || panFrom) return false;
+    swipe = { x0:x, y0:y, x:x, y:y, live:false, took:false, axis:null };
+    return true;
+  }
+  // returns true when it has taken the event
+  function swipeMove(x, y){
+    if(!swipe) return false;
+    if(!swipe.live){
+      const ax = Math.abs(x - swipe.x0), ay = Math.abs(y - swipe.y0);
+      if(ax < SWIPE.slop && ay < SWIPE.slop) return false;   // still undecided
+      if(ax > ay) swipe.axis = "dx";
+      // UP AND DOWN READS ON, BUT ONLY INSIDE ONE WORD VIEW -- which is the
+      // wheel's own rule at this level, said for a finger: there, deltaY is
+      // the finest grain there is and the page has nothing left to scroll.
+      // Anywhere else up and down is the reader's own scroll (and, inside a
+      // contents pane, wheel.js's own drag) and is never taken.
+      else if(levelOf(dx) === "word") swipe.axis = "word";
+      else { swipe = null; return false; }
+      swipe.live = true; swipe.x = x; swipe.y = y;
+      inputTick++;
+      wakeSub();
+    }
+    const px = x - swipe.x, py = y - swipe.y;
+    swipe.x = x; swipe.y = y;
+    if(swipe.axis === "word"){
+      // a finger travelling UP carries the reading forward, which is what a
+      // positive wheel deltaY means -- one inversion, and bumpWord's own
+      // WORD_PX decides how far a word is.
+      if(py){ swipe.took = true; bumpWord(-py); markPaint(); }
+      return true;
+    }
+    if(px){
+      swipe.took = true;
+      // the panes come out as dx goes NEGATIVE and the finger travels the
+      // other way, so the sign is inverted here and nowhere else.
+      axisPush(-(px / Math.max(1, window.innerWidth || 1)) * SWIPE.gain);
+      markPaint();
+    }
+    return true;
+  }
+  function swipeDrop(){ swipe = null; }
+  /* A LIVE SWIPE IS NOT A TAP ON A CHAPTER. wheel.js's Column measures its own
+     drag on Y ALONE (`drag.moved += Math.abs(dy)`) and calls anything under
+     5px of it a tap that opens the row let go over. A sideways sweep across an
+     open contents pane is precisely that: nearly no Y at all. On the Mac the
+     two never met -- the axis was a wheel and the Column a pointer drag -- but
+     one finger is both event streams at once, so the swipe has to say so.
+
+     It stops exactly one event, `pointerup`, and only on the touch it actually
+     took: a capture listener on the window runs before the pane's own, and
+     stopping the dispatch there means the Column never sees the release and
+     never opens a chapter. Its `drag` is left standing, which costs nothing --
+     the next `pointerdown` replaces it, and a finger that is not down sends no
+     pointermove. A tap that was only ever a tap is untouched: `took` is set
+     only once the axis has actually been pushed. */
+  addEventListener("pointerup", e => {
+    if(swipe && swipe.live && swipe.took){ e.stopPropagation(); }
+  }, true);
+  const twoAway = (a, b) => Math.sqrt((a.clientX-b.clientX)*(a.clientX-b.clientX)
+                                    + (a.clientY-b.clientY)*(a.clientY-b.clientY));
+  addEventListener("touchstart", e=>{
+    const t = e.touches || [];
+    if(t.length === 2 && !sawGesture){
+      const d = twoAway(t[0], t[1]);
+      if(!(d > 0)) return;
+      // TWO FINGERS IS A PINCH, and it takes the gesture off the swipe
+      // before beginPinch runs -- one place, one line, and neither gesture
+      // has to test for the other anywhere else.
+      swipeDrop();
+      panFrom = null;
+      if(beginPinch((t[0].clientX+t[1].clientX)/2, (t[0].clientY+t[1].clientY)/2)){
+        tp = { d0: d, z0: pinchFrom };
+        if(e.preventDefault) e.preventDefault();
+      }
+      return;
+    }
+    // one finger on a page already held zoomed is a pan -- that reading of
+    // one finger is older than this one and still wins.
+    if(t.length === 1 && pinchHold){ panFrom = { x:t[0].clientX, y:t[0].clientY }; return; }
+    // ...and one finger anywhere else is the axis, IF it turns out to be
+    // sideways. Nothing is preventDefault-ed here: until it has proved itself
+    // horizontal this is still an ordinary touch on an ordinary page, and a
+    // page that scrolls under it.
+    if(t.length === 1) swipeArm(t[0].clientX, t[0].clientY);
+  }, {passive:false});
+  addEventListener("touchmove", e=>{
+    const t = e.touches || [];
+    if(tp && t.length === 2){
+      if(e.preventDefault) e.preventDefault();
+      const d = twoAway(t[0], t[1]);
+      if(d > 0) pinchTo(tp.z0 * d / tp.d0);
+      return;
+    }
+    if(panFrom && t.length === 1 && pinchHold){
+      const px = t[0].clientX - panFrom.x, py = t[0].clientY - panFrom.y;
+      panFrom = { x:t[0].clientX, y:t[0].clientY };
+      if(e.preventDefault) e.preventDefault();
+      panBy(px, py);
+      return;
+    }
+    if(swipe && t.length === 1 && swipeMove(t[0].clientX, t[0].clientY)){
+      // only once the swipe is LIVE, which is the whole of why swipeMove
+      // answers a boolean: an undecided touch must still be able to scroll.
+      if(e.preventDefault) e.preventDefault();
+    }
+  }, {passive:false});
+  function dropTouch(){ if(tp){ tp = null; endPinch(); } panFrom = null; swipeDrop(); }
+  addEventListener("touchend", dropTouch);
+  addEventListener("touchcancel", dropTouch);
+
+  addEventListener("gesturestart", e=>{
+    sawGesture = true;                      // ...and the touch route stands down
+    tp = null; panFrom = null;
+    swipeDrop();                            // a pinch is never a swipe
+    if(!beginPinch(e.clientX, e.clientY)) return;
+    if(e.preventDefault) e.preventDefault();
+  }, {passive:false});
+  addEventListener("gesturechange", e=>{
+    if(!pinching) return;
+    if(e.preventDefault) e.preventDefault();
+    pinchTo(pinchFrom * (e.scale || 1));
+  }, {passive:false});
+  addEventListener("gestureend", e=>{
+    if(!pinching) return;
+    if(e.preventDefault) e.preventDefault();
+    endPinch();
+  }, {passive:false});
+
   // ---------------------------------------------------------------- INPUT
   addEventListener("wheel", e=>{
     inputTick++;
     wakeSub();                       // any wheel wakes the subtitle (job 24)
     if(screen!=="open") return;
+    // A CHROMIUM PINCH IS A WHEEL WITH CTRL HELD, and so is ctrl+scroll on a
+    // mouse -- the same intention said another way. It is the one wheel on this
+    // page that is never the axis and never the reader's own scroll, so it is
+    // taken first, at every level: pinching back OUT of one word is this too.
+    if(e.ctrlKey){
+      if(e.preventDefault) e.preventDefault();
+      if(!pinching){ wheelPinch = beginPinch(e.clientX, e.clientY); }
+      wheelPinchIdle = 0;
+      pinchTo(pinchLevel() * Math.exp(-(e.deltaY || 0) * PINCH.wheel));
+      return;
+    }
+    // ...AND WHILE THE PAGE IS HELD ZOOMED, SIDEWAYS PANS IT. It would
+    // otherwise be the axis, which would throw a page you are in the middle of
+    // looking around straight out into the contents. Up and down is the
+    // scroller's own and is left exactly alone, at every zoom.
+    if(pinchHold && Math.abs(e.deltaX) > Math.abs(e.deltaY)){
+      if(e.preventDefault) e.preventDefault();
+      // ...UNTIL THE PAGE'S OWN EDGE, AND THEN IT LETS GO. A wheel with
+      // nothing left to pan is a wheel pushing the axis, which is what a
+      // sideways wheel has always been -- so the hold drops and this falls
+      // straight through to it, rather than leaving a page that answers
+      // nothing. Same shape as the deliberate push at the deepest pane.
+      if(panBy(-e.deltaX, 0)) return;
+      pinchHold = false;
+    }
     if(levelOf(dx)==="word"){
       // down/up reads on (the finest grain there is); left/right only
       // leaves the view -- same two rules as everywhere else, applied here.
@@ -2793,21 +3747,16 @@ function mount(o){
         return;
       }
       e.preventDefault();
-      dxInput += e.deltaX*T.gain;
+      axisPush(e.deltaX*T.gain);
       return;
     }
     if(Math.abs(e.deltaX) < Math.abs(e.deltaY)) return;   // vertical: the reader's own scroll
+    // THE AXIS IS BEING PUSHED. What that means -- the pinch's rest point
+    // ending, the deliberate push past the deepest pane, the exit -- is
+    // axisPush's, and this handler no longer holds a second copy of it: the
+    // finger on the glass makes the same call (THE SWIPE below).
     e.preventDefault();
-    if(dx<=-currentMaxLeft() && e.deltaX<0){
-      // past the deepest pane this book's own trail actually has, a
-      // deliberate push goes straight back to the library -- one gate,
-      // however many panes were open along the way.
-      exitAccum += -e.deltaX;
-      if(exitAccum>EXIT_PUSH){ closeToLibrary(); exitAccum=0; }
-      return;
-    }
-    exitAccum=0;
-    dxInput += e.deltaX*T.gain;
+    axisPush(e.deltaX*T.gain);
   }, {passive:false});
 
   addEventListener("keydown", e=>{
@@ -2863,13 +3812,68 @@ function mount(o){
        inside its own layout(), so it only needs a frame to run. */
     kickWheels(){ leftPanes.forEach(p=>{ if(p&&p.wheel&&p.wheel.mode) p.wheel.mode(p.wheel.mode()); }); },
     snap:setSnap, get snapNow(){return {snap:T.snap, grace:T.grace};},
+    /* THE RAIL, for the bench and for the headless checks -- `rail.set(k,v)` is
+       the same call bench-page.html makes, so a number proved on the bench is
+       the number the app runs. */
+    get rail(){ return readerRail; },
     /* THE CONTENTS PANES THEMSELVES -- width, the white space between them,
        how far out they start and the shape of the way in. See PANE above. */
     pane:setPane, get paneNow(){return Object.assign({}, PANE);},
+    /* THE PINCH -- its numbers, where the page has got to, and the gesture
+       itself, so a bench (and this file's own checks) can drive it without a
+       pair of fingers. `zoomFactor` is the one number that says how big the
+       page is right now, at any point on the whole continuum. */
+    pinch:setPinch, get pinchNow(){return Object.assign({}, PINCH);},
+    get zoomFactor(){ return pinchLevel(); },
+    get zoomArrival(){ return arrivalFactor(); },
+    get pinchHeld(){ return pinchHold; },
+    get pinchOn(){ return pinching; },
+    /* THE ZOOM'S OWN STATE, read-only and in one place -- what factor is on the
+       column, how far across it is standing, the point the word is being held
+       at, the arrival it is travelling to, and whether the reader is still
+       being brought to the word. A bench prints it; a check reads it; nothing
+       here can be set from outside. */
+    get zoomState(){
+      return { z: pageZ, shift: shiftX, base: panBase,
+               anchor: anchor ? { x: anchor.x, y: anchor.y } : null,
+               k: arrived ? arrived.k : 0, seating: seating,
+               chapter: wordChapterIdx, word: wordIdx };
+    },
+    pinchStart(x, y){ return beginPinch(x, y); },
+    pinchScale(z){ return pinchTo(z); },
+    pinchEnd(){ return endPinch(); },
+    pan(px, py){ return panBy(px, py); },
     /* THE CURSOR -- one word view's own endpoint, and the voice's place.
        Read it, or set it from outside (a voice engine following along). */
     get cursor(){ return cursor ? {chapter:cursor.ch, word:cursor.wi} : null; },
     goTo(ch, wi){ return jumpTo(ch, wi, "goTo", false); },
+    /* WHERE THE READER IS BY CHAPTER, AND HOW TO SEND IT TO ONE (7 Sep).
+       Read-only over state this file already keeps: `curChapterIdx` is set by
+       the reader's own scroll event (syncContentsLive), and `chIndexById` is
+       built in openBook. Nothing is recomputed here -- the reading-line rule
+       lives in readingLine()/sectionAt() and page.js has the only other copy
+       of it; a page that merely wants to NAME the chapter must not add a
+       third.
+       `openChapter` is `?ch=` on open and nothing else. It takes a chapter id
+       ("c018") or an index, and seats the reader with the same settle a
+       contents row gets, because it is the same function. curChapterIdx is
+       moved with it rather than waited for: the scroll event is a task away,
+       and a caller that asks for a chapter and then reads chapterIdNow must
+       not be told the old one. */
+    get chapterNow(){ return curChapterIdx; },
+    get chapterIdNow(){
+      const c = book && book.chapters && book.chapters[curChapterIdx];
+      return (c && c.id != null) ? c.id : null;
+    },
+    openChapter(k){
+      let i = -1;
+      if(typeof k === "number" && k === k) i = k;
+      else if(k != null && chIndexById.has(String(k))) i = chIndexById.get(String(k));
+      if(!(i >= 0) || !book || !book.chapters || !book.chapters[i]) return null;
+      scrollReaderTo(i);
+      curChapterIdx = i;
+      return i;
+    },
     /* THE SUBTITLE'S OWN TWO DOORS (job 24). `playing` is the app's -- set it
        from listen.js's play/pause and the line sleeps a second after the last
        wheel, tap or key while narration runs, and stays up when it does not.

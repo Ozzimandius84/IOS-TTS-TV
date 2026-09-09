@@ -2,16 +2,16 @@
   "added_here": [
     "index.html"
   ],
-  "bytes": 1402845,
-  "count": 52,
+  "bytes": 1811800,
+  "count": 57,
   "files": {
     "bar/askbar.css": {
       "bytes": 11175,
       "sha256": "9aad3d62a13ba38e9b390f6074a72ed15e81b6f24b5893d0e1ec6e3d40ae0f3a"
     },
     "bar/askbar.js": {
-      "bytes": 36071,
-      "sha256": "3f68c747e373058003384cefc7263a8d641e9da1320fc2c9ccb59bc281c2fe63"
+      "bytes": 38497,
+      "sha256": "6a4b8be9715326f24be503f8b3a42e81cb7c9ecaf94cb63a70e823e4b9bc0f27"
     },
     "bar/lanes.css": {
       "bytes": 3061,
@@ -34,12 +34,12 @@
       "sha256": "3e731b5a2c10b98d64a3e1feacc9e7c8776e5e9d6a786dc100b8fc385606a107"
     },
     "library/library.css": {
-      "bytes": 67323,
-      "sha256": "3e76024a83058817c994b68ad79db01bffd4722663375a4013d82c452ee16c25"
+      "bytes": 71623,
+      "sha256": "c2dccfac7bcda31f54ca8ae7e56a689c61086de8c02e1b2f5721e014af2183eb"
     },
     "library/library.html": {
-      "bytes": 243260,
-      "sha256": "6e8aba73eaac7621af5bf0b547bef5770618cac1aba117535be1dd7ea174693c"
+      "bytes": 256205,
+      "sha256": "49636e68e89519e882c8464d5798fcb685a9a5497ea9de0a84f8f5e17064cf22"
     },
     "library/transfer.js": {
       "bytes": 11069,
@@ -54,8 +54,8 @@
       "sha256": "2b0c86208e4e044b7fec34956b014f34b4837527364a5824910391af43677c9c"
     },
     "reader/book-nav.js": {
-      "bytes": 158567,
-      "sha256": "ab9eafa12e5be4d766fdc17ed5165a21c899d04103293a301adbc614568ad8d5"
+      "bytes": 215261,
+      "sha256": "5f185e7cf514aa22dd1779c0841ac483e7eef0f76806a2187fffdddde3526412"
     },
     "reader/book.js": {
       "bytes": 6116,
@@ -110,12 +110,12 @@
       "sha256": "054ca550167ce5f23985ae2d0b53da7b48ba3927f4290edd726151e0ae096f62"
     },
     "reader/page.css": {
-      "bytes": 18698,
-      "sha256": "d515bd630282efe7df93ff552c3978fd233592f49a456d3afb373374774a9200"
+      "bytes": 18184,
+      "sha256": "b91ecf5e97a905114a9c4c5aedecc8b8392b49b3196f07ea18df82d8cad31caf"
     },
     "reader/page.js": {
-      "bytes": 12734,
-      "sha256": "17254eed93506f5f235c4aac61a38b3caa30c61aa32d5256d3075f65156d4f32"
+      "bytes": 11322,
+      "sha256": "af95528ccaa1b4117a206e155e2070fea4721378f8c510e9c2425c5e3a5fd073"
     },
     "reader/pane.css": {
       "bytes": 2651,
@@ -134,20 +134,40 @@
       "sha256": "01d0599452f0583b677409bef75c8211aeee66c02d6033831ced4bace0fc37cd"
     },
     "reader/reader.html": {
-      "bytes": 43684,
-      "sha256": "25a1ce8fbe98c084884a98eefda0c0cb98381feb6b7626e8f11f2af31bd7d01c"
+      "bytes": 75801,
+      "sha256": "1b1c66e567c099dc70406e4512aa6568c0b6ba772d7db506e6070c68a4e3214f"
+    },
+    "reader/scrub.css": {
+      "bytes": 9414,
+      "sha256": "03db6b33e9fc83493d9483dd74718a40269aa86f6cad41d6c9140a806db8968f"
+    },
+    "reader/scrub.js": {
+      "bytes": 26639,
+      "sha256": "85ad06e454c9b52c403f5b8b99836391a9e432037fd0d1402f18423dd03d0dad"
     },
     "reader/shell.css": {
-      "bytes": 26055,
-      "sha256": "00e9bc70b935c91c94badd8d6830122015b44d68914f187fded03dc182175c76"
+      "bytes": 47646,
+      "sha256": "7bccc302b3bb1347aa9b55fe8eb3b67d625d15b5b13c8c165e00b2c95aa57bdd"
+    },
+    "reader/surface.css": {
+      "bytes": 27987,
+      "sha256": "4b1569bd57c0613e11f5e8ce07b95312c82172f3350080acae91fe02a0146238"
+    },
+    "reader/surface.js": {
+      "bytes": 199823,
+      "sha256": "633ae60560ad5d1b86b3d8363b18543c37cd89ad7a7a2b97bb17085fb735e213"
     },
     "reader/sw.js": {
-      "bytes": 18855,
-      "sha256": "f1fc4cbea94f6b94bbaad63ffcae7fe4522217febf19398f215984e2f995bc7d"
+      "bytes": 21563,
+      "sha256": "71db01dc1294220998f2e4083aec249a662d44cb2e73e518d13b2d09b700d640"
     },
     "reader/tokens.css": {
       "bytes": 5848,
       "sha256": "2132267fdb5bd8e7af744bba23be070f7d9ee8ef3e154e8ab14ccd3f2354ab59"
+    },
+    "reader/transport.js": {
+      "bytes": 14237,
+      "sha256": "1e0a4c924e9723adeb724a7024ff1e0cc1e23b550ff53b272b65d1651b95c5c5"
     },
     "reader/wheel.css": {
       "bytes": 3423,
@@ -216,8 +236,8 @@
   },
   "home_page": "library/library.html",
   "source": {
-    "commit": "f8df4c6",
-    "repo": "/sessions/rcw-019kcdm9g6c4sizk8icb7y72/mnt/TTSTV",
-    "shell_cache": "ttstv-shell-v36"
+    "commit": "6ff7258",
+    "repo": "/sessions/rcw-015zjidp98vb9wek89gfgy4j/mnt/TTSTV",
+    "shell_cache": "ttstv-shell-v40"
   }
 }

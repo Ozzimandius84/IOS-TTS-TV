@@ -42,6 +42,15 @@
       does not have. */
 .column.zoomed .chapter{ max-width:none; }
 .pane.zoomed{ overflow-x:hidden; }
+/* 3. AND A ZOOMED PAGE DOES NOT SNAP (7 Sep, the pinch). The scroller carries
+      `scroll-snap-type: y proximity` -- chapter beginnings and endings, which
+      is right for a page you are turning and wrong for one you are looking
+      around: measured in Chromium at zoom 3.5, `readerpane.scrollTop = 6189`
+      (a 120px pan up) read back as 6069, snapped straight home, so the pan had
+      no vertical at all. It was fighting the word-hold too -- book-nav.js's own
+      closing loop writes scrollTop every frame of the zoom against a snap that
+      was pulling the other way. Off for exactly as long as the zoom is on. */
+.pane.zoomed{ scroll-snap-type:none; }
 
 /* AND IT STAYS HIDDEN. Osca: "ALWAYS HIDE the scroll bar IN SAFARI, that is
    not the one we want, I mean our PARTICULAR scroll bar." The browser's own
@@ -147,7 +156,7 @@ html[data-hardsnap] .pane{ scroll-snap-type:y mandatory; }
 .plate{ position:relative; display:flex; align-items:center; justify-content:center;
   min-height:82vh; padding:4vh 0; }
 .plate > figure{ margin:0; display:flex; flex-direction:column; align-items:center; gap:1.1rem; }
-.plate img{ display:block; max-width:100%; max-height:var(--plate-h, 72vh);
+.plate img{ display:block; max-width:100%; max-height:var(--plate-h, 100vh);
   width:auto; height:auto; }
 .plate figcaption{ font-family:var(--ui); font-size:.78rem; letter-spacing:.02em;
   color:var(--dim); text-align:center; max-width:34ch; }
@@ -199,13 +208,13 @@ h1 small{ display:block; font-size:.48rem; letter-spacing:.18em;
    there at all. page.js writes <b>book</b><span>chapter</span> into it, so
    hiding one of them is one rule each. */
 .runhead{ position:fixed;
-  top:var(--head-top, 10px); right:var(--head-right, 37px);
+  top:var(--head-top, 11px); right:var(--head-right, 54px);
   width:var(--head-w); height:var(--head-h);
   pointer-events:none; z-index:20; display:flex; flex-direction:column;
   align-items:flex-end; justify-content:center;     /* ink centred in the box */
   text-align:right; font-family:var(--ui);
-  font-size:var(--head-size, 14.5px); line-height:1.5;
-  opacity:var(--head-fade, 1);
+  font-size:var(--head-size, 10px); line-height:1.5;
+  opacity:var(--head-fade, 0.24);
   color:var(--dim); }
 .runhead b{ font-weight:600; color:var(--ink); }
 html[data-runhead="off"]  .runhead{ display:none; }
@@ -218,52 +227,22 @@ html[data-head-align="left"] .runhead{ align-items:flex-start; text-align:left; 
    rather than dots on it. A mark sits where its chapter ACTUALLY is --
    spacing them evenly while the fill tracks real scroll is why the bar ran
    ahead of the dots and then caught up. */
-/* OUR OWN SCROLL BAR, AND ITS SETTINGS. Osca: "I need to have settings on the
-   scroll bar... I mean our PARTICULAR scroll bar." Every number the rail is
-   made of is a custom property now -- how far in from the edge it stands, how
-   thick its line is, how far down it starts and stops, and whether it rests
-   visible or waits to be woken. `data-scrub` is the one switch: `on` keeps it
-   up, `off` takes it away entirely, and unset is the page's own behaviour --
-   asleep until you scroll, awake for a moment, and always awake under the
-   pointer. */
-.scrub{ position:fixed; top:0; right:0; width:var(--scrub-w); height:100%; z-index:15;
-  opacity:0; transition:opacity .45s ease; }
-.scrub.awake{ opacity:1; }
-.scrub:hover{ opacity:1; transition-duration:.12s; }
-html[data-scrub="on"]  .scrub{ opacity:1; }
-html[data-scrub="off"] .scrub{ display:none; }
-.track,.fill{ position:absolute; right:var(--scrub-x, 26px);
-  top:var(--scrub-top, 14vh); width:var(--scrub-line, 1px); }
-/* READ AND UNREAD ARE TWO COLOURS, AND THE LINE HAS A RADIUS. Osca: "I need
-   to be able to set the radius and the colours of read and unread chapters, in
-   the scroll bar." The track is what is still ahead of you and the fill is
-   what you have been through, so they are named for that rather than for
-   which element they are; the radius rounds both ends of a line that is now
-   thick enough to have ends. */
-.track{ bottom:var(--scrub-top, 14vh);
-  background:var(--scrub-unread, var(--rule));
-  border-radius:var(--scrub-r, 0); }
-.fill{ height:0;
-  background:var(--scrub-read, var(--dim));
-  border-radius:var(--scrub-r, 0); }
-.scrub .g{ position:absolute; right:0; width:100%; cursor:pointer; }
-/* a mark is a GAP in the line, not a dot on it -- so it is the ground's
-   colour, and it has to sit over the line wherever the line has been put */
-.scrub .m{ position:absolute; right:calc(var(--scrub-x, 26px) - 3px);
-  width:7px; height:11px;
-  background:var(--ground); transform:translateY(-5px); }
-html[data-scrub-marks="off"] .scrub .m{ display:none; }
-html[data-scrub-labels="off"] .scrub .l{ display:none; }
-.scrub .g.on .m::after{ content:""; position:absolute; right:3px; top:4px;
-  width:1px; height:3px; background:var(--ink); }
-.scrub .l{ position:absolute; right:calc(var(--scrub-x, 26px) + 16px);
-  width:var(--label-w); height:var(--label-h);
-  transform:translateY(-15px); text-align:right; white-space:nowrap; overflow:hidden;
-  text-overflow:ellipsis; color:var(--dim); opacity:0; transition:opacity .2s;
-  font:var(--label-fs)/var(--label-h) var(--ui); }
-.scrub .g.on .l, .scrub:hover .l{ opacity:1; }
-.scrub .g.on .l{ color:var(--ink); }
-.scrub .g.title .m{ height:15px; }
+/* OUR OWN SCROLL BAR LEFT THIS FILE, 9 September. It was `.scrub` here -- a
+   line, one whole-book fill, and a tick per chapter placed off `offsetTop`;
+   `scrub.js`/`scrub.css` were a second rail, with the bench and the sliders,
+   that only bench-page.html and pair.html ever mounted. Two rails, and the
+   bench pointed at the one the app did not run. The capsule rail is the rail
+   now (`.scrub2`), and its every number is a slider on bench-page.html.
+
+   NOTE the bare `.track` / `.fill` selectors that used to live here: they were
+   unscoped, so they would have reached inside the new rail as well. That is why
+   this block is deleted rather than left dormant.
+
+   The three switches are kept and re-aimed, so anything that has ever written
+   them keeps working against the rail that exists. */
+html[data-scrub="on"]  .scrub2{ opacity:1; }
+html[data-scrub="off"] .scrub2{ display:none; }
+html[data-scrub-labels="off"] .scrub2 .seg > span{ display:none; }
 
 /* ================= WHAT THE PAGE CATCHES ON, AND WHAT IT SKIPS ============
    Both of these were in shell.css, scoped to #readerpane -- which meant the
@@ -285,6 +264,14 @@ html[data-scrub-labels="off"] .scrub .l{ display:none; }
      chapters                 only a chapter's own opener and its end, and the
                               opener no longer forbids a flick from passing it
      none                     nothing catches at all */
+/* `chapters` IS THE DEFAULT NOW, 9 Sep -- it always said it was, three lines
+   up, and it never was: nothing in the app or the shell wrote the attribute, so
+   only the bench ever got it. Osca judged the reader with it on and kept it
+   ("data-catch=\"chapters\""), so the two values move onto :root and the
+   attribute is only needed to go BACK. That is the prose and the code agreeing
+   for the first time. */
+:root{ --snap-turn:none; --stop-open:normal; }
+html[data-catch="speeches"]{ --snap-turn:start; --stop-open:always; }
 html[data-catch="chapters"]{ --snap-turn:none; --stop-open:normal; }
 html[data-catch="none"]{ --snap-turn:none; --snap-open:none;
   --snap-end:none; --snap-plate:none; }

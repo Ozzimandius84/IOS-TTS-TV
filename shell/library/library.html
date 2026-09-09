@@ -1,4 +1,10 @@
 <!doctype html>
+<!-- THIS PAGE IS THE MASTER -- its own module-tier file, there is no
+     design/library/; `design/export.py --shell` builds clean/library/ from it (design/LOOP.md).
+     The Library's bench is design/reader/bench-library.html -- the dials for
+     the sort bar, the spacing and the newly-added count live there, and this
+     page ships the numbers they settled on. So there is nothing here to cut,
+     and the loop's own word for that is one marker: -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -49,6 +55,17 @@
 <link rel="stylesheet" href="../reader/chrome.css">
 <link rel="stylesheet" href="../bar/askbar.css">
 <link rel="stylesheet" href="../bar/lanes.css">
+<!-- THE SEARCH SURFACE'S SHEET. It is a sibling module's file, like
+     chrome.css above it, and it is linked here for one reason: the surface
+     opens OVER this page, so the page it opens over has to carry its style.
+     reader/sw.js already lists surface.css for "reader.html and
+     library.html" -- this is the half of that line the Library never had.
+     (Written WITHOUT the leading ./ on purpose: design/ship.py::routes
+     reads a quoted relative path out of a COMMENT exactly as it reads one
+     out of an attribute, and a path that exists on only one side of that
+     comparison is reported as a route that moved. Prose must not look
+     like a route.) -->
+<link rel="stylesheet" href="../reader/surface.css">
 <link rel="stylesheet" href="library.css">
 </head>
 <body>
@@ -127,6 +144,25 @@
 <script src="import.js"></script>
 <script src="../reader/context.js"></script>
 <script src="../reader/popover.js"></script>
+<!-- THE SEARCH SURFACE, AND IT LOADS BEFORE askbar.js ON PURPOSE.
+     Osca, 7 Sep: *"Search must also open from the Library, not only the
+     reader."* It did not, and the reason was not a missing handler --
+     `bar/askbar.js::surfaceOpen` has called `SearchSurface.open(q)` since the
+     surface landed. It was that NOTHING ON THIS PAGE EVER LOADED surface.js,
+     so `window.SearchSurface` was undefined here, `surfaceOpen` returned
+     false every time, and `everywhere()` fell through to the old 46px
+     dropdown. The reader loaded it; the Library did not; that asymmetry was
+     the whole bug. One script tag closes it -- surface.js mounts itself on
+     DOMContentLoaded and binds its own ⌘K, so there is no call to make.
+
+     THE ORDER IS THE CONTRACT, in surface.js's own words: *"IT NEVER TAKES A
+     HANDLER THAT IS ALREADY THERE ... which is why library.html loads this
+     one FIRST and askbar second."* Both files merge an `ask` into
+     `window.TTSTVPage`; whichever loads last owns it. This page HAS an
+     askbar with an editor behind it, so askbar's `ask` must win -- and it
+     only wins by loading after. Swap these two lines and the strip stops
+     typing into the panel. -->
+<script src="../reader/surface.js"></script>
 <!-- THE BAR'S ANSWERS. The field is the shell's, in the title-bar strip; this
      is what answers it, out of this page's own shelf, find and /search. It
      merges into `window.TTSTVPage`, so its position relative to this page's own
@@ -1819,10 +1855,13 @@ function shelfCacheWrite(books) {
 
 let shelfDrawn = null;   // the markup as last written -- see the note below
 /* ------------------------------------------------------------- THE ZOOM.
- * FOUR SHELF ZOOMS (design/reader/library.html, 6 Sep; Osca: "the bench
+ * FIVE SHELF ZOOMS (design/reader/bench-library.html; Osca: "the bench
  * wins"). One control on the shelf and it moves in one direction: how much of
  * the pane a single book is given. Out to in --
  *
+ *    16   the whole library on one screen, covers only (Osca, 6 Sep: "a new
+ *         view in library on 16 book rows, larger than 8 -- keep all others,
+ *         just add a 16 row view")
  *     8   the whole shelf at a glance, covers only
  *     4   THE APP, and the one it opens on
  *     2   two books, the covers given the caption's room
@@ -1830,7 +1869,7 @@ let shelfDrawn = null;   // the markup as last written -- see the note below
  *
  * Every difference between them is CSS off `#shelf[data-zoom]` (library.css,
  * "THE LADDER"), so this is the whole of the page's half: an attribute, a
- * field on the record, and four buttons. NOTHING IS RE-RENDERED when it
+ * field on the record, and five buttons. NOTHING IS RE-RENDERED when it
  * changes -- the tiles are already whole -- which is why zooming can keep the
  * book that was in the middle in the middle instead of jumping to the top of
  * the shelf, and why a zoom costs no JPEG (renderShelf's memo, above).
@@ -1838,20 +1877,20 @@ let shelfDrawn = null;   // the markup as last written -- see the note below
  * The bench's two ¶ steps (2 ¶ and 1 ¶, a DRAWN pane beside the cover) are
  * not here: see library/STATUS.md §7.
  */
-const SHELF_ZOOMS = ["8", "4", "2", "1"];      // out to in
+const SHELF_ZOOMS = ["16", "8", "4", "2", "1"];      // out to in
 const SHELF_ZOOM_DEFAULT = "4";
 
 function shelfZoom() { return SHELF_ZOOMS.includes(library.zoom) ? library.zoom : SHELF_ZOOM_DEFAULT; }
 
 /* The control, exactly where the bench puts it: a foot under the shelf. The
-   four buttons are the bench's markup, its `data-z`, its titles and its order.
+   five buttons are the bench's markup, its `data-z`, its titles and its order.
 
    WHICH ONE IS PRESSED IS NOT IN THIS STRING, and that is deliberate.
    `renderShelf` writes its markup only when it differs from what it wrote
    last (the memo above it, and the jitter Osca reported on the 5th); if the
    pressed button were in here, every zoom would differ, every zoom would set
    `innerHTML`, and every zoom would throw away and re-request every decoded
-   JPEG on the shelf. So the markup is the same at all four zooms and
+   JPEG on the shelf. So the markup is the same at all five zooms and
    `paintShelfZoom()` moves the `aria-pressed` afterwards -- which is also
    what makes "nothing is re-rendered when the zoom changes" true here rather
    than merely claimed. */
@@ -1860,6 +1899,7 @@ function shelfFootHTML() {
     ` aria-pressed="false">${label}</button>`;
   return `<div class="shelffoot">` +
     `<span class="zoom" id="zoom" role="group" aria-label="books across">` +
+    b("16", "sixteen books, covers only", "16") +
     b("8", "eight books, covers only", "8") +
     b("4", "four books — the shelf as it opens", "4") +
     b("2", "two books, covers only", "2") +
@@ -1911,13 +1951,175 @@ function shelfZoomStep(dir) {
   return setShelfZoom(SHELF_ZOOMS[Math.min(SHELF_ZOOMS.length - 1, Math.max(0, i + dir))]);
 }
 
+/* ------------------------------------------------------------------ ORDER.
+ * Osca, on the bench (design/reader/bench-library.html): "I need a small drop
+ * down in library, to change how the books are ordered. Alphabetically by
+ * title, and by author and most recent. Put newly added in its own section
+ * too."
+ *
+ * FIVE ORDERS, AND ONE RULE: THE COVERS DO NOT MOVE WITH THEM. A pairing is
+ * assigned by `assignPairings` walking the list about to be drawn and is kept
+ * in `coverPairings`, KEYED BY SLUG -- so re-ordering the shelf re-orders the
+ * books and nothing else. A book has one cover whichever way the shelf is
+ * stacked.
+ *
+ * `opened` IS THE DEFAULT AND IS THE APP'S OWN. This shelf has sorted by last
+ * opened since it was written (`byLastOpened`), and a drop down that silently
+ * changed that would be a redesign nobody asked for: the request was a way to
+ * CHANGE the order, not a different one to start on. The bench opens on
+ * `title` because a bench has no reading history to sort by.
+ *
+ * AND THE TWO DATE ORDERS ASK `firstSeen`, NOT THE BOOK. The bench sorts on
+ * `books/index.json`'s `updated`; /state's shelf row carries no date at all
+ * (studio/bookinfo.py `shelf_of` -- counters and flags, nothing else), and a
+ * date derived from a counter would be a picture of a fact. `firstSeen`
+ * below is the one date this page can know honestly.
+ */
+function orderTitleOf(b) { return String((b && (b.title || b.slug)) || ""); }
+const SHELF_ORDERS = {
+  opened: { label: "last opened first",
+            cmp: (a, b) => openedAt(b.slug) - openedAt(a.slug) },
+  title:  { label: "by title, a–z",
+            cmp: (a, b) => orderTitleOf(a).localeCompare(orderTitleOf(b), undefined, { sensitivity: "base" }) },
+  /* A BOOK WITH NO AUTHOR GOES TO THE END, said out loud rather than left to a
+     sentinel string: "~" looks like it sorts last and does not -- ICU puts
+     punctuation BEFORE letters, which is how a book with author "" came out at
+     the TOP of the author shelf on the bench. */
+  author: { label: "by author, a–z",
+            cmp: (a, b) => (!a.author - !b.author)
+              || String(a.author || "").localeCompare(String(b.author || ""), undefined, { sensitivity: "base" })
+              || orderTitleOf(a).localeCompare(orderTitleOf(b), undefined, { sensitivity: "base" }) },
+  added:  { label: "newest here first",
+            cmp: (a, b) => firstSeenAt(b.slug) - firstSeenAt(a.slug) },
+  oldest: { label: "longest here first",
+            cmp: (a, b) => firstSeenAt(a.slug) - firstSeenAt(b.slug) },
+};
+const SHELF_ORDER_KEYS = ["opened", "title", "author", "added", "oldest"];
+const SHELF_ORDER_DEFAULT = "opened";
+
+function shelfOrder() { return SHELF_ORDERS[library.order] ? library.order : SHELF_ORDER_DEFAULT; }
+
+// `opened` goes through `byLastOpened` rather than through its own comparator
+// so the app's own order is the same code it always was, and the drop down
+// can only ever ADD orders to it.
+function shelfOrdered(rows) {
+  const key = shelfOrder();
+  if (key === "opened") return byLastOpened(rows);
+  return (rows || []).slice().sort(SHELF_ORDERS[key].cmp);
+}
+
+/* ------------------------------------------------- NEWLY ADDED, HONESTLY.
+ * "Put newly added in its own section too." A band above the shelf holding the
+ * SHELF_NEW_N books that arrived last, LIFTED OUT of the shelf rather than
+ * repeated in it -- so the count on the Shelf heading still adds up, which is
+ * the bench's own rule.
+ *
+ * WHAT "ADDED" MEANS HERE, AND WHY IT IS NOT THE BOOK'S OWN DATE. /state's
+ * shelf row has no timestamp on it, so the only date this page can be honest
+ * about is the one it keeps itself: the first time the shelf SAW a slug. It
+ * lives on the library record beside `positions`, so it survives a reload and
+ * rides the same mirror to TTS_DATA.
+ *
+ * AND THE FIRST RUN ADDS NOTHING. A record with no `firstSeen` in it has never
+ * watched this library, so every slug already on the shelf is stamped 0 --
+ * "was already here" -- and the band stays empty until a book actually
+ * arrives. Stamping them `now` instead would open the page with four books
+ * called new that have been there for weeks, which is the invented fact this
+ * avoids.
+ *
+ * SHELF_NEW_N IS A NUMBER AND NOT A SLIDER. The bench has the slider (0..12,
+ * default 4) because setting it is what a bench is for; the app ships what it
+ * settled on, exactly as it ships the gaps rather than the spacing dial.
+ */
+const SHELF_NEW_N = 4;
+
+function firstSeenAt(slug) {
+  const m = library && library.firstSeen;
+  return (m && Number(m[slug])) || 0;
+}
+
+// Called from `renderShelf`, so every path that puts books on the shelf goes
+// through it. It writes only when a slug is genuinely new, so a poll that
+// brings no news writes nothing and mirrors nothing.
+function noteFirstSeen(rows) {
+  const books = rows || [];
+  if (!books.length) return false;
+  const seen = (library && library.firstSeen) || {};
+  const add = books.map(b => b.slug).filter(x => x && !(x in seen));
+  if (!add.length) return false;
+  const now = Date.now();
+  libPatch(d => {
+    d.firstSeen = d.firstSeen || {};
+    const virgin = !Object.keys(d.firstSeen).length;
+    for (const x of add) if (!(x in d.firstSeen)) d.firstSeen[x] = virgin ? 0 : now;
+  });
+  return true;
+}
+
+// The n most recently first-seen books, newest first. A book stamped 0 was
+// already there when the record began and is never "newly added".
+function shelfFresh(rows) {
+  if (!SHELF_NEW_N) return [];
+  return (rows || []).filter(b => firstSeenAt(b.slug) > 0)
+    .sort((a, b) => firstSeenAt(b.slug) - firstSeenAt(a.slug))
+    .slice(0, SHELF_NEW_N);
+}
+
+function bandHTML(fresh) {
+  if (!fresh || !fresh.length) return "";
+  return `<section class="band" data-band="new">` +
+    `<h2 class="bandhead">newly added</h2>` + tileRows(fresh) + `</section>`;
+}
+
+/* The drop down, at the start of the shelf. ITS MARKUP DOES NOT SAY WHICH
+   ORDER IS ON, for the same reason `shelfFootHTML`'s does not say which button
+   is pressed: `renderShelf` writes its markup only when it differs from what
+   it wrote last, and a `selected` attribute in here would make a poll that
+   brings no news rewrite the shelf whenever the order was not the default --
+   throwing away and re-requesting every decoded JPEG on it.
+   `paintShelfOrder()` sets the value afterwards.
+
+   One book cannot be in an order, so the bar is not drawn for one. */
+function sortbarHTML(entries) {
+  if (!entries || entries.length < 2) return "";
+  return `<div class="sortbar"><label for="shelforder">order</label>` +
+    `<select id="shelforder" aria-label="how the books are ordered">` +
+    SHELF_ORDER_KEYS.map(k =>
+      `<option value="${esc(k)}">${esc(SHELF_ORDERS[k].label)}</option>`).join("") +
+    `</select></div>`;
+}
+
+function paintShelfOrder() {
+  const sel = document.getElementById("shelforder");
+  if (sel) sel.value = shelfOrder();
+}
+
+function setShelfOrder(k) {
+  if (!SHELF_ORDERS[k]) return false;
+  if (k === shelfOrder()) { paintShelfOrder(); return true; }
+  libPatch(d => { d.order = k; });
+  renderShelf();
+  return true;
+}
+
 function renderShelf() {
   const el = document.getElementById("shelf");
+  noteFirstSeen(libraryBooks);      // before the entries: a new slug is dated once
   const entries = shelfEntries();
-  const collapsed = !!library.mainCollapsed;
-  // one grid: the finished tiles, then the ones still being ingested, so a
-  // book arriving takes its place in the same flow rather than under it
-  const rows = collapsed ? "" : tileRows(null, loadingRows());
+  // With no named shelves the main list IS the page: no "Shelf" heading to set
+  // it apart, and nothing to collapse it against either (Osca, 7 Sep).
+  const hasNamed = library.shelves.length > 0;
+  const collapsed = hasNamed && !!library.mainCollapsed;
+  /* TWO GRIDS NOW, AND THE SECOND IS THE SHELF. `newly added` is lifted out
+     of the shelf (`shelfEntries` puts it at the front, so this split is the
+     order on screen), then the finished tiles, then the ones still being
+     ingested -- so a book arriving takes its place in the same flow rather
+     than under it. `assignPairings` runs per grid, which is what it already
+     did for every named shelf above. */
+  const fresh = collapsed ? [] : shelfFresh(entries);
+  const freshSet = new Set(fresh.map(b => b.slug));
+  const rows = collapsed ? "" : (bandHTML(fresh) +
+    tileRows(entries.filter(b => !freshSet.has(b.slug)), loadingRows()));
   const n = entries.length;
   const empty = api("/state") && !studioLive
     ? "No books on this device yet. Books arrive as a bundle .zip from the bench (PROMPTS/phone-app.md)."
@@ -1928,7 +2130,10 @@ function renderShelf() {
   // heading for something that cannot exist there. The heading is now a
   // collapse control with a count, like every named shelf above it -- Osca
   // named the count twice, so it shows open or closed.
-  const shelf = (studioLive || n || !CAN_IMPORT)
+  const shelf = !hasNamed
+    // no named shelves -> the books ARE the page; no "Shelf" heading over them
+    ? (rows || `<div class="empty">${empty}</div>`)
+    : (studioLive || n || !CAN_IMPORT)
     ? shelfHeadHTML(MAIN_SHELF, "Shelf", n, collapsed, "") +
       (collapsed ? "" : (rows || `<div class="empty">${empty}</div>`))
     : rows;
@@ -1966,10 +2171,11 @@ function renderShelf() {
      brings no news does not rewrite the control either; `paintShelfZoom`
      below is what keeps the attribute and the pressed button true across a
      skip. */
-  const body = deviceSection() + namedShelvesHTML(entries) + shelf + line;
+  const body = sortbarHTML(entries) + deviceSection() + namedShelvesHTML(entries) + shelf + line;
   const html = body + (body.includes('class="shelfgrid"') ? shelfFootHTML() : "");
   if (html !== shelfDrawn) { el.innerHTML = html; shelfDrawn = html; }
   paintShelfZoom();
+  paintShelfOrder();
   paintSelection();
   pushHostContext();   // the strip says the same count, and the same ingest
   if (Array.from(pending.values()).some(e => !e.failed)) ensurePainting();
@@ -2308,7 +2514,8 @@ let libraryWhy = null;      // why the last save did not reach the SSD
 
 function libEmpty() {
   return { version: LIB_VERSION, saved: 0, device: null, merges: [], shelves: [],
-           mainCollapsed: false, zoom: SHELF_ZOOM_DEFAULT, positions: {}, last: null };
+           mainCollapsed: false, zoom: SHELF_ZOOM_DEFAULT, order: SHELF_ORDER_DEFAULT,
+           firstSeen: {}, positions: {}, last: null };
 }
 
 // A stable random id for THIS device. "Eventually shared with the phone" is
@@ -2412,14 +2619,31 @@ function libNormalise(raw) {
     covers[k] = { choice: v.choice, by: v.by === "you" ? "you" : "measured" };
   }
 
-  /* HOW MANY BOOKS ACROSS. One of four, and anything else -- an older record
+  /* HOW MANY BOOKS ACROSS. One of five, and anything else -- an older record
      with no zoom in it, a hand-edited file, one of the bench's two ¶ steps
      that this page does not draw -- falls back to the app's own 4 rather than
      leaving the shelf with an attribute no rule answers. */
   const zoom = SHELF_ZOOMS.includes(d.zoom) ? d.zoom : SHELF_ZOOM_DEFAULT;
 
+  /* HOW THEY ARE ORDERED, and WHEN EACH ONE FIRST APPEARED. An unknown order
+     falls back to the app's own the same way a bad zoom does. `firstSeen` is
+     read key by key and anything that is not a finite, non-negative number is
+     DROPPED rather than kept -- a bad date would put a book in the newly-added
+     band forever. An ABSENT map and an EMPTY one mean the same thing and must:
+     `noteFirstSeen` reads emptiness as "this record has never watched the
+     library" and stamps 0, so a record cannot be tricked into calling
+     everything new by having its map deleted. */
+  const order = SHELF_ORDERS[d.order] ? d.order : SHELF_ORDER_DEFAULT;
+  const firstSeen = {};
+  const fs = (d.firstSeen && typeof d.firstSeen === "object") ? d.firstSeen : {};
+  for (const k of Object.keys(fs)) {
+    const v = Number(fs[k]);
+    if (isFinite(v) && v >= 0) firstSeen[k] = v;
+  }
+
   return { version: LIB_VERSION, saved: Number(d.saved) || 0, device: d.device || null,
-           merges: uniq, shelves, mainCollapsed: !!d.mainCollapsed, zoom, positions, last, covers };
+           merges: uniq, shelves, mainCollapsed: !!d.mainCollapsed, zoom, order, firstSeen,
+           positions, last, covers };
 }
 
 function libRead() {
@@ -2459,7 +2683,10 @@ async function libFetchMirror() {
   const d = await getJSON(LIB_ROUTE);
   if (!d) return null;
   const m = libNormalise(d);
-  if (m.saved > library.saved) { library = m; renderShelf(); }
+  // PERSIST, not just hold in memory: firstSeen's read-modify-write from
+  // localStorage would otherwise discard a just-pulled newer mirror, losing
+  // another device's shelves on every pull (mirror_wins caught this, 7 Sep).
+  if (m.saved > library.saved) { library = m; try { localStorage.setItem(LIB_KEY, JSON.stringify(m)); } catch (e) {} renderShelf(); }
   return m;
 }
 
@@ -3058,7 +3285,7 @@ function byLastOpened(rows) {
 // One list, merges first, in the order the shelf paints them -- shift-click
 // needs a linear order and it must be the order on screen.
 function shelfEntries() {
-  const books = byLastOpened(libraryBooks || []);
+  const books = shelfOrdered(libraryBooks || []);
   const loadingSlugs = new Set(Array.from(pending.values()).map(e => e.slug).filter(Boolean));
   const real = books.filter(b => !loadingSlugs.has(b.slug));
   const bySlug = new Map(real.map(b => [b.slug, b]));
@@ -3076,7 +3303,14 @@ function shelfEntries() {
       openedAt: Math.max.apply(null, m.members.map(x => openedAt(x.slug))),
     }));
   merged.sort((a, b) => b.openedAt - a.openedAt);
-  return merged.concat(real);
+  /* NEWLY ADDED COMES OFF THE TOP, so this list IS the order on screen --
+     which is the property this function's own comment claims and the thing
+     shift-click depends on. `renderShelf` splits it back out on the same
+     rule; a merged entry has no `firstSeen` of its own, so it can never be
+     lifted into the band. */
+  const fresh = shelfFresh(real);
+  const freshSet = new Set(fresh.map(b => b.slug));
+  return merged.concat(fresh, real.filter(b => !freshSet.has(b.slug)));
 }
 
 /* ------------------------------------------------- the marginalia, read only
@@ -4633,7 +4867,14 @@ if ("serviceWorker" in navigator) {
   });
 }
 
-// ---- the zoom: the four buttons and the trackpad pinch
+// ---- the order: one drop down, and it is the whole of the page's half
+shelfEl.addEventListener("change", (e) => {
+  const sel = e.target.closest("#shelforder");
+  if (!sel) return;
+  setShelfOrder(sel.value);
+});
+
+// ---- the zoom: the five buttons and the trackpad pinch
 shelfEl.addEventListener("click", (e) => {
   const b = e.target.closest("#zoom button");
   if (!b) return;
@@ -4833,9 +5074,13 @@ window.__LIBRARY_DEBUG__ = {
   shelfCreate, shelfRename, shelfDelete, shelfToggle, shelfAdd, shelfRemove, shelvesFor,
   selSet, selToggle, selExtend, selClear, openSelection, openEntry, readerPairUrl,
   shelfMenuItems, shelfEmptyMenuItems, pickerItems, shelfPickerItems, shelfActionItems, menuItems, renderShelf,
-  // the four shelf zooms (design/reader/library.html, 6 Sep)
+  // the five shelf zooms (design/reader/bench-library.html)
   SHELF_ZOOMS, SHELF_ZOOM_DEFAULT, shelfZoom, setShelfZoom, shelfZoomStep,
   shelfFootHTML, paintShelfZoom, shelfNearestTile,
+  // the order, and the newly-added band (design/reader/bench-library.html)
+  SHELF_ORDERS, SHELF_ORDER_KEYS, SHELF_ORDER_DEFAULT, SHELF_NEW_N,
+  shelfOrder, setShelfOrder, shelfOrdered, shelfFresh, firstSeenAt, noteFirstSeen,
+  sortbarHTML, bandHTML, paintShelfOrder,
   margReadRec, margKey, margNormalise, margMerge, margLive, margPrune, margOrder, margSpanIds,
   margColourAt, margStale, margEmpty, margId, margColour, bookmarksFor, bookmarkLabel,
   bookmarkPickerItems, readerUrl,

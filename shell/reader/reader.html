@@ -10,11 +10,13 @@
 <link rel="stylesheet" href="tokens.css">
 <link rel="stylesheet" href="wheel.css">
 <link rel="stylesheet" href="page.css">
+<link rel="stylesheet" href="scrub.css">
 <link rel="stylesheet" href="pane.css">
 <link rel="stylesheet" href="wordpane.css">
 <link rel="stylesheet" href="shell.css">
 <link rel="stylesheet" href="listen.css">
 <link rel="stylesheet" href="marginalia.css">
+<link rel="stylesheet" href="surface.css">
 
 <!-- THE TWO ROOTS EVERY SURFACE LOADS BEFORE IT PAINTS (job 15 step 3b).
      keys.js: while the caret is in a field the keyboard belongs to the
@@ -48,7 +50,9 @@
   <div class="readerbox" id="readerbox">
     <div class="pane" id="readerpane"><div class="column" id="readercol"></div></div>
     <div class="runhead" id="readerhead"></div>
-    <div class="scrub" id="readerscrub"><div class="track"></div><div class="fill" id="readerfill"></div></div>
+    <!-- THE RAIL. Empty on purpose: scrub.js builds its own capsules into
+         this host (9 Sep). It used to carry page.js's track and fill. -->
+    <div id="readerscrub"></div>
   </div>
 
   <!-- level 0 of the left stack -- the pane closest to the reader, same
@@ -58,34 +62,498 @@
        inside #leftmore below; most books never reach past this one. -->
   <div class="cpane contentsbox" id="contentsbox">
     <div id="contentscol"></div>
+    <!-- THE WAY OUT OF THE BOOK IS THE SCROLL, AND THERE IS NO BUTTON
+         (Osca, 8 September: *"Remove ... the `.paneexit` 'LEAVE THE BOOK'
+         button -- the scroll is the way out now, so there's no separate
+         button (its small hitbox is moot once gone)."*).
+
+         WHAT STOOD HERE: `<button class="paneexit" id="leavebook">`, drawn in
+         pane 0 alone, calling `nav.closeToLibrary()`. It was the 7 September
+         answer to a phone whose only gesture stopped at pane 0 and could go no
+         further, so the last step out had to be a control. The gesture reaches
+         the library itself now -- one continuous scroll, on the trackpad and
+         on the glass alike (book-nav.js, THE SWIPE IS THE WHEEL) -- so the
+         button was the second route out, not the only one.
+
+         THERE IS STILL ALWAYS A WAY BACK, and it is the same one function on
+         both platforms: `closeToLibrary()`, reached by the push past the
+         deepest pane, by a second ArrowLeft there, and by Escape. -->
   </div>
   <div id="leftmore"></div>
-
-  <div class="head"><b id="big"></b><span id="small"></span></div>
 </div>
 
-<!-- THE LIBRARY DOOR, and it is the page's ONE control (Osca, 6 September:
-     *"it looks like a designer, not a finished reader. The bar at the top we
-     don't need. I do NOT want a button for light/dark. Settings drives it."*).
-     The way out used to be a text link at the bottom of the bench strip, which
-     went with the strip. It comes back where the picture puts a control of
-     this kind -- the bar row, `bar.html`'s own `ICONS` row (contents, one
-     word, text size, Frank, light/dark, Settings). The row's height is
-     bar.css's 28px, the standard macOS title bar; the STRIP itself is not
-     drawn, because Bar.mount() came off these benches on the 5th ("Get rid of
-     the bar"), and one control does not need a strip to sit in. It takes the
-     row's centre because that is the part of the row nothing else is in --
-     `.head` holds the left and page.css's `.runhead` the right -- and it is
-     where the warmth bar stood until this pass. -->
-<div class="barrow">
-  <a id="librarydoor" href="../library/library.html" title="the library" aria-label="the library">
-    <svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor"
-         stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M3 2.8v10.4M6.1 2.8v10.4M9.2 2.8v10.4"/>
-      <path d="M11.6 3.2l2.4 9.9"/>
-    </svg>
-  </a>
-</div>
+<!-- THE LIBRARY DOOR IS GONE (Osca, 7 September: *"Remove the Library
+     button/tab everywhere."*). It was `.barrow` -- a 28px pointer-transparent
+     row pinned to the top of the window with one 28x22 anchor at its centre,
+     `#librarydoor`, three shelved spines, pointing at the library page. It was
+     itself the 6 September replacement for a text link at the foot of the
+     bench strip, and it is the last button this page had.
+
+     THE WAY BACK IS THE SCROLL ITSELF, on both platforms (8 Sep): push the
+     axis past the deepest contents pane this book has and it goes to the
+     library. Nothing else in this page changes: the door was a link and
+     nothing read it. -->
+
+<!-- ===================== THE PHONE BAR — the mount ==========================
+     Osca, 7 September: *"THE PHONE BAR, its own design ... Replace them with
+     ONE phone bar ... Left: <- back to Library. Centre: the book · chapter,
+     once. Right: Settings, and the hands-free mic ... the bar auto-hides as
+     you read and returns on scroll-up or a tap at the top edge -- like Apple
+     Books. Osca dials whether it auto-hides or stays."*
+
+     THE PICTURE IS reader/shell.css (design/reader/shell.css is the master and
+     design/phone/bar.html is the contract). This is the hand: the markup the
+     bar needs and the one behaviour CSS cannot have -- which way the reader
+     just scrolled.
+
+     THE MAC GAINS NOTHING. It returns on the first line unless
+     `html[data-phone]` is set, so on a Mac this page's DOM is the same
+     document it was before the bar existed -- not a hidden node, no node. Same
+     division as the viewport meta and the head script above: the phone's own
+     two lines live in this page, and the shell files carry the rules.
+
+     It creates NO second source for anything already on the page. The centre
+     mirrors page.css's `.runhead` -- the element page.js keeps current -- and
+     the mic is voiceui's own button, MOVED into the bar's slot rather than
+     copied, so there is one mic on the page and its state colours still come
+     from voiceui. `--pbar-mic: float` moves that same element back.
+     ======================================================================== -->
+<script>
+(function () {
+  var R = document.documentElement;
+  if (!R.hasAttribute("data-phone")) return;          /* the Mac: no node at all */
+
+  var bar = document.createElement("div");
+  bar.className = "pbar"; bar.id = "pbar";
+  bar.setAttribute("data-shown", "on");
+  /* THE LEFT NO LONGER HOLDS A DOOR TO THE LIBRARY (Osca, 7 September:
+     *"Remove the Library button/tab everywhere ... the phone nav bar's
+     < Library."*). What was here: `#pbarback`, an <a href> to the library
+     page drawn as a left chevron, 44 square, the bar's first child -- and its
+     href was that page's path written out a SECOND time, which is why the name
+     now appears in this file exactly once, in `LIBRARY_PAGE`, and why
+     reader/tests/test_shell_no_benches.py counts it.
+
+     THE EXIT IS THE SCROLL NOW, not a button on a bar that hides itself as
+     you read: a one-finger sideways swipe reveals the contents panes, scrolls
+     through them, and past the deepest one goes to the library -- the same
+     axis the Mac's trackpad pushes (book-nav.js, THE SWIPE IS THE WHEEL).
+     Nothing else in this mount moves -- `--pbar-side` is
+     measured off the RIGHT group and is unchanged, so the centred title has
+     not shifted a pixel; the search door simply becomes the first child. */
+  bar.innerHTML =
+      /* THE PHONE'S DOOR TO THE SEARCH SURFACE (Osca, 7 Sep: *"THE PHONE BAR
+       opens it too. Two bars, one surface."*). It is a BUTTON and not an
+       <a href>, and that is the difference between this control and the two
+       doors either side of it: the Library and Settings are places you GO,
+       and on a phone a place you go is a link; the surface opens OVER what
+       you are reading and closes without moving you, so it is not a
+       navigation and must not be written as one.
+       IT GOES ON THE LEFT, and that is a measurement rather than a taste.
+       `--pbar-side` is the inset the centred title is held off BOTH edges by,
+       and it was already `pad + 88 + 2*gap` -- the right group's two 44s --
+       while the left held one. A second 44 on the left makes the two groups
+       the same width, so the title's box is now centred on the bar rather
+       than sitting 44px right of centre, and `--pbar-side` did not move.
+       ITS OWN REASON OUTLIVED THE LIBRARY DOOR IT WAS MEASURED AGAINST: the
+       inset is the RIGHT group's width, so with the left down to this one
+       control the title is still centred on the bar and the left is merely
+       roomy. Left is where it stays -- a control that opens something over
+       the page does not belong in the corner the two doors used. */
+      '<button type="button" class="pbar-b pbar-find" id="pbarfind"'
+    + ' aria-label="Search" title="Search">'
+    +   '<svg viewBox="0 0 20 20" aria-hidden="true" fill="none" stroke="currentColor"'
+    +   ' stroke-width="1.7" stroke-linecap="round">'
+    +   '<circle cx="9" cy="9" r="5.2"/><path d="M12.9 12.9 16.8 16.8"/></svg></button>'
+    + '<div class="pbar-title" id="pbartitle"><b></b><span></span></div>'
+    + '<div class="pbar-right">'
+    +   '<a class="pbar-b pbar-set" id="pbarset" href="../settings/settings.html"'
+    +   ' aria-label="Settings" title="Settings">'
+    +     '<svg viewBox="0 0 20 20" aria-hidden="true" fill="none" stroke="currentColor"'
+    +     ' stroke-width="1.5" stroke-linecap="round"><circle cx="10" cy="10" r="2.7"/>'
+    +     '<path d="M10 2.4v2.1M10 15.5v2.1M17.6 10h-2.1M4.5 10H2.4'
+    +     'M15.4 4.6l-1.5 1.5M6.1 13.9l-1.5 1.5M15.4 15.4l-1.5-1.5M6.1 6.1L4.6 4.6"/>'
+    +   '</svg></a>'
+    +   '<span class="pbar-mic" id="pbarmic"></span>'
+    + '</div>';
+  var peek = document.createElement("div");
+  peek.className = "pbar-peek"; peek.id = "pbarpeek";
+  document.body.appendChild(bar);
+  document.body.appendChild(peek);           /* the peek is the bar's next sibling */
+
+  /* ---------------------------------------------------- the centre, once */
+  var src = document.getElementById("readerhead");   /* page.css's .runhead */
+  var tb = bar.querySelector(".pbar-title b"), ts = bar.querySelector(".pbar-title span");
+  /* ONE SOURCE, AND NOW IT IS THE ONLY ONE. This read `.head`'s `#big`/`#small`
+     as a fallback while that block existed; `.head` left the page on 7 Sep
+     and the fallback goes with it rather than reading two elements that are
+     one element. `.runhead` is page.js's and is kept current on every scroll,
+     so an empty string here means the page has not painted yet, which is the
+     honest answer and was already what the fallback returned. */
+  function title() {
+    var b = src && src.querySelector("b"), s = src && src.querySelector("span");
+    var t1 = b ? b.textContent : "";
+    var t2 = s ? s.textContent : "";
+    if (tb.textContent !== t1) tb.textContent = t1;
+    if (ts.textContent !== t2) ts.textContent = t2;
+  }
+  if (src) new MutationObserver(title).observe(src, { childList: true, subtree: true, characterData: true });
+  title();
+
+  /* ------------------------------------------------------------- the mic */
+  var slot = document.getElementById("pbarmic");
+  function mic() {
+    var pill = document.querySelector(".voiceui-pill");
+    if (!pill) return;
+    var want = (getComputedStyle(R).getPropertyValue("--pbar-mic") || "bar").trim();
+    var home = (want === "float") ? document.body : slot;
+    if (pill.parentNode !== home) home.appendChild(pill);
+  }
+  new MutationObserver(mic).observe(document.body, { childList: true });
+
+  /* ---------------------------------------- away as you read, back on the
+     way up. The reader's scroller is #readerpane; the document is watched too
+     so a page that scrolls itself (one word view, a short chapter) is not a
+     bar that never moves. A tap on the top edge is the other way back. */
+  var pane = document.getElementById("readerpane");
+  var last = pane ? pane.scrollTop : 0, tick = false;
+  function autohide() {
+    var v = (getComputedStyle(R).getPropertyValue("--pbar-autohide") || "1").trim();
+    return v !== "0" && v !== "off" && v !== "false";
+  }
+  /* HIDDEN WHILE ZOOMED (7 Sep, corrected 7 Sep).
+
+     THE MARKER IS THE PINCH LANE'S OWN, AND IT IS A CLASS PAIR, NOT AN ID.
+     This asked `#readerpane` for `.zoomed` -- a name guessed while the pinch
+     was still being built. What book-nav.js actually writes, in
+     `writePageZoom` and at EVERY factor above 1 rather than only at the word,
+     is `.zoomed` on the column (`#readercol`, which is where the css `zoom`
+     goes) AND on that column's pane. So the question is asked of those two
+     classes -- `.pane.zoomed, .column.zoomed` -- and either one answers.
+
+     AND THE HONEST SIZE OF THE FIX, because it is not a bug being closed.
+     MEASURED on the master at zoom 2.4 mid-pinch: `.pane.zoomed` true,
+     `.column.zoomed` true, `#readerpane.zoomed` ALSO true -- the id happens to
+     be on the element that takes one of the two classes, so on this page the
+     old read and the new read agreed and the bars were already hiding from the
+     first frame. What changes is that the read is now correct by construction
+     instead of by coincidence: it survives a bench, an iframe, a second reader
+     on one page, or a rename of the scroller -- none of which is obliged to
+     call anything `readerpane`, and one of which the playback bars' own bench
+     already is. It also stops being the ONE selector in this page that names a
+     state by a different name from the file that owns the state.
+
+     It is a FORCED hide and it goes through `show()` rather than around it,
+     so every way back --
+     scrolling up, the peek strip at the top edge, `--pbar-autohide: 0` -- is
+     answered by the same two lines and none of them can bring the bar back
+     over a zoomed page. The playback bar reads the same class for itself. */
+  function zoomed() { return !!document.querySelector(".pane.zoomed, .column.zoomed"); }
+  function show() { bar.setAttribute("data-shown", zoomed() ? "off" : "on"); }
+  function hide() { if (autohide() || zoomed()) bar.setAttribute("data-shown", "off"); }
+  function moved(top) {
+    var d = top - last;
+    if (Math.abs(d) < 5) return;
+    last = top;
+    if (!autohide()) { show(); return; }
+    if (top <= bar.offsetHeight) { show(); return; }
+    if (d > 0) hide(); else show();
+  }
+  function onScroll(el) {
+    if (tick) return; tick = true;
+    requestAnimationFrame(function () { tick = false; moved(el.scrollTop || 0); });
+  }
+  if (pane) pane.addEventListener("scroll", function () { onScroll(pane); }, { passive: true });
+  addEventListener("scroll", function () {
+    if (pane && pane.scrollHeight > pane.clientHeight + 4) return;   /* the pane is the scroller */
+    onScroll(document.scrollingElement || document.documentElement);
+  }, { passive: true });
+  peek.addEventListener("pointerdown", show);
+  peek.addEventListener("click", show);
+
+  /* ...and the door it opens. ONE function, the same one the Mac's ⌘K and the
+     bar's ⏎ call (reader/surface.js) -- there is no phone implementation of
+     search on this page and there must never be one. The bar shows itself
+     first: pressing a control that is on its way out is confusing, and the
+     surface closing puts you back on a bar you can see. */
+  document.getElementById("pbarfind").addEventListener("click", function () {
+    show();
+    if (window.SearchSurface) window.SearchSurface.open("");
+  });
+
+  /* the bench writes its dials as inline properties on <html>; re-read them */
+  new MutationObserver(function () { mic(); if (!autohide()) show(); })
+    .observe(R, { attributes: true, attributeFilter: ["style"] });
+
+  /* the zoom going in or out is not a scroll, so it has its own watch: in,
+     and the bar goes; out, and the page has changed enough that the bar
+     coming back is the right answer whatever the scroll position is. */
+  [document.querySelector(".pane"), document.querySelector(".column")]
+    .forEach(function (el) {
+      if (el) new MutationObserver(function () { show(); })
+        .observe(el, { attributes: true, attributeFilter: ["class"] });
+    });
+
+  window.PhoneBar = { el: bar, peek: peek, show: show, hide: hide,
+                      sync: function () { title(); mic(); if (!autohide()) show(); },
+                      autohide: autohide, zoomed: zoomed };
+  mic();
+})();
+</script>
+
+<!-- THE TRANSPORT IS LOADED HERE AND NOT WITH THE OTHER ENGINES, and the
+     reason is order: the mount below runs at parse time, where the reading
+     page's own <script src> block is a hundred lines further down the file
+     (Lane A's region, not this one). A bar that mounted before its transport
+     existed would return on its first line and the page would carry no bar at
+     all -- measured, 7 Sep. transport.js depends on nothing and reads
+     window.ReaderControl lazily, so it is safe this early and belongs beside
+     the two mounts that are its only callers. -->
+<script src="transport.js"></script>
+
+<!-- ================== THE PLAYBACK BARS — the two mounts ====================
+     Osca, 7 September: *"a SEPARATE PLAYBACK bar -- the TTS transport
+     (play/pause, scrub the chapter, speed) -- on BOTH platforms. Same shell,
+     two distinct bars: the phone's (designed in design/phone/) and the Mac's
+     (designed in design/reader/) are NOT based on each other, but they share
+     one transport API. Gate the two presentations by the data-phone split in
+     the shell, exactly as the nav bar already is."*
+
+     SO THIS BLOCK BUILDS ONE OF TWO BARS AND NEVER BOTH. The flag decides
+     which, on the first line, the same way the nav bar's mount above returns
+     without it -- a Mac document gains the capsule and no strip, a phone
+     document gains the strip and no capsule, and neither ever holds a hidden
+     copy of the other. What the two share is `reader/transport.js` and the
+     wiring below it: the same five doors (play/pause, the two arcs, the two
+     sentence steps, the rail, the speed) said to the same object, so the
+     pictures are two and the behaviour is one.
+
+     THE PICTURES ARE reader/shell.css -- `.mplay` for the Mac (a floating
+     capsule, quiet until the pointer is near) and `.pplay` for the phone (a
+     full-width strip at the foot, 44 everywhere). design/reader/shell.css is
+     the master of both; design/reader/bench-playbar.html and
+     design/phone/playbar.html are their two contracts.
+
+     NO BAR WITHOUT A VOICE (Osca, 1 September: *"no playback or volume
+     control shows when the chapter has no audio -- hide the player when
+     there's no master for the chapter"*). `Transport.hasVoice()` is that
+     question asked once; `--mplay-when` / `--pplay-when` are the dials that
+     answer it differently, and `always` is what the benches measure the
+     layout on when the shelf has no rendered chapter to hand.
+
+     THE TWO PHONE BARS HIDE TOGETHER, and this block does not decide when.
+     The nav bar owns "away as you read"; the strip WATCHES `#pbar`'s
+     `data-shown` and follows it. One observer, no coupling back into the nav
+     bar's own code, and `--pplay-autohide: 0` unpicks it so the player can
+     stay while the nav bar goes.
+
+     HIDDEN WHILE ZOOMED, on both platforms. The state both bars watch is the
+     pinch lane's own, and it is read as a CLASS PAIR -- `.pane.zoomed,
+     .column.zoomed` -- never as `#readerpane.zoomed`, which is the name this
+     block guessed before the pinch landed. book-nav.js's `writePageZoom` puts
+     `.zoomed` on `#readercol` and on its pane together, at every factor above
+     1, so a bar goes on the first frame of a pinch and not only once one word
+     view has committed. On this page the two reads agree (measured, zoom 2.4:
+     all three selectors true); the pair is the one that keeps agreeing
+     wherever the reader is mounted under another id. It is a FORCED hide: it beats `--pplay-autohide:
+     0`, it beats the peek tap, and nothing brings a bar back until the zoom
+     is out -- in that state the page is the control.
+     ======================================================================== -->
+<script>
+(function () {
+  "use strict";
+  var R = document.documentElement;
+  var PHONE = R.hasAttribute("data-phone");
+  var T = window.Transport;
+  if (!T) return;                      /* transport.js absent: no bar, no throw */
+
+  /* --------------------------------------------------------------- the ink
+     One drawing per control, at 20x20, in the stroke language the nav bar's
+     three already use. The two arcs carry their seconds as a <text> inside
+     the svg, because the seconds are a dial. */
+  function svg(inner, fill) {
+    return '<svg viewBox="0 0 20 20" aria-hidden="true" fill="' + (fill || "none") + '"'
+         + ' stroke="currentColor" stroke-width="1.7" stroke-linecap="round"'
+         + ' stroke-linejoin="round">' + inner + '</svg>';
+  }
+  var ICON = {
+    play:  svg('<path d="M6.4 4.2 15.6 10 6.4 15.8z" fill="currentColor" stroke-width="1.4"/>'),
+    pause: svg('<path d="M7.4 4.6v10.8M12.6 4.6v10.8" stroke-width="2"/>'),
+    prev:  svg('<path d="M14.6 4.8 8.2 10l6.4 5.2z" fill="currentColor" stroke-width="1.3"/>'
+             + '<path d="M5.6 4.8v10.4"/>'),
+    next:  svg('<path d="M5.4 4.8 11.8 10l-6.4 5.2z" fill="currentColor" stroke-width="1.3"/>'
+             + '<path d="M14.4 4.8v10.4"/>'),
+    /* ~270 degrees of circle with the gap where the arrowhead goes, so the
+       direction is read off the head and not off the sweep */
+    back:  svg('<path d="M10 4.6a5.4 5.4 0 1 1-5.4 5.4" stroke-width="1.5"/>'
+             + '<path d="M10 1.9 10 7.3 6.6 4.6z" fill="currentColor" stroke="none"/>'
+             + '<text class="sec" x="10" y="12.9" text-anchor="middle" font-size="6.4"'
+             + ' font-weight="700" fill="currentColor" stroke="none">15</text>'),
+    fwd:   svg('<path d="M10 4.6a5.4 5.4 0 1 0 5.4 5.4" stroke-width="1.5"/>'
+             + '<path d="M10 1.9 10 7.3 13.4 4.6z" fill="currentColor" stroke="none"/>'
+             + '<text class="sec" x="10" y="12.9" text-anchor="middle" font-size="6.4"'
+             + ' font-weight="700" fill="currentColor" stroke="none">15</text>'),
+  };
+  function num(v) { return String(Math.round(v)); }
+  function cssVar(name, fallback) {
+    var v = (getComputedStyle(R).getPropertyValue(name) || "").trim();
+    return v || fallback;
+  }
+
+  /* ------------------------------------------------------------ the markup
+     TWO PICTURES, and the DOM says so: the phone's five controls sit in their
+     own row under their own rail, the Mac's nine sit in one line. Neither is
+     built from the other's template -- writing them as one parameterised
+     string is exactly the sharing Osca said not to do. */
+  var bar = document.createElement("div");
+  var b = function (id, cls, label, ink) {
+    return '<button type="button" class="' + cls + '" id="' + id + '"'
+         + ' aria-label="' + label + '" title="' + label + '">' + ink + '</button>';
+  };
+  var P = PHONE ? "pplay" : "mplay";
+  var rail = '<input type="range" class="' + P + '-rail" id="' + P + 'rail"'
+           + ' min="0" max="1000" step="1" value="0" aria-label="Scrub the chapter">';
+  var t0 = '<span class="' + P + '-t left" id="' + P + 't">0:00</span>';
+  var t1 = '<span class="' + P + '-t" id="' + P + 'left">0:00</span>';
+  var speed = '<button type="button" class="' + P + '-speed" id="' + P + 'speed"'
+            + ' aria-label="Speed" title="Speed">1&times;</button>';
+
+  if (PHONE) {
+    bar.className = "pplay"; bar.id = "pplay";
+    bar.innerHTML =
+        '<div class="pplay-scrub">' + t0 + rail + t1 + '</div>'
+      + '<div class="pplay-row">'
+      +   b("pplayback", "pplay-b", "Back fifteen seconds", ICON.back)
+      +   b("pplayprev", "pplay-b", "The sentence before", ICON.prev)
+      +   b("pplaygo",   "pplay-b pplay-go", "Play", ICON.play)
+      +   b("pplaynext", "pplay-b", "The sentence after", ICON.next)
+      +   speed
+      + '</div>';
+  } else {
+    bar.className = "mplay"; bar.id = "mplay";
+    bar.innerHTML =
+        b("mplayback", "mplay-b", "Back fifteen seconds", ICON.back)
+      + b("mplayprev", "mplay-b", "The sentence before", ICON.prev)
+      + b("mplaygo",   "mplay-b mplay-go", "Play", ICON.play)
+      + b("mplaynext", "mplay-b", "The sentence after", ICON.next)
+      + b("mplayfwd",  "mplay-b", "Forward fifteen seconds", ICON.fwd)
+      + t0 + rail + t1 + speed;
+  }
+  bar.setAttribute("data-shown", "off");
+  bar.hidden = true;                    /* until the transport says there is a voice */
+  document.body.appendChild(bar);
+
+  var $ = function (id) { return document.getElementById(id); };
+  var railEl = $(P + "rail"), tEl = $(P + "t"), leftEl = $(P + "left"),
+      goEl = $(P + "go"), speedEl = $(P + "speed");
+
+  /* -------------------------------------------------------------- the doors
+     Every one of them is a call into `Transport`, which guards itself: with no
+     book open, no chapter loaded or no `window.ReaderControl` yet, each of
+     these is a no-op that returns false rather than a throw. */
+  function skip() { return +cssVar(PHONE ? "--pplay-skip" : "--mplay-skip", "15") || 15; }
+  $(P + "back").addEventListener("click", function () { T.nudge(-skip()); });
+  if ($(P + "fwd")) $(P + "fwd").addEventListener("click", function () { T.nudge(skip()); });
+  $(P + "prev").addEventListener("click", function () { T.stepSentence(-1); });
+  $(P + "next").addEventListener("click", function () { T.stepSentence(1); });
+  goEl.addEventListener("click", function () { T.toggle(); });
+  speedEl.addEventListener("click", function () { T.cycleSpeed(); });
+
+  /* THE RAIL IS THE ONE CONTROL THAT FIGHTS THE CLOCK. While a finger or a
+     pointer is on it, the paint below must not put the thumb back where the
+     voice is -- so dragging holds the paint off, and `input` seeks live so
+     the highlight moves under the finger rather than after it. */
+  var dragging = false;
+  function railSeek() { T.seekFraction((+railEl.value || 0) / 1000); }
+  railEl.addEventListener("pointerdown", function () { dragging = true; });
+  railEl.addEventListener("input", function () { dragging = true; railSeek(); });
+  ["pointerup", "pointercancel", "change", "blur"].forEach(function (e) {
+    railEl.addEventListener(e, function () { railSeek(); dragging = false; });
+  });
+
+  /* ------------------------------------------------------------- when it is
+     `--*-when`: `voice` (the default, and Osca's 1 Sep rule), `timings` (a
+     silent preview is worth a bar), `always` (the bench, measuring a layout on
+     a shelf with nothing rendered). */
+  function wanted(s) {
+    var w = cssVar(PHONE ? "--pplay-when" : "--mplay-when", "voice");
+    if (w === "always") return true;
+    if (w === "timings") return s.voice || s.timings;
+    return s.voice;
+  }
+  function zoomed() { return !!document.querySelector(".pane.zoomed, .column.zoomed"); }
+  function autohide() {
+    if (!PHONE) return true;
+    var v = cssVar("--pplay-autohide", "1");
+    return v !== "0" && v !== "off" && v !== "false";
+  }
+  /* the nav bar owns "away as you read"; the strip follows it */
+  function navShown() {
+    var n = document.getElementById("pbar");
+    return !n || n.getAttribute("data-shown") !== "off";
+  }
+
+  var lastRate = null, lastPlaying = null;
+  function paint(s) {
+    var here = wanted(s);
+    if (bar.hidden === here) bar.hidden = !here;
+    if (!here) { R.removeAttribute("data-pplay"); return; }
+
+    var on = !zoomed() && (PHONE ? (autohide() ? navShown() : true) : true);
+    bar.setAttribute("data-shown", on ? "on" : "off");
+    if (PHONE) { if (on) R.setAttribute("data-pplay", "on"); else R.removeAttribute("data-pplay"); }
+
+    /* the glyph is redrawn when it CHANGES and not on every tenth of a
+       second the clock moves through -- paint() runs ten times a second while
+       the voice is playing, and rebuilding an svg at that rate for a picture
+       that is already right is the one expensive thing on this strip. */
+    if (s.playing !== lastPlaying) {
+      lastPlaying = s.playing;
+      goEl.innerHTML = s.playing ? ICON.pause : ICON.play;
+      goEl.setAttribute("aria-label", s.playing ? "Pause" : "Play");
+      goEl.setAttribute("title", s.playing ? "Pause" : "Play");
+    }
+
+    bar.style.setProperty("--" + P + "-f", s.f.toFixed(4));
+    if (!dragging) railEl.value = String(Math.round(s.f * 1000));
+    railEl.setAttribute("aria-valuetext", T.fmt(s.t) + " of " + T.fmt(s.d));
+    tEl.textContent = T.fmt(s.t);
+    leftEl.textContent = "-" + T.fmt(Math.max(0, s.d - s.t));
+
+    if (s.rate !== lastRate) {
+      lastRate = s.rate;
+      speedEl.innerHTML = (Math.round(s.rate * 100) / 100) + "&times;";
+      speedEl.setAttribute("aria-label", "Speed, " + s.rate + " times");
+    }
+    /* the seconds on the two arcs are a dial, so they are written, not drawn */
+    var sec = num(skip());
+    Array.prototype.forEach.call(bar.querySelectorAll("text.sec"), function (n) {
+      if (n.textContent !== sec) n.textContent = sec;
+    });
+  }
+  var repaint = function () { paint(T.state()); };
+  T.on(paint);
+
+  /* the three things that change the ANSWER without changing the clock: the
+     zoom going in or out, the nav bar going away, and a dial being turned on
+     the bench (which writes an inline custom property on <html>) */
+  /* BOTH ELEMENTS THE ZOOM MARKS, and by class -- `writePageZoom` writes
+     `.zoomed` on the column and on its pane together, and this bar asks the
+     same pair `zoomed()` asks rather than one id it guessed. */
+  [document.querySelector(".pane"), document.querySelector(".column")]
+    .forEach(function (el) {
+      if (el) new MutationObserver(repaint).observe(el, { attributes: true, attributeFilter: ["class"] });
+    });
+  var nav = document.getElementById("pbar");
+  if (nav) new MutationObserver(repaint).observe(nav, { attributes: true, attributeFilter: ["data-shown"] });
+  new MutationObserver(repaint).observe(R, { attributes: true, attributeFilter: ["style"] });
+  /* #pbar is built by the mount above, which runs before this one; on a Mac
+     there is none and this observer is simply never created. */
+
+  window.PlayBar = { el: bar, phone: PHONE, sync: repaint, zoomed: zoomed,
+                     wanted: function () { return wanted(T.state()); } };
+})();
+</script>
 
 <!-- THE TUNER. Osca: "I want to get rid of the convexity in the contents, I
      just want the option to make them straight, allow me to adjust convexity
@@ -117,6 +585,7 @@
 <script src="book.js"></script>
 <script src="wheel.js"></script>
 <script src="page.js"></script>
+<script src="scrub.js"></script>
 <script src="pane.js"></script>
 <script src="wordpane.js"></script>
 <script src="book-nav.js"></script>
@@ -124,6 +593,11 @@
 <script src="lookup.js"></script>
 <script src="marginalia.js"></script>
 <script src="cursor.js"></script>
+<!-- THE SEARCH SURFACE (design/reader/surface.js). It mounts itself over this
+     page and opens on ⌘K, on the bar's ⏎, and on the phone bar's ⌕ -- the
+     reader has no askbar, so surface.js's own `bar()` takes `TTSTVPage.ask`
+     here and answers the one verb that means "search". -->
+<script src="surface.js"></script>
 <script>
 /* THE SHELL -- thirteenth pass, 4 September: book-nav.js owns the mechanic
    (see that file's own long comment). No more #titlescreen -- chapter
@@ -167,8 +641,11 @@ const nav = BookNav.mount({
   contentsColEl: $("contentscol"),
   leftMoreEl: $("leftmore"),
   readerBox: $("readerbox"), readerPane: $("readerpane"), readerCol: $("readercol"),
-  readerScrub: $("readerscrub"), readerFill: $("readerfill"), readerHead: $("readerhead"),
-  big: $("big"), small: $("small"),
+  readerScrub: $("readerscrub"), readerHead: $("readerhead"),
+  /* `big` and `small` are NOT passed any more, and there is nothing to pass
+     them: `.head`, the top-left running header, left the app on 7 September
+     (shell.css says what it carried). book-nav.js still writes both behind
+     `if(o.big)` guards, so the omission is the whole of the change here. */
 });
 /* ===================== THE BENCH -- ?bench, AND ONLY ?bench ================
    Osca, 6 September, pressing the reader in Frank Studio: *"it looks like a
@@ -478,6 +955,114 @@ try{ (function(){
   const timer = setInterval(watch, WATCH_MS);
   addEventListener("pagehide", () => { clearInterval(timer); stopFrames(); });
 })(); }catch(e){ console.warn("[pace] not wired:", e); }
+
+/* ========= WHAT STUDIO IS ABOUT TO RENDER -- TTSTVHost.setTarget =========
+   Lost on 6 September with the old reader (`1b1b813`) and owed back by
+   `desktop/STATUS.md` §6, 7 Sep. Not cosmetics. `studio_flip` falls back to
+   `chapter_in(&base, &tab.path)` -- the tab URL's `?ch=` -- so with the page
+   silent the studio pane seeds on the chapter the TAB WAS OPENED AT and
+   drifts on the first page turn; its go button then spends Kaggle or Modal
+   minutes rendering the chapter the card names rather than the one being
+   read. Silent, and wrong in the direction that costs money.
+
+   The shape is `readercontrol.js`'s `pushHostTarget`, verbatim:
+   `{slug, current, chapters}`, `chapters: []` meaning "just where the reader
+   is". `[]` is the truth here and not a stub -- this reader has no pick list
+   at all. The contents panes choose a BRANCH to read into, not a set to
+   render, so there is no selection for studio to be told about; when a pick
+   list comes back, `hostTargetModel` is the one line that changes.
+
+   GUARDED ON THE METHOD, never on the host. `TTSTVHost` is absent in a
+   browser and on the phone, and an older shell has the object without this
+   door -- `context.js` already reads it as a fact about the machine, and
+   this is the same fact asked a question. */
+let OPEN_BOOK = null;                    // the book nav actually opened
+function hostTakesTarget(){
+  return !!(window.TTSTVHost && typeof window.TTSTVHost.setTarget === "function");
+}
+/* Pure over the page's own state, so a node test can read the target with no
+   host at all. `null` before a book has arrived -- every caller runs from an
+   event, but a scroll can be emitted by a relayout before the first open. */
+function hostTargetModel(){
+  if(!OPEN_BOOK) return null;
+  return { slug: OPEN_BOOK.slug || null,
+           current: nav.chapterIdNow,
+           chapters: [] };
+}
+/* Sent on every change and ONLY on a change. One page turn emits scroll
+   events by the dozen and the host would be told the identical thing every
+   time. Deduped on the value, not on the caller, so no call site has to know
+   about the others. */
+let LAST_TARGET = null;
+function pushHostTarget(force){
+  if(!hostTakesTarget()) return null;
+  const t = hostTargetModel();
+  if(!t) return null;
+  const key = JSON.stringify(t);
+  if(!force && key === LAST_TARGET) return t;
+  LAST_TARGET = key;
+  try{ TTSTVHost.setTarget(t); }catch(e){ /* an older host, or a closed tab */ }
+  return t;
+}
+
+/* `?ch=` ON OPEN -- "open this chapter" from the Library, which until now
+   landed on the book's default. The desktop opens a reader tab at
+   `clean/reader/reader.html?book=books/<slug>&ch=<id>` (tabs.rs `url_for`);
+   this page read `book=` and dropped `ch=`.
+
+   READ FROM THE SAME SOURCE `slugFromUrl` READ, and that pairing is the whole
+   of it: coming back from library.html changes the HASH and leaves the tab's
+   original query standing, so a search-first rule would drag every later book
+   to the first book's chapter -- an id that means a different chapter, or
+   none. The hash wins only when the hash is the thing carrying `book=`. */
+function chapterFromUrl(){
+  const s = /(?:^|[#&?])book=/.test(location.hash || "") ? (location.hash || "")
+                                                        : (location.search || "");
+  const m = /(?:^|[#&?])ch=([^&]+)/.exec(s);
+  if(!m) return null;
+  let v; try{ v = decodeURIComponent(m[1]); }catch(e){ v = m[1]; }
+  return v || null;
+}
+
+/* ONE WRAPPER, FOR THE SAME REASON THE LISTEN BLOCK ABOVE IS ONE: this page
+   opens a book from four places (the `?book=` IIFE, the file picker, the
+   hashchange and openDefault) and book-nav.js may open one itself. Wrapping
+   the one function catches all of them and cannot fall out of step with a
+   fifth. It wraps the listen wrapper, so the mounts are up before the target
+   goes out. */
+(function(){
+  const openBook1 = nav.openBook;
+  nav.openBook = function(b){
+    const r = openBook1.call(nav, b);
+    OPEN_BOOK = b || null;
+    try{
+      const ch = chapterFromUrl();
+      if(ch != null) nav.openChapter(ch);
+    }catch(e){ console.warn("[shell] ?ch= not honoured:", e); }
+    /* forced: a new book at the same chapter id is a different target, and
+       the dedupe key cannot tell the difference from the id alone */
+    try{ pushHostTarget(true); }catch(e){ console.warn("[shell] target not published:", e); }
+    return r;
+  };
+})();
+
+/* AND ON EVERY CHANGE -- a page turn IS a scroll on the reader pane, and a
+   chapter change is a page turn that crossed a section. `syncContentsLive` is
+   bound to this same element and was bound FIRST (book-nav.js mounts above),
+   so `nav.chapterIdNow` is already the new chapter by the time this runs.
+   Debounced rather than sent per event: a turn emits scroll events by the
+   dozen and only the chapter it ends on is a target -- the dedupe would drop
+   the rest anyway, this just never builds them. */
+(function(){
+  const pane = $("readerpane");
+  if(!pane) return;
+  let t = 0;
+  pane.addEventListener("scroll", () => {
+    clearTimeout(t);
+    t = setTimeout(() => { try{ pushHostTarget(); }catch(e){} }, 120);
+  }, {passive:true});
+  addEventListener("pagehide", () => clearTimeout(t));
+})();
 
 /* WHICH BOOK THIS PAGE OPENS.
    library.html is its own page now and hands a book over by slug --

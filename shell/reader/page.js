@@ -1,14 +1,15 @@
-/* ENGINE · the reading page itself -- sections, the measured boxes, the scrub's marks, the running head
+/* ENGINE · the reading page itself -- sections, the measured boxes, the running head
    · bench: bench-page.html · mounted by: see MAP.md (generated -- `python3 map.py`) */
 /* ======================= THE READING PAGE — the column ====================
    A module, not a page. The bench and the app link this same file.
 
-     Page.mount({ pane, column, scrub, fill, runhead }) -> handle
+     Page.mount({ pane, column, runhead }) -> handle
      handle: render(book) · relayout() · wake() · boxes() · book
 
    pane     the scroller
    column   where the chapters go
-   scrub / fill / runhead   optional; omit them and the page is just text  */
+   runhead                  optional; omit it and the page is just text.
+   THE RAIL IS NOT HERE. It is scrub.js, mounted by book-nav.js -- see below. */
 (function(){
 
 const esc = s => String(s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
@@ -72,25 +73,26 @@ function tintOpeners(col, palette){
 }
 
 function mount(o){
-  const pane=o.pane, col=o.column, scrub=o.scrub, fill=o.fill, runhead=o.runhead;
-  let CUR=null, marks=[], hideT=null;
-  /* HOW LONG THE SCRUB STAYS UP after a scroll. A variable rather than a
-     constant because it is one of the rail's settings, like the ones page.css
-     holds -- Osca: "I need to have settings on the scroll bar... our
-     PARTICULAR scroll bar." */
-  let HOLD = 1100;
+  const pane=o.pane, col=o.column, runhead=o.runhead;
+  let CUR=null;
+  /* THE RAIL LEFT THIS FILE, 9 September. It drew ticks and one whole-book fill
+     into `#readerscrub`; `scrub.js` drew capsules for a bench nothing else
+     loaded. Two rails, and the bench pointed at the one the app did not run --
+     which is the whole of Osca's "the bench is behind, I can't edit it".
+     `scrub.js` is the rail now, mounted by `book-nav.js` on the same host, and
+     `Page.mount` no longer takes a `scrub` or a `fill`. What stays here is the
+     page: the sections, the measured boxes, and the running head. */
 
   /* where this book's own files sit, from whichever page is doing the
      drawing: books/<slug>/images/... is what a fig block carries, and every
      page that mounts this lives in design/reader/. */
   function baseFor(book){
     const slug = book && book.slug;
-    return slug ? "../books/" + encodeURIComponent(slug) + "/" : "";   /* reader/ is one level above books/; design/reader/ was two */
+    return slug ? "../books/" + encodeURIComponent(slug) + "/" : "";
   }
   function render(book){
     const BASE = baseFor(book);
     CUR=book; col.innerHTML="";
-    if(scrub) scrub.querySelectorAll(".g").forEach(g=>g.remove());
 
     /* THE TITULAR SLIDE IS SYNTHESISED, never taken from a chapter. Dropping
        it with the front matter left the book looking as though it started
@@ -158,21 +160,8 @@ function mount(o){
       sec.innerHTML=h; col.appendChild(sec);
     });
     tintOpeners(col, book.palette);
-    buildScrub(book); placeAxis(); placeMarks(); paint();
+    placeAxis(); paint();
     return handle;
-  }
-
-  function buildScrub(book){
-    if(!scrub){ marks=[]; return; }
-    /* the title page is a stop on the rail too -- without it the book looks
-       as though it begins off the end of the bar rather than at the top */
-    const rows=(book.title?[{n:"", title:true}]:[]).concat(book.chapters||[]);
-    marks = rows.map(ch=>{
-      const g=document.createElement("div");
-      g.className = ch.title ? "g title" : "g";
-      g.innerHTML='<div class="m"></div><div class="l">'+esc(ch.n||"")+'</div>';
-      scrub.appendChild(g); return g;
-    });
   }
 
   function placeAxis(){
@@ -205,37 +194,11 @@ function mount(o){
     return out;
   }
 
-  /* A MARK SITS WHERE ITS CHAPTER ACTUALLY IS. Spacing them evenly while the
-     fill tracks real scroll is why the bar ran ahead of the marks and then
-     caught up -- chapters are not the same length. */
-  function placeMarks(){
-    if(!scrub) return;
-    const span=Math.max(1, pane.scrollHeight - pane.clientHeight);
-    col.querySelectorAll(".chapter").forEach((c,i)=>{
-      if(!marks[i]) return;
-      const top=(14 + 72*Math.min(1, c.offsetTop/span))+"vh";
-      marks[i].querySelector(".m").style.top=top;
-      marks[i].querySelector(".l").style.top=top;
-      marks[i].onclick=()=>c.scrollIntoView({behavior:"smooth"});
-    });
-  }
-
-  function wake(){
-    if(!scrub) return;
-    scrub.classList.add("awake");
-    clearTimeout(hideT);
-    hideT=setTimeout(()=>scrub.classList.remove("awake"), HOLD);
-  }
-
   function paint(){
-    const span=Math.max(1, pane.scrollHeight - pane.clientHeight);
-    if(fill) fill.style.height=(72*(pane.scrollTop/span))+"vh";
     const all=[...col.querySelectorAll(".chapter")];
     const chs=all.filter(c=>!c.classList.contains("titlepage"));
-    const off=all.length-chs.length;
     let cur=0;
     chs.forEach((c,i)=>{ if(c.offsetTop - pane.scrollTop <= pane.clientHeight*0.35) cur=i; });
-    marks.forEach((g,i)=>g.classList.toggle("on", i===cur+off));
     if(runhead){
       const onTitle = pane.scrollTop < (chs[0]?chs[0].offsetTop:0) - pane.clientHeight*0.5;
       const ch=(CUR&&CUR.chapters&&CUR.chapters[cur])||{n:"",t:""};
@@ -245,17 +208,20 @@ function mount(o){
     }
   }
 
-  function relayout(){ placeAxis(); placeMarks(); paint(); }
+  function relayout(){ placeAxis(); paint(); }
 
-  pane.addEventListener("scroll", ()=>{ paint(); wake(); }, {passive:true});
-  if(scrub) scrub.addEventListener("pointerenter", wake);
-  addEventListener("resize", ()=>{ placeAxis(); placeMarks(); });
+  pane.addEventListener("scroll", paint, {passive:true});
+  addEventListener("resize", placeAxis);
   /* the reading face lands after first layout and moves every offset with it */
   if(document.fonts && document.fonts.ready) document.fonts.ready.then(relayout);
   addEventListener("load", relayout);
 
-  const handle = { render, relayout, wake, paint, boxes: placeAxis,
-                   scrubHold(ms){ HOLD = Math.max(0, +ms || 0); return HOLD; },
+  /* `wake` is kept and does nothing. `pair.html` calls `page.wake()` and this
+     file no longer has anything to wake -- the rail wakes itself, off the same
+     scroll. A no-op with a reason beats an exception in a page nobody was
+     asked to change today. */
+  const handle = { render, relayout, paint, boxes: placeAxis,
+                   wake(){},
                    get book(){ return CUR; } };
   return handle;
 }

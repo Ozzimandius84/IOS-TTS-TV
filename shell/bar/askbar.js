@@ -352,7 +352,37 @@
   // asks studio directly and a chosen row travels to the Library instead.
   var token = 0;
   var inflight = 0;              // the token of the search that is running, or 0
+
+  /* THE SEARCH ACTION IS THE SURFACE'S NOW (Osca, 7 Sep: *"THE MAC BAR opens
+     it ... instead of the old search.html window"*).
+     ------------------------------------------------------------------------
+     What this bar is stays exactly what it was: the field is the strip's, the
+     ANSWERS are this page's, and typing still draws your own shelf out of the
+     `/state` this file already holds -- a keystroke costs nothing and lands in
+     the panel under the caret, which is the whole reason this half exists.
+     What moves is the one action that costs a request and opens a place:
+     "and everywhere else". It used to be a `/search` this file made and drew
+     as more rows in a 46px strip's dropdown; it is now `SearchSurface.open(q)`
+     -- your library and out there in ONE list, with the pipeline beside it,
+     over whatever you are already on.
+
+     THE FALLBACK IS THE OLD PATH, WORD FOR WORD, and it is not dead code:
+     studio's page loads this file and does NOT load surface.js, and neither
+     does an older shell. There the panel does what it always did. Nothing
+     here reaches for a window: `tabs.rs::open_search` is not called from this
+     file and never was. */
+  function surfaceOpen(q) {
+    var S = window.SearchSurface;
+    if (!S || typeof S.open !== "function") return false;
+    /* `true` is ⏎: this is the one action in the bar that means "and
+       everywhere else", so the surface asks at once rather than sitting out
+       its own typing pause on words a person has already finished. */
+    try { S.open(String(q == null ? "" : q), true); } catch (e) { return false; }
+    return true;
+  }
+
   function everywhere() {
+    if (surfaceOpen(q)) { shut(); return; }
     var mine = ++token;
     inflight = mine;
     notes = "";
@@ -488,6 +518,18 @@
       try { at = JSON.parse(query); } catch (e) { at = null; }
       place();
       return;
+    }
+    /* WHILE THE SURFACE IS UP, THE STRIP IS TYPING INTO IT. The field is in
+       the strip's webview and the surface's field is in this one, so the
+       caret cannot cross; the words can, and do. `at` still lands below --
+       it places this panel, which is not on the screen while the surface is,
+       and a placement is cheap. */
+    if (verb !== "at" && window.SearchSurface && window.SearchSurface.opened) {
+      var SF = window.SearchSurface;
+      if (verb === "type" || verb === "focus") { SF.feed(query); return; }
+      if (verb === "enter") { SF.feed(query, true); return; }
+      if (verb === "escape") { SF.close(); return; }
+      return;                       /* a blur is not a reason to shut it */
     }
     if (verb === "blur") {
       /* A SEARCH IN FLIGHT SURVIVES A BLUR. Moving the pointer off the strip,
