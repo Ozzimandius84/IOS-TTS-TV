@@ -198,7 +198,11 @@ function mount(o){
     const all=[...col.querySelectorAll(".chapter")];
     const chs=all.filter(c=>!c.classList.contains("titlepage"));
     let cur=0;
-    chs.forEach((c,i)=>{ if(c.offsetTop - pane.scrollTop <= pane.clientHeight*0.35) cur=i; });
+    /* THE READING LINE, and scrub.js has the same number (its `READ_LINE`).
+       It was 0.35 here and the rail asked a different question entirely, so on
+       an opener slide the two readouts named different chapters. Osca chose
+       HALFWAY, 9 Sep. Move it in one file only and test-scrub.mjs fails. */
+    chs.forEach((c,i)=>{ if(c.offsetTop - pane.scrollTop <= pane.clientHeight*0.5) cur=i; });
     if(runhead){
       const onTitle = pane.scrollTop < (chs[0]?chs[0].offsetTop:0) - pane.clientHeight*0.5;
       const ch=(CUR&&CUR.chapters&&CUR.chapters[cur])||{n:"",t:""};

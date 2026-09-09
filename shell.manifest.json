@@ -2,7 +2,7 @@
   "added_here": [
     "index.html"
   ],
-  "bytes": 1811800,
+  "bytes": 1816529,
   "count": 57,
   "files": {
     "bar/askbar.css": {
@@ -114,8 +114,8 @@
       "sha256": "b91ecf5e97a905114a9c4c5aedecc8b8392b49b3196f07ea18df82d8cad31caf"
     },
     "reader/page.js": {
-      "bytes": 11322,
-      "sha256": "af95528ccaa1b4117a206e155e2070fea4721378f8c510e9c2425c5e3a5fd073"
+      "bytes": 11632,
+      "sha256": "2e8dcc92e3f878cfb256c1dbaa127d04054626ac31a0bf161da08c1229dbd29f"
     },
     "reader/pane.css": {
       "bytes": 2651,
@@ -138,12 +138,12 @@
       "sha256": "1b1c66e567c099dc70406e4512aa6568c0b6ba772d7db506e6070c68a4e3214f"
     },
     "reader/scrub.css": {
-      "bytes": 9414,
-      "sha256": "03db6b33e9fc83493d9483dd74718a40269aa86f6cad41d6c9140a806db8968f"
+      "bytes": 10487,
+      "sha256": "3919c00f515bb930fb6525fc34744fffec703e5449db5fa69b93d0553ab2d1ce"
     },
     "reader/scrub.js": {
-      "bytes": 26639,
-      "sha256": "85ad06e454c9b52c403f5b8b99836391a9e432037fd0d1402f18423dd03d0dad"
+      "bytes": 29985,
+      "sha256": "9099e5b5ad88950dd8aa948aea6e6c10c0e6c6ce9cab5db69cc5eb8f5c764831"
     },
     "reader/shell.css": {
       "bytes": 47646,
@@ -236,7 +236,7 @@
   },
   "home_page": "library/library.html",
   "source": {
-    "commit": "6ff7258",
+    "commit": "241b6fa",
     "repo": "/sessions/rcw-015zjidp98vb9wek89gfgy4j/mnt/TTSTV",
     "shell_cache": "ttstv-shell-v40"
   }
