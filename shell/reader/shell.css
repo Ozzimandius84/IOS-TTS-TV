@@ -276,7 +276,12 @@ body{ font-family:var(--serif); color:var(--ink); }
    the voice is. It is marked wherever you are -- in the page, in the panes,
    at any depth -- because it is a position in the book rather than an artefact
    of a view. Double-click any word to move it. */
-::highlight(word-target){ background:#a8522a2e; }
+/* THE CURSOR MARK, and why its alpha is a variable. At 1x this is a small
+   tint behind the word and exactly right. Multiplied by the page zoom it is a
+   block of colour the size of a paragraph -- the "box/highlight" in IMG_0445.
+   book-nav.js takes it to zero as the zoom grows (--wt-a), so it is there when
+   it helps and gone when it would be a slab. */
+::highlight(word-target){ background:rgba(168, 82, 42, var(--wt-a, .18)); }
 
 /* ---- ONE WORD (dx>0). Osca: "NO LIFT... NO FADE, all it needs to do is
    push spacing and zoom in." So there is nothing here any more: no

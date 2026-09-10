@@ -1,0 +1,56 @@
+/* ONE WORD, ALONE. The view owns the screen; there is no page under it.
+
+   Osca, 9 Sep: "No box/highlight around the text should be present inside one
+   word view." So there is none -- and note what is NOT here as much as what
+   is: no ::highlight rule, no background on the word, no border, no shadow,
+   no transition on anything. The cursor mark that came out as a big pale
+   rectangle in IMG_0445 belongs to the reading page and cannot reach this
+   element, because the word here is a string in a div rather than the page's
+   own text under a highlight.
+
+   "Words should not move inside it, just one, next one": the box is centred by
+   the grid and never told to move, so a longer word grows about its own centre
+   and a shorter one shrinks about it. Nothing travels. */
+.wordview{
+  position:fixed; inset:0;
+  /* UNDER THE SUBTITLE, OVER EVERYTHING ELSE. Osca, 9 Sep: *"where is the
+     subtitle we made, as a part of one word view? So you can see the whole
+     line/sentence? We made that to be present in one word view BECAUSE it's a
+     separate view."* wordpane.js's caption and its rail sit at z-index 12 and
+     are fixed to the viewport, outside the reading box, so the view has to
+     come BELOW them or it covers the one thing that tells you where the word
+     came from. 10 is above the page and under the pane. */
+  z-index:8;
+  display:grid; place-items:center;
+  /* THE PAGE'S OWN GROUND AND ITS OWN INK, and those are the token names --
+     `--ground`, not `--paper`. With the wrong name the view kept a hard-coded
+     LIGHT ground while inheriting the dark theme's near-white ink: measured in
+     Chrome, background rgb(250,249,247) under colour rgb(232,231,230), which
+     is white on white and is the "transparency" Osca saw. It was never
+     transparent.
+
+     And this is the whole of following the theme, too (Osca: *"it should agree
+     at all times to the system -- FRANK APP or OS -- light/dark mode. Right
+     now it's doing its own thing."*). tokens.css already answers that question
+     for the app in three places -- html[data-theme="dark"], html[data-dark],
+     and @media (prefers-color-scheme: dark) -- so a view that spends the
+     tokens is right in all three by construction and has no opinion of its
+     own to go wrong. */
+  background:var(--ground);
+  color:var(--ink);
+  visibility:hidden; opacity:0;
+  pointer-events:none;
+  /* NO TRANSITION. The view is either the screen or it is not. */
+}
+.wordview.on{ visibility:visible; opacity:1; }
+
+.wordview-word{
+  font-family:var(--serif);
+  font-weight:normal;
+  line-height:1;
+  white-space:nowrap;
+  text-align:center;
+  /* the size is written by wordview.js, measured against this box */
+  font-size:200px;
+  /* and nothing else: no background, no box, no mark. */
+}

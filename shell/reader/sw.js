@@ -30,7 +30,7 @@
 // that is not the current SHELL_CACHE, so changing this string IS the eviction
 // -- and changing it changes sw.js's own bytes, which is the only thing that
 // makes a browser run `install` and `activate` at all.
-const SHELL_CACHE = "ttstv-shell-v41";   // 7 Sep: transport.js joins the shell -- a NEW name in
+const SHELL_CACHE = "ttstv-shell-v42";   // 7 Sep: transport.js joins the shell -- a NEW name in
                                          // SHELL_FILES is only fetched by an install, so the
                                          // string has to move or an installed app never caches
                                          // it (v37: the shell moved to clean/)
@@ -93,6 +93,7 @@ const SHELL_FILES = [
      job touched anything; fixed here because it is one line each and this
      turn is already in this file. */
   "./wordpane.css",         // the one-word caption and its scrub rail (job 24)
+  "./wordview.css",         // ONE WORD, ALONE -- the ground and the type (9 Sep)
   "./scrub.css",            // ...and the rail's own look (9 Sep, with scrub.js)
   "./surface.css",           // THE SEARCH SURFACE: reader.html and library.html
                              // both link it, and the phone opens it from its
@@ -111,6 +112,7 @@ const SHELL_FILES = [
   "./pane.js",               // Panes.measure/apply -- where a pane goes
   "./book-nav.js",           // the axis, the reader, one word
   "./wordpane.js",           // ...and the caption under it (job 24)
+  "./wordview.js",           // ...and the view itself: one word and no page (9 Sep)
   "./listen.js",             // the audio, the highlight, and window.ReaderControl
   "./transport.js",          // ...and THE ONE TRANSPORT over it (7 Sep): the
                              // play/pause/seek/speed both playback bars say,

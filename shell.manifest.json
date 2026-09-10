@@ -2,8 +2,8 @@
   "added_here": [
     "index.html"
   ],
-  "bytes": 1843458,
-  "count": 57,
+  "bytes": 1880478,
+  "count": 59,
   "files": {
     "bar/askbar.css": {
       "bytes": 11175,
@@ -54,8 +54,8 @@
       "sha256": "2b0c86208e4e044b7fec34956b014f34b4837527364a5824910391af43677c9c"
     },
     "reader/book-nav.js": {
-      "bytes": 242052,
-      "sha256": "949d5a6b616fa345312eb7183dc1e27cdf49eb0cde947f9d6187483db3107979"
+      "bytes": 268618,
+      "sha256": "58c2f9f8faea1531a320994a00a6f53b63c446e34f91448a2bc0852135c7cb6a"
     },
     "reader/book.js": {
       "bytes": 6116,
@@ -134,8 +134,8 @@
       "sha256": "01d0599452f0583b677409bef75c8211aeee66c02d6033831ced4bace0fc37cd"
     },
     "reader/reader.html": {
-      "bytes": 75801,
-      "sha256": "1b1c66e567c099dc70406e4512aa6568c0b6ba772d7db506e6070c68a4e3214f"
+      "bytes": 75881,
+      "sha256": "b5062fd46d7d1c291ed5a96adf8b10dc291879cb410b13ac37c8b50077ba6088"
     },
     "reader/scrub.css": {
       "bytes": 10487,
@@ -146,8 +146,8 @@
       "sha256": "9099e5b5ad88950dd8aa948aea6e6c10c0e6c6ce9cab5db69cc5eb8f5c764831"
     },
     "reader/shell.css": {
-      "bytes": 47646,
-      "sha256": "7bccc302b3bb1347aa9b55fe8eb3b67d625d15b5b13c8c165e00b2c95aa57bdd"
+      "bytes": 48034,
+      "sha256": "56654fc9144565f387432e0cd135800eebb88c54b1b0b037e252b88b09d55f1b"
     },
     "reader/surface.css": {
       "bytes": 27987,
@@ -158,8 +158,8 @@
       "sha256": "633ae60560ad5d1b86b3d8363b18543c37cd89ad7a7a2b97bb17085fb735e213"
     },
     "reader/sw.js": {
-      "bytes": 21563,
-      "sha256": "8e3f6be66f7f79cbc836b9eaab8b63b5c63800ebc4fe46ee5344b3ffaea853f6"
+      "bytes": 21730,
+      "sha256": "aedcad9f043fb73b8c944a6fd0385fdb94042578b9e0880639be4a5ed3d3009d"
     },
     "reader/tokens.css": {
       "bytes": 5848,
@@ -184,6 +184,14 @@
     "reader/wordpane.js": {
       "bytes": 8510,
       "sha256": "bbeebf2d6a561221c66b82fc13b04eba163b2850181c6036f2a1d866a9070954"
+    },
+    "reader/wordview.css": {
+      "bytes": 2785,
+      "sha256": "058bb3ea137dbff74115152c13bb2dd095e21d86f86306ec6638ca8e553c7786"
+    },
+    "reader/wordview.js": {
+      "bytes": 7034,
+      "sha256": "d62cd37461c17ef65833dbf0ef1129726c0742fdf8028d4fb3fbf8dbd808218d"
     },
     "settings/settings.css": {
       "bytes": 17062,
@@ -236,8 +244,8 @@
   },
   "home_page": "library/library.html",
   "source": {
-    "commit": "1293ba9",
-    "repo": "/Users/oscarwilson-brown/Documents/RUNNERS/TTSTV/TTSTV",
-    "shell_cache": "ttstv-shell-v41"
+    "commit": "d7b7743",
+    "repo": "/sessions/rcw-015zjidp98vb9wek89gfgy4j/mnt/TTSTV",
+    "shell_cache": "ttstv-shell-v42"
   }
 }
