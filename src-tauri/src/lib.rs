@@ -1346,7 +1346,7 @@ fn fill_root_view(window: &tauri::WebviewWindow<Wry>) {
 //
 // DEBUG BUILDS ONLY, both halves: the script is not injected in a release
 // binary and the route is not answered there either, so `--release` has neither
-// the button nor the handler. It is here and not in `shell/` because `shell/`
+// the script nor the handler (and neither build has a button: 10 Sep). It is here and not in `shell/` because `shell/`
 // is another lane's folder and because a diagnostic that measures the host
 // belongs to the host.
 
@@ -1355,7 +1355,13 @@ fn fill_root_view(window: &tauri::WebviewWindow<Wry>) {
 /// anyway, but the handler answers first.
 const PROBE_PATH: &str = "/__probe";
 
-/// The two measurements, and a 64x36 button to start the second one.
+/// The two measurements. NO BUTTON ANY MORE (Osca, 10 Sep, PROMPTS/phone-chrome.md
+/// in TTSTV: *"No probe artifact."*): the 64x36 "probe" button this script
+/// appended sat bottom-right over the reader's own controls -- the strip's speed
+/// button at G-PHONE, the bar's mic now -- in every debug build Osca pressed.
+/// The reader has real rendered audio now, so `adopt` below reports on ITS media
+/// element and the sine the button played is not needed to have a sound to
+/// measure. The button, the sine and the function that started it are deleted.
 ///
 /// **The viewport (job 2).** `window.innerHeight * devicePixelRatio` against
 /// `screen.height * devicePixelRatio`, plus the safe-area insets read off a
@@ -1364,23 +1370,13 @@ const PROBE_PATH: &str = "/__probe";
 /// vars were right and describing the wrong box. Reported at load, at 1500 ms
 /// (after UIKit has finished laying out), and on every resize.
 ///
-/// **The sound (job 3).** A REAL media element -- a 30-second 220 Hz sine built
-/// as a WAV data URI, looping, at 5% -- and not a WebAudio oscillator: an
-/// oscillator is not a media element, does not raise `play`, and does not own
-/// the system's now-playing session, so it would prove nothing about the thing
-/// under test. It needs a tap because iOS refuses media playback without a user
-/// gesture, hence the button; `NOW_PLAYING_JS`'s `play` listener fires on it
-/// exactly as it will on the reader's, which is the point. Then every
+/// **The sound (job 3).** Whatever media element plays first -- the reader's
+/// own master, now that chapters are rendered -- is adopted, and every
 /// `timeupdate` reports how many seconds it is since the app went to the
 /// background. The last such line while `hidden=1` is the answer.
-///
-/// The reader has no rendered audio yet (`shell/reader/listen.js` runs a clock
-/// where the `<audio>` will be), so this element is the only real sound in the
-/// app today. When there is a chapter to play, the same three listeners report
-/// on it and the button stops being the only source.
 pub const PROBE_JS: &str = r#"(function () {
   "use strict";
-  var MIN_MS = 1000, RATE = 8000, SECONDS = 30, HZ = 220;
+  var MIN_MS = 1000;
   var media = null, playAt = 0, hiddenAt = 0, lastBeat = 0, resizeTimer = 0;
 
   function say(kind, fields) {
@@ -1430,27 +1426,6 @@ pub const PROBE_JS: &str = r#"(function () {
   }
 
   /* ------------------------------------------------------------- the sound */
-  /* 8-bit unsigned mono PCM: the smallest WAV that is unambiguously a media
-     file, and small enough to sit in a data URI without a fetch. */
-  function wav() {
-    var n = RATE * SECONDS, size = 44 + n;
-    var b = new Uint8Array(size), v = new DataView(b.buffer);
-    function tag(o, str) { for (var i = 0; i < str.length; i++) b[o + i] = str.charCodeAt(i); }
-    tag(0, "RIFF"); v.setUint32(4, size - 8, true); tag(8, "WAVEfmt ");
-    v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
-    v.setUint32(24, RATE, true); v.setUint32(28, RATE, true);
-    v.setUint16(32, 1, true); v.setUint16(34, 8, true);
-    tag(36, "data"); v.setUint32(40, n, true);
-    for (var i = 0; i < n; i++) {
-      b[44 + i] = 128 + Math.round(100 * Math.sin(2 * Math.PI * HZ * i / RATE));
-    }
-    var bin = "", CHUNK = 4096;
-    for (var j = 0; j < size; j += CHUNK) {
-      bin += String.fromCharCode.apply(null, b.subarray(j, Math.min(j + CHUNK, size)));
-    }
-    return "data:audio/wav;base64," + window.btoa(bin);
-  }
-
   function beat(what) {
     var now = Date.now();
     if (what === "tick" && now - lastBeat < MIN_MS) { return; }
@@ -1465,34 +1440,8 @@ pub const PROBE_JS: &str = r#"(function () {
     });
   }
 
-  function start() {
-    if (media) { media.play(); return; }
-    media = document.createElement("audio");
-    media.src = wav();
-    media.loop = true;
-    media.volume = 0.05;
-    media.setAttribute("data-frank-probe", "1");
-    /* in the document, because `NOW_PLAYING_JS` listens on `document` in the
-       capture phase and a detached element's events never get there. */
-    document.body.appendChild(media);
-    playAt = Date.now();
-    var p = media.play();
-    if (p && p.catch) { p.catch(function (e) { say("audio", { e: "refused", why: String(e) }); }); }
-  }
-
   /* ---------------------------------------------------------------- wiring */
   function ready() {
-    var b = document.createElement("button");
-    b.type = "button";
-    b.textContent = "probe";
-    b.setAttribute("data-frank-probe", "1");
-    b.style.cssText = "position:fixed;z-index:2147483647;right:8px;" +
-      "bottom:calc(8px + env(safe-area-inset-bottom,0px));width:64px;height:36px;" +
-      "border-radius:8px;border:1px solid #8886;background:#c9c4bb;color:#111;" +
-      "font:12px/1 system-ui,sans-serif;opacity:.85";
-    b.addEventListener("click", function () { start(); viewport("tap"); });
-    document.body.appendChild(b);
-
     viewport("load");
     window.setTimeout(function () { viewport("settled"); }, 1500);
     window.addEventListener("resize", function () {
@@ -1500,10 +1449,8 @@ pub const PROBE_JS: &str = r#"(function () {
       resizeTimer = window.setTimeout(function () { resizeTimer = 0; viewport("resize"); }, 250);
     });
 
-    /* `adopt` is what makes this a probe of the APP and not only of itself:
-       whatever media element plays first is the one reported on, so when the
-       reader has rendered audio these lines describe the reader and the button
-       is redundant. Until then the button is the only sound in the app. */
+    /* `adopt` is what makes this a probe of the APP: whatever media element
+       plays first -- the reader's master -- is the one reported on. */
     function adopt(ev) {
       if (!media && ev && ev.target && typeof ev.target.currentTime === "number") { media = ev.target; }
     }
