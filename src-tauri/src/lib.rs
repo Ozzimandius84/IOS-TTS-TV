@@ -61,12 +61,13 @@
 //! `frontendDist` embeds the staged shell in the binary, and the handler could
 //! read it back out of the embedded assets on every request. It writes them to
 //! the app's data directory once instead, and serves from there, because that
-//! directory is where the *books* are going: sync (not today) puts a
-//! `.frank/` object store beside this folder, and a reader that fetches
-//! `frank://localhost/books/<slug>/book.json` will want one handler, one root
-//! and one set of path rules -- not a second scheme bolted on later. Today
-//! nothing but the shell is under that root, so today the app opens empty,
-//! which is exactly what it is meant to do.
+//! directory is where the *books* go: a reader that fetches
+//! `frank://localhost/books/<slug>/book.json` wants one handler, one root and
+//! one set of path rules -- not a second scheme bolted on later. Since G-PULL
+//! (11 Sep) that is what it gets: a Sync pull writes each book through the
+//! `book_*` commands into `<app data>/books/`, BESIDE the shell's folder (an
+//! update clears the shell's; a book outlives it), and [`route`] answers
+//! `/books/...` from there. See "the books", below.
 //!
 //! The unpack is stamped with a fingerprint of what was embedded -- how many
 //! assets and a hash of their names and bytes -- so a launch after the first
@@ -105,7 +106,8 @@ mod search;
 const SCHEME: &str = "frank";
 
 /// Where the served tree lives under the app's data directory. A folder and not
-/// the data dir itself, because sync's object store is going to want its own.
+/// the data dir itself, because the books have their own beside it
+/// ([`BOOKS_DIR`], G-PULL) and must survive this one being cleared.
 const SHELL_DIR: &str = "shell";
 
 /// The page the one window opens on. The Library is the app -- there is no
@@ -823,6 +825,417 @@ fn percent_decode(s: &str) -> String {
     String::from_utf8_lossy(&out).into_owned()
 }
 
+// ------------------------------------------------------------ the books
+//
+// G-PULL (Osca, 11 Sep): *"the phone can read Drive but cannot take a book."*
+// The Sync press read `library.json` off Drive (26 rows), said `Pulling 1 of
+// 26 · Les Pensées · 0/31`, and failed on the first byte of the first file,
+// every press. The shell kept a book in the Cache API (`library/import.js`),
+// and `Cache.put` refuses any URL whose scheme is not http or https -- WebKit's
+// words are `Request url is not HTTP/HTTPS` -- and this origin is `frank://`.
+// Nor would a Cache have been read if it had taken the bytes: there is no
+// service worker on a custom scheme, and `frank://localhost/books/<slug>/...`
+// is answered by THIS crate's handler, off disk, which is where the module
+// head always said the books were going.
+//
+// So the books go to disk, through four commands, and the shell's store seam
+// (`import.js`, "the store") hands them the same four verbs it gives the
+// Cache on the web: `book_put` one file, `book_meta` the row -- written LAST,
+// and it is the commit -- `book_list` every row, `book_remove` a slug. The
+// reader and the Library need nothing new: they already ask for
+// `frank://localhost/books/<slug>/...`, and [`route`] now answers that from
+// the books folder.
+//
+// THE FOLDER IS NOT UNDER SHELL_DIR. `unpack_shell` clears the shell tree
+// whenever the app carries a different shell -- every update -- and a book
+// must outlive every update. `<app data>/books/` sits beside `shell/`:
+//
+//   books/<slug>/<rel>                 the installed version, whole
+//   books/<slug>/.meta.json            its row (what the Library lists)
+//   books/<slug>/.hash                 its hash, for the next commit to name
+//   books/.part/<slug>@<hash>/<rel>    a version being pulled
+//   books/.old/<slug>@<hash>-<n>/      a replaced version, waiting for its delete
+//
+// A pull writes into `.part/`; `book_meta` writes the row there and swaps
+// the folder in. A pull that dies half-way leaves a `.part/` folder and no
+// row, so the book is not on the shelf and the version already installed is
+// untouched -- the same promise `import.js` makes for a Cache ("a power cut
+// mid-import leaves the old book whole and the new one partial-but-
+// unreferenced"). Every dot-named name here is the crate's own: a book file
+// may not have one ([`book_rel`]) and none is ever served ([`route`]).
+
+/// The books folder's name under the app's data directory -- beside
+/// [`SHELL_DIR`], never in it.
+const BOOKS_DIR: &str = "books";
+
+/// The request paths that are books. The reader lives in `reader/` and asks
+/// for `../books/<slug>/...`, which is this.
+const BOOKS_PREFIX: &str = "/books/";
+
+/// A version being pulled, and a version a commit has replaced.
+const BOOKS_PART: &str = ".part";
+const BOOKS_OLD: &str = ".old";
+
+/// The row `listInstalled` reads -- `import.js`'s meta object, as the page
+/// sent it -- and the installed version's hash beside it (plain text, so a
+/// commit can say which version it replaced without parsing JSON).
+const BOOK_META: &str = ".meta.json";
+const BOOK_HASH: &str = ".hash";
+
+/// The three names a `book_put` carries, as request headers (the body is the
+/// bytes). Percent-encoded by [`BOOKS_JS`]: a header value is ASCII.
+const BOOK_SLUG_HEADER: &str = "frank-book-slug";
+const BOOK_HASH_HEADER: &str = "frank-book-hash";
+const BOOK_REL_HEADER: &str = "frank-book-rel";
+
+fn books_root<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> PathBuf {
+    app.path()
+        .app_data_dir()
+        .expect("no app data dir")
+        .join(BOOKS_DIR)
+}
+
+/// Which file answers a request: `/books/<slug>/<rel>` from the books folder,
+/// everything else from the shell. ONE extra root and the same path rules as
+/// [`resolve`] -- the same `..` refusals, the same decoding -- plus one of its
+/// own: a dot-named segment under `/books/` is refused, because every dot
+/// name there is the crate's (`.meta.json`, `.hash`, `.part/`, `.old/`).
+/// `None` means 404.
+///
+/// The prefix is tested on the path AS SENT. A request that spells it in
+/// percent-escapes (`/%62ooks/...`) is therefore a shell path, and the
+/// shell has no `books/` beyond the dev shelf -- so it can only miss, and a
+/// `..` spelt `%2e%2e` is decoded before [`resolve`] reads the components,
+/// where it is refused like any other.
+fn route(shell: &Path, books: &Path, request_path: &str) -> Option<PathBuf> {
+    let Some(rest) = request_path.strip_prefix(BOOKS_PREFIX) else {
+        return resolve(shell, request_path);
+    };
+    if rest.is_empty() {
+        return None;
+    }
+    let p = resolve(books, rest)?;
+    let dotted = p
+        .strip_prefix(books)
+        .ok()?
+        .components()
+        .any(|c| c.as_os_str().to_string_lossy().starts_with('.'));
+    if dotted {
+        None
+    } else {
+        Some(p)
+    }
+}
+
+/// import.js's slug rule (`validateBook`): lower-case letters, digits and
+/// hyphens, a letter or digit first. It is a folder name and a URL segment
+/// here, exactly as it is a Cache name and a URL segment on the web.
+fn book_slug_ok(slug: &str) -> Result<(), String> {
+    let b = slug.as_bytes();
+    let first = b
+        .first()
+        .map_or(false, |c| c.is_ascii_lowercase() || c.is_ascii_digit());
+    let rest = b
+        .iter()
+        .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || *c == b'-');
+    if first && rest && b.len() <= 128 {
+        Ok(())
+    } else {
+        Err(format!(
+            "{slug:?} is not a book slug (lower-case letters, digits and hyphens)"
+        ))
+    }
+}
+
+/// A book's version: core/provenance.py's word-id hash, lower-case hex.
+fn book_hash_ok(hash: &str) -> Result<(), String> {
+    let ok = !hash.is_empty()
+        && hash.len() <= 64
+        && hash.bytes().all(|c| c.is_ascii_digit() || (b'a'..=b'f').contains(&c));
+    if ok {
+        Ok(())
+    } else {
+        Err(format!("{hash:?} is not a book hash (lower-case hex)"))
+    }
+}
+
+/// A file of a book, relative to the book's folder -- `chapters/c001.txt`,
+/// `audio/c001.opus`. [`resolve`]'s rules and then some, because this path is
+/// WRITTEN: no `..`, nothing absolute, no empty segment, no backslash or NUL,
+/// and no dot-named segment (those are the crate's). Every refusal a sentence.
+fn book_rel(rel: &str) -> Result<PathBuf, String> {
+    if rel.is_empty() {
+        return Err("an empty path is not a file of a book".into());
+    }
+    if rel.starts_with('/') || rel.contains('\\') || rel.contains('\0') {
+        return Err(format!("{rel:?} is not a relative path inside a book"));
+    }
+    let mut out = PathBuf::new();
+    for seg in rel.split('/') {
+        if seg.is_empty() {
+            return Err(format!("{rel:?} has an empty segment"));
+        }
+        if seg == "." || seg == ".." {
+            return Err(format!("{rel:?} tries to leave the book's folder"));
+        }
+        if seg.starts_with('.') {
+            return Err(format!("{rel:?} names a dot-file, and those are Frank's own"));
+        }
+        let mut parts = Path::new(seg).components();
+        match (parts.next(), parts.next()) {
+            (Some(Component::Normal(_)), None) => out.push(seg),
+            _ => return Err(format!("{rel:?} is not a plain path")),
+        }
+    }
+    Ok(out)
+}
+
+fn book_part(books: &Path, slug: &str, hash: &str) -> PathBuf {
+    books.join(BOOKS_PART).join(format!("{slug}@{hash}"))
+}
+
+fn io_why(what: &str, path: &Path, e: std::io::Error) -> String {
+    format!("frank: cannot {what} {} -- {e}", path.display())
+}
+
+/// `book_put`'s body: one file of a version being pulled, into `.part/`.
+/// Answers the byte count.
+fn book_write(books: &Path, slug: &str, hash: &str, rel: &str, bytes: &[u8]) -> Result<u64, String> {
+    book_slug_ok(slug)?;
+    book_hash_ok(hash)?;
+    let dst = book_part(books, slug, hash).join(book_rel(rel)?);
+    if let Some(parent) = dst.parent() {
+        fs::create_dir_all(parent).map_err(|e| io_why("create", parent, e))?;
+    }
+    fs::write(&dst, bytes).map_err(|e| io_why("write", &dst, e))?;
+    Ok(bytes.len() as u64)
+}
+
+/// `book_meta`'s body: THE COMMIT. The row and the hash go into the version's
+/// `.part/` folder, and the folder becomes `books/<slug>`. The version it
+/// replaced -- if its hash differs -- is named in the answer (`<slug>@<hash>`,
+/// as the Cache store names the cache it dropped). A folder that cannot be
+/// swapped in puts the old one back and says so.
+fn book_commit(books: &Path, slug: &str, hash: &str, meta_json: &str) -> Result<Vec<String>, String> {
+    book_slug_ok(slug)?;
+    book_hash_ok(hash)?;
+    let part = book_part(books, slug, hash);
+    if !part.is_dir() {
+        return Err(format!(
+            "nothing was put for {slug}@{hash} -- a book's row comes after its files"
+        ));
+    }
+    let meta = part.join(BOOK_META);
+    fs::write(&meta, meta_json).map_err(|e| io_why("write", &meta, e))?;
+    let stamp = part.join(BOOK_HASH);
+    fs::write(&stamp, hash).map_err(|e| io_why("write", &stamp, e))?;
+
+    let live = books.join(slug);
+    let mut replaced = Vec::new();
+    if live.exists() {
+        let old = fs::read_to_string(live.join(BOOK_HASH))
+            .map(|s| s.trim().to_string())
+            .unwrap_or_default();
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_nanos())
+            .unwrap_or(0);
+        let label = if old.is_empty() { "unknown" } else { old.as_str() };
+        let aside = books.join(BOOKS_OLD).join(format!("{slug}@{label}-{nanos}"));
+        if let Some(parent) = aside.parent() {
+            fs::create_dir_all(parent).map_err(|e| io_why("create", parent, e))?;
+        }
+        fs::rename(&live, &aside).map_err(|e| io_why("move aside", &live, e))?;
+        if let Err(e) = fs::rename(&part, &live) {
+            let back = fs::rename(&aside, &live);
+            return Err(format!(
+                "{} ({})",
+                io_why("install", &part, e),
+                if back.is_ok() { "the old version is back" } else { "and the old version could not be put back" }
+            ));
+        }
+        let _ = fs::remove_dir_all(&aside);
+        if !old.is_empty() && old != hash {
+            replaced.push(format!("{slug}@{old}"));
+        }
+    } else {
+        fs::rename(&part, &live).map_err(|e| io_why("install", &part, e))?;
+    }
+    Ok(replaced)
+}
+
+/// `book_list`'s body: `(slug, row text, hash)` for every installed book,
+/// in slug order -- the row as the page wrote it, `None` when a folder has
+/// no readable one (the command then answers a `broken` row, as the Cache
+/// store does for a cache with no meta entry).
+fn book_rows(books: &Path) -> Vec<(String, Option<String>, String)> {
+    let Ok(dir) = fs::read_dir(books) else {
+        return Vec::new();
+    };
+    let mut out = Vec::new();
+    for entry in dir.flatten() {
+        let name = entry.file_name().to_string_lossy().into_owned();
+        if name.starts_with('.') || !entry.path().is_dir() {
+            continue;
+        }
+        let meta = fs::read_to_string(entry.path().join(BOOK_META)).ok();
+        let hash = fs::read_to_string(entry.path().join(BOOK_HASH))
+            .map(|s| s.trim().to_string())
+            .unwrap_or_default();
+        out.push((name, meta, hash));
+    }
+    out.sort();
+    out
+}
+
+/// `book_remove`'s body: the slug's installed folder and every half-pulled
+/// version of it. Answers how many folders went (0 when none was here) --
+/// the Cache store's count, which includes a cache with no meta.
+fn book_delete(books: &Path, slug: &str) -> Result<u32, String> {
+    book_slug_ok(slug)?;
+    let mut n = 0;
+    let live = books.join(slug);
+    if live.is_dir() {
+        fs::remove_dir_all(&live).map_err(|e| io_why("remove", &live, e))?;
+        n += 1;
+    }
+    let prefix = format!("{slug}@");
+    if let Ok(dir) = fs::read_dir(books.join(BOOKS_PART)) {
+        for entry in dir.flatten() {
+            if entry.file_name().to_string_lossy().starts_with(&prefix) {
+                fs::remove_dir_all(entry.path()).map_err(|e| io_why("remove", &entry.path(), e))?;
+                n += 1;
+            }
+        }
+    }
+    Ok(n)
+}
+
+/// One file of a book. **The bytes are the RAW IPC body** -- `invoke(
+/// "book_put", bytes, { headers })` from [`BOOKS_JS`] -- and the three names
+/// ride as headers: a book's audio is megabytes, and a JSON array of numbers
+/// is four to five bytes a byte and a parse. On iOS the body crosses as the
+/// body of Tauri's own `ipc://` request (wry reads `HTTPBody`, or
+/// `HTTPBodyStream` when WebKit hands it that way). Where the custom-protocol
+/// IPC is not used -- Android, or a webview that refused it -- Tauri falls
+/// back to `postMessage`, which serialises the bytes as a JSON array; that
+/// arrives as `InvokeBody::Json` and is taken too, slowly, rather than
+/// refused. A synchronous command, so it runs on the main thread: one
+/// `fs::write` of one file. Its cost is the log line below (debug builds
+/// log at Info; Xcode's console, filter `book_put`).
+#[tauri::command]
+fn book_put<R: tauri::Runtime>(
+    app: tauri::AppHandle<R>,
+    request: tauri::ipc::Request<'_>,
+) -> Result<u64, String> {
+    let header = |name: &str| -> Result<String, String> {
+        request
+            .headers()
+            .get(name)
+            .and_then(|v| v.to_str().ok())
+            .map(percent_decode)
+            .ok_or_else(|| format!("book_put: no {name} header"))
+    };
+    let slug = header(BOOK_SLUG_HEADER)?;
+    let hash = header(BOOK_HASH_HEADER)?;
+    let rel = header(BOOK_REL_HEADER)?;
+    let started = Instant::now();
+    let books = books_root(&app);
+    let n = match request.body() {
+        tauri::ipc::InvokeBody::Raw(bytes) => book_write(&books, &slug, &hash, &rel, bytes)?,
+        tauri::ipc::InvokeBody::Json(serde_json::Value::Array(items)) => {
+            let bytes: Option<Vec<u8>> = items
+                .iter()
+                .map(|v| v.as_u64().filter(|n| *n < 256).map(|n| n as u8))
+                .collect();
+            let bytes = bytes.ok_or("book_put: the body is not bytes")?;
+            book_write(&books, &slug, &hash, &rel, &bytes)?
+        }
+        _ => {
+            return Err(
+                "book_put: the bytes go as the raw body -- invoke(\"book_put\", bytes, { headers })".into(),
+            )
+        }
+    };
+    log::info!(
+        "frank: book_put {slug}@{hash}/{rel} -- {n} bytes in {} ms",
+        started.elapsed().as_millis()
+    );
+    Ok(n)
+}
+
+/// The row, LAST: the commit ([`book_commit`]). Answers the versions it
+/// replaced.
+#[tauri::command]
+fn book_meta<R: tauri::Runtime>(
+    app: tauri::AppHandle<R>,
+    slug: String,
+    hash: String,
+    meta: serde_json::Value,
+) -> Result<Vec<String>, String> {
+    if !meta.is_object() {
+        return Err("book_meta: a book's row is a JSON object".into());
+    }
+    let text = serde_json::to_string(&meta).map_err(|e| format!("book_meta: {e}"))?;
+    let replaced = book_commit(&books_root(&app), &slug, &hash, &text)?;
+    log::info!("frank: book_meta {slug}@{hash} -- installed, replaced {replaced:?}");
+    Ok(replaced)
+}
+
+/// Every installed book's row -- what the Library lists as "On this device".
+#[tauri::command]
+fn book_list<R: tauri::Runtime>(app: tauri::AppHandle<R>) -> Vec<serde_json::Value> {
+    book_rows(&books_root(&app))
+        .into_iter()
+        .map(|(slug, meta, hash)| {
+            meta.and_then(|t| serde_json::from_str::<serde_json::Value>(&t).ok())
+                .filter(|v| v.is_object())
+                .unwrap_or_else(|| {
+                    serde_json::json!({
+                        "slug": slug, "hash": hash, "title": slug,
+                        "broken": true, "bytes": 0, "chapters": 0
+                    })
+                })
+        })
+        .collect()
+}
+
+/// A book off this phone, every version of it.
+#[tauri::command]
+fn book_remove<R: tauri::Runtime>(app: tauri::AppHandle<R>, slug: String) -> Result<u32, String> {
+    book_delete(&books_root(&app), &slug)
+}
+
+/// `window.TTSTVHost.books`, the door `library/import.js`'s `HostStore`
+/// talks to: the four commands, and nothing else. Injected on its own rather
+/// than inside [`HOST_JS`], whose tests pin that object to its two commands;
+/// guarded the same way -- a page that is not in Frank gets no door, and
+/// import.js then keeps the Cache API, which is right on every origin but
+/// this one. `put` sends the bytes as the raw body and the three names as
+/// headers, percent-encoded (a header value is ASCII; a book file's name is
+/// not promised to be).
+pub const BOOKS_JS: &str = r#"(function () {
+  "use strict";
+  var TAURI = window.__TAURI__ && window.__TAURI__.core;
+  if (!TAURI || typeof TAURI.invoke !== "function") return;
+  window.TTSTVHost = window.TTSTVHost || {};
+  var enc = encodeURIComponent;
+  window.TTSTVHost.books = {
+    // put(slug, hash, rel, bytes: Uint8Array) -> Promise<number>
+    put: function (slug, hash, rel, bytes) {
+      return TAURI.invoke("book_put", bytes, { headers: {
+        "frank-book-slug": enc(slug), "frank-book-hash": enc(hash), "frank-book-rel": enc(rel) } });
+    },
+    // meta(slug, hash, row) -> Promise<string[]>, the versions it replaced
+    meta: function (slug, hash, meta) { return TAURI.invoke("book_meta", { slug: slug, hash: hash, meta: meta }); },
+    // list() -> Promise<row[]>
+    list: function () { return TAURI.invoke("book_list"); },
+    // remove(slug) -> Promise<number>
+    remove: function (slug) { return TAURI.invoke("book_remove", { slug: slug }); }
+  };
+})();
+"#;
+
 /// The content type for a file of the shell, by extension.
 ///
 /// Every extension the app shell actually contains is named here, and
@@ -844,6 +1257,12 @@ fn content_type(path: &Path) -> &'static str {
         Some("wav") => "audio/wav",
         Some("opus") => "audio/ogg",
         Some("mp3") => "audio/mpeg",
+        // A book's files, since the books folder is served from here too
+        // (G-PULL, 11 Sep): `library/import.js`'s own TYPES, so a chapter is
+        // UTF-8 text and an audio file is audio whichever store it came from.
+        Some("txt") => "text/plain; charset=utf-8",
+        Some("ogg") => "audio/ogg",
+        Some("m4a") => "audio/mp4",
         _ => "application/octet-stream",
     }
 }
@@ -1552,7 +1971,11 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             sync_discover,
             google_sign_in,
-            audio_session_start
+            audio_session_start,
+            book_put,
+            book_meta,
+            book_list,
+            book_remove
         ])
         // The launch scheme (`frank-pair://`, NOT the asset scheme). The
         // plugin is what turns an OS open into an event on iOS, macOS and
@@ -1575,6 +1998,7 @@ pub fn run() {
         .register_uri_scheme_protocol(SCHEME, |ctx: UriSchemeContext<'_, Wry>, request| {
             let app = ctx.app_handle();
             let root = shell_root(app);
+            let books = books_root(app);
             let path = request.uri().path().to_string();
 
             // The probe (jobs 2 and 3), and nothing in a release binary:
@@ -1605,9 +2029,17 @@ pub fn run() {
                 ));
             }
 
-            let disk = resolve(&root, &path);
+            // A book from the books folder (G-PULL); anything else from the
+            // shell. A book that is not there is looked for once more in the
+            // shell's own `books/` -- the dev shelf `tools/dev_books.py` embeds
+            // for the simulator -- so both kinds open at the same URL.
+            let disk = route(&root, &books, &path);
+            let dev_shelf = disk
+                .as_ref()
+                .filter(|_| path.starts_with(BOOKS_PREFIX))
+                .and_then(|_| resolve(&root, &path));
 
-            if let Some(p) = &disk {
+            for p in disk.iter().chain(dev_shelf.iter()) {
                 if let Ok(bytes) = fs::read(p) {
                     return http_response(200, content_type(p), bytes);
                 }
@@ -1697,6 +2129,11 @@ pub fn run() {
             )
             .title("Frank")
             .initialization_script(HOST_JS)
+            // The book door (G-PULL): `TTSTVHost.books`, before any page
+            // script, so `library/import.js` finds it when it loads and
+            // keeps its books on disk instead of in a Cache that refuses
+            // this scheme.
+            .initialization_script(BOOKS_JS)
             // Separate from HOST_JS, and unconditional -- see PAIR_JS's own
             // note. Both run before the document's own scripts, so a page that
             // reads the key at load reads a key a link has already written.
@@ -2251,5 +2688,199 @@ mod tests {
     #[test]
     fn the_error_page_cannot_be_broken_by_a_path() {
         assert_eq!(escape("a<b>&c"), "a&lt;b&gt;&amp;c");
+    }
+}
+
+/// The book door (G-PULL, 11 Sep). Everything here but the last test is
+/// std-only -- no Tauri, no webview -- so it is provable by extraction in a
+/// shell with no Xcode (the session that wrote it compiled these with a bare
+/// `rustc --test` against this file's own functions). `cargo test` on the Mac
+/// is the whole proof.
+#[cfg(test)]
+mod book_tests {
+    use super::*;
+
+    fn scratch(name: &str) -> PathBuf {
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_nanos())
+            .unwrap_or(0);
+        let d = std::env::temp_dir().join(format!("frank-books-{name}-{}-{nanos}", std::process::id()));
+        fs::create_dir_all(&d).unwrap();
+        d
+    }
+
+    #[test]
+    fn a_book_is_served_from_the_books_folder_and_nothing_leaves_it() {
+        let shell = Path::new("/tmp/shell");
+        let books = Path::new("/tmp/books");
+        assert_eq!(
+            route(shell, books, "/books/eclogues-en/book-data.js").unwrap(),
+            books.join("eclogues-en").join("book-data.js")
+        );
+        assert_eq!(
+            route(shell, books, "/books/eclogues-en/chapters/c001.txt").unwrap(),
+            books.join("eclogues-en").join("chapters").join("c001.txt")
+        );
+        // resolve's refusals, one root over
+        for bad in [
+            "/books/../x",
+            "/books/../../etc/passwd",
+            "/books/%2e%2e/x",
+            "/books/a/../../shell/index.html",
+            "/books/",
+        ] {
+            assert!(route(shell, books, bad).is_none(), "{bad}");
+        }
+        // ...and the crate's own names are never served
+        for mine in [
+            "/books/eclogues-en/.meta.json",
+            "/books/eclogues-en/.hash",
+            "/books/.part/eclogues-en@ab/book.json",
+            "/books/.old/eclogues-en@ab-1/book.json",
+        ] {
+            assert!(route(shell, books, mine).is_none(), "{mine}");
+        }
+        // the shell is where it was
+        assert_eq!(
+            route(shell, books, "/library/library.html").unwrap(),
+            shell.join("library").join("library.html")
+        );
+        assert_eq!(route(shell, books, "/").unwrap(), shell.join("index.html"));
+        assert!(route(shell, books, "/../etc/passwd").is_none());
+        // the prefix spelt in escapes is a shell path, and it stays in the shell
+        assert_eq!(route(shell, books, "/%62ooks/x.js").unwrap(), shell.join("books").join("x.js"));
+        assert_eq!(route(shell, books, "/books").unwrap(), shell.join("books"));
+        // a book's name is decoded like any other path
+        assert_eq!(
+            route(shell, books, "/books/a%20b/book.json").unwrap(),
+            books.join("a b").join("book.json")
+        );
+    }
+
+    #[test]
+    fn a_book_files_path_and_names_are_refused_in_words() {
+        assert_eq!(book_rel("book.json").unwrap(), PathBuf::from("book.json"));
+        assert_eq!(
+            book_rel("audio/c001.opus").unwrap(),
+            Path::new("audio").join("c001.opus")
+        );
+        for bad in ["", "/etc/passwd", "../x", "a/../../x", "a//b", "./x", "a\\b", ".meta.json", "chapters/.hash", "a/"] {
+            let why = book_rel(bad).unwrap_err();
+            assert!(!why.is_empty(), "{bad:?}");
+        }
+        assert!(book_slug_ok("eclogues-en").is_ok() && book_slug_ok("c001").is_ok());
+        for bad in ["", "-a", "A", "les-pensées", "a/b", "..", "a b", "a.b"] {
+            assert!(book_slug_ok(bad).is_err(), "{bad:?}");
+        }
+        assert!(book_hash_ok("0123456789abcdef").is_ok());
+        for bad in ["", "ABCDEF", "xyz", "01/2", &"a".repeat(65)] {
+            assert!(book_hash_ok(bad).is_err(), "{bad:?}");
+        }
+    }
+
+    #[test]
+    fn a_write_cannot_leave_the_books_folder() {
+        let books = scratch("escape");
+        for bad in ["../x", "/etc/passwd", "a/../../x", "a//b", ".meta.json", "chapters/.hash", "a\\b", "", "./x"] {
+            assert!(book_write(&books, "a", "01", bad, b"x").is_err(), "{bad:?}");
+        }
+        assert!(book_write(&books, "A", "01", "x", b"x").is_err());
+        assert!(book_write(&books, "a", "XY", "x", b"x").is_err());
+        assert!(book_write(&books, "a/b", "01", "x", b"x").is_err());
+        assert!(book_write(&books, "..", "01", "x", b"x").is_err());
+        assert!(!books.join(BOOKS_PART).exists(), "a refused write writes nothing");
+        let _ = fs::remove_dir_all(&books);
+    }
+
+    #[test]
+    fn a_pull_has_no_row_until_its_commit_and_a_new_version_replaces_the_old() {
+        let books = scratch("commit");
+        assert_eq!(book_write(&books, "eclogues-en", "aaaa", "book.json", b"{}").unwrap(), 2);
+        book_write(&books, "eclogues-en", "aaaa", "chapters/c001.txt", b"arma").unwrap();
+        assert!(book_rows(&books).is_empty(), "files and no row: not on the shelf");
+        assert!(!books.join("eclogues-en").exists(), "and not at the reader's URL either");
+
+        let row = r#"{"slug":"eclogues-en","hash":"aaaa","title":"The Bucolics and Eclogues"}"#;
+        assert!(book_commit(&books, "eclogues-en", "aaaa", row).unwrap().is_empty());
+        assert_eq!(fs::read(books.join("eclogues-en").join("chapters").join("c001.txt")).unwrap(), b"arma");
+        let rows = book_rows(&books);
+        assert_eq!(rows.len(), 1);
+        assert_eq!((rows[0].0.as_str(), rows[0].2.as_str()), ("eclogues-en", "aaaa"));
+        assert_eq!(rows[0].1.as_deref(), Some(row));
+
+        // a newer version, half-pulled: the installed one is untouched
+        book_write(&books, "eclogues-en", "bbbb", "book.json", b"{\"v\":2}").unwrap();
+        assert_eq!(fs::read(books.join("eclogues-en").join("book.json")).unwrap(), b"{}");
+        assert_eq!(book_rows(&books)[0].2, "aaaa");
+        // ...committed: it is swapped in whole, and the one it replaced is named and gone
+        assert_eq!(book_commit(&books, "eclogues-en", "bbbb", "{}").unwrap(), vec!["eclogues-en@aaaa".to_string()]);
+        assert_eq!(fs::read(books.join("eclogues-en").join("book.json")).unwrap(), b"{\"v\":2}");
+        assert!(!books.join("eclogues-en").join("chapters").exists(), "no file of the old version lingers");
+        assert_eq!(fs::read_dir(books.join(BOOKS_OLD)).map(|d| d.count()).unwrap_or(0), 0);
+        assert!(!book_part(&books, "eclogues-en", "bbbb").exists());
+
+        // the same version again replaces nothing; a row with no files is refused
+        book_write(&books, "eclogues-en", "bbbb", "book.json", b"{\"v\":2}").unwrap();
+        assert!(book_commit(&books, "eclogues-en", "bbbb", "{}").unwrap().is_empty());
+        assert!(book_commit(&books, "hamlet", "cccc", "{}").unwrap_err().contains("after its files"));
+        let _ = fs::remove_dir_all(&books);
+    }
+
+    #[test]
+    fn remove_takes_the_book_and_its_half_pulled_versions_and_no_neighbour() {
+        let books = scratch("remove");
+        book_write(&books, "a", "01", "book.json", b"1").unwrap();
+        book_commit(&books, "a", "01", "{}").unwrap();
+        book_write(&books, "a", "02", "book.json", b"2").unwrap();
+        book_write(&books, "ab", "01", "book.json", b"3").unwrap();
+        book_commit(&books, "ab", "01", "{}").unwrap();
+        assert_eq!(book_delete(&books, "a").unwrap(), 2, "the installed one and the half-pulled one");
+        let left: Vec<String> = book_rows(&books).into_iter().map(|r| r.0).collect();
+        assert_eq!(left, vec!["ab".to_string()], "a slug that starts the same is a different book");
+        assert_eq!(book_delete(&books, "a").unwrap(), 0);
+        assert!(book_delete(&books, "../x").is_err());
+        let _ = fs::remove_dir_all(&books);
+    }
+
+    #[test]
+    fn a_book_file_is_served_with_the_type_the_cache_gave_it() {
+        assert_eq!(content_type(Path::new("chapters/c001.txt")), "text/plain; charset=utf-8");
+        assert_eq!(content_type(Path::new("book-data.js")), "text/javascript; charset=utf-8");
+        assert_eq!(content_type(Path::new("audio/c001.opus")), "audio/ogg");
+        assert_eq!(content_type(Path::new("audio/c001.m4a")), "audio/mp4");
+    }
+
+    /// The wiring: four commands, declared (build.rs), granted (the
+    /// capability), handled (`generate_handler!`), and one door that calls
+    /// them -- `put` with the bytes as the raw body.
+    #[test]
+    fn the_book_door_is_four_commands_and_put_sends_the_raw_body() {
+        let js = BOOKS_JS;
+        assert_eq!(js.matches("invoke(").count(), 4);
+        assert!(js.contains(r#"TAURI.invoke("book_put", bytes, { headers: {"#), "the bytes are the body, not an argument");
+        assert!(js.contains(r#""frank-book-slug": enc(slug)"#) && js.contains(r#""frank-book-rel": enc(rel)"#));
+        assert!(js.contains(r#"invoke("book_meta", { slug: slug, hash: hash, meta: meta })"#));
+        assert!(js.contains(r#"invoke("book_list")"#) && js.contains(r#"invoke("book_remove", { slug: slug })"#));
+        assert!(js.contains("if (!TAURI"), "a page outside Frank gets no door");
+        assert_eq!(BOOK_SLUG_HEADER, "frank-book-slug");
+        assert_eq!(BOOK_HASH_HEADER, "frank-book-hash");
+        assert_eq!(BOOK_REL_HEADER, "frank-book-rel");
+        assert_eq!(HOST_JS.matches("invoke(").count(), 2, "HOST_JS keeps its two");
+        let build = include_str!("../build.rs");
+        let cap = include_str!("../capabilities/default.json");
+        let lib = include_str!("lib.rs");
+        for (cmd, perm) in [
+            ("book_put", "allow-book-put"),
+            ("book_meta", "allow-book-meta"),
+            ("book_list", "allow-book-list"),
+            ("book_remove", "allow-book-remove"),
+        ] {
+            assert!(build.contains(&format!("\"{cmd}\"")), "build.rs declares {cmd}");
+            assert!(cap.contains(&format!("\"{perm}\"")), "the capability grants {perm}");
+            assert!(lib.contains(&format!("            {cmd},\n")) || lib.contains(&format!("            {cmd}\n")),
+                    "generate_handler! handles {cmd}");
+        }
+        assert!(lib.contains(".initialization_script(BOOKS_JS)"));
     }
 }

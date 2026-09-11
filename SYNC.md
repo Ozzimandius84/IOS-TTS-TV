@@ -31,14 +31,18 @@ and the transport is one adapter behind four verbs.
 
 ## 2. Where the phone keeps things — and why the LAN half is JS, not Rust
 
-The shell (`shell/`, imported from TTSTV, never edited here) already owns every store the
-phone has: books in the **Cache API** as `ttstv-book-<slug>-<hash>` (`library/import.js`,
-`importZip` → `cache.put(bookUrl(slug, rel))`, one `.bundle.json` meta entry per book);
+The shell (`shell/`, imported from TTSTV, never edited here) owns every store the phone
+has but one. **Books are NOT in the Cache API on the phone** (G-PULL, 11 Sep — this
+paragraph said they were, and that was the bug): `Cache.put` refuses `frank://` (WebKit:
+`Request url is not HTTP/HTTPS`), so `library/import.js` hands a book to the host's door,
+`TTSTVHost.books` → `book_put`/`book_meta`/`book_list`/`book_remove` in `lib.rs`, which
+writes `<app data>/books/<slug>/<rel>` and serves it back at `frank://localhost/books/…`.
+The PWA and the Mac's pages keep the Cache (`ttstv-book-<slug>-<hash>`). The rest is the
+page's own:
 marks in `localStorage` `ttstv.reader.marginalia.<slug>` (`reader/marginalia.js`);
 positions in `localStorage` `ttstv.reader.library`'s `positions` (`reader/cursor.js`).
-`frank://` grants the shell no IPC (`capabilities/default.json`) and does not need to:
-a `fetch()` from the page to `http://<mac>:<port>/sync/manifest` and a `cache.put` of
-what comes back IS the phone's LAN half. So the LAN transport is one file in the shell
+A `fetch()` from the page to `http://<mac>:<port>/sync/manifest`, and the store step of
+what comes back, IS the phone's LAN half. So the LAN transport is one file in the shell
 (TTSTV `library/sync.js`, loaded by settings and the Library), and `lib.rs` changes
 **nothing** for it. What the phone side does need, and where:
 
@@ -154,9 +158,9 @@ reverse in `tauri.conf.json`; `tests/test_google_link.py` fails until they agree
 ## 7. What proves it (Osca's presses, `PHONE.md` order)
 
 - LAN: Studio's row shows a code; the phone types it once; **Sync** → the line reads
-  "Pulled 31 books · 12 marks"; `caches.keys()` in the phone's console lists
-  `ttstv-book-<slug>-<hash>` with the hashes `GET /sync/manifest` gave — one string
-  compare per book, printed. A mark made on the phone → Sync → it is in
+  "Pulled 31 books · 12 marks"; `TTSTVHost.books.list()` in the phone's console lists
+  the rows with the hashes `GET /sync/manifest` gave — one string compare per book,
+  printed. A mark made on the phone → Sync → it is in
   `TTS_DATA/reader/marginalia/<slug>.json` on the Mac and the Mac's open reader repaints.
 - Airplane mode: the button's line says not reachable; a mark made offline syncs on the
   next press, count printed before and after.

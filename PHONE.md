@@ -509,9 +509,10 @@ that is a thing to type once, yourself, having read what it does.
 ## 7. What is owed
 
 - **The shell itself** — blocked on TTSTV job 15 (§1). One command after it lands.
-- **`bookload.js` reading books from the Cache API over `frank://`** — job 15
-  step 2 writes `bookload.js`; it does not exist yet, so "one book imported,
-  opened, read to chapter 2" has not been done and is not claimed.
+- **A book on the phone** — not from the Cache API: `Cache.put` refuses `frank://`
+  (G-PULL, 11 Sep). Books go through `TTSTVHost.books` (lib.rs "the books") into
+  `<app data>/books/` and are served at `frank://localhost/books/…`. "Sync pulls,
+  Les Pensées opens, a chapter reads" is Osca's press, not yet made.
 - **`cap` under `narrow`** — §6, a `design/reader/` question.
 - **`gen/android/`** — does not exist until someone with Android Studio runs
   `init`. Nothing in this repo has been built for Android.

@@ -9,6 +9,11 @@
 // AVAudioSession the moment the reader first plays -- the page can see a
 // `play` event and an app cannot, and an app can hold an audio session and
 // a page cannot, so the one crosses to the other here.
+// SEVEN since G-PULL (11 Sep): `book_put`, `book_meta`, `book_list` and
+// `book_remove`, the door a Sync pull stores a book through -- the Cache API
+// refuses `frank://`, so a book goes to `<app data>/books/` and the scheme
+// handler serves it back at `frank://localhost/books/<slug>/...` (lib.rs,
+// "the books").
 // Everything else the shell does it does over frank:// and fetch.
 fn main() {
     // ios/FrankAudio.m -> the two C symbols `lib.rs` declares under
@@ -60,6 +65,10 @@ fn main() {
                 "sync_discover",
                 "google_sign_in",
                 "audio_session_start",
+                "book_put",
+                "book_meta",
+                "book_list",
+                "book_remove",
             ]),
         ),
     )
