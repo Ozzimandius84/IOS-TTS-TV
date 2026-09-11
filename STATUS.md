@@ -4,6 +4,44 @@ Newest first. `REPORT_PROTOCOL.md` (TTSTV), nine headings. `README.md` says what
 
 ---
 
+## G-LANG — languages are packs the phone adds · 11 Sep (Cowork, bridge VM + container), phone `c525c0a` `aa9eea2` · TTSTV `07433d6`…`b7e9518` (no GPU, 0 GPU-minutes)
+
+**Status line:** `dictionary · G-LANG built · 11 Sep · a whole language per SQLite file, looked up in Rust (dict.rs), added from Settings > Languages as one more pull job; owed: cargo test, the build, Osca's Add Latin press`
+
+The full nine-heading report is TTSTV `dictionary/STATUS.md` (G-LANG); this is the phone's half.
+
+### 1. Built
+`src-tauri/src/dict.rs` (new): a pack (TTSTV `dictionary/pack.py`, schema 1) opened read-only with rusqlite (bundled); `resolve`/`entry` = `pack.py::resolve` step for step; `dict_langs` / `dict_lookup(term, lang)` → `{lang, term, entries, us}` / `dict_remove`; `DICT_JS` = `TTSTVHost.dict`; `Packs`, the pull's door into `<app data>/languages/` (gz → `.part/`, inflated at the commit, checked, row last). `pull.rs`: `Door` + `BookDoor`, `Job.kind` (`"language"`), `Status.kind/queued`, a language pressed during a pull queued and run next on the same thread. `lib.rs`: `mod dict;`, three handlers, `DictState`, the init script. `build.rs`, capability, `Cargo.toml` (`rusqlite 0.37` bundled, `flate2 1`). Shell import v54 from TTSTV b7e9518.
+
+### 2. Verified — and how
+**unit, container** — `cargo test --offline` (real serde/serde_json/log, rusqlite 0.37.0 with bundled SQLite, flate2 1.1.10 from source; tauri/ureq mocked): **23 passed** (lane 1's 12 unchanged + 3 language pull tests + 8 dict: hit, miss, accent-insensitive Latin, apostrophe terms, wrong schema, door, refusals, wiring); 6 RED controls each fail ≥ 1. **live, container** — the real la/en/fr gz through the real door, then 8,887 keys held to `pack.py`: 0 differ; lookup mean 28–47 µs, p99 ≤ 172 µs (container). `tests/`: 95 passed, 4 failed before and after (pre-existing). **Not verified:** `cargo test` on this crate, the build, anything on the iPhone.
+
+### 3. Judgment calls
+One downloader: a `Door` seam in lane 1's `pull.rs` rather than a pack downloader; a pack is a job of `kind: "language"`. Unicode keys by the pack's own `fold` table (exact parity with Python's `norm`), not a new crate.
+
+### 4. Boundary check
+`src-tauri/src/{dict.rs,pull.rs,lib.rs}`, `src-tauri/{build.rs,Cargo.toml,capabilities/default.json}`, the shell import, this file. Left alone: `shell/library/library.json` (deleted before this session), `src-tauri/gen/apple/*` (4), `scratch-float/`, `scratch-j13/`, `scratch-lookup/`, `scratch26b/`.
+
+### 5. Footprint
+`_to_delete/shell.1789151958` (2.1 MB, the import's old shell) and 4 git locks the bridge could not unlink. The app's own on the phone: `<app data>/languages/` — la 266 MB, en 293, fr 85, grc 108 once added.
+
+### 6. Requests
+Lane 5's dot: `running || TTSTVLangs.dot()` (TTSTV report §6).
+
+### 7. Known gaps
+Cargo.lock not regenerated here (crates.io unreachable) — the first Mac build writes it. No byte progress in the status (files only).
+
+### 8. Next
+Osca: `cd src-tauri && cargo test`, the build, then Settings ▸ Languages ▸ Add Latin (71 MB), and the Eclogues by voice. Stop.
+
+### 8b. Commit check
+`c525c0a` (Rust), `aa9eea2` (shell import), this entry — pathspec, `GIT_OPTIONAL_LOCKS=0`.
+
+### 9. Status line
+Above.
+
+---
+
 ## G-SYNCBG — the phone syncs while you use it · 11 Sep (Cowork, bridge VM + container), TTSTV `70f5fc5` `5dd1411` · phone `62590f6` `019d1fe` (no GPU, no Kaggle, no Modal, 0 GPU-minutes)
 
 **Status line:** `library · G-SYNCBG code done · 11 Sep · a Sync's books are pulled by the app (pull.rs) and the page only plans them; auto on launch + foreground; owed: cargo test + Osca's three presses`
