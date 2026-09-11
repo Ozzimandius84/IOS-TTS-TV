@@ -82,10 +82,12 @@ fi
 
 if [ -z "$DEVICE" ]; then
   # One connected phone is the normal case; more than one is a question, not a
-  # guess. `devicectl` prints a table, so the udid is column-parsed rather than
-  # regex-guessed out of prose.
+  # guess. `devicectl` prints a table whose Name and Model columns both carry
+  # spaces ("iPhone 2", "iPhone 17 Pro"), so a column index is a guess -- on
+  # 11 Sep $(NF-1) handed devicectl the string "17". The identifier is the one
+  # token shaped like a UUID; take that.
   DEVICE="$(xcrun devicectl list devices 2>/dev/null \
-            | awk 'NR>2 && $0 ~ /connected/ {print $(NF-1)}' | head -2)"
+            | awk '$0 ~ /connected/ { for (i=1;i<=NF;i++) if ($i ~ /^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$/) print $i }' | head -2)"
   n="$(printf '%s\n' "$DEVICE" | grep -c . || true)"
   if [ "$n" -eq 0 ]; then
     echo "phone.sh: no connected device. Plug the phone in and unlock it, or pass --device <udid>." >&2
