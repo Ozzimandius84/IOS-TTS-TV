@@ -194,7 +194,26 @@ function mount(o){
     return out;
   }
 
+  /* book-nav.js sets this on <html> for exactly the span the reading page is
+     not the thing on screen; scrub.js reads the same flag. */
+  function offPage(){
+    try { return document.documentElement.getAttribute("data-axis") === "off-page"; }
+    catch(_) { return false; }
+  }
   function paint(){
+    /* ============ NOT WHILE THE AXIS IS OFF THE PAGE ============
+       Counted 10 September, inside one frame of the zoom on the complete
+       Shakespeare: 221 `offsetTop` reads and 217 `clientHeight` reads. They are
+       these two lines. The hold loop writes the scroller every frame to keep
+       the word still, every write fires `scroll`, and every `scroll` came here
+       and walked all 866 chapters -- each read forcing the layout the frame's
+       own style writes had just dirtied. That thrash, not the zoom, is why the
+       page painted one frame per second: a zoom write costs 75ms on this book
+       and the frame cost 450.
+
+       And the running head is not on screen off the page, so it is work for a
+       thing nobody can see. The next real scroll paints it. */
+    if(offPage()) return;
     const all=[...col.querySelectorAll(".chapter")];
     const chs=all.filter(c=>!c.classList.contains("titlepage"));
     let cur=0;
@@ -202,9 +221,21 @@ function mount(o){
        It was 0.35 here and the rail asked a different question entirely, so on
        an opener slide the two readouts named different chapters. Osca chose
        HALFWAY, 9 Sep. Move it in one file only and test-scrub.mjs fails. */
-    chs.forEach((c,i)=>{ if(c.offsetTop - pane.scrollTop <= pane.clientHeight*0.5) cur=i; });
+    /* ...AND IT IS FOUND BY BINARY SEARCH, not by walking the book. The scan
+       was O(chapters) in forced layouts and re-read `pane.clientHeight` on
+       every step of it. book-nav.js took the same medicine for the same reason
+       (see its `sectionAt`: "about eleven offsetTop [reads]" against every
+       one); this is that, here. The tops ascend, so the search is sound. */
+    const top = pane.scrollTop, line = top + pane.clientHeight*0.5;
+    if(chs.length){
+      let lo = 0, hi = chs.length - 1;
+      while(lo <= hi){
+        const mid = (lo + hi) >> 1;
+        if(chs[mid].offsetTop <= line){ cur = mid; lo = mid + 1; } else hi = mid - 1;
+      }
+    }
     if(runhead){
-      const onTitle = pane.scrollTop < (chs[0]?chs[0].offsetTop:0) - pane.clientHeight*0.5;
+      const onTitle = line < (chs[0]?chs[0].offsetTop:0);
       const ch=(CUR&&CUR.chapters&&CUR.chapters[cur])||{n:"",t:""};
       runhead.innerHTML='<b>'+esc(CUR?CUR.title:"")+'</b>'
         + (onTitle ? '<span>'+esc((CUR&&CUR.author)||"")+'</span>'

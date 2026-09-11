@@ -340,7 +340,19 @@
        the next chapter's `before`, where it resumes at `into` 0. No jump. */
     const READ_LINE = 0.5;                  // page.js::paint() uses this number
 
-    function progress(){
+    /* THE RAIL DOES NOT MOVE A PAGE THAT IS NOT THERE. book-nav.js puts
+     `data-axis="off-page"` on <html> whenever the axis has left the reader --
+     a pane, the zoom, one word. Every seek below is a fraction or an offsetTop
+     measured against the READING page, and neither means anything while the
+     page is zoomed thirty times or slid aside: `f * (scrollHeight -
+     clientHeight)` against a zoomed scrollHeight lands anywhere, 0 included,
+     and 0 is the title page. Osca, 10 Sep: "the page is moving like crazy...
+     it launched out of the title page." */
+  function offPage(){
+    try { return document.documentElement.getAttribute("data-axis") === "off-page"; }
+    catch(_) { return false; }
+  }
+  function progress(){
       const line = pane.scrollTop;
       const mark = line + pane.clientHeight * READ_LINE;
       let cur = 0;
@@ -354,6 +366,20 @@
     }
 
     function paint(){
+      /* ============ NOT WHILE THE AXIS IS OFF THE PAGE ============
+         Measured 10 September, counting every layout-forcing call in a frame:
+         during the zoom this ran 216 times a frame -- `progress()` reads
+         `offsetTop` on every segment and `paint()` then writes `--f` and
+         toggles two classes on every one of them. On the complete Shakespeare
+         that is 866 segments, and it is the whole reason the page painted ONE
+         FRAME PER SECOND while dx climbed 0 -> 1 (median 470ms a frame against
+         85ms for the zoom write itself).
+
+         And it is work for nothing: past the page the rail is not on screen at
+         all. The hold loop moves the scroller every frame to keep the word
+         still, each move fires `scroll`, and each `scroll` repainted a rail
+         nobody could see. Home again, the next real scroll paints it. */
+      if(offPage()) return;
       const { cur, into, at } = progress();
       /* the ONE fill, in "bar" shape: an unbroken track down the rail, filled
          to exactly `at`. The capsule boundaries are notched over it by css. */
@@ -409,6 +435,7 @@
       const r = host.getBoundingClientRect();
       const f = clamp((clientY - r.top) / Math.max(1, r.height), 0, 1);
       if(!segs.length){
+        if(offPage()) return;
         pane.scrollTop = f * Math.max(1, pane.scrollHeight - pane.clientHeight);
         return;
       }
@@ -416,6 +443,7 @@
       for(let k = 0; k < segs.length; k++){ if(segs[k].before <= f) i = k; else break; }
       const s = segs[i];
       const into = clamp((f - s.before) / Math.max(1e-9, s.share), 0, 1);
+      if(offPage()) return;
       pane.scrollTop = s.ch.offsetTop + into * s.ch.offsetHeight;
     }
     /* ---- GOING TO A CHAPTER, AND ARRIVING AT IT. A chapter that has not been
@@ -428,6 +456,7 @@
       /* scrollIntoView, not a number: the browser works out where the chapter
          is at the moment of the call, against the live layout, rather than
          against an offsetTop that a skipped chapter has only estimated. */
+      if(offPage()) return;
       ch.scrollIntoView({ behavior:"smooth", block:"start" });
       /* ...and then RELATIVELY, not to a number. Chasing ch.offsetTop walks
          the page: every correction renders more of the book, every render

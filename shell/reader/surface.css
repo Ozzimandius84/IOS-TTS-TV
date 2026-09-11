@@ -79,8 +79,67 @@
                              hides the webview by itself (videos_rect: a box
                              under 1px high is None)                         */
 
+  /* --- ITS OWN PALETTE, AND ITS OWN TYPE (G-SURF2, 10 Sep) -----------------
+     Osca: *"Opened from the library it's grey-tinted and loose; from a reader
+     it's yellow-tinted and tight -- it must be the same sheet regardless of
+     what's behind."* It was reading the HOST's tokens -- `--ground`, `--ink`,
+     `--dim`, `--rule`, `--ui`, `--serif` -- and the two hosts disagree about
+     every one of them:
+       reader   tokens.css, with the reader's paper WARMTH folded into
+                `--ground` -- so the sheet took the page's cream (the yellow)
+       library  tokens.css is NOT LOADED, so all six are undefined, and a
+                `var()` of an undefined name makes its whole declaration
+                invalid: the background went TRANSPARENT (the grey was the
+                library itself, blurred through it), every `font:` shorthand
+                fell back to the inherited 16px (the loose), and the border
+                vanished.
+     Measured before this, off the two real pages at 1440x900 with the same
+     query: 192 of 195 shared nodes differed in computed style.
+     So the sheet carries its own six, and nothing in this file reads a host
+     token any more. The values are tokens.css's own at `--warm: 0` -- the
+     near-neutral paper, the reader's own formula with the warmth taken out --
+     because chrome does not follow the book's paper (bar.css's rule: chrome
+     is fixed). Dark is the same swap tokens.css makes, on the same three
+     selectors, so Settings' theme reaches the sheet exactly as it reaches a
+     page. */
+  --sf-ground-hsl: 48 14% 98.5%;
+  --sf-ground:  hsl(var(--sf-ground-hsl));
+  --sf-ink:     hsl(42 18% 7%);
+  --sf-dim:     #7a776d;
+  --sf-rule:    #dedcd4;
+  --sf-ui:      -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --sf-serif:   "Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
+  /* HOW SOLID THE SHEET IS. 1 is opaque. It was 0 over the library (the
+     background declaration was invalid, see above) and 1 over the reader;
+     .97 lets 3 % of what is behind through the blur -- enough to say the
+     sheet is OVER something, never enough to tint it. One number: the pixel
+     proof (design/reader/pixelcheck/sheet.mjs) runs once at this value and
+     once with it forced to 1, and at 1 the two hosts are identical inside the
+     sheet to the pixel. */
+  --sf-solid:   .97;
+  --sf-sheet:   hsl(var(--sf-ground-hsl) / var(--sf-solid));
+  /* the type every node inherits unless it says otherwise -- so an element
+     with no size of its own takes 12px from HERE, not 16px from the library's
+     body or 26.8px from the reader's fluid <html> */
+  --sf-size:    12px;
+  --sf-lh:      1.35;
+
   /* --- the phone --------------------------------------------------------- */
   --sf-narrow:   720px;   /* under this the sheet is the screen, one column  */
+}
+
+/* DARK IS THE SAME SWAP tokens.css MAKES, on the same selectors (prefs/ stamps
+   html[data-theme]; "system" stamps nothing and leaves the media query in
+   charge) -- and at warmth 0, like the light half. */
+html[data-theme="dark"], html[data-dark]{
+  --sf-ground-hsl: 240 7.3% 8.04%;
+  --sf-ink: hsl(30 4.17% 90.59%); --sf-dim:#8c8a83; --sf-rule:#2e2e33;
+}
+@media (prefers-color-scheme: dark){
+  html:not([data-theme="light"]){
+    --sf-ground-hsl: 240 7.3% 8.04%;
+    --sf-ink: hsl(30 4.17% 90.59%); --sf-dim:#8c8a83; --sf-rule:#2e2e33;
+  }
 }
 
 /* ============================ THE SCRIM ================================= */
@@ -102,14 +161,29 @@
   transition:opacity .16s ease, transform .16s ease;
   display:flex; flex-direction:column;
   box-sizing:border-box;
-  background:var(--ground); color:var(--ink);
-  border:1px solid var(--rule); border-radius:var(--sf-radius);
+  background:var(--sf-sheet); color:var(--sf-ink);
+  /* EVERY INHERITED PROPERTY, PINNED HERE, so no host reaches a node inside
+     through inheritance: the library's 16px body, the reader's fluid rem, a
+     page's letter-spacing or line-height. The list is what the two-host diff
+     found and what could find it next. */
+  font:400 var(--sf-size)/var(--sf-lh) var(--sf-ui);
+  letter-spacing:normal; word-spacing:normal; text-transform:none;
+  text-align:left; text-indent:0; white-space:normal;
+  font-variant:normal; font-feature-settings:normal; font-kerning:auto;
+  -webkit-font-smoothing:antialiased; text-rendering:auto;
+  border:1px solid var(--sf-rule); border-radius:var(--sf-radius);
   box-shadow:0 26px 70px rgba(0,0,0,.28), 0 3px 10px rgba(0,0,0,.10);
   overflow:hidden;
-  font-family:var(--ui);
   -webkit-backdrop-filter:blur(var(--sf-blur)); backdrop-filter:blur(var(--sf-blur));
 }
 .sf.on{ opacity:1; transform:translate(-50%, 0); pointer-events:auto; }
+/* THE LIBRARY'S `* { box-sizing: border-box }` REACHED EVERY NODE HERE and
+   the reader's page has no such rule -- 168 nodes measured apart, and the
+   list and works columns a different width in each. `revert` hands each node
+   back the browser's own value (content-box for a span, border-box where the
+   UA says so), which is what the bench measured every rectangle against; the
+   two rules below that want border-box say so themselves, later in the file. */
+.sf *, .sf *::before, .sf *::after{ box-sizing:revert; }
 
 /* ============================ THE FIELD ================================= */
 /* One field for the whole surface. The bar upstairs carries only the door to
@@ -119,27 +193,27 @@
   flex:0 0 auto; height:var(--sf-fieldh);
   display:flex; align-items:center; gap:11px;
   padding:0 var(--sf-pad); box-sizing:border-box;
-  border-bottom:1px solid var(--rule);
+  border-bottom:1px solid var(--sf-rule);
 }
 /* the lookup ring, bar.css's own -- a ring with a hand, not a magnifier,
    because a lookup lands you at a PLACE IN A BOOK */
 .sf-look{ flex:0 0 auto; width:15px; height:15px; border-radius:50%;
-  box-shadow:inset 0 0 0 1.2px var(--dim); position:relative; }
+  box-shadow:inset 0 0 0 1.2px var(--sf-dim); position:relative; }
 .sf-look::after{ content:""; position:absolute; left:7px; top:3.5px;
-  width:1.2px; height:5px; background:var(--dim); transform-origin:50% 100%;
+  width:1.2px; height:5px; background:var(--sf-dim); transform-origin:50% 100%;
   transform:rotate(38deg); }
 .sf-field input{
   flex:1 1 auto; min-width:0; border:0; outline:0; background:transparent;
-  font:var(--sf-field)/1.2 var(--ui); letter-spacing:-.01em; color:var(--ink);
+  font:var(--sf-field)/1.2 var(--sf-ui); letter-spacing:-.01em; color:var(--sf-ink);
 }
-.sf-field input::placeholder{ color:var(--dim); }
+.sf-field input::placeholder{ color:var(--sf-dim); }
 .sf-esc{
-  flex:0 0 auto; font:600 9px/1 var(--ui); letter-spacing:.12em;
-  text-transform:uppercase; color:var(--dim);
-  background:transparent; border:1px solid var(--rule); border-radius:5px;
+  flex:0 0 auto; font:600 9px/1 var(--sf-ui); letter-spacing:.12em;
+  text-transform:uppercase; color:var(--sf-dim);
+  background:transparent; border:1px solid var(--sf-rule); border-radius:5px;
   padding:5px 7px; cursor:pointer;
 }
-.sf-esc:hover{ color:var(--ink); }
+.sf-esc:hover{ color:var(--sf-ink); }
 
 /* ============================ THE COLUMNS =============================== */
 .sf-cols{ flex:1 1 auto; display:flex; min-height:0; }
@@ -151,15 +225,15 @@
 .sf-works{
   flex:1 1 auto; min-width:0;
   padding:6px var(--sf-pad) var(--sf-pad);
-  border-left:1px solid var(--rule);
+  border-left:1px solid var(--sf-rule);
   overflow-y:auto; overscroll-behavior:contain;
 }
 
 /* a section head, in both columns */
 .sf-h{
   display:block; padding:14px 0 6px;
-  font:600 var(--sf-head)/1 var(--ui); letter-spacing:.14em;
-  text-transform:uppercase; color:var(--dim);
+  font:600 var(--sf-head)/1 var(--sf-ui); letter-spacing:.14em;
+  text-transform:uppercase; color:var(--sf-dim);
 }
 .sf-h:first-child{ padding-top:6px; }
 
@@ -168,7 +242,7 @@
   position:relative; display:flex; align-items:flex-start; gap:10px;
   min-height:var(--sf-row);
   padding:9px 0 9px var(--sf-gutter);
-  border-bottom:1px solid var(--rule);
+  border-bottom:1px solid var(--sf-rule);
   color:inherit; text-decoration:none;
   border-radius:6px;
 }
@@ -176,12 +250,12 @@
 .sf-row .spine{
   position:absolute; left:0; top:9px; width:var(--sf-spine);
   height:0; border-radius:var(--sf-spine);
-  background:var(--dim); transition:height .28s ease;
+  background:var(--sf-dim); transition:height .28s ease;
 }
 .sf-row .body{ flex:1 1 auto; min-width:0; }
 .sf-row .t{
-  display:block; font-family:var(--serif); font-size:var(--sf-title);
-  line-height:1.24; letter-spacing:-.02em; color:var(--ink);
+  display:block; font-family:var(--sf-serif); font-size:var(--sf-title);
+  line-height:1.24; letter-spacing:-.02em; color:var(--sf-ink);
   overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
 }
 /* THE SECOND LINE IS A ROW, NOT A STRING (Round 2 item 5).
@@ -198,8 +272,8 @@
    item, and `min-width:0` lets it shrink. */
 .sf-row .s{
   display:flex; align-items:baseline; gap:7px; margin-top:.45em;
-  font:var(--sf-meta)/1.3 var(--ui); letter-spacing:.14em;
-  text-transform:uppercase; color:var(--dim);
+  font:var(--sf-meta)/1.3 var(--sf-ui); letter-spacing:.14em;
+  text-transform:uppercase; color:var(--sf-dim);
   overflow:hidden; white-space:nowrap; min-width:0;
 }
 .sf-row .s > .sf-who{
@@ -208,7 +282,7 @@
 .sf-row .s > .sf-src-tag,
 .sf-row .s > .sf-lang,
 .sf-row .s > .sf-ta{ flex:0 0 auto; }
-.sf-row .s > .sf-src-tag{ color:var(--ink); font-weight:600; }
+.sf-row .s > .sf-src-tag{ color:var(--sf-ink); font-weight:600; }
 .sf-row .s > .sf-lang{ opacity:.7; }
 
 /* ITEM 6 · TEXT, AUDIO, OR BOTH — three states and no fourth. Both is the
@@ -222,15 +296,37 @@
    it's long"*, so they wrap rather than truncate */
 .sf-facts{
   display:flex; flex-wrap:wrap; gap:4px 10px; margin-top:.4em;
-  font:var(--sf-meta)/1.4 var(--ui); letter-spacing:.1em;
-  text-transform:uppercase; color:var(--dim);
+  font:var(--sf-meta)/1.4 var(--sf-ui); letter-spacing:.1em;
+  text-transform:uppercase; color:var(--sf-dim);
 }
 .sf-facts i{ font-style:normal; }
 .sf-preview{
   display:block; margin-top:.45em; max-width:60ch;
-  font:12px/1.5 var(--serif); color:var(--dim);
+  font:12px/1.5 var(--sf-serif); color:var(--sf-dim);
   overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
 }
+
+/* G-SURF2 · WHERE IT CAME FROM, on the row. One line under the second:
+   the origin, then the file. Lowercase and monospaced -- both are names you
+   may have to type or find, and letter case is part of a path, which the
+   meta line's small capitals would have thrown away. Each half truncates on
+   its own, the origin first; the whole of both is in each half's title and,
+   selected, in THE WORKS. */
+.sf-prov{
+  display:flex; align-items:baseline; gap:6px; margin-top:.4em; min-width:0;
+  font:10px/1.35 ui-monospace, SFMono-Regular, Menlo, monospace;
+  color:var(--sf-dim); white-space:nowrap; overflow:hidden;
+}
+.sf-prov .po{ flex:0 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; }
+.sf-prov .pf{ flex:0 1 auto; min-width:3em; overflow:hidden; text-overflow:ellipsis;
+  color:var(--sf-ink); opacity:.78; }
+.sf-prov .sep{ flex:0 0 auto; opacity:.6; }
+.sf-prov .po:empty, .sf-prov .po:empty + .sep{ display:none; }
+/* an import that did not come in: studio's own sentence, whole, wrapping */
+.sf-prov.err{ display:block; white-space:pre-wrap; overflow-wrap:anywhere;
+  max-height:6.8em; overflow:auto; color:#a8532a; }
+.sf-provpane .sf-path, .sf-provpane .sf-origin{ padding-top:5px; }
+.sf-provpane .sf-origin{ color:var(--sf-ink); }
 
 /* ITEM 8 · the whole row is a target, and it looks like one */
 .sf-row.r-out{ cursor:pointer; }
@@ -246,29 +342,29 @@
 .sf-h.sf-workhead .sf-verb{ flex:0 0 auto; }
 .sf-heldwhy{
   flex:1 0 100%; text-transform:none; letter-spacing:0;
-  font:11px/1.4 var(--ui); color:#a8532a;
+  font:11px/1.4 var(--sf-ui); color:#a8532a;
 }
 .sf-rowacts{ display:inline-flex; align-items:center; gap:5px; }
 .sf-row.r-queued .spine{ opacity:.45; height:calc(100% - 26px); }
 .sf-row.r-queued .t{ opacity:.8; }
 
 /* ITEM 7 · the audition, in the panel */
-.sf-peekpane{ border-top:1px solid var(--rule); margin-top:8px; }
+.sf-peekpane{ border-top:1px solid var(--sf-rule); margin-top:8px; }
 .sf-peekaudio{ padding:6px 0; }
 .sf-peekaudio audio{ width:100%; height:32px; }
 .sf-peektext, .sf-candtext{
   margin:6px 0 10px; padding:0; max-height:200px; overflow:auto;
   white-space:pre-wrap; word-break:break-word;
-  font:11.5px/1.5 var(--serif); color:var(--dim);
+  font:11.5px/1.5 var(--sf-serif); color:var(--sf-dim);
 }
 .sf-pair{
-  margin:2px 0 8px; font:10.5px/1.45 var(--ui); color:var(--dim);
+  margin:2px 0 8px; font:10.5px/1.45 var(--sf-ui); color:var(--sf-dim);
 }
 .sf-row .end{
   flex:0 0 auto; display:flex; align-items:center; gap:7px;
   padding-top:2px;
-  font:var(--sf-meta)/1.3 var(--ui); letter-spacing:.12em;
-  text-transform:uppercase; color:var(--dim);
+  font:var(--sf-meta)/1.3 var(--sf-ui); letter-spacing:.12em;
+  text-transform:uppercase; color:var(--sf-dim);
 }
 
 /* --- ON THE SHELF: the row IS the door, and the spine is full ----------- */
@@ -293,7 +389,7 @@
 
 /* --- OUT THERE: no spine, and one verb --------------------------------- */
 .sf-row.r-out .spine{ height:0; }
-.sf-row.r-out .t{ color:var(--ink); }
+.sf-row.r-out .t{ color:var(--sf-ink); }
 
 /* --- WORKING: the spine fills, and a hairline runs under the row -------- */
 .sf-row.r-work{ cursor:pointer; }
@@ -321,13 +417,13 @@
 
 /* the one verb, the library's drawn read button at this row's size */
 .sf-verb{
-  font:600 9px/1 var(--ui); letter-spacing:.10em; text-transform:uppercase;
-  color:var(--ground); background:var(--ink);
+  font:600 9px/1 var(--sf-ui); letter-spacing:.10em; text-transform:uppercase;
+  color:var(--sf-ground); background:var(--sf-ink);
   border:0; border-radius:999px; padding:.62em 1.15em; cursor:pointer;
   white-space:nowrap;
 }
-.sf-verb[disabled]{ background:transparent; color:var(--dim);
-  box-shadow:inset 0 0 0 1px var(--rule); cursor:default; }
+.sf-verb[disabled]{ background:transparent; color:var(--sf-dim);
+  box-shadow:inset 0 0 0 1px var(--sf-rule); cursor:default; }
 
 /* ========================= THE STEP RIBBON ============================== */
 /* studio/state.py STEPS, in its order and its length: parse, interpret,
@@ -338,10 +434,10 @@
 .sf-steps i{
   display:block; width:var(--sf-cell); height:var(--sf-cell);
   border-radius:1.5px; background:transparent;
-  box-shadow:inset 0 0 0 1px var(--rule);
+  box-shadow:inset 0 0 0 1px var(--sf-rule);
 }
-.sf-steps i.ok  { background:var(--hue, var(--ink)); box-shadow:none; }
-.sf-steps i.run { background:var(--hue, var(--ink)); opacity:.45;
+.sf-steps i.ok  { background:var(--hue, var(--sf-ink)); box-shadow:none; }
+.sf-steps i.run { background:var(--hue, var(--sf-ink)); opacity:.45;
                   animation:sfPulse 1.1s ease-in-out infinite; box-shadow:none; }
 .sf-steps i.bad { background:#a8532a; box-shadow:none; }
 @keyframes sfPulse{ 0%,100%{ opacity:.28 } 50%{ opacity:.72 } }
@@ -349,42 +445,42 @@
 /* ============================ THE WORKS ================================= */
 /* studio/studio.html's cockpit, folded in. The card, the queue and the grid
    are the same three things it draws, at this width. */
-.sf-card{ padding:2px 0 10px; border-bottom:1px solid var(--rule); }
+.sf-card{ padding:2px 0 10px; border-bottom:1px solid var(--sf-rule); }
 .sf-card .l{ display:flex; justify-content:space-between; gap:8px;
-  font:11px/1.35 var(--ui); color:var(--ink); }
+  font:11px/1.35 var(--sf-ui); color:var(--sf-ink); }
 .sf-card .l b{ font-weight:600; }
-.sf-card .l span:last-child{ color:var(--dim); font-variant-numeric:tabular-nums; }
+.sf-card .l span:last-child{ color:var(--sf-dim); font-variant-numeric:tabular-nums; }
 .sf-bar{ display:block; height:3px; margin:8px 0 7px; border-radius:2px;
-  background:var(--rule); overflow:hidden; }
-.sf-bar i{ display:block; height:100%; background:var(--hue, var(--ink));
+  background:var(--sf-rule); overflow:hidden; }
+.sf-bar i{ display:block; height:100%; background:var(--hue, var(--sf-ink));
   width:calc(var(--p, 0) * 100%); transition:width .3s ease; }
 .sf-bar.indeterminate i{ width:36%; animation:sfSlide 1.5s ease-in-out infinite; }
 @keyframes sfSlide{ 0%{ margin-left:-36% } 100%{ margin-left:100% } }
-.sf-st{ font:10px/1.3 var(--ui); color:var(--dim); }
-.sf-lnk{ background:none; border:0; padding:0; font:inherit; color:var(--dim);
+.sf-st{ font:10px/1.3 var(--sf-ui); color:var(--sf-dim); }
+.sf-lnk{ background:none; border:0; padding:0; font:inherit; color:var(--sf-dim);
   text-decoration:underline; text-underline-offset:2px; cursor:pointer; }
-.sf-lnk:hover{ color:var(--ink); }
+.sf-lnk:hover{ color:var(--sf-ink); }
 .sf-lnk[disabled]{ opacity:.45; cursor:default; text-decoration:none; }
 
 .sf-q{ display:flex; align-items:center; gap:7px; padding:6px 0;
-  font:10.5px/1.3 var(--ui); color:var(--ink); border-bottom:1px solid var(--rule); }
+  font:10.5px/1.3 var(--sf-ui); color:var(--sf-ink); border-bottom:1px solid var(--sf-rule); }
 .sf-q .qn{ flex:1 1 auto; min-width:0; overflow:hidden;
   text-overflow:ellipsis; white-space:nowrap; }
-.sf-q .qv{ flex:0 0 auto; color:var(--dim); }
-.sf-q .qx{ flex:0 0 auto; background:none; border:0; padding:2px; color:var(--dim);
+.sf-q .qv{ flex:0 0 auto; color:var(--sf-dim); }
+.sf-q .qx{ flex:0 0 auto; background:none; border:0; padding:2px; color:var(--sf-dim);
   cursor:pointer; opacity:0; transition:opacity .12s ease; }
 .sf-q:hover .qx{ opacity:1; }
-.sf-q .qx:hover{ color:var(--ink); }
+.sf-q .qx:hover{ color:var(--sf-ink); }
 
 /* the grid: one line per chapter, its eight cells at the right */
 .sf-grid{ display:block; }
 .sf-gr{ display:flex; align-items:center; gap:8px; padding:5px 0;
-  font:10.5px/1.3 var(--ui); color:var(--ink); border-bottom:1px solid var(--rule); }
-.sf-gr .gid{ flex:0 0 auto; color:var(--dim); font-variant-numeric:tabular-nums; }
+  font:10.5px/1.3 var(--sf-ui); color:var(--sf-ink); border-bottom:1px solid var(--sf-rule); }
+.sf-gr .gid{ flex:0 0 auto; color:var(--sf-dim); font-variant-numeric:tabular-nums; }
 .sf-gr .gt{ flex:1 1 auto; min-width:0; overflow:hidden;
   text-overflow:ellipsis; white-space:nowrap; }
 
-.sf-note{ display:block; padding:8px 0; font:10.5px/1.45 var(--ui); color:var(--dim); }
+.sf-note{ display:block; padding:8px 0; font:10.5px/1.45 var(--sf-ui); color:var(--sf-dim); }
 
 /* ======================= VIDEO, AND THE WEB ============================= */
 /* The two lanes that are not books keep their place -- at the foot of the one
@@ -396,11 +492,11 @@
 .sf-video.open{ height:var(--sf-video); }
 .sf-video iframe{ display:block; width:100%; height:var(--sf-video); border:0; }
 .sf-row .chev{ display:inline-block; width:7px; height:7px; margin-left:2px;
-  border-right:1.2px solid var(--dim); border-bottom:1.2px solid var(--dim);
+  border-right:1.2px solid var(--sf-dim); border-bottom:1.2px solid var(--sf-dim);
   transform:rotate(45deg) translate(-1px,-1px); transition:transform .2s ease; }
 .sf-row.open .chev{ transform:rotate(-135deg) translate(-2px,-2px); }
-.sf-row .q{ display:block; margin-top:.45em; font:var(--sf-meta)/1.4 var(--ui);
-  letter-spacing:0; text-transform:none; color:var(--dim); white-space:normal;
+.sf-row .q{ display:block; margin-top:.45em; font:var(--sf-meta)/1.4 var(--sf-ui);
+  letter-spacing:0; text-transform:none; color:var(--sf-dim); white-space:normal;
   overflow-wrap:anywhere; }
 
 /* ============================== THE PHONE =============================== */
@@ -415,7 +511,7 @@
   .sf-cols{ flex-direction:column; }
   .sf-list{ flex:1 1 auto; order:2; }
   .sf-works{ flex:0 0 auto; order:1; border-left:0;
-             border-bottom:1px solid var(--rule); max-height:38vh; }
+             border-bottom:1px solid var(--sf-rule); max-height:38vh; }
   .sf-works.empty{ display:none; }
   :root{ --sf-title:17px; --sf-meta:10.5px; --sf-row:56px; --sf-field:19px; }
 }
@@ -429,37 +525,70 @@
    same `rowShell()`.
    ====================================================================== */
 
-/* --- the per-source report, under the list ------------------------------ */
-.sf-src{ display:flex; flex-wrap:wrap; gap:5px; padding:9px 0 4px;
-         border-top:1px solid var(--rule); }
+/* --- the per-source report, AT THE TOP OF RESULTS (G-SURF2, 10 Sep) -----
+   It was a row of chips under the list, drawn once the answer was in, and
+   while the search was out the page had one grey "Searching…" note -- which
+   a redraw a microtask later took away. Now it is the first thing under the
+   Results head for as long as there is a query: ASKING while `/search` is
+   out (every source by name, the seconds, a bar filling against studio's
+   25 s), ANSWERED after (what each source did). Same element both times, so
+   nothing jumps when the answer lands.
+
+   WHILE ASKING IT IS STICKY AT BOTH EDGES -- `top` AND `bottom` -- so a long
+   WORKING band above it cannot push it off either end of the list: scrolled
+   down, it holds the top; pushed below the fold, it holds the bottom. A wait
+   you cannot see is the thing this exists to end. Opaque there, because rows
+   pass under it. */
+.sf-src{ display:flex; flex-wrap:wrap; align-items:center; gap:5px;
+         padding:8px 0 10px; border-bottom:1px solid var(--sf-rule); }
+.sf-srchead{ flex:1 0 100%; display:flex; align-items:baseline; gap:10px; min-width:0;
+  font:11px/1.4 var(--sf-ui); color:var(--sf-dim); }
+.sf-srchead .hl{ flex:1 1 auto; min-width:0; overflow-wrap:anywhere; }
+.sf-srchead .ck{ flex:0 0 auto; font-variant-numeric:tabular-nums; }
+.sf-src.asking{ position:sticky; top:0; bottom:0; z-index:2;
+                background:var(--sf-ground); }
+.sf-src.asking .sf-srchead{ font:600 13px/1.35 var(--sf-ui); color:var(--sf-ink); }
+.sf-src.asking .sf-srchead .ck{ font-weight:400; color:var(--sf-dim); }
+.sf-srcbar{ flex:1 0 100%; display:block; height:2px; margin:1px 0 3px;
+  border-radius:1px; background:var(--sf-rule); overflow:hidden; }
+.sf-srcbar i{ display:block; height:100%; width:0; background:var(--sf-ink);
+  transition:width .5s linear; }
+.sf-srcsub{ flex:1 0 100%; padding-top:2px; font:10.5px/1.45 var(--sf-ui);
+  color:var(--sf-dim); }
+/* asked, not yet answered: dashed, with a dot that breathes on the step
+   cells' own clock -- present and plainly unfinished */
+.sf-chip.s-ask{ border-style:dashed; }
+.sf-chip.s-ask i::before{ content:""; display:inline-block; width:5px; height:5px;
+  margin-right:4px; vertical-align:1px; border-radius:50%; background:currentColor;
+  animation:sfPulse 1.1s ease-in-out infinite; }
 .sf-chip{ display:inline-flex; align-items:baseline; gap:5px; cursor:default;
-          padding:2px 7px; border-radius:10px; border:1px solid var(--rule);
-          font:var(--sf-meta)/1.5 var(--ui); color:var(--dim); }
-.sf-chip b{ font-weight:600; color:var(--ink); }
+          padding:2px 7px; border-radius:10px; border:1px solid var(--sf-rule);
+          font:var(--sf-meta)/1.5 var(--sf-ui); color:var(--sf-dim); }
+.sf-chip b{ font-weight:600; color:var(--sf-ink); }
 .sf-chip i{ font-style:normal; font-variant-numeric:tabular-nums; }
 /* the four words, and only two of them are bad news */
-.sf-chip.s-n{ border-color:color-mix(in srgb, var(--ink) 30%, transparent); }
-.sf-chip.s-n i{ color:var(--ink); }
+.sf-chip.s-n{ border-color:color-mix(in srgb, var(--sf-ink) 30%, transparent); }
+.sf-chip.s-n i{ color:var(--sf-ink); }
 .sf-chip.s-down, .sf-chip.s-failed{ cursor:pointer;
   border-color:#a8532a; color:#a8532a; }
 .sf-chip.s-down b, .sf-chip.s-failed b{ color:#a8532a; }
 .sf-chip.s-off{ cursor:pointer; opacity:.72; }
 .sf-chip.s-nothing{ opacity:.62; }
 .sf-chip.s-drop{ opacity:.72; }
-.sf-srcwhy{ flex:1 0 100%; padding:5px 0 0; color:var(--dim);
-            font:var(--sf-meta)/1.5 var(--ui); }
+.sf-srcwhy{ flex:1 0 100%; padding:5px 0 0; color:var(--sf-dim);
+            font:var(--sf-meta)/1.5 var(--sf-ui); }
 
 /* --- a hit out there is still a row, and it still lines up --------------- */
 .sf-row.sf-hit{ cursor:pointer; }
 /* folded into `.sf-row:not(.sf-query):hover` above (8 Sep, §5.8) */
-.sf-row.sf-query .t{ color:var(--dim); }
+.sf-row.sf-query .t{ color:var(--sf-dim); }
 .sf-row.sf-find{ cursor:pointer; }
 /* folded into `.sf-row:not(.sf-query):hover` above (8 Sep, §5.8) */
 .sf-row.sf-ch .spine{ height:calc(100% - 22px); opacity:.8; }
 .sf-row .end .sf-steps{ margin-right:6px; }
 /* the second verb on a row: present, and plainly the quieter of the two */
-.sf-verb.ghost{ background:transparent; border:1px solid var(--rule); color:var(--dim); }
-.sf-verb.ghost:hover{ color:var(--ink); }
+.sf-verb.ghost{ background:transparent; border:1px solid var(--sf-rule); color:var(--sf-dim); }
+.sf-verb.ghost:hover{ color:var(--sf-ink); }
 
 /* --- the works column, acting ------------------------------------------- */
 .sf-acts{ display:flex; flex-wrap:wrap; gap:6px; padding:8px 0 2px; }
@@ -469,11 +598,11 @@
 .sf-gr.pick{ cursor:pointer; }
 .sf-gr.pick:hover{ background:rgba(127,127,127,.07); }
 .sf-gr .sf-verb{ flex:0 0 auto; padding:1px 6px; font-size:9.5px; }
-.sf-log{ border-top:1px solid var(--rule); margin-top:8px; }
+.sf-log{ border-top:1px solid var(--sf-rule); margin-top:8px; }
 .sf-logtext{ margin:0; padding:6px 0 10px; max-height:220px; overflow:auto;
              white-space:pre-wrap; word-break:break-word;
              font:10px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace;
-             color:var(--dim); }
+             color:var(--sf-dim); }
 
 /* ==========================================================================
    8 SEPTEMBER, §4 — THE WORKS IS THE FULL STUDIO
@@ -492,50 +621,50 @@
 .sf-studio{ display:block; padding:2px 0 4px; }
 
 .sf-prow{ display:flex; align-items:flex-start; gap:10px; padding:7px 0;
-  border-bottom:1px solid var(--rule); }
+  border-bottom:1px solid var(--sf-rule); }
 .sf-prow:last-child{ border-bottom:0; }
 .sf-prow .pl{ flex:0 0 54px; padding-top:4px;
-  font:600 var(--sf-head)/1.2 var(--ui); letter-spacing:.12em;
-  text-transform:uppercase; color:var(--dim); }
+  font:600 var(--sf-head)/1.2 var(--sf-ui); letter-spacing:.12em;
+  text-transform:uppercase; color:var(--sf-dim); }
 .sf-prow .pc{ flex:1 1 auto; min-width:0; }
 
 .sf-pills{ display:flex; flex-wrap:wrap; gap:5px; }
 .sf-pill{
-  font:10.5px/1.25 var(--ui); color:var(--ink);
-  background:transparent; border:1px solid var(--rule); border-radius:999px;
+  font:10.5px/1.25 var(--sf-ui); color:var(--sf-ink);
+  background:transparent; border:1px solid var(--sf-rule); border-radius:999px;
   padding:3px 9px; cursor:pointer; white-space:nowrap;
   display:inline-flex; align-items:center; gap:5px;
 }
-.sf-pill:hover{ border-color:var(--ink); }
-.sf-pill[aria-selected="true"]{ background:var(--ink); color:var(--ground);
-  border-color:var(--ink); }
+.sf-pill:hover{ border-color:var(--sf-ink); }
+.sf-pill[aria-selected="true"]{ background:var(--sf-ink); color:var(--sf-ground);
+  border-color:var(--sf-ink); }
 .sf-pill[disabled]{ opacity:.45; cursor:default; }
 /* the dashed one: present, plainly not a choice, and carrying its reason */
-.sf-pill.off{ border-style:dashed; color:var(--dim); cursor:default;
+.sf-pill.off{ border-style:dashed; color:var(--sf-dim); cursor:default;
   white-space:normal; max-width:100%; }
-.sf-pill.imp{ border-style:dashed; color:var(--dim); }
-.sf-pill.imp:hover{ color:var(--ink); border-color:var(--ink); }
+.sf-pill.imp{ border-style:dashed; color:var(--sf-dim); }
+.sf-pill.imp:hover{ color:var(--sf-ink); border-color:var(--sf-ink); }
 /* the reference's play/pause, INSIDE the selected pill and nothing else moves */
 .sf-pill .pp{ font-style:normal; font-size:9px; line-height:1; cursor:pointer;
   opacity:.8; }
 .sf-pill .pp:hover{ opacity:1; }
 
 .sf-vsub{ display:block; }
-.sf-sub{ display:block; padding:5px 0 0; font:10.5px/1.45 var(--ui); color:var(--dim); }
-.sf-sub b{ color:var(--ink); font-weight:600; }
+.sf-sub{ display:block; padding:5px 0 0; font:10.5px/1.45 var(--sf-ui); color:var(--sf-dim); }
+.sf-sub b{ color:var(--sf-ink); font-weight:600; }
 .sf-refslot{ display:block; }
 .sf-refslot audio{ display:none; }   /* the pill's glyph IS the control */
 
 /* `voice/port.py::limits()`, verbatim, ABOVE the GPU-minutes on purpose */
-.sf-limits{ display:block; padding:6px 0 0; font:10px/1.5 var(--ui); color:var(--dim); }
-.sf-limits b{ display:block; color:var(--ink); font-weight:600; }
+.sf-limits{ display:block; padding:6px 0 0; font:10px/1.5 var(--sf-ui); color:var(--sf-dim); }
+.sf-limits b{ display:block; color:var(--sf-ink); font-weight:600; }
 .sf-limits span{ display:block; }
 
 .sf-sample{ display:block; }
 .sf-sample audio{ display:block; width:100%; margin-top:8px; height:30px; }
 .sf-est{ display:flex; flex-wrap:wrap; gap:4px 16px; padding:6px 0 0;
-  font:10.5px/1.4 var(--ui); color:var(--ink); }
-.sf-est .k{ color:var(--dim); }
+  font:10.5px/1.4 var(--sf-ui); color:var(--sf-ink); }
+.sf-est .k{ color:var(--sf-dim); }
 .sf-est b{ font-weight:600; font-variant-numeric:tabular-nums; }
 
 /* one column: the label stacks over its pills rather than eating the width */
@@ -548,7 +677,7 @@
 /* `stage_for_ingest` answered `{status:"choose", files:[…]}` — IA's own file
    list. It is the queue's own row shape, because it is the same kind of thing:
    a short list of names you press one of. */
-.sf-choose{ display:block; border-bottom:1px solid var(--rule); padding-bottom:6px; }
+.sf-choose{ display:block; border-bottom:1px solid var(--sf-rule); padding-bottom:6px; }
 .sf-choose .sf-q .qn{ font-variant-numeric:tabular-nums; }
 
 
@@ -559,11 +688,11 @@
    the click asked — what IS this — out of the candidate's own fields, and
    puts the verbs that can act on it in the same place.
    ========================================================================== */
-.sf-cand{ display:block; border-bottom:1px solid var(--rule); padding-bottom:8px; }
-.sf-cand .ct{ font:600 13px/1.35 var(--ui); color:var(--ink); padding:2px 0 6px; }
+.sf-cand{ display:block; border-bottom:1px solid var(--sf-rule); padding-bottom:8px; }
+.sf-cand .ct{ font:600 13px/1.35 var(--sf-ui); color:var(--sf-ink); padding:2px 0 6px; }
 .sf-fields{ display:grid; grid-template-columns:auto 1fr; gap:3px 10px;
-  font:10.5px/1.4 var(--ui); }
-.sf-fields .k{ color:var(--dim); white-space:nowrap; }
-.sf-fields .v{ color:var(--ink); min-width:0; overflow-wrap:anywhere; }
+  font:10.5px/1.4 var(--sf-ui); }
+.sf-fields .k{ color:var(--sf-dim); white-space:nowrap; }
+.sf-fields .v{ color:var(--sf-ink); min-width:0; overflow-wrap:anywhere; }
 .sf-url{ display:block; padding:7px 0 0; font:10px/1.4 ui-monospace, SFMono-Regular,
-  Menlo, monospace; color:var(--dim); overflow-wrap:anywhere; }
+  Menlo, monospace; color:var(--sf-dim); overflow-wrap:anywhere; }

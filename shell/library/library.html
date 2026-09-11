@@ -1492,7 +1492,14 @@ function tileHTML(b) {
     m ? ' data-merge="1"' : ""} aria-selected="false" title="${esc(title)}">` +
     tileCoverHTML(b) +
     `<span class="railrow-title">${esc(b.title)}</span>` +
-    `<span class="railrow-by">${esc(tileLine(b))}</span></button>`;
+    `<span class="railrow-by">${esc(tileLine(b))}</span>` +
+    // 1 ¶'s pane: empty in the memo'd markup, filled by paintBookViews
+    `<span class="tile-pane"></span>` +
+    // an OPEN book's close (OPEN BOOKS COME FIRST, below) -- a span, because
+    // a button cannot hold a button; the device row's ✕ is the same shape
+    (openNow.has(b.slug) ? `<span class="tile-close" role="button" tabindex="0" data-close="${
+      esc(b.slug)}" aria-label="Close ${esc(b.title || b.slug)}" title="Close">\u2715</span>` : "") +
+    `</button>`;
 }
 
 // The grid the tiles sit in. `entries` is a named shelf's books, or
@@ -1855,7 +1862,7 @@ function shelfCacheWrite(books) {
 
 let shelfDrawn = null;   // the markup as last written -- see the note below
 /* ------------------------------------------------------------- THE ZOOM.
- * FIVE SHELF ZOOMS (design/reader/bench-library.html; Osca: "the bench
+ * SIX SHELF ZOOMS (design/reader/bench-library.html; Osca: "the bench
  * wins"). One control on the shelf and it moves in one direction: how much of
  * the pane a single book is given. Out to in --
  *
@@ -1865,47 +1872,28 @@ let shelfDrawn = null;   // the markup as last written -- see the note below
  *     8   the whole shelf at a glance, covers only
  *     4   THE APP, and the one it opens on
  *     2   two books, the covers given the caption's room
+ *   1 ¶   one book as its own page: the cover, and the book's text beside it
+ *         (10 Sep -- `1t`, the bench's name; 1 ¶ -- ONE BOOK, below)
  *     1   one jacket, and the shelf snaps book to book
  *
  * Every difference between them is CSS off `#shelf[data-zoom]` (library.css,
- * "THE LADDER"), so this is the whole of the page's half: an attribute, a
- * field on the record, and five buttons. NOTHING IS RE-RENDERED when it
- * changes -- the tiles are already whole -- which is why zooming can keep the
- * book that was in the middle in the middle instead of jumping to the top of
- * the shelf, and why a zoom costs no JPEG (renderShelf's memo, above).
+ * "THE LADDER"), so this is the whole of the page's half: an attribute and a
+ * field on the record. NOTHING IS RE-RENDERED when it changes -- the tiles
+ * are already whole -- which is why zooming can keep the book that was in the
+ * middle in the middle instead of jumping to the top of the shelf, and why a
+ * zoom costs no JPEG (renderShelf's memo, above).
  *
- * The bench's two ¶ steps (2 ¶ and 1 ¶, a DRAWN pane beside the cover) are
- * not here: see library/STATUS.md §7.
+ * THE PINCH IS THE CONTROL, AND THE ONLY ONE (Osca, 10 Sep: "Remove the
+ * 16/8/4/2/1 zoom-ladder buttons from the page -- pinch already drives
+ * data-zoom and stays"). The five buttons in a `.shelffoot` under the shelf
+ * went with that line; cmd/ctrl + wheel, which is what a trackpad pinch
+ * arrives as, walks the ladder one step per gesture (the listener at the foot
+ * of this file). The bench keeps its own buttons, and 2 ¶ stays the bench's.
  */
-const SHELF_ZOOMS = ["16", "8", "4", "2", "1"];      // out to in
+const SHELF_ZOOMS = ["16", "8", "4", "2", "1t", "1"];      // out to in
 const SHELF_ZOOM_DEFAULT = "4";
 
 function shelfZoom() { return SHELF_ZOOMS.includes(library.zoom) ? library.zoom : SHELF_ZOOM_DEFAULT; }
-
-/* The control, exactly where the bench puts it: a foot under the shelf. The
-   five buttons are the bench's markup, its `data-z`, its titles and its order.
-
-   WHICH ONE IS PRESSED IS NOT IN THIS STRING, and that is deliberate.
-   `renderShelf` writes its markup only when it differs from what it wrote
-   last (the memo above it, and the jitter Osca reported on the 5th); if the
-   pressed button were in here, every zoom would differ, every zoom would set
-   `innerHTML`, and every zoom would throw away and re-request every decoded
-   JPEG on the shelf. So the markup is the same at all five zooms and
-   `paintShelfZoom()` moves the `aria-pressed` afterwards -- which is also
-   what makes "nothing is re-rendered when the zoom changes" true here rather
-   than merely claimed. */
-function shelfFootHTML() {
-  const b = (v, title, label) => `<button type="button" data-z="${v}" title="${esc(title)}"` +
-    ` aria-pressed="false">${label}</button>`;
-  return `<div class="shelffoot">` +
-    `<span class="zoom" id="zoom" role="group" aria-label="books across">` +
-    b("16", "sixteen books, covers only", "16") +
-    b("8", "eight books, covers only", "8") +
-    b("4", "four books — the shelf as it opens", "4") +
-    b("2", "two books, covers only", "2") +
-    b("1", "one book, the cover alone", "1") +
-    `</span></div>`;
-}
 
 // Whatever is nearest the middle of the shelf stays in the middle after the
 // pane changes -- a shelf that jumps to the first book on every zoom is
@@ -1922,16 +1910,14 @@ function shelfNearestTile() {
   return best;
 }
 
-// The attribute and the pressed button, off the record. Called by renderShelf
-// (which may skip its own innerHTML write) and by setShelfZoom.
+// The attribute, off the record -- and, at 1 ¶, the panes beside the covers.
+// Called by renderShelf (which may skip its own innerHTML write) and by
+// setShelfZoom.
 function paintShelfZoom() {
   const el = document.getElementById("shelf");
   if (!el) return;
-  const z = shelfZoom();
-  el.setAttribute("data-zoom", z);
-  const bar = el.querySelector("#zoom");
-  if (bar) bar.querySelectorAll("button").forEach(b =>
-    b.setAttribute("aria-pressed", String(b.dataset.z === z)));
+  el.setAttribute("data-zoom", shelfZoom());
+  paintBookViews();
 }
 
 function setShelfZoom(z, anchor) {
@@ -1950,6 +1936,218 @@ function shelfZoomStep(dir) {
   const i = SHELF_ZOOMS.indexOf(shelfZoom());
   return setShelfZoom(SHELF_ZOOMS[Math.min(SHELF_ZOOMS.length - 1, Math.max(0, i + dir))]);
 }
+
+/* ------------------------------------------ 1 ¶ -- ONE BOOK AS ITS OWN PAGE.
+ * The bench's one-book text view (design/reader/bench-library.html, `1t`),
+ * shipped 10 Sep: at that rung the tile turns on its side, the cover on the
+ * left and, beside it, the book's own text --
+ *
+ *    title · AUTHOR · LANG                 the tile's own two lines, set large
+ *    LANG · N CHAPTERS · BUILT             the facts line (the bench's metaLine)
+ *    publisher · published · id · subjects one details line, what the record has
+ *    blurb                                 the description, else the opening lines
+ *    languages   voices                    voices only once a chapter is rendered
+ *    chapters                              the chapter titles
+ *    read                                  a door: one press opens the book
+ *
+ * ONE SOURCE, THE BOOK RECORD, READ ONCE PER BOOK. `GET /book?slug=` is the
+ * record as studio serves it -- `meta` carries description, publisher, date,
+ * identifier and subjects since `c0ad5df` put them there, through
+ * `studio/sourcemeta.py`'s META_ALLOW, the same tuple the filler writes by --
+ * with `preview_text` (the book's opening lines, picked past the front
+ * matter), the chapter titles, the language's name, the voice and the voiced
+ * count. `bookRecordFrom` reduces it ONCE to the few strings this view draws
+ * and keeps them in `bookRecords`; the view reads that map and derives
+ * nothing of its own. BUILT is the one fact not on that record, so it comes
+ * from the file the bench's own BUILT came from, `books/index.json`
+ * (`updated`: book.json's date, as studio's write_index records it), asked
+ * once per page. A fact the record does not have is not drawn -- no label
+ * over nothing, no grey bar.
+ *
+ * ASKED FOR ONLY WHEN IT CAN BE SEEN. Osca, 4 Sep: a shelf loads "only the
+ * INFO actually needed to SHOW the book in the library". So nothing here runs
+ * until the shelf is at 1 ¶, and then only for the tiles within a screen of
+ * the view (an IntersectionObserver on #shelf; every tile at once where there
+ * is none). A book is asked once, ever, even if it 404s.
+ *
+ * AND IT IS PAINTED, NOT RENDERED. The pane is an empty `<span class=
+ * "tile-pane">` in the tile markup `renderShelf` memoises -- the same string at
+ * every zoom and before and after a record lands -- and `paintBookViews` fills
+ * it in place afterwards, the way `paintShelfZoom` moves the pressed state.
+ * A record arriving therefore touches one pane and no cover: the memo's rule
+ * (a write that throws away every decoded JPEG on the shelf is the jitter of
+ * 5 Sep) holds here too. On the rare full rewrite the panes come back empty
+ * and are refilled in the same task, before a frame can show them empty.
+ */
+const BOOK_VIEW_ZOOM = "1t";
+const BOOK_VIEW_CHAPTERS = 10;        // titles drawn before "and N more"
+const bookRecords = new Map();        // slug -> the view's strings; null = asked, nothing came
+let bookBuilt = null;                 // slug -> "YYYY-MM-DD", from books/index.json
+let bookBuiltAsked = false;
+let bookViewEntries = new Map();      // slug -> the shelf entry its tile was drawn from
+
+/* A description is the publisher's HTML (`<p><b><u>Winner of the Booker of
+   Bookers<br></u></b><br>Saleem Sinai is born ...`) and the view wants its
+   words. Block ends and breaks become spaces, every tag goes, and the named
+   and numeric entities are decoded BY HAND: the two DOM ways to do it -- a
+   parser, or innerHTML on a spare element -- would fetch the images an
+   `<img>` in it names, and a publisher's blurb is not something this page
+   should run. What comes out is text, and `esc()` sees it before the page does. */
+function blurbText(html) {
+  const NAMED = { amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", nbsp: " ",
+                  mdash: "—", ndash: "–", hellip: "…",
+                  rsquo: "’", lsquo: "‘", rdquo: "”", ldquo: "“" };
+  return String(html == null ? "" : html)
+    .replace(/<\s*(br|\/p|\/div|\/li|\/h\d)\b[^>]*>/gi, " ")
+    .replace(/<[^>]*>/g, "")
+    .replace(/&(#x[0-9a-f]+|#\d+|[a-z]+);/gi, (m, e) => {
+      if (e[0] === "#") {
+        const n = e[1] === "x" || e[1] === "X" ? parseInt(e.slice(2), 16) : parseInt(e.slice(1), 10);
+        try { return Number.isFinite(n) && n > 0 ? String.fromCodePoint(n) : m; } catch (err) { return m; }
+      }
+      return Object.prototype.hasOwnProperty.call(NAMED, e.toLowerCase()) ? NAMED[e.toLowerCase()] : m;
+    })
+    .replace(/\s+/g, " ").trim();
+}
+
+// `/book`'s answer, reduced to what the view draws -- once, on arrival.
+// `bookinfo._public_meta` already joins a list with ", "; an array is joined
+// the same way in case a record ever arrives unjoined.
+function bookRecordFrom(r) {
+  if (!r || typeof r !== "object" || Array.isArray(r)) return null;
+  const m = r.meta && typeof r.meta === "object" ? r.meta : {};
+  const s = v => (Array.isArray(v) ? v.filter(x => typeof x === "string").join(", ")
+                  : typeof v === "string" || typeof v === "number" ? String(v) : "").trim();
+  return {
+    description: blurbText(s(m.description)),
+    opening: s(r.preview_text),
+    publisher: s(m.publisher),
+    published: s(m.date).slice(0, 10),
+    identifier: s(m.identifier),
+    subjects: s(m.subjects),
+    langName: s(r.lang_name),
+    chapters: Array.isArray(r.chapters)
+      ? r.chapters.map(c => s(c && c.title).replace(/\s+/g, " ")).filter(Boolean) : [],
+    voice: s(r.voice),
+    voiced: Number(r.voiced) || 0,
+  };
+}
+
+async function loadBookRecord(slug) {
+  if (!slug || bookRecords.has(slug)) return false;
+  bookRecords.set(slug, null);                   // asked: never twice, even if it 404s
+  const rec = bookRecordFrom(await getJSON("/book?" + new URLSearchParams({ slug })));
+  if (!rec) return false;
+  bookRecords.set(slug, rec);
+  return true;
+}
+
+async function loadBookBuilt() {
+  if (bookBuiltAsked) return false;
+  bookBuiltAsked = true;
+  try {
+    const res = await fetch("../books/index.json", { cache: "no-store" });
+    if (!res.ok) return false;
+    const rows = await res.json();
+    const out = {};
+    for (const r of Array.isArray(rows) ? rows : []) {
+      if (r && r.slug && typeof r.updated === "string" && r.updated) out[r.slug] = r.updated.slice(0, 10);
+    }
+    bookBuilt = out;
+    return true;
+  } catch (e) { return false; }
+}
+
+// The pane for one shelf entry. A merged pair is two books opened as one, so
+// its languages and voices are both halves' and the rest is the first's.
+function bookViewHTML(b) {
+  if (!b || !b.slug) return "";
+  const slugs = b.merge ? b.merge.members.map(x => x.slug) : [b.slug];
+  const recs = slugs.map(x => bookRecords.get(x) || null);
+  const one = recs[0] || null;
+  const dot = " <i>\u00b7</i> ";
+  const parts = [];
+
+  const facts = [];
+  if (b.lang) facts.push(esc(String(b.lang).toUpperCase()));
+  if (b.chapters) facts.push(esc(b.chapters + (Number(b.chapters) === 1 ? " chapter" : " chapters")));
+  const built = !b.merge && bookBuilt ? bookBuilt[b.slug] : null;
+  if (built) facts.push("built " + esc(built));
+  if (facts.length) parts.push(`<span class="tile-facts">${facts.map(f => `<span>${f}</span>`).join(dot)}</span>`);
+
+  if (one) {
+    const details = [one.publisher, one.published ? "published " + one.published : "",
+                     one.identifier, one.subjects].filter(Boolean);
+    // ONE line, as asked: a subject list can run to five (Walden's does), so
+    // the line ends in an ellipsis and the whole of it is the line's title
+    if (details.length) parts.push(`<span class="tile-details" title="${esc(details.join(" \u00b7 "))}">` +
+      `${details.map(esc).join(dot)}</span>`);
+    const blurb = one.description || one.opening;
+    if (blurb) parts.push(`<span class="tile-slot tile-blurb"><b>blurb</b><span>${esc(blurb)}</span></span>`);
+  }
+
+  const uniq = xs => xs.filter((x, i) => x && xs.indexOf(x) === i);
+  const langs = uniq(slugs.map((x, i) => (recs[i] && recs[i].langName)
+    || (!b.merge ? String(b.lang || "").toUpperCase() : "")));
+  const voices = uniq(recs.map(r => (r && r.voiced > 0 ? r.voice : "")));
+  const row = [];
+  if (langs.length) row.push(`<span class="tile-slot"><b>languages</b><span>${langs.map(esc).join(" · ")}</span></span>`);
+  if (voices.length) row.push(`<span class="tile-slot"><b>voices</b><span>${voices.map(esc).join(" · ")}</span></span>`);
+  if (row.length) parts.push(`<span class="tile-slotrow">${row.join("")}</span>`);
+
+  if (one && one.chapters.length) {
+    const shown = one.chapters.slice(0, BOOK_VIEW_CHAPTERS).map(t => `<span>${esc(t)}</span>`);
+    const more = one.chapters.length - shown.length;
+    if (more > 0) shown.push(`<span class="tile-more">and ${more} more</span>`);
+    parts.push(`<span class="tile-slot tile-chapters"><b>chapters</b><span>${shown.join("")}</span></span>`);
+  }
+
+  parts.push(`<span class="tile-read" role="link">read</span>`);
+  return parts.join("");
+}
+
+// Fill every tile's pane from the map, writing only a pane whose text has
+// changed. Called from paintShelfZoom (so from renderShelf and every zoom)
+// and whenever a record lands. Off 1 ¶ it does nothing and asks for nothing
+// -- and ON THE PHONE it does nothing at any rung: the phone draws its one
+// size whatever step the record remembers (library.css fences 1 ¶ off
+// `html[data-phone]`, the same flag), so there is no pane to fill, and a
+// record asked for there would be fourteen requests for a hidden span.
+function paintBookViews() {
+  const el = document.getElementById("shelf");
+  if (!el || shelfZoom() !== BOOK_VIEW_ZOOM || document.documentElement.hasAttribute("data-phone")) {
+    watchBookViews(null); return;
+  }
+  if (!bookBuiltAsked) loadBookBuilt().then(got => { if (got) paintBookViews(); });
+  const tiles = Array.from(el.querySelectorAll(".railrow.tile[data-slug]"))
+    .filter(t => t.querySelector(".tile-pane"));
+  for (const t of tiles) {
+    const pane = t.querySelector(".tile-pane");
+    const html = bookViewHTML(bookViewEntries.get(t.dataset.slug));
+    if (pane._drawn !== html) { pane.innerHTML = html; pane._drawn = html; }
+  }
+  watchBookViews(tiles);
+}
+
+let bookViewWatch = null, bookViewWatched = [];
+function wantBookView(tile) {
+  const b = bookViewEntries.get(tile.dataset.slug);
+  const slugs = b && b.merge ? b.merge.members.map(x => x.slug) : [tile.dataset.slug];
+  Promise.all(slugs.map(loadBookRecord)).then(got => { if (got.some(Boolean)) paintBookViews(); });
+}
+function watchBookViews(tiles) {
+  const same = tiles && tiles.length === bookViewWatched.length
+    && tiles.every((t, i) => t === bookViewWatched[i]);
+  if (same) return;
+  if (bookViewWatch) { bookViewWatch.disconnect(); bookViewWatch = null; }
+  bookViewWatched = tiles || [];
+  if (!tiles) return;
+  if (typeof IntersectionObserver !== "function") { tiles.forEach(wantBookView); return; }
+  bookViewWatch = new IntersectionObserver(es => es.forEach(e => { if (e.isIntersecting) wantBookView(e.target); }),
+    { root: document.getElementById("shelf"), rootMargin: "100% 0px" });
+  tiles.forEach(t => bookViewWatch.observe(t));
+}
+
 
 /* ------------------------------------------------------------------ ORDER.
  * Osca, on the bench (design/reader/bench-library.html): "I need a small drop
@@ -2065,15 +2263,71 @@ function shelfFresh(rows) {
     .slice(0, SHELF_NEW_N);
 }
 
-function bandHTML(fresh) {
-  if (!fresh || !fresh.length) return "";
-  return `<section class="band" data-band="new">` +
-    `<h2 class="bandhead">newly added</h2>` + tileRows(fresh) + `</section>`;
+/* ------------------------------------------- OPEN BOOKS COME FIRST (10 Sep).
+ * PROMPTS/phone-chrome.md: the bar's drag-up is *"the library. Open books and
+ * newly added come first at the top; below that, the whole library."* -- and,
+ * added the same day, *"In the library, each open book carries a small ✕ at
+ * its top-right -- press it to close."*
+ *
+ * THE LIST IS THE READER'S, AND THIS PAGE ONLY READS IT -- except for the ✕.
+ * `localStorage["ttstv.openBooks"]`, `[{slug, title}]`, front first:
+ * reader/reader.html's phone bar writes it (every open puts the book at the
+ * front; the reading route out of a book takes it off; a slide between books
+ * walks it without reordering). Until now the open books reached the top of
+ * this shelf only by accident of the default order -- `opened`, the last
+ * reading position -- and under any other order they were wherever they fell.
+ * Only the phone writes the list, so on the Mac it is empty and nothing here
+ * changes there.
+ *
+ * ONE BAND, AND ITS SIZE IS NOT CHANGED. SHELF_NEW_N places: the open books
+ * first, in the list's own order, then newly added -- each book once, lifted
+ * out of the shelf as the band always was. An open book the band has no room
+ * for stays in the shelf and still carries its ✕. How big the band is (4 vs
+ * 10) is Osca's, and is not decided here. */
+const OPEN_BOOKS_KEY = "ttstv.openBooks";
+let openNow = new Set();              // the open slugs, as the last paint read them
+function openBookSlugs() {
+  let v = null;
+  try { v = JSON.parse(localStorage.getItem(OPEN_BOOKS_KEY) || "[]"); } catch (e) { v = null; }
+  if (!Array.isArray(v)) return [];
+  const seen = new Set();
+  return v.map(e => (e && typeof e.slug === "string") ? e.slug : "")
+    .filter(x => x && !seen.has(x) && seen.add(x));
+}
+// The ✕: this book leaves the open list, and only this book. The list is the
+// reader's shape, so an entry is removed whole and the rest keep their order.
+function closeOpenBook(slug) {
+  if (!slug) return false;
+  let v = null;
+  try { v = JSON.parse(localStorage.getItem(OPEN_BOOKS_KEY) || "[]"); } catch (e) { v = null; }
+  if (!Array.isArray(v)) return false;
+  const kept = v.filter(e => !(e && e.slug === slug));
+  if (kept.length === v.length) return false;
+  try { localStorage.setItem(OPEN_BOOKS_KEY, JSON.stringify(kept)); } catch (e) { return false; }
+  return true;
+}
+function shelfBand(rows) {
+  if (!SHELF_NEW_N) return [];
+  const bySlug = new Map((rows || []).map(b => [b.slug, b]));
+  const open = openBookSlugs().map(x => bySlug.get(x)).filter(Boolean);
+  const taken = new Set(open.map(b => b.slug));
+  return open.concat(shelfFresh(rows).filter(b => !taken.has(b.slug))).slice(0, SHELF_NEW_N);
 }
 
-/* The drop down, at the start of the shelf. ITS MARKUP DOES NOT SAY WHICH
-   ORDER IS ON, for the same reason `shelfFootHTML`'s does not say which button
-   is pressed: `renderShelf` writes its markup only when it differs from what
+// The heading says what the band holds: `newly added` as it always did, `open`
+// when every book in it is open, and both names when it holds both.
+function bandHTML(band, open) {
+  if (!band || !band.length) return "";
+  const o = open || new Set();
+  const nOpen = band.filter(b => o.has(b.slug)).length;
+  const head = !nOpen ? "newly added" : nOpen === band.length ? "open" : "open \u00b7 newly added";
+  return `<section class="band" data-band="${nOpen ? "open" : "new"}">` +
+    `<h2 class="bandhead">${head}</h2>` + tileRows(band) + `</section>`;
+}
+
+/* The drop down, at the top of the shelf and at its right (Osca's dial,
+   10 Sep -- library.css `.sortbar`). ITS MARKUP DOES NOT SAY WHICH ORDER IS
+   ON, for the same reason the tile markup carries 1 ¶'s pane EMPTY: `renderShelf` writes its markup only when it differs from what
    it wrote last, and a `selected` attribute in here would make a poll that
    brings no news rewrite the shelf whenever the order was not the default --
    throwing away and re-requesting every decoded JPEG on it.
@@ -2105,6 +2359,7 @@ function setShelfOrder(k) {
 function renderShelf() {
   const el = document.getElementById("shelf");
   noteFirstSeen(libraryBooks);      // before the entries: a new slug is dated once
+  openNow = new Set(openBookSlugs());   // before any tile: the ✕ is in the markup
   const entries = shelfEntries();
   // With no named shelves the main list IS the page: no "Shelf" heading to set
   // it apart, and nothing to collapse it against either (Osca, 7 Sep).
@@ -2116,9 +2371,9 @@ function renderShelf() {
      ingested -- so a book arriving takes its place in the same flow rather
      than under it. `assignPairings` runs per grid, which is what it already
      did for every named shelf above. */
-  const fresh = collapsed ? [] : shelfFresh(entries);
+  const fresh = collapsed ? [] : shelfBand(entries);
   const freshSet = new Set(fresh.map(b => b.slug));
-  const rows = collapsed ? "" : (bandHTML(fresh) +
+  const rows = collapsed ? "" : (bandHTML(fresh, openNow) +
     tileRows(entries.filter(b => !freshSet.has(b.slug)), loadingRows()));
   const n = entries.length;
   const empty = api("/state") && !studioLive
@@ -2163,17 +2418,14 @@ function renderShelf() {
      wiping it; `paintSelection` runs on the line below every time; and a
      `.covimg` that 404'd and removed itself stays removed, so a dead cover is
      no longer re-requested six times a minute either. */
-  /* THE FOOT FOLLOWS THE BOOKS, NOT THE SHELF. The zoom sets `--cols` and
-     `--bookw` for every `.shelfgrid` on the page -- the named shelves and the
-     device's own section as well as the main shelf -- so the control belongs
-     wherever there is a grid to zoom, and nowhere when the page is a single
-     "no books yet" line. It is part of the memo'd markup, so a poll that
-     brings no news does not rewrite the control either; `paintShelfZoom`
-     below is what keeps the attribute and the pressed button true across a
-     skip. */
-  const body = sortbarHTML(entries) + deviceSection() + namedShelvesHTML(entries) + shelf + line;
-  const html = body + (body.includes('class="shelfgrid"') ? shelfFootHTML() : "");
+  /* NO FOOT (Osca, 10 Sep): the 16/8/4/2/1 buttons that stood under the last
+     grid are gone and the pinch is the zoom. `paintShelfZoom` below keeps the
+     attribute true across a skip, and fills the 1 ¶ panes from
+     `bookViewEntries` -- the entries every tile on this page was drawn from,
+     named shelves included, since each is `entries` filtered. */
+  const html = sortbarHTML(entries) + deviceSection() + namedShelvesHTML(entries) + shelf + line;
   if (html !== shelfDrawn) { el.innerHTML = html; shelfDrawn = html; }
+  bookViewEntries = new Map(entries.map(b => [b.slug, b]));
   paintShelfZoom();
   paintShelfOrder();
   paintSelection();
@@ -2619,10 +2871,10 @@ function libNormalise(raw) {
     covers[k] = { choice: v.choice, by: v.by === "you" ? "you" : "measured" };
   }
 
-  /* HOW MANY BOOKS ACROSS. One of five, and anything else -- an older record
-     with no zoom in it, a hand-edited file, one of the bench's two ¶ steps
-     that this page does not draw -- falls back to the app's own 4 rather than
-     leaving the shelf with an attribute no rule answers. */
+  /* HOW MANY BOOKS ACROSS. One of six, and anything else -- an older record
+     with no zoom in it, a hand-edited file, the bench's 2 ¶ that this page
+     does not draw -- falls back to the app's own 4 rather than leaving the
+     shelf with an attribute no rule answers. */
   const zoom = SHELF_ZOOMS.includes(d.zoom) ? d.zoom : SHELF_ZOOM_DEFAULT;
 
   /* HOW THEY ARE ORDERED, and WHEN EACH ONE FIRST APPEARED. An unknown order
@@ -3308,9 +3560,13 @@ function shelfEntries() {
      shift-click depends on. `renderShelf` splits it back out on the same
      rule; a merged entry has no `firstSeen` of its own, so it can never be
      lifted into the band. */
-  const fresh = shelfFresh(real);
-  const freshSet = new Set(fresh.map(b => b.slug));
-  return merged.concat(fresh, real.filter(b => !freshSet.has(b.slug)));
+  /* ...AND THE BAND IS THE OPEN BOOKS AND THEN NEWLY ADDED (OPEN BOOKS COME
+     FIRST), so it is the band that comes off the top now, ahead of the pairs
+     -- which is where it is on screen. */
+  const all = merged.concat(real);
+  const band = shelfBand(all);
+  const bandSet = new Set(band.map(b => b.slug));
+  return band.concat(all.filter(b => !bandSet.has(b.slug)));
 }
 
 /* ------------------------------------------------- the marginalia, read only
@@ -3578,6 +3834,51 @@ function openStudio(slug, units) {
   window.open(studioUrl(slug, units), "_blank"); return "tab";
 }
 
+/* ============================================ OPEN IN FINDER (G-FINDER, 10 Sep)
+ * Osca: *"right-click a book -> Open in Finder ... Absent source -> the item
+ * is disabled, not hidden."* Two things decide it, in this order:
+ *   FINDER[slug]   the last answer `POST /reveal {slug, check: true}` gave --
+ *                  the server's own sentence when the file is not there (a
+ *                  dead mount it could not re-root, a file moved away), null
+ *                  when it was; asked every time the menu opens on a book
+ *   /state's row   a book whose `source` names no path has no file to show,
+ *                  which is known before anything is asked
+ * The press is `POST /reveal {slug}`: studio resolves the file the way a
+ * re-parse does (`studio.add.source_for`) and runs `open -R` on it. */
+const FINDER = {};
+function finderWhy(slug) {
+  if (Object.prototype.hasOwnProperty.call(FINDER, slug)) return FINDER[slug];
+  const row = stateBooks && stateBooks[slug];
+  if (row && row.source && !row.source.path) return "this book has no source file on record";
+  return null;
+}
+async function finderCheck(slug) {
+  if (!slug || !libraryContext().bench) return null;
+  const r = await postJSON("/reveal", { slug, check: true });
+  // only the route's own "not there" disables it; a studio that does not know
+  // the route at all is not a missing file, and the press will say so
+  let why;
+  if (r.ok) why = null;
+  else if (r.body && r.body.exists === false) why = r.body.error || "the source file is not there";
+  else return null;
+  const was = FINDER[slug];
+  FINDER[slug] = why;
+  const el = document.getElementById("menu");
+  if (was !== why && el && !el.hidden && menuTarget && menuTarget.slug === slug
+      && (menuTarget.kind === "shelf" || menuTarget.kind === "source")) {
+    showMenu(menuAt.x, menuAt.y, menuTarget.kind, menuTarget);   // the same menu, the item re-said
+  }
+  return why;
+}
+async function revealBook(slug) {
+  const r = await postJSON("/reveal", { slug });
+  if (r.ok) return "finder";
+  const why = (r.body && r.body.error) || `studio answered ${r.status}`;
+  if (r.body && r.body.exists === false) FINDER[slug] = why;
+  note(`Couldn't open Finder — ${why}`);
+  return "note";
+}
+
 function reveal(src) {
   const h = host();
   const p = sourcePath(src);
@@ -3651,6 +3952,7 @@ function menuItems(kind, state, opts) {
       coverIsSource: opts.slug ? coverChoice(opts.slug) === "source" : true,
       hasCover: opts.hasCover,
       busy: opts.busy !== undefined ? opts.busy : (opts.slug ? reparseBusyReason(opts.slug) : null),
+      finderWhy: opts.finderWhy !== undefined ? opts.finderWhy : (opts.slug ? finderWhy(opts.slug) : null),
       titleOf: entryTitle,
     });
   }
@@ -3723,6 +4025,17 @@ function shelfMenuItems(slug, opts) {
     items.push(merge
       ? { id: "studio", label: "Open in Studio", disabled: "a merged entry has no text of its own — open one of its two books" }
       : { id: "studio", label: "Open in Studio" });
+    // OPEN IN FINDER (G-FINDER, Osca 10 Sep): the book's own SOURCE FILE,
+    // selected in Finder -- studio does it (`POST /reveal {slug}`, `open -R`),
+    // so it needs no Rust and no host. Beside Open in Studio, because both
+    // answer "where does this book live". Absent source -> DISABLED, never
+    // hidden, and the reason is the server's own sentence once it has been
+    // asked (`finderCheck`, as the menu opens).
+    items.push(merge
+      ? { id: "finder", label: "Open in Finder", disabled: "a merged entry is two books — open one of its two" }
+      : opts.finderWhy
+        ? { id: "finder", label: "Open in Finder", disabled: opts.finderWhy }
+        : { id: "finder", label: "Open in Finder" });
     // RE-PARSE BESIDE DELETE, because they are the same question answered
     // two ways -- "the parse is wrong" -- and the whole point of the pair is
     // that one of them keeps the audio and one does not. Disabled with its
@@ -4024,6 +4337,7 @@ function menuAct(act) {
       return true;
     }
     case "studio": return openStudio(slug);
+    case "finder": return revealBook(slug);
     case "reparse": return reparseBook(slug);
     case "parses": return openParses(slug);
     case "delete": return removeBook(slug, book && book.title);
@@ -4071,6 +4385,10 @@ shelfEl.addEventListener("click", (e) => {
   if (retry) { e.preventDefault(); e.stopPropagation(); ingest(retry.dataset.retry, { force: true }); return; }
   const rm = e.target.closest("[data-remove]");
   if (rm) { e.preventDefault(); e.stopPropagation(); forgetBook(rm.dataset.remove); return; }
+  // an open book's ✕: it closes, and the tile drops back into the shelf --
+  // never an open, never a selection
+  const cx = e.target.closest("[data-close]");
+  if (cx) { e.preventDefault(); e.stopPropagation(); closeOpenBook(cx.dataset.close); renderShelf(); return; }
   // a shelf heading: collapse/expand, and its ⋯
   const sm = e.target.closest("[data-shelfmenu]");
   if (sm) {
@@ -4082,6 +4400,15 @@ shelfEl.addEventListener("click", (e) => {
   const st = e.target.closest(".shelftoggle");
   if (st) { e.preventDefault(); shelfToggle(st.dataset.shelf); return; }
 
+  // 1 ¶'s read button is a door, and one press opens -- the same open a
+  // tile's double-click is, so a pair opens as a pair.
+  const rd = e.target.closest(".tile-read");
+  if (rd) {
+    const t = rd.closest(".railrow");
+    e.preventDefault();
+    if (t && t.dataset.slug && !t.classList.contains("loading")) { selSet(t.dataset.slug); openEntry(t.dataset.slug, false); }
+    return;
+  }
   const row = e.target.closest(".railrow");
   // "Clicking the shelf background clears it" (§1) -- the one gesture that
   // says "never mind" without reaching for a key.
@@ -4111,12 +4438,23 @@ shelfEl.addEventListener("click", (e) => {
 // open this one", and the reason a single click is free to mean something
 // else at last.
 shelfEl.addEventListener("dblclick", (e) => {
+  if (e.target.closest("[data-close]")) { e.preventDefault(); return; }
   const row = e.target.closest(".railrow");
   if (!row || row.classList.contains("loading") || row.dataset.importing) return;
   e.preventDefault();
   selSet(row.dataset.slug);
   openEntry(row.dataset.slug, false);
 });
+// the ✕ is focusable, so Enter and Space press it -- and nothing further up
+// (Enter on the document opens the selection)
+shelfEl.addEventListener("keydown", (e) => {
+  const cx = e.target.closest && e.target.closest("[data-close]");
+  if (!cx || (e.key !== "Enter" && e.key !== " ")) return;
+  e.preventDefault(); e.stopPropagation();
+  closeOpenBook(cx.dataset.close); renderShelf();
+}, true);
+// another page of this app (the reader, in another window) changed the list
+addEventListener("storage", (e) => { if (e.key === OPEN_BOOKS_KEY) renderShelf(); });
 shelfEl.addEventListener("contextmenu", (e) => {
   const row = e.target.closest(".railrow");
   if (!row) {
@@ -4138,6 +4476,7 @@ shelfEl.addEventListener("contextmenu", (e) => {
   // "Merge with X & Y" can only ever appear over one of the two it names.
   if (!row.dataset.device && !isPhone() && SEL.indexOf(row.dataset.slug) < 0) selSet(row.dataset.slug);
   showMenu(e.clientX, e.clientY, row.dataset.device ? "device" : "shelf", { slug: row.dataset.slug, state: "filled" });
+  if (!row.dataset.device) finderCheck(row.dataset.slug);
 });
 
 // A row for an event, even when the event's own target is the container:
@@ -4183,6 +4522,7 @@ sourcesEl.addEventListener("contextmenu", (e) => {
   if (!row) return;
   e.preventDefault();
   showMenu(e.clientX, e.clientY, "source", { name: row.dataset.name, slug: row.dataset.slug || null, state: row.dataset.state });
+  if (row.dataset.state === "filled" && row.dataset.slug) finderCheck(row.dataset.slug);
 });
 sourcesEl.addEventListener("dragstart", (e) => {
   const row = e.target.closest(".src");
@@ -4862,7 +5202,51 @@ if ("serviceWorker" in navigator) {
     // above its own folder without a header no static host sends), so this page
     // registers it to keep the shell cached but is NOT itself controlled by it --
     // manifest D1, the worker's home, is the decision that changes that.
+    /* ============ THE DESKTOP APP HAS NO USE FOR A WORKER ============
+       Osca, 10 September, four times: *"the desktop app is still the old
+       one."* Everything was right and had been for days -- dist/ staged fresh
+       at every launch, clean/ rebuilt, the binary rebuilt. PROVED by
+       elimination: `tauri dev` embeds nothing (grep of the rebuilt binary for
+       WORD_SNAP, wordview, zoomTo: zero), so the app reads ../dist off disk,
+       and ../dist had the new code. The only thing left between the disk and
+       the window was a service worker, and it had been answering with a shell
+       it cached days earlier.
+
+       The worker exists to make a PHONE work offline. The desktop app's shell
+       is already on the disk it is running from: there is no network for it to
+       be offline from, so the worker buys nothing there and costs exactly
+       this. So in the app it is not registered -- and, because a registration
+       already made outlives the code that made it, any worker already there is
+       unregistered and the SHELL caches are dropped.
+
+       What is NOT dropped, deliberately: the book caches (ttstv-book-*) and
+       localStorage. His marginalia and every reading position live in
+       localStorage, and clearing the app's data to fix a stale shell would
+       have cost him those. This costs nothing. */
+    const inApp = !!(window.TTSTVHost || location.protocol === "tauri:"
+                     || /^(tauri|asset)$/.test((location.protocol||"").replace(":","")));
+    if (inApp) {
+      navigator.serviceWorker.getRegistrations()
+        .then((rs) => Promise.all(rs.map((r) => r.unregister())))
+        .then(() => caches.keys())
+        .then((keys) => Promise.all(keys
+          .filter((k) => k.indexOf("ttstv-shell") === 0)
+          .map((k) => caches.delete(k))))
+        .catch(() => {});
+      return;
+    }
+    /* ...AND ASK IT FOR A NEW ONE, EVERY TIME. Osca, 10 Sep, after a full loop
+       and a push: *"the desktop app is still the old one."* Everything on disk
+       was right; a service worker was answering with the shell it had cached
+       days before. register() alone does not re-fetch sw.js once a
+       registration exists, and this page is the ONLY one that can ask -- it
+       sits outside the worker's scope (a worker's scope is its own folder), so
+       it is always served fresh, while every page the worker covers is served
+       whatever the worker already has. Without this, a shell that went stale
+       could never un-stale itself: the reader would be handed the old
+       reader.html forever, including any code meant to fix exactly this. */
     navigator.serviceWorker.register("../reader/sw.js")
+      .then((r) => r && r.update())
       .catch((e) => console.warn("[sw] registration failed:", e));
   });
 }
@@ -4874,13 +5258,7 @@ shelfEl.addEventListener("change", (e) => {
   setShelfOrder(sel.value);
 });
 
-// ---- the zoom: the five buttons and the trackpad pinch
-shelfEl.addEventListener("click", (e) => {
-  const b = e.target.closest("#zoom button");
-  if (!b) return;
-  e.preventDefault(); e.stopPropagation();
-  setShelfZoom(b.dataset.z);
-});
+// ---- the zoom: the trackpad pinch, and nothing else (Osca, 10 Sep)
 /* AND NO KEYS, WHICH IS A DECISION AND NOT AN OVERSIGHT. The bench zooms on
  * `+` / `-` (and `[` / `]`) as well as by button, and those two would be four
  * lines here. But "every key on this page asks settings.js which ACTION a
@@ -5074,9 +5452,11 @@ window.__LIBRARY_DEBUG__ = {
   shelfCreate, shelfRename, shelfDelete, shelfToggle, shelfAdd, shelfRemove, shelvesFor,
   selSet, selToggle, selExtend, selClear, openSelection, openEntry, readerPairUrl,
   shelfMenuItems, shelfEmptyMenuItems, pickerItems, shelfPickerItems, shelfActionItems, menuItems, renderShelf,
-  // the five shelf zooms (design/reader/bench-library.html)
+  // the six shelf zooms (design/reader/bench-library.html), and 1 ¶'s pane
   SHELF_ZOOMS, SHELF_ZOOM_DEFAULT, shelfZoom, setShelfZoom, shelfZoomStep,
-  shelfFootHTML, paintShelfZoom, shelfNearestTile,
+  paintShelfZoom, shelfNearestTile,
+  BOOK_VIEW_ZOOM, BOOK_VIEW_CHAPTERS, bookRecords, bookRecordFrom, blurbText, loadBookRecord,
+  loadBookBuilt, get bookBuilt() { return bookBuilt; }, bookViewHTML, paintBookViews,
   // the order, and the newly-added band (design/reader/bench-library.html)
   SHELF_ORDERS, SHELF_ORDER_KEYS, SHELF_ORDER_DEFAULT, SHELF_NEW_N,
   shelfOrder, setShelfOrder, shelfOrdered, shelfFresh, firstSeenAt, noteFirstSeen,

@@ -257,14 +257,23 @@
     // one there was -- the room wheel.css's live-row marker needs at
     // left:-1.15rem -- and the right was hard zero, so the text ran to the
     // pane's own edge whatever was wanted.
-    if(p.pl != null) el.style.setProperty("--pane-pl", p.pl + "rem");
-    if(p.pr != null) el.style.setProperty("--pane-pr", p.pr + "rem");
+    /* WRITTEN ONLY WHEN THEY CHANGE. These four ran on every pane on every
+       frame of every travel with the same values, and a custom-property write
+       dirties that pane's style even when the string is identical -- which
+       costs a re-layout on the next read. Counted 10 September during the zoom:
+       eight of these a frame. The values move when the tuner moves them and
+       almost never otherwise. */
+    const set = (k, v) => { if(el.__pv && el.__pv[k] === v) return;
+      (el.__pv || (el.__pv = {}))[k] = v;
+      if(v == null) el.style.removeProperty(k); else el.style.setProperty(k, v); };
+    if(p.pl != null) set("--pane-pl", p.pl + "rem");
+    if(p.pr != null) set("--pane-pr", p.pr + "rem");
     if(p.wash){
-      el.style.setProperty("--pane-h", String(p.hue));
+      set("--pane-h", String(p.hue));
       if(el.setAttribute) el.setAttribute("data-wash", "");
     }else{
       if(el.removeAttribute) el.removeAttribute("data-wash");
-      el.style.removeProperty("--pane-h");
+      set("--pane-h", null);
     }
   }
 

@@ -123,7 +123,7 @@
   }
 
   var SOURCE = { gutenberg: "Gutenberg", archive: "Archive", librivox: "LibriVox",
-                 youtube: "YouTube", dokumen: "Dokumen" };
+                 youtube: "YouTube", dokumen: "Dokumen", fadedpage: "Faded Page" };
   /* every source the app already covers -- the -site: list is built from this
      and nowhere else (search.html's own COVERED, kept identical) */
   var COVERED = ["gutenberg.org", "archive.org", "youtube.com",
@@ -230,15 +230,31 @@
      so the mock cannot teach this file to read a payload studio never sends
      -- which is precisely how the first version came to ask for `audio_s`. */
   var MOCK_SHELF = [
+    /* G-SURF2: `source` in the shape `bookinfo.book_summary` sends it --
+       `kind`, `file`, `path`, `origin` -- and the three cases a shelf really
+       holds: a book dropped in by hand (no origin: there never was one), a
+       book that came through Search (its origin, recorded at add time), and
+       a book whose FILE named where it came from. The first path is a real
+       book.json's own. */
     { slug: "eclogues-virgil", title: "Eclogues", author: "Virgil", lang: "la",
       chapters_n: 10, parsed: 10, voiced: 10, aligned: 10, dict_ok: true,
-      has_audio: true, has_timings: true },
+      has_audio: true, has_timings: true,
+      source: { kind: "epub", file: "Eclogues Virgil.epub",
+                path: "/Volumes/Ex_Repo/github/TTS_APP/TTS_APP/tts_data/sources/epubs/Eclogues Virgil.epub",
+                origin: null } },
     { slug: "ethics-spinoza", title: "Ethics", author: "Benedictus de Spinoza", lang: "la",
       chapters_n: 5, parsed: 5, voiced: 0, aligned: 0, dict_ok: false,
-      has_audio: false, has_timings: false },
+      has_audio: false, has_timings: false,
+      source: { kind: "epub", file: "gutenberg-ethics.epub",
+                path: "/Volumes/Ex_Repo/github/TTS_APP/TTS_APP/tts_data/sources/search/gutenberg-ethics.epub",
+                origin: { source: "gutenberg", id: "3800", from: "search",
+                          url: "https://www.gutenberg.org/ebooks/3800.epub3.images" } } },
     { slug: "fictions-borges", title: "Ficciones", author: "Jorge Luis Borges", lang: "es",
       chapters_n: 17, parsed: 17, voiced: 9, aligned: 9, dict_ok: true,
-      has_audio: true, has_timings: true }
+      has_audio: true, has_timings: true,
+      source: { kind: "epub", file: "ficciones.epub",
+                path: "/Volumes/Ex_Repo/github/TTS_APP/TTS_APP/tts_data/sources/epubs/ficciones.epub",
+                origin: { url: "https://example.org/ficciones", from: "file" } } }
   ];
   /* ITEM 9, AND ITEMS 4-6 ARE WHY. These rows carry the fields a real
      `Candidate` carries (`tools/search/candidate.py`) and the old mock did
@@ -480,6 +496,17 @@
                  a sentence the page can say rather than a mystery. */
     media: [], sources: null, dropped: [],
     searchedFor: "",    /* the query `sources` actually describes             */
+    /* ----------------------------------------- G-SURF2, 10 Sep: THE WAIT, SEEN
+       `asking`  null, or {q, t0, names} while a `/search` is out -- a STATE,
+                 not an argument to draw(). It was `draw(true)`, passed by
+                 exactly one caller, and every other draw -- the shelf's own
+                 `yours().then(draw)` a microtask later, each /state poll --
+                 passed nothing and took the "Searching…" note off the screen
+                 while the search was still out.
+       `askedMs` how long the last answer took, said once it is in
+       `srcNames` which sources there are -- the last report's own keys,
+                 remembered (see `knownSources`) */
+    asking: null, askedMs: 0, srcNames: null,
     /* the works column is the LIVE studio, not a display: these are what it
        is doing about it right now */
     hold: null,         /* studio/tasks.py::hold_state -- null, or the hold  */
@@ -522,7 +549,14 @@
     peek: null
   };
   /* what the bench dials, and nothing else does */
-  var CFG = { mixed: true, bias: 1.0, coarse: false };
+  var CFG = { mixed: true, bias: 1.0, coarse: false,
+              /* G-SURF2: how long the MOCK takes to answer, so the searching
+                 state can be looked at on the bench (`?mockdelay=1500`). 0 in
+                 the app, where the wait is studio's and real. */
+              mockDelay: (function () {
+                try { var m = /[?&]mockdelay=(\d+)/.exec(location.search || "");
+                      return m ? +m[1] : 0; } catch (e) { return 0; }
+              })() };
 
   var root = null, scrim = null, sheet = null, input = null,
       listEl = null, worksEl = null, videoBox = null, opened = false;
@@ -680,6 +714,7 @@
     opened = false;
     scrim.classList.remove("on"); sheet.classList.remove("on");
     S.videoOpen = false;
+    stopTick();
   }
   function toggle() { opened ? close() : open(S.q); }
 
@@ -709,7 +744,10 @@
     S.q = String(q || "").trim();
     yours().then(function () { draw(); });
     clearTimeout(outTimer);
-    if (!S.q) { S.out = []; draw(); return; }
+    /* AN EMPTIED FIELD CANCELS THE SEARCH THAT IS OUT. The token is what an
+       answer checks before it lands; without the bump a slow answer for the
+       old words filled the list after the field had been cleared. */
+    if (!S.q) { token++; S.asking = null; stopTick(); S.out = []; draw(); return; }
     if (now) return elsewhere();
     outTimer = setTimeout(elsewhere, 320);
   }
@@ -736,7 +774,13 @@
                 Dropped here until today, which is why the studio block had to
                 be told the engine twice. Both are on `bookinfo.shelf_of`'s own
                 row; neither is derived. */
-             voice: b.voice || null, engine: b.engine || null };
+             voice: b.voice || null, engine: b.engine || null,
+             /* G-SURF2: WHERE IT CAME FROM. `bookinfo.book_summary`'s own
+                `source` -- the kind, the file's name, its whole path, and the
+                origin when one is on record -- carried through untouched,
+                so a row and its detail say what studio says and nothing
+                derived. */
+             source: b.source || null };
   }
 
   var shelfAt = 0;
@@ -954,22 +998,26 @@
     var my = ++token;
     var url = api("/search?title=" + encodeURIComponent(S.q));
     if (!url) {
-      S.out = MOCK_OUT.slice(); S.media = MOCK_MEDIA.slice();
-      S.sources = MOCK_SOURCES; S.searchedFor = S.q;
-      /* ITEM 9: the mock builds `S.pairs` THE SAME WAY the live answer does
-         -- one pass over both lists, grouped by `linked_id` -- rather than
-         being handed a ready-made map. A mock that took a shortcut here could
-         show a pairing the real grouping would not, which is the one thing a
-         bench must never do. */
-      S.pairs = {};
-      S.out.concat(S.media).forEach(function (c) {
-        if (!c.linked_id) return;
-        var k = String(c.linked_id);
-        (S.pairs[k] = S.pairs[k] || []).push(c);
-      });
-      draw(); return Promise.resolve();
+      /* THE BENCH CAN SEE THE WAIT (G-SURF2). With `?mockdelay=` the mock
+         answers late, through the SAME `asking` state the live wait uses --
+         so the strip the bench shows during is the strip the app shows
+         during, drawn by the same code. Without it the mock answers at once,
+         as it always did. */
+      if (CFG.mockDelay > 0) {
+        beginAsking();
+        draw();
+        setTimeout(function () {
+          if (my !== token) return;              /* a newer search owns it */
+          endAsking(MOCK_SOURCES);
+          mockAnswer();
+        }, CFG.mockDelay);
+        return Promise.resolve();
+      }
+      mockAnswer();
+      return Promise.resolve();
     }
-    S.out = []; S.media = []; S.sources = null; S.outErr = ""; draw(true);
+    beginAsking();
+    S.out = []; S.media = []; S.sources = null; S.outErr = ""; draw();
     /* 40 s: `sources.SEARCH_BUDGET` is 25 s and the route answers inside it
        by construction, so past 40 s the route is not coming back. */
     return ask_(url, 40000, { cache: "no-store" })
@@ -990,6 +1038,7 @@
       })
       .then(function (j) {
         if (my !== token) return;                    /* a newer search owns it */
+        endAsking(j && j.adapters);
         S.searchedFor = S.q;
         /* studio's own 500 shape: `{error: "Type: message"}` -- the search was
            REACHED and it broke, which is a different sentence again. */
@@ -1027,10 +1076,118 @@
       })
       .catch(function (e) {
         if (my !== token) return;
+        endAsking(null);
         S.searchedFor = S.q;
         S.outErr = why("/search", e);
         S.out = []; S.media = []; draw();
       });
+  }
+
+  /* THE MOCK'S ANSWER, in one place -- the immediate bench and the delayed
+     one both land here, so the two cannot answer differently. */
+  function mockAnswer() {
+    S.out = MOCK_OUT.slice(); S.media = MOCK_MEDIA.slice();
+    S.sources = MOCK_SOURCES; S.searchedFor = S.q;
+    /* ITEM 9: the mock builds `S.pairs` THE SAME WAY the live answer does
+       -- one pass over both lists, grouped by `linked_id` -- rather than
+       being handed a ready-made map. A mock that took a shortcut here could
+       show a pairing the real grouping would not, which is the one thing a
+       bench must never do. */
+    S.pairs = {};
+    S.out.concat(S.media).forEach(function (c) {
+      if (!c.linked_id) return;
+      var k = String(c.linked_id);
+      (S.pairs[k] = S.pairs[k] || []).push(c);
+    });
+    draw();
+  }
+
+  /* ==================================================== THE WAIT, IN THE OPEN
+     G-SURF2, Osca 10 Sep: *"Searching is unmistakable ... visible at the top
+     of RESULTS the whole time any source is still answering -- which sources
+     are out, which have answered ... Osca must never wait not knowing."*
+
+     WHAT CAN HONESTLY BE SAID DURING, AND WHAT CANNOT. `/search` is ONE
+     request: `tools/search/sources/__init__.py::run_all_with_report` asks
+     every adapter at once, on its own thread, and studio answers when the
+     slowest has answered or `SEARCH_BUDGET` (25 s) has run out -- whichever
+     is first -- with every source's report in the one body. So while it is
+     out, EVERY source is out, and they all answer in the same instant. The
+     strip says exactly that: each source by name, "asking", the seconds
+     counting against the 25, and the moment the answer lands each chip turns
+     into what that source did. A chip that turned on its own would be a
+     chip claiming something studio never told this page -- a streamed
+     `/search` is what would buy it, and that is studio's to build (the
+     report's §6), not this file's to pretend.
+
+     WHICH SOURCES, BEFORE ANY HAVE ANSWERED. The last report's own keys --
+     studio's names, not a list typed here -- remembered across searches and
+     across launches. The very first search on a machine has no report yet,
+     so it names `SOURCE`'s table and the first answer corrects it. */
+  var BUDGET_S = 25;       /* tools/search/sources/__init__.py SEARCH_BUDGET */
+  var SRC_KEY = "ttstv.surface.sources";
+  function knownSources() {
+    if (S.srcNames && S.srcNames.length) return S.srcNames.slice();
+    try {
+      var kept = JSON.parse(localStorage.getItem(SRC_KEY) || "null");
+      if (kept && kept.length) { S.srcNames = kept; return kept.slice(); }
+    } catch (e) {}
+    return Object.keys(SOURCE).sort();
+  }
+  function beginAsking() {
+    S.asking = { q: S.q, t0: Date.now(), names: knownSources() };
+    S.askedMs = 0;
+    tick();
+  }
+  function endAsking(report) {
+    if (S.asking) S.askedMs = Date.now() - S.asking.t0;
+    S.asking = null;
+    stopTick();
+    if (report) {
+      var names = Object.keys(report).filter(function (k) { return k !== "library"; }).sort();
+      if (names.length) {
+        S.srcNames = names;
+        try { localStorage.setItem(SRC_KEY, JSON.stringify(names)); } catch (e) {}
+      }
+    }
+  }
+  /* THE SECONDS MOVE WITHOUT A REDRAW. One timer, half a second, and it
+     touches only the strip's own clock and bar -- never the list, so a row
+     you are pointing at does not flicker under you while you wait. Stopped
+     the moment the answer lands, the field is cleared, or the sheet shuts. */
+  var tickTimer = null;
+  function tick() {
+    clearTimeout(tickTimer);
+    if (!S.asking || !opened) return;
+    var n = listEl && listEl.querySelector(".sf-src.asking");
+    if (n) paintAsking(n);
+    tickTimer = setTimeout(tick, 500);
+  }
+  function stopTick() { clearTimeout(tickTimer); tickTimer = null; }
+  function askingWords(a) {
+    var sec = (Date.now() - a.t0) / 1000;
+    var names = a.names.length;
+    if (sec <= BUDGET_S)
+      return { head: "Searching " + names + " source" + (names === 1 ? "" : "s")
+                     + " for “" + a.q + "”",
+               clock: Math.floor(sec) + " s",
+               sub: "every source is asked at once; studio answers for all of them "
+                  + "together, within " + BUDGET_S + " s",
+               p: Math.min(1, sec / BUDGET_S) };
+    return { head: "Still searching for “" + a.q + "”",
+             clock: Math.floor(sec) + " s",
+             sub: "past studio's " + BUDGET_S + " s — it answers with whatever came back; "
+                + "this page stops waiting at 40 s and says so",
+             p: 1 };
+  }
+  function paintAsking(n) {
+    var w = askingWords(S.asking);
+    var h = n.querySelector(".sf-srchead .hl"), c = n.querySelector(".sf-srchead .ck"),
+        sub = n.querySelector(".sf-srcsub"), bar = n.querySelector(".sf-srcbar i");
+    if (h) h.textContent = w.head;
+    if (c) c.textContent = w.clock;
+    if (sub) sub.textContent = w.sub;
+    if (bar) bar.style.width = (w.p * 100).toFixed(1) + "%";
   }
 
   /* ------------------------------------------------ WHAT A SOURCE ACTUALLY DID
@@ -1128,12 +1285,170 @@
   }
   function onShelf(c) {
     var t = norm(c.title);
-    return S.shelf.some(function (b) { return norm(b.title) === t; });
+    return S.shelf.some(function (b) {
+      var o = b.source && b.source.origin;
+      if (o && o.from === "search") return sameOrigin(o, c);
+      return norm(b.title) === t;
+    });
+  }
+
+  /* ============================================================ PROVENANCE
+     G-SURF2, Osca 10 Sep: *"For every shelf book -- on its row and in its
+     detail -- show where it came from: the source file (book.source.path)
+     and the origin (the candidate URL / archive id). When a book is added,
+     say what file it was saved as."*
+
+     Every word below is a field studio sends. `book.source` is
+     `bookinfo.book_summary`'s: `file` (the name), `path` (the whole of
+     `book.json`'s `source.path`), `kind`, and `origin` when one is on
+     record, in one of two strengths:
+       from "search"   written at add time from the candidate the book was
+                       added from (`studio/add.py::record_origin`) -- the
+                       candidate's url and its source's own id
+       from "file"     no candidate was ever recorded, but the file's own
+                       identifier is a url (a Gutenberg epub's dc:identifier)
+     and nothing at all for a book dropped in by hand, which is said as such
+     rather than left blank: a blank reads as "the page forgot". */
+  function provOf(src) {
+    src = src || {};
+    var path = src.path || "";
+    var file = src.file || (path ? String(path).split(/[\\/]/).pop() : "");
+    var o = src.origin || null;
+    var label = "", url = "";
+    if (o) {
+      url = o.url || "";
+      label = url ? String(url).replace(/^https?:\/\//, "").replace(/^www\./, "").replace(/\/+$/, "")
+                  : [SOURCE[o.source] || o.source, o.id].filter(Boolean).join(" · ");
+    }
+    return { file: file, path: path, kind: src.kind || "", origin: o,
+             label: label, url: url, from: o ? (o.from || "search") : "" };
+  }
+  /* the one line a row carries: FROM where, then the FILE -- lowercase and
+     monospaced, because both are names a person may have to type or find,
+     and letter case is part of a path */
+  function provLine(from, file, fileTitle, fromTitle) {
+    var n = el("span", "sf-prov");
+    var o = el("span", "po"); o.textContent = from; if (fromTitle) o.title = fromTitle;
+    n.appendChild(o);
+    if (file) {
+      n.appendChild(el("span", "sep", "·"));
+      var f = el("span", "pf"); f.textContent = file; if (fileTitle) f.title = fileTitle;
+      n.appendChild(f);
+    }
+    return n;
+  }
+  function shelfProv(b) {
+    var p = provOf(b.source);
+    if (!p.file && !p.origin) return null;
+    var from = p.origin ? "from " + p.label : "no origin on record";
+    return provLine(from, p.file, p.path || p.file,
+                    p.origin ? (p.url || p.label) + (p.from === "file" ? " — the file's own identifier" : "")
+                             : "added by hand, or before origins were kept");
+  }
+  /* the working row's line: what the file was SAVED AS, the moment staging
+     answers -- `/stage_for_ingest`'s own `source`, relative to the depot's
+     sources/ -- and where it was fetched from */
+  function workProv(w) {
+    var saved = w.source ? "saved as sources/" + String(w.source).replace(/^\/+/, "") : "";
+    var from = w.origin ? provOf({ origin: w.origin }).label : "";
+    if (!saved && !from) return null;
+    return provLine(from ? "from " + from : "", saved, saved, w.origin && w.origin.url);
+  }
+  /* THE DETAIL: every provenance field, whole, and the two things you can do
+     with them -- open the page it came from, and show the file in Finder
+     (`POST /reveal`, the Library's own right-click, G-FINDER) */
+  function provPane(b) {
+    var p = provOf(b.source);
+    var box = el("div", "sf-cand sf-provpane");
+    box.appendChild(head("Where it came from"));
+    var rows = [
+      ["From", p.origin ? (p.origin.source ? (SOURCE[p.origin.source] || p.origin.source) : shortHost(p.url))
+                        : "not on record — dropped in by hand, or added before origins were kept"],
+      ["Id", p.origin && p.origin.id],
+      ["Kind", p.kind],
+      ["File", p.file],
+      ["On record", p.from === "file" ? "the file's own identifier — no search candidate was recorded" : null]
+    ];
+    var dl = el("div", "sf-fields");
+    rows.forEach(function (kv) {
+      if (kv[1] == null || kv[1] === "") return;
+      dl.appendChild(el("span", "k", esc(kv[0])));
+      dl.appendChild(el("span", "v", esc(String(kv[1]))));
+    });
+    box.appendChild(dl);
+    if (p.url) { var u = el("div", "sf-url sf-origin"); u.textContent = p.url; u.title = p.url; box.appendChild(u); }
+    if (p.path) { var f = el("div", "sf-url sf-path"); f.textContent = p.path; f.title = p.path; box.appendChild(f); }
+    var acts = el("div", "sf-acts");
+    if (p.url && /^https?:/.test(p.url)) {
+      var o = el("button", "sf-verb ghost");
+      o.type = "button"; o.textContent = "Open the source page";
+      o.addEventListener("click", function () { openOut(p.url); });
+      acts.appendChild(o);
+    }
+    var r = el("button", "sf-verb ghost");
+    r.type = "button"; r.textContent = "Show in Finder";
+    r.title = p.path ? "POST /reveal — Finder, with " + p.file + " selected"
+                     : "this book has no source file on record";
+    if (!p.path || !S.live) r.disabled = true;
+    r.addEventListener("click", function () {
+      if (r.disabled) return;
+      r.disabled = true;
+      postJSON("/reveal", { slug: b.slug }).then(function (j) {
+        r.textContent = j && j.error ? "Couldn't — " + j.error : "Shown in Finder";
+        setTimeout(function () { r.textContent = "Show in Finder"; r.disabled = false; }, 2500);
+      });
+    });
+    acts.appendChild(r);
+    box.appendChild(acts);
+    return box;
+  }
+  /* THE SAME BOOK, BY WHERE IT CAME FROM. A shelf book whose origin was
+     recorded from a search is the same book as a result only when the
+     result IS that origin -- so a second archive edition of a title you
+     already have is a result you can add (G-SLUG's other half), where the
+     title rule alone hid it. A book with no recorded origin keeps the title
+     rule, which is the only thing there is to go on. */
+  function sameUrl(a, b) {
+    function n(u) { return String(u || "").toLowerCase().replace(/^https?:\/\//, "")
+                      .replace(/^www\./, "").replace(/\/+$/, ""); }
+    return !!a && !!b && n(a) === n(b);
+  }
+  function sameOrigin(o, c) {
+    if (!o || !c) return false;
+    if (o.url && c.url && sameUrl(o.url, c.url)) return true;
+    return !!(o.id && c.source_id && o.source === c.source && String(o.id) === String(c.source_id));
+  }
+  /* the shelf book a working row became: its slug when studio has said it,
+     else its FILE -- the staged name is the book's `source.file` (or the
+     stem of it, when the parser read a converted copy such as `.ocr.pdf`) --
+     and last, by title, but ONLY a book that was not on the shelf when the
+     row began (`w.before`). That last clause is the whole difference from
+     the rule this replaces: the first edition of "The Ethics" was already
+     there when the second was pressed, so it can never be taken for it. */
+  function landedBook(c) {
+    var file = c.source ? String(c.source).split("/").pop() : "";
+    var stem = file.replace(/\.[^.]+$/, "");
+    var hit = null;
+    S.shelf.forEach(function (b) {
+      if (hit) return;
+      var bf = (b.source && b.source.file) || "";
+      if (c.slug && b.slug === c.slug) hit = b;
+      else if (file && bf && (bf === file || bf.indexOf(stem + ".") === 0)) hit = b;
+    });
+    if (hit || c.slug) return hit;
+    var before = c.before || [];
+    return S.shelf.filter(function (b) {
+      return before.indexOf(b.slug) < 0 && norm(b.title) === norm(c.title || "§");
+    })[0] || null;
   }
 
   /* ================================================================ drawing */
-  function draw(searching) {
+  function draw() {
     if (!listEl) return;
+    /* THE WAIT IS STATE (G-SURF2) -- see `S.asking`. Every caller of draw()
+       now draws it, which is the whole of the fix for the note that vanished
+       a microtask after it appeared. */
+    var searching = !!S.asking;
     listEl.textContent = "";
     var rows = rank();
     /* ONE LIST, AND IT IS THE FOLD (item 1). This was `S.work`'s own rows
@@ -1158,12 +1473,24 @@
       });
     }
 
+    /* WHAT EACH SOURCE IS DOING, AT THE TOP OF RESULTS -- during AND after
+       (G-SURF2). It was a line under the list, drawn only once the answer
+       was in; while the search was out the page said "Searching…" in the
+       note's grey, at the foot, for one microtask. Now the one strip is the
+       first thing under the Results head from the moment the search leaves
+       to the moment it is replaced: every source by name while it is out,
+       what each did once it has answered. Not a debug panel -- it is the
+       difference between "nothing anywhere" and "the three places that
+       would have it did not answer". */
+    var strip = S.q && (searching || S.sources) ? sourcesStrip() : null;
     if (CFG.mixed) {
-      if (rows.length) listEl.appendChild(head(S.q ? "Results" : "Your library"));
+      if (rows.length || strip) listEl.appendChild(head(S.q ? "Results" : "Your library"));
+      if (strip) listEl.appendChild(strip);
       rows.forEach(function (r) {
         listEl.appendChild(r.kind === "shelf" ? shelfRow(r.book) : outRow(r));
       });
     } else {
+      if (strip) listEl.appendChild(strip);
       var mine = rows.filter(function (r) { return r.kind === "shelf"; });
       var them = rows.filter(function (r) { return r.kind === "out"; });
       if (mine.length) { listEl.appendChild(head("Your library"));
@@ -1172,9 +1499,8 @@
         them.forEach(function (r) { listEl.appendChild(outRow(r)); }); }
     }
 
-    if (S.q && searching) listEl.appendChild(note("Searching…"));
-    else if (S.q && S.outErr) listEl.appendChild(note(S.outErr));
-    else if (S.q && !rows.length && !working.length && !S.media.length)
+    if (S.q && !searching && S.outErr) listEl.appendChild(note(S.outErr));
+    else if (S.q && !searching && !rows.length && !working.length && !S.media.length)
       listEl.appendChild(note(nothingLine()));
     /* THE MOCK SAYS SO, AND ONLY THE MOCK. With studio behind the page this
        line is not softened or reworded -- it is not there. What replaces it
@@ -1183,12 +1509,8 @@
     if (!S.live) listEl.appendChild(note("No server behind this page — these rows are the mock."));
     else if (S.stateErr) listEl.appendChild(note(S.stateErr));
 
-    /* WHAT EACH SOURCE DID, under the list, whenever a search has run.
-       Not a debug panel: it is the difference between "there is no copy of
-       this book anywhere" and "the three places that would have it did not
-       answer", and a person deciding whether to try again needs to know
-       which. Drawn from `/search`'s own report and nothing else. */
-    if (S.q && !searching && S.live && S.sources) listEl.appendChild(sourcesStrip());
+    /* the per-source strip that stood here moved to the TOP of Results --
+       see `strip` above (G-SURF2) */
 
     /* the lanes that are not books, at the foot of the one list */
     if (S.q) {
@@ -1218,11 +1540,50 @@
     return "Nothing on the shelves, and " + t.n + " sources looked and found nothing.";
   }
 
-  /* one chip per source: its word, and its reason in the title attribute and
-     in a line under it when it is bad news */
+  /* THE STRIP, in its two states, and it is the same element in both so
+     nothing jumps when the answer lands (G-SURF2):
+
+       asking    "Searching 6 sources for “ethics”   4 s"
+                 a bar filling against the 25 s studio gives a search
+                 one chip per source, each ASKING, and one line saying that
+                 studio answers for all of them together
+       answered  "6 sources answered for “ethics” in 4.2 s — 2 found
+                 something · 1 down · 1 off · 2 nothing"
+                 one chip per source: its word, and its reason in the title
+                 attribute and in a line under it when it is bad news */
   function sourcesStrip() {
-    var box = el("div", "sf-src");
+    var a = S.asking;
+    var box = el("div", "sf-src" + (a ? " asking" : ""));
+    var hd = el("div", "sf-srchead");
+    var hl = el("span", "hl"), ck = el("span", "ck");
+    hd.appendChild(hl); hd.appendChild(ck);
+    box.appendChild(hd);
+    if (a) {
+      var bar = el("span", "sf-srcbar"); bar.appendChild(el("i"));
+      box.appendChild(bar);
+      a.names.forEach(function (k) {
+        var chip = el("span", "sf-chip s-ask");
+        chip.appendChild(el("b", null, esc(SOURCE[k] || k)));
+        chip.appendChild(el("i", null, "asking"));
+        chip.title = (SOURCE[k] || k) + " has been asked and has not answered yet";
+        box.appendChild(chip);
+      });
+      box.appendChild(el("span", "sf-srcsub"));
+      paintAsking(box);
+      return box;
+    }
     var names = Object.keys(S.sources).filter(function (k) { return k !== "library"; }).sort();
+    var t = sourceTally();
+    var parts = [];
+    if (t.worked) parts.push(t.worked + " found something");
+    if (t.down) parts.push(t.down + " down");
+    if (t.failed) parts.push(t.failed + " failed");
+    if (t.off) parts.push(t.off + " off");
+    if (t.nothing) parts.push(t.nothing + " nothing");
+    hl.textContent = names.length + " source" + (names.length === 1 ? "" : "s")
+      + " answered for “" + (S.searchedFor || S.q) + "”"
+      + (parts.length ? " — " + parts.join(" · ") : "");
+    ck.textContent = S.askedMs ? (S.askedMs / 1000).toFixed(1) + " s" : "";
     names.forEach(function (k) {
       var st = sourceState(S.sources[k]);
       var chip = el("span", "sf-chip s-" + (/^\d+$/.test(st.word) ? "n" : st.word));
@@ -1394,6 +1755,8 @@
       [b.author || "unknown author", b.lang, "on the shelf"].filter(Boolean).join(" · ");
     /* WHAT A SHELF ROW CAN HONESTLY SAY, and it is the counters `/state`
        carries -- not a duration, which that payload has never had. */
+    var pv = shelfProv(b);
+    if (pv) r.querySelector(".body").appendChild(pv);
     var end = r.querySelector(".end");
     var said = el("span", "cnt");
     said.textContent = (b.chapters ? b.chapters + " ch" : "")
@@ -1602,7 +1965,7 @@
     (S.ingests || []).forEach(function (it) {
       if (taken(it)) return;
       out.push({ kind: "queued", key: "iq:" + it.id, id: it.id, qkind: "ingest",
-                 slug: it.slug, title: it.name || it.source,
+                 slug: it.slug, title: it.name || it.source, source: it.source,
                  hue: hueFor(it.slug || it.source || ("iq:" + it.id)),
                  lane: "import" });
     });
@@ -1849,6 +2212,13 @@
     /* THE STEP LINE ITEM 1 ASKS FOR, in place of "author · word": what the
        machine is doing to THIS book, said the way studio says it. */
     r.querySelector(".s").textContent = stepLine(row);
+    /* G-SURF2: WHAT IT WAS SAVED AS, from the moment staging answers, and --
+       when the import failed -- studio's own sentence, whole, where the
+       step line would only have cut it off */
+    var wp = workProv({ source: w.source || row.source, origin: w.origin });
+    if (wp) r.querySelector(".body").appendChild(wp);
+    if (w.err) { var we = el("span", "sf-prov err"); we.textContent = w.err;
+                 r.querySelector(".body").appendChild(we); }
     var end = r.querySelector(".end");
     if (row.elapsed) end.appendChild(el("span", "cnt", esc(row.elapsed)));
     if (row.kind !== "queued") end.appendChild(ribbon(w.cells || row.cells || {}));
@@ -1876,7 +2246,11 @@
           draw();
         }, "qx"));
     }
-    if (row.kind === "run") {
+    if (row.kind === "run" && w.failed) {
+      acts.appendChild(rowBtn("×", "it did not come in — take the row away", function () {
+        delete S.work[w.key]; draw();
+      }, "qx"));
+    } else if (row.kind === "run") {
       if (S.live)
         acts.appendChild(rowBtn("stop", "stop the job in studio's one slot",
           function (b) { act("/stop", {}, b, "…"); }));
@@ -2077,7 +2451,10 @@
        row's own key -- the candidate's url, or the import's slug. From here
        every other name this book answers to is aliased to this one. */
     var w = { key: key, title: c.title, author: c.author, hue: hueFor(key),
-              cells: {}, p: 0, word: "Fetching", slug: null };
+              cells: {}, p: 0, word: "Fetching", slug: null,
+              /* what was already on the shelf when this began -- a book in
+                 here can never be the one this row becomes (`landedBook`) */
+              before: (S.shelf || []).map(function (b) { return b.slug; }) };
     STEPS.forEach(function (s) { w.cells[s] = "-"; });
     S.work[key] = w;
     return w;
@@ -2090,6 +2467,11 @@
       return;
     }
     var w = S.work[r0.key] || beginWork(r0.key, c);
+    /* where it came from, held on the row from the first press -- the working
+       row says it at once, and `/ingest` is handed the whole candidate so
+       studio can record it on the book (G-SURF2 + G-SLUG) */
+    w.origin = { source: c.source, id: c.source_id || null, url: c.url || null };
+    w.failed = false; w.err = "";
     S.choose = null;
     draw();
     if (!S.live) return simulate(w);          /* the bench: watch it arrive */
@@ -2124,7 +2506,10 @@
         w.source = st.source;
         holdAs(w.key, st.source);   /* item 3: the staged name is the same book */
         w.word = "Parsing"; w.cells.parse = "running"; w.p = 0.06; draw();
-        return postJSON("/ingest", { source: st.source });
+        /* THE CANDIDATE RIDES WITH IT (G-SLUG): studio records where the
+           book came from on the book, and a second edition of a title you
+           already have gets a slug of its own from the candidate's id */
+        return postJSON("/ingest", { source: st.source, candidate: c });
       })
       .then(function (ing) {
         if (ing === null) return;              /* a `choose` is waiting on a person */
@@ -2132,7 +2517,9 @@
         pollWorks();
       })
       .catch(function (e) {
-        w.word = "Couldn't add — " + (e && e.message || e);
+        w.word = "Couldn't add";
+        w.err = String(e && e.message || e);
+        w.failed = true;
         w.cells.parse = "failed"; draw();
       });
   }
@@ -2286,6 +2673,11 @@
        thing blocking the book from having any */
     if (S.choose) worksEl.appendChild(choosePane());
 
+    /* G-SURF2: a shelf book's provenance, whole, above its steps -- where
+       it came from is the first thing to know about a book you did not add
+       five minutes ago */
+    if (S.sel && S.sel.slug && !S.sel.cells && "source" in S.sel)
+      worksEl.appendChild(provPane(S.sel));
     if (S.sel) worksEl.appendChild(gridFor(S.sel));
     /* the log is no longer drawn here: it belongs under its own WORKING row
        (item 2), which `draw()` appends immediately after that row */
@@ -3321,14 +3713,29 @@
         });
         /* AND IT LEAVES WHEN IT ARRIVES. A working row whose book is now on
            the shelf is the book: drop the working row and the shelf row is
-           already drawn in its place. */
+           already drawn in its place.
+           WHICH BOOK IT BECAME IS FOUND BY SLUG, THEN BY FILE (G-SURF2). It
+           was by TITLE, and a second edition of a title already on the shelf
+           "arrived" the instant it was pressed -- the row vanished before its
+           parse had begun, because the FIRST edition was already there. And
+           an import that FAILED is said, on its row, in studio's own words:
+           the finished ingest is parked on `/state`'s `job` once its lane is
+           free (`JobManager._finish_lane`), with its `err`. */
         Object.keys(S.work).forEach(function (k) {
           var c = S.work[k];
           var here = (d.importing || []).some(function (it) {
-            return it.source === c.source || it.slug === c.slug ||
-                   norm(it.name || "") === norm(c.title || "");
+            return (c.source && it.source === c.source) || (c.slug && it.slug === c.slug) ||
+                   (!c.source && norm(it.name || "") === norm(c.title || ""));
           });
-          if (!here && S.shelf.some(function (b) { return norm(b.title) === norm(c.title || "§"); })) {
+          var fin = (!here && d.job && d.job.mode === "ingest" && c.source &&
+                     d.job.source === c.source) ? d.job : null;
+          if (fin && fin.phase === "failed" && !c.failed) {
+            c.failed = true; c.word = "Couldn't add";
+            c.err = String(fin.err || "the import failed");
+            STEPS.forEach(function (s2) { if (c.cells[s2] === "running") c.cells[s2] = "failed"; });
+          }
+          if (fin && fin.slug && !c.slug) { holdAs(c.key, fin.slug); c.slug = fin.slug; }
+          if (!here && !c.failed && landedBook(c)) {
             if (c.slug) delete S.detail[c.slug];     /* its steps changed; ask again */
             delete S.work[k];
             /* AND ITS CHAPTERS APPEAR, HERE (8 Sep addendum: *"then parsed via
@@ -3337,8 +3744,7 @@
                waiting for, so the works column opens it -- one `GET /book`,
                the same grid every other selection draws. Only when nothing
                else is selected: a person who moved on is not moved back. */
-            var landed = c.slug || (S.shelf.filter(function (b) {
-              return norm(b.title) === norm(c.title || "§"); })[0] || {}).slug;
+            var landed = (landedBook(c) || {}).slug || c.slug;
             /* the last name it takes, and the one the tile will carry */
             if (landed) holdAs(c.key, landed);
             if (landed && (!S.sel || !S.sel.slug)) selectSlug(landed);

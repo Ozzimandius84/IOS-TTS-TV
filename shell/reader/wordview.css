@@ -8,9 +8,11 @@
    element, because the word here is a string in a div rather than the page's
    own text under a highlight.
 
-   "Words should not move inside it, just one, next one": the box is centred by
-   the grid and never told to move, so a longer word grows about its own centre
-   and a shorter one shrinks about it. Nothing travels. */
+   "Words should not move inside it, just one, next one": the red letter
+   stands on one column and never moves; a longer word reaches further either
+   side of it, a shorter one less. Nothing travels. (Osca, 10 Sep: "one word,
+   the red ORP marker, the subtitle line at the foot, and instant word changes
+   when stepping.") */
 .wordview{
   position:fixed; inset:0;
   /* UNDER THE SUBTITLE, OVER EVERYTHING ELSE. Osca, 9 Sep: *"where is the
@@ -21,7 +23,6 @@
      come BELOW them or it covers the one thing that tells you where the word
      came from. 10 is above the page and under the pane. */
   z-index:8;
-  display:grid; place-items:center;
   /* THE PAGE'S OWN GROUND AND ITS OWN INK, and those are the token names --
      `--ground`, not `--paper`. With the wrong name the view kept a hard-coded
      LIGHT ground while inheriting the dark theme's near-white ink: measured in
@@ -42,15 +43,69 @@
   pointer-events:none;
   /* NO TRANSITION. The view is either the screen or it is not. */
 }
-.wordview.on{ visibility:visible; opacity:1; }
+/* ...AND WHEN IT IS THE SCREEN IT TAKES THE POINTER. The page under it is
+   still in the document (at opacity 0 -- see book-nav.js::wzPage), so a press
+   that fell through would land on a word nobody can see. The subtitle and its
+   rail are above this (12 over 8) and keep theirs; the wheel is the window's. */
+.wordview.on{ visibility:visible; opacity:1; pointer-events:auto; }
 
+/* ============ PLACED BY ITS PIVOT, NOT CENTRED ============
+   wordview.js puts the box at a `left` and a `top` in pixels so that the red
+   letter's centre stands on the pivot column (42% of the frame) and the word's
+   middle on the frame's middle -- measured off the letter itself, every word.
+   So nothing here centres anything: the grid and the translate that used to
+   (they were right for a centred word, 10 Sep) would fight the measurement.
+   A word wider than the frame at the chosen height runs off whichever side it
+   must; that is information about the dial, not a case to shrink for -- a
+   smaller word would be a variation in height. No transition on anything. */
 .wordview-word{
+  position:absolute;
+  left:0; top:0;
   font-family:var(--serif);
   font-weight:normal;
   line-height:1;
   white-space:nowrap;
-  text-align:center;
-  /* the size is written by wordview.js, measured against this box */
+  /* the size is written by wordview.js */
   font-size:200px;
   /* and nothing else: no background, no box, no mark. */
 }
+
+/* ============ THE RED LETTER ============
+   The prototype's pivot colour (out/reader-oneword/proto.html: #c02c46 on
+   light, #e0526a on dark), and it is a TOKEN so the page's own word can wear
+   it too: the zoom brings the red in on the page's pivot letter as it travels
+   (book-nav.js, ::highlight(word-pivot)), so by the handover the two pictures
+   are the same picture, red letter included. Three dark hooks, the same three
+   tokens.css answers on -- this spends no opinion of its own. */
+:root{ --pivot:#c02c46; }
+html[data-theme="dark"], html[data-dark]{ --pivot:#e0526a; }
+@media (prefers-color-scheme: dark){
+  html:not([data-theme="light"]){ --pivot:#e0526a; }
+}
+.wordview-word .pv{ color:var(--pivot); }
+
+/* ============ THE VEIL, AND THE PAGE'S OWN RED LETTER ============
+   Both belong to the ZOOM, not to the view, and live here because every page
+   that mounts the view mounts this file. book-nav.js hangs `.wz-veil` inside
+   #readerbox for the length of a travel: the page's own ground over the page,
+   with a hole cut exactly round the word (a clip-path, written once per word),
+   so over the second half of the zoom the neighbours FADE -- they do not part,
+   move or re-wrap -- and at the end of it the page is one word on its ground,
+   which is the view's picture. Opacity is the only thing that changes on it.
+   `word-pivot` is the same word's pivot letter warming to the view's red. */
+.wz-veil{
+  position:absolute; inset:0; z-index:6;
+  background:var(--ground);
+  opacity:0;
+  pointer-events:none;
+}
+::highlight(word-pivot){ color:var(--wz-pv, var(--ink)); }
+
+/* ============ THE CHROME STEPS ASIDE WITHOUT A REPAINT ============
+   book-nav.js hides the running head and the rail when the axis enters the
+   word half (opacity 0 at dx 0.5) and brings them back on the way out. As plain
+   paint that toggle cost a 20ms repaint in the middle of the zoom, measured in
+   the trace (Paint 20-21ms on the frame dx crossed 0.5, both ways); on their
+   own compositor layers it is an opacity and nothing else -- 16.6ms frames
+   either side, measured. Two small layers, for the length of the session. */
+.runhead, .scrub{ will-change:opacity; }

@@ -305,3 +305,39 @@ html[data-skipoff] .chapter.wordzoom{
   content-visibility:visible;
   contain-intrinsic-size:none;
 }
+/* ============ AND WHILE THE AXIS IS MOVING, NOTHING IS REMEMBERED ============
+   Measured 10 September, off the compositor's own frames: on the complete
+   Shakespeare the page painted ONE FRAME PER SECOND while dx climbed 0 -> 1 --
+   median 470ms a frame, worst 1,038ms -- against 51ms on Walden through the
+   same gesture. The cost scales with the BOOK, so it is not the zoom's
+   arithmetic, it is the column being laid out again.
+
+   `contain-intrinsic-size: auto 900px` is why. `auto` means the browser
+   REMEMBERS each skipped section's real height, which is exactly right while
+   you read: the estimate corrects itself. But every remembered height is in
+   the scale it was measured at, so a zoom write invalidates all of them at
+   once and the column's total height has to be found again -- on this book,
+   hundreds of sections, every frame of the travel.
+
+   So while the axis is off the page the remembered sizes are set aside and a
+   FIXED estimate stands in. Nothing to invalidate, nothing to re-measure, and
+   the estimate's only job during a travel is to keep the scroller a sane
+   length -- you are looking at one word, not at the shape of the book. The
+   moment the axis is home the `auto` comes back and the real heights with it.
+   `[data-axis="off-page"]` is book-nav.js's own flag, already set for exactly
+   this span (scrub.js reads it too). */
+/* ...AND ONLY WHILE A `zoom` IS ACTUALLY WRITTEN (10 Sep). The scroll's zoom
+   is a transform now (book-nav.js, THE ZOOM IS THE WAY IN AND OUT) and writes
+   no `zoom` at all, so there is nothing to invalidate -- and swapping every
+   remembered height for 900px the moment the axis leaves the page is itself a
+   re-layout of the column: every skipped chapter above the word changes height
+   and the word moves under the zoom. `.column.zoomed` is set by exactly one
+   writer, writePageZoom, which only the pinch's band still runs -- so it is
+   the whole condition and `[data-axis]` is not in the selector at all: an
+   attribute on <html> that a selector names is a style recalc of every
+   chapter the moment it is written, measured at 55-61ms on the complete
+   Shakespeare, on the first frame of every zoom and the last. Nothing in any
+   stylesheet names it now; page.js and scrub.js read it from script, free. */
+html[data-skipoff] .column.zoomed .chapter:not(.wordzoom){
+  contain-intrinsic-size:900px;
+}

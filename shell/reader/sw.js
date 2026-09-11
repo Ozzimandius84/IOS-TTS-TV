@@ -30,7 +30,7 @@
 // that is not the current SHELL_CACHE, so changing this string IS the eviction
 // -- and changing it changes sw.js's own bytes, which is the only thing that
 // makes a browser run `install` and `activate` at all.
-const SHELL_CACHE = "ttstv-shell-v42";   // 7 Sep: transport.js joins the shell -- a NEW name in
+const SHELL_CACHE = "ttstv-shell-v54";   // 7 Sep: transport.js joins the shell -- a NEW name in
                                          // SHELL_FILES is only fetched by an install, so the
                                          // string has to move or an installed app never caches
                                          // it (v37: the shell moved to clean/)
@@ -201,6 +201,17 @@ self.addEventListener("install", (event) => {
     }));
     self.skipWaiting();
   })());
+});
+
+/* WHICH SHELL AM I. The page asks on every load and stamps the answer on
+   html[data-shell], so the build on the screen can be read off the screen
+   rather than inferred from the files on disk -- which were right every one of
+   the six times the app looked wrong. */
+self.addEventListener("message", (event) => {
+  const d = event.data;
+  if (!d || d.q !== "shell-version") return;
+  const port = event.ports && event.ports[0];
+  if (port) port.postMessage(SHELL_CACHE);
 });
 
 self.addEventListener("activate", (event) => {
