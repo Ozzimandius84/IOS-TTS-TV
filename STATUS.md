@@ -4,6 +4,82 @@ Newest first. `REPORT_PROTOCOL.md` (TTSTV), nine headings. `README.md` says what
 
 ---
 
+## G-SYNCBG — the phone syncs while you use it · 11 Sep (Cowork, bridge VM + container), TTSTV `70f5fc5` `5dd1411` · phone `62590f6` `019d1fe` (no GPU, no Kaggle, no Modal, 0 GPU-minutes)
+
+**Status line:** `library · G-SYNCBG code done · 11 Sep · a Sync's books are pulled by the app (pull.rs) and the page only plans them; auto on launch + foreground; owed: cargo test + Osca's three presses`
+
+### 1. Built
+**Phone repo (`main`)**
+- `src-tauri/src/pull.rs` (new): the job types (`Job {transport, trigger, auth, books, why}`, `Auth` = drive.js's token names incl. `clientId` / the LAN `base`+`token`, `Book {slug, hash, title, meta, files}`, `File {rel, id|url, bytes}`), `Status` (`running, transport, trigger, book, slug, i, n, file, done, total, pulled, skipped, why, since, ended, google`), `Pull` (status + stop flag; `begin`, `request_stop`), `Wire` (the network + clock, faked in tests), `check_job` (the whole job refused in words before a byte is fetched), `run` (one book at a time in the page's order; a book installed at that hash skipped; each file skipped when `.part/` holds it at the listed size — the resume; `book_commit` LAST; stop after the current file), `fetch_file` (retry ×4 at 1/3/8 s on a lost network, a 5xx, a 429 or a short body; a Drive 401 refreshes once; any other status a sentence), `refresh` (POST `oauth2.googleapis.com/token` with client id + refresh token, no secret — `drive.js::googleRefresh`'s request), `start` (claims the runner, spawns `frank-pull`; a second start returns the running status untouched), `auto_js`, `Net` (ureq, blocking, rustls; timeouts 15/30/30 s).
+- `src-tauri/src/lib.rs`: `book_dest` (the name checks + folder, now shared by `book_write` and the new `book_write_from`, which streams), `book_have`, `book_installed`; `meta_text` (the row arrives as an object, is kept as text); commands `sync_start(job)`, `sync_status()`, `sync_stop()`; `PullState`; `sync_auto` (evaluates `TTSTVHost.sync.auto(trigger)` unless a pull runs), `sync_on_load` (the first finished page load = launch), `sync_on_window` (`WindowEvent::Resumed`, mobile = foreground); `SYNC_JS` = `TTSTVHost.sync {start, status, stop, auto}` — writes a refreshed token back into `ttstv.sync.google` (only into a signed-in record) and strips it, dispatches `ttstv:sync` on a start, and loads `/library/drive.js` into whatever page is showing for `auto`. `run()`: the three commands, `.manage(PullState)`, the init script after `BOOKS_JS`, the page-load and window-event hooks. `mod pull_door_tests` (2).
+- `build.rs`, `capabilities/default.json` (+ the three, the description says what they reach), `Cargo.toml` (`ureq = "2.12"`, with why). `tests/test_sync_pull.py` (new, 6). `SYNC.md` §2 and `PHONE.md` §7 corrected (see §3). `shell/` re-imported (`019d1fe`).
+
+**TTSTV (`FRANK`)**
+- `library/drive.js`: `syncBookMeta` (import.js's row from Studio's row + the file list), `syncJobBook`, `syncJob` (superseded never; already here at that hash never; one book per slug; import.js's allowlist and refusals, its words), `syncDriveAuth`, `syncHave` (the door's list, else import.js's), `syncHandOff`, `syncPlanLan` (4 s), `syncPlanDrive`, `syncPlan` (D4: paired Studio first, Drive otherwise, nothing when neither), `syncAuto`; `runDriveSync` with `o.pull`: marks → position → library.json → settings, THEN the books handed over; without `o.pull`, unchanged.
+- `settings/settings.js`: `syncWhen` (out of `syncStateLine`, same words), `syncPullLine`, `syncHostPull`; `runSync` (LAN) hands off with `o.pull`; the Transfer panel passes `pull` on the phone, follows `TTSTVHost.sync.status()` (1 s while running; on build; on `ttstv:sync`) and paints it on `.tr-state`.
+- `library/tests/test_sync_job.py` (5) + `samples/sync/drive-library.json`; `settings/tests/test_sync_pull.py` (3).
+
+### 2. Verified — and how
+- **unit, Rust — 21 passed, 0 failed**: `pull_tests` 12 (order + bearer on every GET; half-way failure has no row and the next start fetches only the missing/short files; 8 bad `rel`s + 14 other refusals each a sentence with nothing fetched or written; refresh inside the minute = exactly `client_id=…&refresh_token=…&grant_type=refresh_token`, then the new token, handed back as `google`; 401 mid-run refreshes once; a refused refresh is `HTTP 400 (invalid_grant)`; `sync_stop` during the 2nd GET → file 2 whole, file 3 never asked, `why: stopped`, restart fetches only the rest; retry waits `[1000, 3000]`; short body tried 4× then a sentence; 404 said at once; LAN `?t=a%2Fb%20c` and no bearer; installed hash skipped; `why` recorded; `start` runs on its thread and a second start is refused), `pull_door_tests` 2 (the page's JSON job parses — `clientId`, `bytes: null`, meta object→text, a non-object meta refused; the wiring inside `run()`), `book_tests` 7 (G-PULL's, unchanged, over the refactored `book_write`). **How:** `cargo test --offline` in the Cowork container on a crate whose lib is lib.rs's items extracted VERBATIM by brace-matching (+ the real `pull.rs`), built against **real** serde 1.0.229 / serde_derive / serde_json 1.0.151 / log 0.4.34 cloned from GitHub (crates.io is 403 here) and hand mocks of the tauri 2.11.3 and ureq 2.12.1 surfaces, signature for signature from their sources at the tags. `RUSTFLAGS="--cfg mobile"` also compiles (the `Resumed` arm). **RED controls:** 5 mutations (resume off, stop off, a `client_secret` added, the rel check off, the 401 refresh off) → each fails ≥1 test. Not `cargo test` on the real crate — owed (§8).
+- **unit, node/pytest:** `library/tests` **247 + 1 xfailed → 261 + 1 xfailed**: 5 are `test_sync_job.py`; 9 are another lane's dirty/untracked tests (`test_library_phone_shelf.py` etc.) — without my file **256**. `settings/tests` **129 → 132** (+3, `test_sync_pull.py`); every pre-existing Sync test (LAN, Drive, pairing, the Mac press, the G-PULL failure line) passes unchanged = **the Mac/PWA path is untouched**. Phone `tests/` **89 passed, 4 failed → 95 passed, 4 failed** (+6; the same 4 pre-existing failures: `test_pair_link`, `test_phone_loop` ×2, `test_phone_shell`). **RED:** the 8 new TTSTV tests all fail on the pre-change `drive.js`/`settings.js`.
+- **the job for the fixture** (`samples/sync/drive-library.json`, 7 rows, device holds `eclogues-la@2c2c…` and `les-pensees-fr@5e5e…`): exactly `les-pensees-fr@6f6f…` (3 files) and `hamlet@1b1b…` (11 files; `notes.md` out, `cover.jpg` in because import.js's working-tree allowlist has it), refused `aeneid-la` (schema 8, import.js's sentence) and `odyssey-en` (no book.json). **Row parity:** for the same book, `importBook`'s row and `syncBookMeta`'s agree on every key import.js writes (incl. the uncommitted G-COVERS keys) bar `imported`.
+- **the loop:** phone shell imported from a `git archive` of TTSTV `5dd1411` — exactly 2 files differ from the last import, byte-identical to TTSTV's; `tools/prebuild.py`: 59 files, 2,004,443 bytes verified. No server started, no route pressed.
+- **not verified:** anything on the phone or the simulator; ureq/rustls/ring compiling for `aarch64-apple-ios`; a real Drive or LAN download.
+
+### 3. Judgment calls
+- **How Rust gets the plan** → the app evaluates `TTSTVHost.sync.auto(trigger)` and the door lazy-loads `/library/drive.js` into any page → at launch the page is the Library, which does not load drive.js, and `library.html` is not mine; a registered builder would exist only after Settings had been opened.
+- **Foreground** = the window's `WindowEvent::Resumed` (tao: `applicationWillEnterForeground`), NOT `RunEvent::Resumed` → the latter is the event loop's `StartCause::Poll` and fires constantly. **Launch** = the first page load that finishes.
+- **D4 in the auto path**: LAN when paired and it answers in 4 s, else Drive → the press still uses the row's "In use" transport (unchanged behaviour; the plan's D4 wording is about sync generally).
+- **Auto pulls books only**; marks/positions/settings merge on a press → they are the page's ledgers and the reader may have them open.
+- **The row the app commits is built from Studio's row**, not book.json (the app never reads it): `chapters` = the chapter texts' count (no chapter count in the row), `words` = the row's, the hash is Studio's (the page path recomputed it from book.json); `first_words`/`form` only when the row carries them → §6.
+- **Press order on the phone**: ledgers first, books handed LAST (the page path did books before settings).
+- **A new dependency, `ureq 2.12`** → tauri's own `reqwest` is on mobile with no TLS feature; ureq is blocking (one thread), rustls/ring, no OpenSSL, same client for iOS/Android/desktop. First Mac build needs crates.io.
+- **A listed size is held**: a body of another size is a failure (retried) rather than committed; an unlisted size (un-transcoded LAN audio) is taken and always re-fetched on resume.
+- **A second `sync_start` while running** returns the running status (not queued, not replaced).
+- **A page that could not plan** sends a job with `why`, so `sync_status` is the one record of "what ran and why".
+- **The token key now appears in lib.rs** (`ttstv.sync.google`, the second shared name after the redirect key) → held equal to drive.js's by `test_sync_pull.py`.
+- **Row words**: "Synced over LAN · 2 books · 17:41 · on opening", "Drive · up to date · 17:41 · on return", short: "Drive · 2 of 26 pulled · stopped".
+- **The prompt named `library/transfer.js` as "the LAN pull"** → it is the Modal/door client; the LAN pull is `settings.js::runSync`. transfer.js untouched.
+- **Tests "the way G-PULL did" (plain rustc)** → cargo `--offline` with serde/serde_json built from source instead, so the real derives and the JSON parse are checked; the tauri/ureq surfaces are still mocks.
+- **The shell import's source**: other lanes' shell files are dirty in TTSTV's tree (G-COVERS), so the phone shell was imported from a `git archive` of HEAD `5dd1411`, in the container; `shell.manifest.json` names `5dd1411` and Osca's path.
+- **Reversed and deleted**: `SYNC.md` §2 "`lib.rs` changes **nothing** for it" (the LAN half) → rewritten, quoting Osca's line of 11 Sep.
+
+### 4. Boundary check
+TTSTV: `library/drive.js`, `library/tests/test_sync_job.py`, `library/tests/samples/sync/drive-library.json`, `settings/settings.js`, `settings/tests/test_sync_pull.py`, this report. Two modules because the prompt names both files; not a move. `core/` untouched. Phone repo: `src-tauri/src/{lib.rs,pull.rs}`, `src-tauri/{build.rs,Cargo.toml,capabilities/default.json}`, `tests/test_sync_pull.py`, `SYNC.md`, `PHONE.md`, `shell/library/drive.js`, `shell/settings/settings.js`, `shell.manifest.json`, `STATUS.md`. Not touched: `import.js`, `library.html/css`, `book-nav.js`, `surface.js`, `transport.js`, `reader.html`, `transfer.js`.
+**Left alone, dirty (another session's):** TTSTV `library/import.js`, `library/library.css`, `library/library.html`, `library/tests/{test_import.py,test_import_store.py,test_library_context.py,test_library_view.py}`, `reader/context.js`, `studio/drive.py`, `studio/sync.py`, `studio/tests/{test_drive.py,test_sync.py}`, untracked `library/tests/test_library_phone_shelf.py`, `PROMPTS/{phone-pull,round-11-sep-evening,sync-phone-plan}.md`. Phone: `shell/library/library.json` (deleted), `gen/apple/…` ×4, `scratch-float/`, `scratch-j13/`, `scratch26b/`. `shell.manifest.json` was dirty with Osca's own re-import from `8903c12` (same files, source line only); the import rewrote it whole and it is committed in `019d1fe`.
+
+### 5. Footprint
+Container only: `/tmp/claude-0/src` (shallow GitHub clones: tauri `tauri-v2.11.3`, ureq `2.12.1`, serde, serde_json, syn, quote, proc-macro2, unicode-ident, itoa, ryu, memchr, zmij, log), `/tmp/claude-0/t` (the test crate + its target), `/tmp/claude-0/imp` (the 47 MB HEAD archive, extracted). VM: `$HOME/drive.js.orig`, `$HOME/settings.js.orig` (RED controls). **TTSTV `_to_delete/syncbg-tars.1789147337`** (49 MB: the two tars staged for the import) — Osca empties it. No SSD, no depot write, no GPU: 0 GPU-minutes.
+
+### 6. Requests to core / other modules
+- **G-COVERS lane (`studio/sync.py::manifest`, `studio/drive.py` rows):** carry `first_words`, `form` (and `chapters`) on each book row. The app never reads book.json, so a book it pulls gets them only from the row; without them the phone's tile falls back to the Range read of book.json that G-COVERS is removing. `syncBookMeta` already copies them when present.
+- **Covers topped up at the same hash (TOPUP)** are pulled by neither path (a book installed at that hash is skipped, as the page always did) — the covers lane's to decide.
+- **Lane 5 (`transport.js`)**: the dot = `TTSTVHost.sync.status().running`; `ttstv:sync` fires when a pull starts.
+- **`library.html` owner**: "Pulling 3 of 26" in the Library's own words, from the same status.
+- **clean/**: `export.py --shell` owed once the other lane's shell files are committed; mine are, so any later build carries them.
+
+### 7. Known gaps
+- `cargo test` and a real iOS build not run; ureq/rustls/ring on `aarch64-apple-ios` unproven here.
+- Nothing pressed. No `beginBackgroundTask`: a lock suspends the thread after iOS's grace; on unlock the socket times out → retried, or the foreground ask restarts it once the run has ended; an app iOS kills while suspended resumes on relaunch.
+- Auto does not merge the ledgers. No Stop button (the command exists). The Library shows no progress.
+- The row's `bytes` sums listed sizes (an un-transcoded chapter counts 0); `imported` is plan time.
+- The plan itself (Drive listing + library.json, seconds) still runs in the page; a navigation during it drops that ask (the next foreground asks again).
+
+### 8. Next — Osca's press
+1. `cd "IOS TTS TV/src-tauri" && cargo test` — the first build fetches ureq/rustls/ring. Expect the old tests + `pull::pull_tests` 12 + `pull_door_tests` 2.
+2. Build to the phone (`tools/phone.sh`; the shell is already imported at `5dd1411` — a re-import from TTSTV's working tree now would also carry the covers lane's uncommitted files).
+3. Settings ▸ Sync ▸ **Sync** → "Pulling 1 of N · … · k/n". Open a book, read two pages, come back → the count moved. Lock 1 min, unlock → it continues (or "· on return" once it ended). Kill mid-book, relaunch → the half book is not on the shelf and the line says "Pulling …" again, then "Synced over … · on opening". Xcode console filter: `frank: pull`, `sync_start`, `sync auto`.
+The question that blocks nothing: none.
+
+### 8b. Commit check
+Pathspec commits only, `GIT_OPTIONAL_LOCKS=0`, `git show --stat HEAD` = the files meant: TTSTV `70f5fc5` (3) · `5dd1411` (2) · this report; phone `62590f6` (8) · `019d1fe` (3) · this report. TTSTV HEAD moved once before my first commit (`39e4597`, G-DICT docs; my "before" counts were taken on the tree just before it and it touches no file tested here). No `--amend`, no `-a`. Locks the bridge could not unlink, moved: TTSTV `_to_delete/HEAD.lock.*`, `next-index-13.lock.*`, `next-index-10.lock.*` (the last was there before my commit — not necessarily mine); phone `_to_delete/HEAD.lock.*`, `next-index-9.lock.*`, `next-index-14.lock.*`.
+
+### 9. Status line
+`library · G-SYNCBG code done · 11 Sep · the pull runs in the app (pull.rs), the page plans (drive.js); owed: cargo test + Osca's three presses`
+
+
+---
+
 ## G-PULL — the phone can read Drive but cannot take a book · 11 Sep (Cowork, bridge VM + container), TTSTV `4e995d3` `2a1c1eb` `194bbd0` · phone `0a8240a` `f6f6554` (no GPU, no Kaggle, no Modal, 0 GPU-minutes)
 
 **Status line:** `library · G-PULL code done · 11 Sep · Cache.put refuses frank:// proved; the phone stores books through TTSTVHost.books; owed: cargo test + Osca's Sync press`
