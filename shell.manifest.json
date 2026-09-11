@@ -2,7 +2,7 @@
   "added_here": [
     "index.html"
   ],
-  "bytes": 2081669,
+  "bytes": 2082042,
   "count": 61,
   "files": {
     "bar/askbar.css": {
@@ -54,8 +54,8 @@
       "sha256": "2b0c86208e4e044b7fec34956b014f34b4837527364a5824910391af43677c9c"
     },
     "reader/book-nav.js": {
-      "bytes": 279091,
-      "sha256": "76547dbb23a1fc24ac3ae16cc3728af40a9f660a38e9bad98cf42958f17e9e0d"
+      "bytes": 279464,
+      "sha256": "7009956e5523eb203841334b9516dd038e4c216580da757c013cc07af84a97a9"
     },
     "reader/book.js": {
       "bytes": 6116,
@@ -252,8 +252,8 @@
   },
   "home_page": "library/library.html",
   "source": {
-    "commit": "b7e9518",
-    "repo": "/sessions/rcw-01qxmvdh6tmwujm44put85im/mnt/TTSTV",
+    "commit": "ac4a21c",
+    "repo": "/sessions/rcw-01f57s95hnnv2yybqbtckmu4/mnt/TTSTV",
     "shell_cache": "ttstv-shell-v54"
   }
 }

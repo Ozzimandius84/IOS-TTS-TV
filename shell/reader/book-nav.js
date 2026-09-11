@@ -4508,7 +4508,7 @@ function mount(o){
      From the book, a finger travelling RIGHT -- toward the contents -- is only
      the axis when it went down within `edge` px of the left edge (plus the
      safe-area inset, in landscape). From anywhere else on the page it is not
-     claimed at all and nothing moves. Every other direction from every other
+     taken and dropped: nothing moves. Every other direction from every other
      position is anywhere on the glass: into the view, home from it, deeper
      into an open trail, back out of it. The numbers are G-CHROME2's gate's
      (design/phone/test-pullout.mjs), which is written against this file.
@@ -4605,8 +4605,12 @@ function mount(o){
       if(ax < SWIPE.slop && ay < SWIPE.slop){ swipe.samples.push({t:tnow(t), x:x}); return false; }   // still undecided
       if(ax > ay){
         swipe.axis = "dx"; swipe.p0 = swipe.goal = touchFrom();
-        /* D19: from the book, toward the contents, only from the edge */
-        if(swipe.p0 === 0 && x > swipe.x0 && swipe.x0 > TOUCH.edge + safeLeft()){ swipe = null; return false; }
+        /* D19: from the book, toward the contents, only from the edge. From
+           anywhere else the finger is TAKEN and dropped, as a pinch is: left
+           alone a sideways sweep is not nothing -- measured in Chromium, trusted
+           touches at 402x874, it is the browser's own back-swipe and the page
+           navigated away. */
+        if(swipe.p0 === 0 && x > swipe.x0 && swipe.x0 > TOUCH.edge + safeLeft()) swipe.axis = "none";
       }
       // UP AND DOWN READS ON, BUT ONLY INSIDE ONE WORD VIEW -- which is the
       // wheel's own rule at this level, said for a finger: there, deltaY is
@@ -4618,8 +4622,9 @@ function mount(o){
       swipe.live = true; swipe.x = x; swipe.y = y;
       inputTick++;
       wakeSub();
-      if(swipe.axis === "word") return true;
+      if(swipe.axis === "word" || swipe.axis === "none") return true;
     }
+    if(swipe.axis === "none") return true;              // taken, and nothing follows
     const px = x - swipe.x, py = y - swipe.y;
     swipe.x = x; swipe.y = y;
     if(swipe.axis === "word"){
