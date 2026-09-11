@@ -92,12 +92,13 @@ use std::borrow::Cow;
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Component, Path, PathBuf};
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use serde::Serialize;
 use tauri::{Manager, UriSchemeContext, WebviewUrl, WebviewWindowBuilder, Wry};
 use tauri_plugin_deep_link::DeepLinkExt;
+mod pull;
 mod search;
 
 /// The scheme. One word, and it is in three places that must agree: here, the
@@ -998,17 +999,56 @@ fn io_why(what: &str, path: &Path, e: std::io::Error) -> String {
     format!("frank: cannot {what} {} -- {e}", path.display())
 }
 
-/// `book_put`'s body: one file of a version being pulled, into `.part/`.
-/// Answers the byte count.
-fn book_write(books: &Path, slug: &str, hash: &str, rel: &str, bytes: &[u8]) -> Result<u64, String> {
+/// Where one file of a version being pulled goes -- `.part/<slug>@<hash>/<rel>`
+/// -- every name checked BEFORE a folder is made, then the folder made. The
+/// one set of rules for both writers: `book_put` (the page's bytes) and the
+/// pull (`pull.rs`, the network's).
+fn book_dest(books: &Path, slug: &str, hash: &str, rel: &str) -> Result<PathBuf, String> {
     book_slug_ok(slug)?;
     book_hash_ok(hash)?;
     let dst = book_part(books, slug, hash).join(book_rel(rel)?);
     if let Some(parent) = dst.parent() {
         fs::create_dir_all(parent).map_err(|e| io_why("create", parent, e))?;
     }
+    Ok(dst)
+}
+
+/// `book_put`'s body: one file of a version being pulled, into `.part/`.
+/// Answers the byte count.
+fn book_write(books: &Path, slug: &str, hash: &str, rel: &str, bytes: &[u8]) -> Result<u64, String> {
+    let dst = book_dest(books, slug, hash, rel)?;
     fs::write(&dst, bytes).map_err(|e| io_why("write", &dst, e))?;
     Ok(bytes.len() as u64)
+}
+
+/// The pull's `book_put` (G-SYNCBG): the same file in the same place,
+/// streamed from the network instead of handed over whole by the page -- a
+/// book's dictionary is tens of megabytes and need not sit in memory. A
+/// stream that breaks leaves a SHORT file, which the resume's byte count
+/// (`book_have`) will not take for a finished one.
+fn book_write_from(books: &Path, slug: &str, hash: &str, rel: &str, src: &mut dyn std::io::Read) -> Result<u64, String> {
+    let dst = book_dest(books, slug, hash, rel)?;
+    let mut out = fs::File::create(&dst).map_err(|e| io_why("write", &dst, e))?;
+    std::io::copy(src, &mut out).map_err(|e| format!("{rel}: {e}"))
+}
+
+/// How many bytes of `rel` a half-pulled version already holds in `.part/`
+/// -- the resume's question. `None` when there is no such file (or the names
+/// are not a book's).
+fn book_have(books: &Path, slug: &str, hash: &str, rel: &str) -> Option<u64> {
+    book_slug_ok(slug).ok()?;
+    book_hash_ok(hash).ok()?;
+    let p = book_part(books, slug, hash).join(book_rel(rel).ok()?);
+    fs::metadata(p).ok().filter(|m| m.is_file()).map(|m| m.len())
+}
+
+/// The hash of the version installed under `slug`, when one is.
+fn book_installed(books: &Path, slug: &str) -> Option<String> {
+    book_slug_ok(slug).ok()?;
+    fs::read_to_string(books.join(slug).join(BOOK_HASH))
+        .ok()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
 }
 
 /// `book_meta`'s body: THE COMMIT. The row and the hash go into the version's
@@ -1232,6 +1272,194 @@ pub const BOOKS_JS: &str = r#"(function () {
     list: function () { return TAURI.invoke("book_list"); },
     // remove(slug) -> Promise<number>
     remove: function (slug) { return TAURI.invoke("book_remove", { slug: slug }); }
+  };
+})();
+"#;
+
+// ------------------------------------------------------------- the pull
+//
+// G-SYNCBG (Osca, 11 Sep): *"the phone's pull is JavaScript inside the
+// Settings page. Leave the page and it cancels; background keeps it; lock
+// pauses it. It must survive using the app."* The book door above made a
+// book something the phone could KEEP; this makes the pulling something the
+// app does, not a page: `pull.rs` runs a job on a thread of its own, writes
+// through `book_dest`/`book_write_from` and commits with `book_commit` --
+// the door's own functions -- and any page reads how it is going.
+//
+// THE PAGE STILL DECIDES WHAT. TTSTV `library/drive.js::syncJob` turns
+// Drive's `library.json` (or Studio's manifest, over the LAN) and
+// `book_list` into the job, and the marks, positions and settings -- small,
+// merged both ways -- stay in the page's JavaScript. Three commands:
+//
+//   sync_start(job) -> status     claim the runner and run the job; while a
+//                                 pull is running, that pull's status and
+//                                 nothing replaced
+//   sync_status()   -> status     {running, transport, trigger, book, i, n,
+//                                 file, done, total, pulled, skipped, why,
+//                                 since, ended}
+//   sync_stop()     -> bool       after the current file
+//
+// AND "AUTO" (D2, D3: on launch and on every return to the foreground, Wi-Fi
+// or cellular alike). The app cannot plan -- the plan needs the page's
+// stores -- so it ASKS: it evaluates `TTSTVHost.sync.auto(trigger)` in the
+// window ([`pull::auto_js`]), and the door below loads `drive.js` into
+// whatever page is showing (the Library, the reader) and hands its
+// `syncAuto` the host. Launch is the first page load that finishes;
+// foreground is the window's `Resumed` (tao: `applicationWillEnterForeground`
+// on iOS, `onResume` on Android). Neither asks while a pull is running.
+
+/// The runner's shared half, one per app. `launched`: the first page load
+/// after launch is the launch's sync; every later load is a navigation.
+#[derive(Default)]
+struct PullState {
+    pull: Arc<pull::Pull>,
+    launched: std::sync::atomic::AtomicBool,
+}
+
+/// `pull::Book::meta`'s deserializer: the row arrives as an object, as
+/// `book_meta`'s does, and is kept as the text `book_commit` writes. Anything
+/// but an object is refused, as `book_meta` refuses it.
+fn meta_text<'de, D: serde::Deserializer<'de>>(d: D) -> Result<String, D::Error> {
+    use serde::de::Error as _;
+    use serde::Deserialize as _;
+    let v = serde_json::Value::deserialize(d)?;
+    if !v.is_object() {
+        return Err(D::Error::custom("a book's row is a JSON object"));
+    }
+    serde_json::to_string(&v).map_err(D::Error::custom)
+}
+
+/// Run a job ([`pull::start`]): checked whole before a byte is fetched, on
+/// the `frank-pull` thread, outside any page. Answers the status.
+#[tauri::command]
+fn sync_start<R: tauri::Runtime>(
+    app: tauri::AppHandle<R>,
+    state: tauri::State<'_, PullState>,
+    job: pull::Job,
+) -> pull::Status {
+    let st = pull::start(state.pull.clone(), books_root(&app), job, pull::Net::new());
+    log::info!(
+        "frank: sync_start {} ({}) -- {} books, running {}",
+        st.transport,
+        st.trigger,
+        st.n,
+        st.running
+    );
+    st
+}
+
+/// What is running, or how the last run ended.
+#[tauri::command]
+fn sync_status(state: tauri::State<'_, PullState>) -> pull::Status {
+    state.pull.snapshot()
+}
+
+/// Stop after the current file. `true` when there was a pull to stop.
+#[tauri::command]
+fn sync_stop(state: tauri::State<'_, PullState>) -> bool {
+    state.pull.request_stop()
+}
+
+/// Ask the page to plan and start -- unless a pull is already running.
+fn sync_auto<R: tauri::Runtime>(app: &tauri::AppHandle<R>, trigger: &str) {
+    let busy = app.try_state::<PullState>().map_or(false, |s| s.pull.snapshot().running);
+    if busy {
+        log::info!("frank: sync auto ({trigger}) -- a pull is running, left alone");
+        return;
+    }
+    if let Some(w) = app.get_webview_window("main") {
+        match w.eval(pull::auto_js(trigger)) {
+            Ok(()) => log::info!("frank: sync auto ({trigger}) -- asked the page"),
+            Err(why) => log::error!("frank: sync auto ({trigger}) -- could not ask the page: {why}"),
+        }
+    }
+}
+
+/// A page finished loading: the first one is the launch.
+fn sync_on_load<R: tauri::Runtime>(app: &tauri::AppHandle<R>) {
+    let first = app
+        .try_state::<PullState>()
+        .map_or(false, |s| !s.launched.swap(true, std::sync::atomic::Ordering::SeqCst));
+    if first {
+        sync_auto(app, "launch");
+    }
+}
+
+/// The window came back to the foreground (mobile only; the desktop has no
+/// such event and syncs on launch).
+fn sync_on_window<R: tauri::Runtime>(app: &tauri::AppHandle<R>, event: &tauri::WindowEvent) {
+    #[cfg(mobile)]
+    if let tauri::WindowEvent::Resumed = event {
+        sync_auto(app, "foreground");
+    }
+    #[cfg(not(mobile))]
+    let _ = (app, event);
+}
+
+/// `window.TTSTVHost.sync`, the pull's door: `start`, `status`, `stop` --
+/// the three commands -- and `auto`, which the app calls. Its own init
+/// script, like [`BOOKS_JS`], and guarded the same way: a page outside Frank
+/// has no `sync` and the Settings page keeps pulling in JavaScript as it
+/// always has (the Mac's pages, the PWA).
+///
+/// Two things it does besides invoking. (1) A token the pull REFRESHED comes
+/// back in the status as `google: {access, expires}`; the door writes it into
+/// `drive.js`'s own record, `ttstv.sync.google` -- only into a record that is
+/// there and signed in, never making one -- and strips it before any page
+/// sees the status. So the page and the thread spend one token. (2) `start`
+/// dispatches `ttstv:sync` with the status, so a Settings row or a dot that
+/// is already open learns a pull began without polling for it.
+pub const SYNC_JS: &str = r#"(function () {
+  "use strict";
+  var TAURI = window.__TAURI__ && window.__TAURI__.core;
+  if (!TAURI || typeof TAURI.invoke !== "function") return;
+  window.TTSTVHost = window.TTSTVHost || {};
+  var TOKEN_KEY = "ttstv.sync.google";
+  var EVENT = "ttstv:sync";
+  function keep(st) {
+    if (st && st.google) {
+      try {
+        var t = JSON.parse(localStorage.getItem(TOKEN_KEY) || "null");
+        if (t && t.refresh && t.access !== st.google.access) {
+          t.access = st.google.access;
+          t.expires = st.google.expires;
+          localStorage.setItem(TOKEN_KEY, JSON.stringify(t));
+        }
+      } catch (e) {}
+      delete st.google;
+    }
+    return st;
+  }
+  function tell(st) {
+    try { window.dispatchEvent(new CustomEvent(EVENT, { detail: st })); } catch (e) {}
+    return st;
+  }
+  /* the planner is drive.js (the page decides WHAT); a page that did not
+     load it -- the Library, the reader -- gets it on the first auto */
+  function planner() {
+    var D = window.TTSTVDrive;
+    if (D && typeof D.syncAuto === "function") return Promise.resolve(D);
+    return new Promise(function (resolve) {
+      var s = document.createElement("script");
+      s.src = "/library/drive.js";
+      s.onload = function () { resolve(window.TTSTVDrive || null); };
+      s.onerror = function () { resolve(null); };
+      (document.head || document.documentElement).appendChild(s);
+    });
+  }
+  window.TTSTVHost.sync = {
+    // start(job) -> Promise<status>: the job runs in the app, not in this page
+    start: function (job) { return TAURI.invoke("sync_start", { job: job }).then(keep).then(tell); },
+    // status() -> Promise<status>
+    status: function () { return TAURI.invoke("sync_status").then(keep); },
+    // stop() -> Promise<boolean>: after the current file
+    stop: function () { return TAURI.invoke("sync_stop"); },
+    // auto(trigger): the app's ask, on launch and on return to the foreground
+    auto: function (trigger) {
+      return planner().then(function (D) {
+        return D && typeof D.syncAuto === "function" ? D.syncAuto(window.TTSTVHost, { trigger: trigger }) : null;
+      }).catch(function () { return null; });
+    }
   };
 })();
 "#;
@@ -1975,7 +2203,10 @@ pub fn run() {
             book_put,
             book_meta,
             book_list,
-            book_remove
+            book_remove,
+            sync_start,
+            sync_status,
+            sync_stop
         ])
         // The launch scheme (`frank-pair://`, NOT the asset scheme). The
         // plugin is what turns an OS open into an event on iOS, macOS and
@@ -1992,6 +2223,8 @@ pub fn run() {
         .plugin(search::init())
         .manage(PendingPair::default())
         .manage(PendingGoogle::default())
+        // The pull (G-SYNCBG): one runner per app, read by every page.
+        .manage(PullState::default())
         // `Wry` and not a generic `R`: `Builder::default()` is a
         // `Builder<Wry>`, and spelling it lets the closure's argument type be
         // written down rather than inferred through a `_`.
@@ -2134,6 +2367,9 @@ pub fn run() {
             // keeps its books on disk instead of in a Cache that refuses
             // this scheme.
             .initialization_script(BOOKS_JS)
+            // The pull's door (G-SYNCBG): `TTSTVHost.sync`, so a Sync hands
+            // its books to the app and any page can read how it is going.
+            .initialization_script(SYNC_JS)
             // Separate from HOST_JS, and unconditional -- see PAIR_JS's own
             // note. Both run before the document's own scripts, so a page that
             // reads the key at load reads a key a link has already written.
@@ -2152,11 +2388,23 @@ pub fn run() {
             .initialization_script(if cfg!(debug_assertions) { PROBE_JS } else { "" })
             // Every document, including the first: whatever a launch link left
             // pending is written here, once.
-            .on_page_load(|window, _payload| flush_pair(window.app_handle()));
+            // And the first document to FINISH loading is the launch's sync
+            // (G-SYNCBG): the page is there to plan it.
+            .on_page_load(|window, payload| {
+                flush_pair(window.app_handle());
+                if payload.event() == tauri::webview::PageLoadEvent::Finished {
+                    sync_on_load(window.app_handle());
+                }
+            });
             // The desktop's 1100x800 -- and on iOS NOTHING, because tao makes
             // the UIWindow from `inner_size` (the webview frame, 6 Sep; the
             // long version is over `desktop_size`).
             let window = desktop_size(window).build()?;
+
+            // Back to the foreground: sync again (G-SYNCBG, D2). The event is
+            // the window's -- `Resumed` exists on mobile only.
+            let handle = app.handle().clone();
+            window.on_window_event(move |event| sync_on_window(&handle, event));
 
             // The black bar (job 2). After `build`, because there is no
             // webview to reach into before it; dispatched, so it lands after
@@ -2884,5 +3132,85 @@ mod book_tests {
                     "generate_handler! handles {cmd}");
         }
         assert!(lib.contains(".initialization_script(BOOKS_JS)"));
+    }
+}
+
+#[cfg(test)]
+mod pull_door_tests {
+    use super::*;
+
+    /// The page's job, as TTSTV `library/drive.js::syncJob` writes it,
+    /// parses into the runner's types: the four token names drive.js keeps
+    /// (`clientId` among them), the row kept as its text, a null size, a
+    /// field an older page never sent defaulted rather than refused.
+    #[test]
+    fn the_pages_job_parses_into_the_runners_types() {
+        let job: pull::Job = serde_json::from_str(
+            r#"{
+              "transport": "drive", "trigger": "press",
+              "auth": {"access": "ya29.a", "refresh": "1//r", "expires": 1757600000000, "clientId": "12-x.apps.googleusercontent.com"},
+              "books": [{"slug": "hamlet", "hash": "0123456789abcdef", "title": "Hamlet",
+                         "meta": {"slug": "hamlet", "hash": "0123456789abcdef", "title": "Hamlet", "words": 32000},
+                         "files": [{"rel": "book.json", "id": "1AbC_d-e", "bytes": 12},
+                                   {"rel": "audio/c001.opus", "id": "1XyZ", "bytes": null}]}]
+            }"#,
+        )
+        .unwrap();
+        assert_eq!(job.auth.client_id.as_deref(), Some("12-x.apps.googleusercontent.com"));
+        assert_eq!((job.auth.refresh.as_deref(), job.auth.expires), (Some("1//r"), Some(1757600000000.0)));
+        let meta: serde_json::Value = serde_json::from_str(&job.books[0].meta).unwrap();
+        assert_eq!(meta, serde_json::json!({"slug": "hamlet", "hash": "0123456789abcdef", "title": "Hamlet", "words": 32000}));
+        assert_eq!((job.books[0].files[0].bytes, job.books[0].files[1].bytes), (Some(12), None));
+        assert!(pull::check_job(&job).is_ok());
+
+        let lan: pull::Job =
+            serde_json::from_str(r#"{"transport":"lan","auth":{"base":"http://192.168.1.5:41499","token":"t"},"books":[]}"#).unwrap();
+        assert_eq!((lan.trigger.as_str(), lan.why.as_deref(), lan.auth.token.as_deref()), ("", None, Some("t")));
+
+        let bad = serde_json::from_str::<pull::Job>(r#"{"transport":"drive","books":[{"slug":"a","hash":"01","meta":[1],"files":[]}]}"#);
+        assert!(bad.unwrap_err().to_string().contains("a book's row is a JSON object"));
+
+        // the status every page reads, by the names settings.js and the dot use
+        let st = serde_json::to_value(pull::Status { running: true, n: 3, ..Default::default() }).unwrap();
+        for k in [
+            "running", "transport", "trigger", "book", "slug", "i", "n", "file", "done", "total", "pulled", "skipped", "why",
+            "since", "ended", "google",
+        ] {
+            assert!(st.get(k).is_some(), "{k}");
+        }
+        assert_eq!((st["running"].as_bool(), st["n"].as_u64(), st["why"].is_null()), (Some(true), Some(3), true));
+    }
+
+    /// The wiring: three commands, declared (build.rs), granted (the
+    /// capability), handled (`generate_handler!`), one door that calls them,
+    /// injected after the book door -- and the two askings, launch and
+    /// foreground, in `run()` itself.
+    #[test]
+    fn the_pull_door_is_three_commands_and_the_app_asks_on_launch_and_foreground() {
+        let js = SYNC_JS;
+        assert_eq!(js.matches("invoke(").count(), 3);
+        assert!(js.contains(r#"TAURI.invoke("sync_start", { job: job })"#));
+        assert!(js.contains(r#"TAURI.invoke("sync_status")"#) && js.contains(r#"TAURI.invoke("sync_stop")"#));
+        assert!(js.contains(r#"s.src = "/library/drive.js";"#), "the planner is loaded into any page");
+        assert!(js.contains(r#"var TOKEN_KEY = "ttstv.sync.google";"#), "drive.js's GOOGLE_TOKEN_KEY");
+        assert!(js.contains("if (!TAURI"), "a page outside Frank gets no door");
+        assert_eq!(HOST_JS.matches("invoke(").count(), 2, "HOST_JS keeps its two");
+        assert_eq!(BOOKS_JS.matches("invoke(").count(), 4, "the book door keeps its four");
+
+        let build = include_str!("../build.rs");
+        let cap = include_str!("../capabilities/default.json");
+        let lib = include_str!("lib.rs");
+        let run_fn = &lib[lib.find("pub fn run() {").unwrap()..lib.find("fn flush_google<").unwrap()];
+        for (cmd, perm) in [("sync_start", "allow-sync-start"), ("sync_status", "allow-sync-status"), ("sync_stop", "allow-sync-stop")] {
+            assert!(build.contains(&format!("\"{cmd}\"")), "build.rs declares {cmd}");
+            assert!(cap.contains(&format!("\"{perm}\"")), "the capability grants {perm}");
+            assert!(run_fn.contains(&format!("            {cmd},\n")) || run_fn.contains(&format!("            {cmd}\n")), "handled: {cmd}");
+        }
+        let at = |s: &str| run_fn.find(s).unwrap_or_else(|| panic!("run() has no {s}"));
+        assert!(at(".initialization_script(BOOKS_JS)") < at(".initialization_script(SYNC_JS)"));
+        at(".manage(PullState::default())");
+        at("if payload.event() == tauri::webview::PageLoadEvent::Finished {");
+        at("sync_on_load(window.app_handle());");
+        at("window.on_window_event(move |event| sync_on_window(&handle, event));");
     }
 }

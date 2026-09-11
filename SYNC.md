@@ -29,7 +29,7 @@ One code path, on both apps:
 
 and the transport is one adapter behind four verbs.
 
-## 2. Where the phone keeps things — and why the LAN half is JS, not Rust
+## 2. Where the phone keeps things — and which half is JS and which is Rust
 
 The shell (`shell/`, imported from TTSTV, never edited here) owns every store the phone
 has but one. **Books are NOT in the Cache API on the phone** (G-PULL, 11 Sep — this
@@ -41,10 +41,18 @@ The PWA and the Mac's pages keep the Cache (`ttstv-book-<slug>-<hash>`). The res
 page's own:
 marks in `localStorage` `ttstv.reader.marginalia.<slug>` (`reader/marginalia.js`);
 positions in `localStorage` `ttstv.reader.library`'s `positions` (`reader/cursor.js`).
-A `fetch()` from the page to `http://<mac>:<port>/sync/manifest`, and the store step of
-what comes back, IS the phone's LAN half. So the LAN transport is one file in the shell
-(TTSTV `library/sync.js`, loaded by settings and the Library), and `lib.rs` changes
-**nothing** for it. What the phone side does need, and where:
+**The book files are fetched by the APP, not the page** (G-SYNCBG, 11 Sep — this
+paragraph said "`lib.rs` changes **nothing** for it", and Osca: *"leave the page and it
+cancels … It must survive using the app"*). The page still decides WHAT: it reads
+`/sync/manifest` (or Drive's `library.json`), compares it with `book_list`, merges marks,
+positions and settings itself (`settings.js::runSync`, TTSTV `library/drive.js`), and
+hands `TTSTVHost.sync.start(job)` the books; `src-tauri/src/pull.rs` downloads them on its
+own thread (LAN `<base><url>?t=<token>`, Drive `files/<id>?alt=media` with the bearer,
+refreshing it itself) and writes through the book door's own functions — `.part/` then the
+row LAST. The app also asks the page for a plan on launch and on every return to the
+foreground (`TTSTVHost.sync.auto`). The app's sockets are rustls/plain TCP, not
+URLSession, so ATS does not apply to them; iOS's local-network permission does, and it is
+the same one the page's fetch already asked for. What the phone side needs, and where:
 
 | need | where | why |
 |---|---|---|

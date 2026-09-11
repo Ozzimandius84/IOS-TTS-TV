@@ -511,8 +511,11 @@ that is a thing to type once, yourself, having read what it does.
 - **The shell itself** — blocked on TTSTV job 15 (§1). One command after it lands.
 - **A book on the phone** — not from the Cache API: `Cache.put` refuses `frank://`
   (G-PULL, 11 Sep). Books go through `TTSTVHost.books` (lib.rs "the books") into
-  `<app data>/books/` and are served at `frank://localhost/books/…`. "Sync pulls,
-  Les Pensées opens, a chapter reads" is Osca's press, not yet made.
+  `<app data>/books/` and are served at `frank://localhost/books/…`. Since G-SYNCBG
+  (11 Sep) the files are downloaded by the app (`src-tauri/src/pull.rs`), not the
+  Settings page: start a pull, read a book, come back — the count moved; lock, unlock —
+  it resumed; kill mid-book, relaunch — no half book on the shelf, the pull continues.
+  Those three are Osca's press, not yet made.
 - **`cap` under `narrow`** — §6, a `design/reader/` question.
 - **`gen/android/`** — does not exist until someone with Android Studio runs
   `init`. Nothing in this repo has been built for Android.

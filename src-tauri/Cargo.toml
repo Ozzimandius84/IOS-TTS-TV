@@ -65,3 +65,16 @@ tauri-plugin-deep-link = "2.4.10"
 # in lib.rs and granted NO page permission -- `google_sign_in` is the only
 # caller and it opens Google's authorization endpoint or nothing.
 tauri-plugin-opener = "2"
+# The pull (G-SYNCBG, 11 Sep): a Sync's books are downloaded by the APP, on a
+# thread of its own, so leaving the Settings page no longer cancels them
+# (`src/pull.rs`). That needs an HTTP client in Rust -- Drive is https, the
+# paired Studio plain http on the LAN -- and there was none: tauri's own
+# `reqwest` is there on mobile with NO TLS feature. ureq 2 is blocking (the
+# runner is one thread; no async runtime to feed), and its default features
+# are rustls with the `ring` provider and webpki's roots -- Rust plus ring's
+# own C and assembly, which its build script compiles with the same Xcode
+# toolchain `cc` already uses here -- so one client serves the phone, Android
+# and the desktop with no platform TLS library and no OpenSSL. `gzip`
+# (default) decodes a gzipped answer. First build after this line needs
+# crates.io (Cargo.lock grows by ureq, rustls, ring, webpki-roots and theirs).
+ureq = "2.12"

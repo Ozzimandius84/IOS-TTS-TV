@@ -69,6 +69,9 @@ fn main() {
                 "book_meta",
                 "book_list",
                 "book_remove",
+                "sync_start",
+                "sync_status",
+                "sync_stop",
             ]),
         ),
     )
