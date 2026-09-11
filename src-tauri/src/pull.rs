@@ -33,6 +33,15 @@
 //! `sync_start` for the same version RESUMES: a file already in `.part/`
 //! whose byte count equals the job's `bytes` is not fetched again.
 //!
+//! AND A LANGUAGE (G-LANG, 11 Sep): a job whose `kind` is `"language"` is
+//! the same run through another [`Door`] -- `dict::Packs`, which puts a
+//! language pack's one gz into `<app data>/languages/.part/` and commits it
+//! by inflating it and swapping it in. One downloader, two destinations: the
+//! fetch, the retries, the token refresh, the resume and the status are this
+//! file's either way. A language job that arrives while a pull is running
+//! waits its turn ([`Pull::enqueue`]) and runs when the pull ends, on the
+//! same thread -- an Add pressed during the auto-sync is not refused.
+//!
 //! Everything above the network is plain `std` and [`Wire`] is the network,
 //! so the runner is tested with a fake one (`mod pull_tests`) -- the order,
 //! the resume, a refused `rel`, the token refresh, `sync_stop`. [`Net`] is
@@ -44,6 +53,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
 use crate::{book_commit, book_have, book_hash_ok, book_installed, book_rel, book_slug_ok, book_write_from, json_field};
+use crate::dict;
 
 /// Drive's download door, `library/drive.js::driveClient.getBytes`'s URL.
 pub const DRIVE_FILES: &str = "https://www.googleapis.com/drive/v3/files/";
@@ -75,6 +85,10 @@ pub struct Job {
     pub trigger: String,
     pub auth: Auth,
     pub books: Vec<Book>,
+    /// What the job carries: `""`/`"books"` -- books, through the book door;
+    /// `"language"` -- language packs (G-LANG), through `dict::Packs`, each
+    /// "book" a language code whose one file is `<code>.sqlite.gz`.
+    pub kind: String,
     /// Set when the page could not plan at all (Drive refused, Studio not
     /// reachable): the reason is recorded as this run's outcome and nothing
     /// is fetched. One record of "what ran and why", and it is the status.
@@ -135,6 +149,11 @@ pub struct File {
 #[derive(Clone, Debug, Default, PartialEq, serde::Serialize)]
 pub struct Status {
     pub running: bool,
+    /// The job's `kind`: `""` for books, `"language"` for packs -- so the
+    /// Languages row can draw its own download and the Sync row its own.
+    pub kind: String,
+    /// Language jobs waiting for this run to end ([`Pull::enqueue`]).
+    pub queued: u32,
     pub transport: String,
     pub trigger: String,
     /// The book being pulled (its title, else its slug) -- the last one,
@@ -174,6 +193,8 @@ pub struct Token {
 pub struct Pull {
     status: Mutex<Status>,
     stop: AtomicBool,
+    /// Language jobs that arrived while a pull was running, in order.
+    queue: Mutex<Vec<Job>>,
 }
 
 impl Pull {
@@ -199,6 +220,7 @@ impl Pull {
         self.stop.store(false, Ordering::SeqCst);
         *s = Status {
             running: true,
+            kind: job.kind.clone(),
             transport: job.transport.clone(),
             trigger: job.trigger.clone(),
             n: job.books.len() as u32,
@@ -206,6 +228,43 @@ impl Pull {
             ..Status::default()
         };
         Ok(s.clone())
+    }
+
+    /// A language job pressed while a pull runs: kept, once per set of
+    /// languages, and taken by the running thread when it ends
+    /// ([`Pull::next_queued`]). Answers the running status, with `queued`.
+    pub fn enqueue(&self, job: Job) -> Status {
+        if let Ok(mut q) = self.queue.lock() {
+            let codes = |j: &Job| j.books.iter().map(|b| b.slug.clone()).collect::<Vec<_>>();
+            if !q.iter().any(|j| codes(j) == codes(&job)) {
+                q.push(job);
+            }
+            let n = q.len() as u32;
+            self.set(|s| s.queued = n);
+        }
+        self.snapshot()
+    }
+
+    /// The next waiting job, CLAIMED -- or `None` when none waits, or when
+    /// another start claimed the runner first (its thread takes the queue
+    /// when it ends).
+    fn next_queued(&self, now: u64) -> Option<Job> {
+        let mut q = self.queue.lock().ok()?;
+        if q.is_empty() {
+            return None;
+        }
+        let job = q.remove(0);
+        match self.begin(&job, now) {
+            Ok(_) => {
+                let n = q.len() as u32;
+                self.set(|s| s.queued = n);
+                Some(job)
+            }
+            Err(_) => {
+                q.insert(0, job);
+                None
+            }
+        }
     }
 
     /// `sync_stop()`: the runner finishes the file it is on and stops.
@@ -262,6 +321,51 @@ pub fn now_ms() -> u64 {
         .unwrap_or(0)
 }
 
+// -------------------------------------------------------------- the doors
+
+/// Where a job's files go and how a finished one is committed: the book
+/// door (lib.rs) for books, `dict::Packs` for a language pack (G-LANG). The
+/// runner above the network is the same for both -- one downloader.
+pub trait Door {
+    /// The hash installed under `slug`, when one is.
+    fn installed(&self, slug: &str) -> Option<String>;
+    /// Bytes of `rel` a half-pulled version already holds -- the resume's question.
+    fn have(&self, slug: &str, hash: &str, rel: &str) -> Option<u64>;
+    /// One file, streamed into the version's `.part/`. Answers the byte count.
+    fn write_from(&self, slug: &str, hash: &str, rel: &str, src: &mut dyn Read) -> Result<u64, String>;
+    /// THE COMMIT, the row last. Answers the versions it replaced.
+    fn commit(&self, slug: &str, hash: &str, meta: &str) -> Result<Vec<String>, String>;
+}
+
+/// The book door's own functions, as a [`Door`].
+pub struct BookDoor<'a>(pub &'a Path);
+
+impl Door for BookDoor<'_> {
+    fn installed(&self, slug: &str) -> Option<String> {
+        book_installed(self.0, slug)
+    }
+    fn have(&self, slug: &str, hash: &str, rel: &str) -> Option<u64> {
+        book_have(self.0, slug, hash, rel)
+    }
+    fn write_from(&self, slug: &str, hash: &str, rel: &str, src: &mut dyn Read) -> Result<u64, String> {
+        book_write_from(self.0, slug, hash, rel, src)
+    }
+    fn commit(&self, slug: &str, hash: &str, meta: &str) -> Result<Vec<String>, String> {
+        book_commit(self.0, slug, hash, meta)
+    }
+}
+
+/// The door a job writes through, by its `kind`. The packs live beside the
+/// books (`<app data>/languages/`), so their root is the books folder's
+/// sibling.
+pub fn door_for<'a>(books: &'a Path, job: &Job) -> Box<dyn Door + 'a> {
+    if job.kind == dict::KIND {
+        Box::new(dict::Packs { root: books.parent().unwrap_or(books).join(dict::LANGUAGES_DIR) })
+    } else {
+        Box::new(BookDoor(books))
+    }
+}
+
 // ------------------------------------------------------------- the checks
 
 fn drive_id_ok(id: &str) -> bool {
@@ -294,6 +398,11 @@ pub fn check_job(job: &Job) -> Result<(), String> {
         "lan" => false,
         other => return Err(format!("{other:?} is not a transport (drive or lan)")),
     };
+    let packs = match job.kind.as_str() {
+        "" | "books" => false,
+        k if k == dict::KIND => true,
+        other => return Err(format!("{other:?} is not a kind of job (books or language)")),
+    };
     let a = &job.auth;
     if drive {
         let can_refresh = a.refresh.as_deref().map_or(false, |s| !s.is_empty())
@@ -319,6 +428,12 @@ pub fn check_job(job: &Job) -> Result<(), String> {
         let meta = b.meta.trim();
         if !(meta.starts_with('{') && meta.ends_with('}')) {
             return Err(format!("{}: a book's row is a JSON object", b.slug));
+        }
+        if packs {
+            dict::code_ok(&b.slug)?;
+            if b.files.len() != 1 || b.files[0].rel != dict::pack_rel(&b.slug) {
+                return Err(format!("{}: a language's one file is {}", b.slug, dict::pack_rel(&b.slug)));
+            }
         }
         let mut rels = std::collections::BTreeSet::new();
         for f in &b.files {
@@ -397,7 +512,7 @@ fn refresh(wire: &mut dyn Wire, auth: &Auth, bearer: &mut Bearer, pull: &Pull) -
 /// One file into `.part/`: fetched, retried while the network is the
 /// problem, a Drive 401 refreshed once, the byte count held to the job's.
 fn fetch_file(
-    books: &Path,
+    door: &dyn Door,
     job: &Job,
     b: &Book,
     f: &File,
@@ -425,7 +540,7 @@ fn fetch_file(
             refreshed = true;
         }
         let lost = match wire.get(&url, if drive { Some(bearer.access.as_str()) } else { None }) {
-            Reply::Body(mut body) => match book_write_from(books, &b.slug, &b.hash, &f.rel, &mut body) {
+            Reply::Body(mut body) => match door.write_from(&b.slug, &b.hash, &f.rel, &mut body) {
                 Ok(n) => match f.bytes {
                     Some(want) if want != n => format!("{}: {n} bytes arrived, {want} were listed", f.rel),
                     _ => return Ok(n),
@@ -472,6 +587,7 @@ fn run_books(books: &Path, job: &Job, wire: &mut dyn Wire, pull: &Pull) -> Resul
         return Err(why.clone());
     }
     check_job(job)?;
+    let door = door_for(books, job);
     let mut bearer = Bearer {
         access: job.auth.access.clone().unwrap_or_default(),
         expires: job.auth.expires.map_or(0, |e| if e > 0.0 { e as u64 } else { 0 }),
@@ -493,7 +609,7 @@ fn run_books(books: &Path, job: &Job, wire: &mut dyn Wire, pull: &Pull) -> Resul
             s.done = 0;
             s.total = b.files.len() as u32;
         });
-        if book_installed(books, &b.slug).as_deref() == Some(b.hash.as_str()) {
+        if door.installed(&b.slug).as_deref() == Some(b.hash.as_str()) {
             pull.set(|s| s.skipped += 1);
             continue;
         }
@@ -502,13 +618,16 @@ fn run_books(books: &Path, job: &Job, wire: &mut dyn Wire, pull: &Pull) -> Resul
                 return Err("stopped".into());
             }
             pull.set(|s| s.file = Some(f.rel.clone()));
-            let have = book_have(books, &b.slug, &b.hash, &f.rel);
+            let have = door.have(&b.slug, &b.hash, &f.rel);
             if !(f.bytes.is_some() && have == f.bytes) {
-                fetch_file(books, job, b, f, wire, &mut bearer, pull).map_err(|e| format!("{title}: {e}"))?;
+                fetch_file(door.as_ref(), job, b, f, wire, &mut bearer, pull).map_err(|e| format!("{title}: {e}"))?;
             }
             pull.set(|s| s.done = j as u32 + 1);
         }
-        let replaced = book_commit(books, &b.slug, &b.hash, &b.meta).map_err(|e| format!("{title}: {e}"))?;
+        if job.kind == dict::KIND {
+            pull.set(|s| s.file = Some("installing".into()));
+        }
+        let replaced = door.commit(&b.slug, &b.hash, &b.meta).map_err(|e| format!("{title}: {e}"))?;
         log::info!("frank: pull {}@{} -- installed, replaced {replaced:?}", b.slug, b.hash);
         pull.set(|s| s.pulled += 1);
     }
@@ -518,16 +637,25 @@ fn run_books(books: &Path, job: &Job, wire: &mut dyn Wire, pull: &Pull) -> Resul
 /// `sync_start`'s body: claim the runner and run the job on a thread of its
 /// own, off the main thread and outside any page. Answers the status as it
 /// is after the claim -- or, when a pull is already running, THAT status,
-/// untouched.
+/// untouched; a language job is then queued behind it ([`Pull::enqueue`])
+/// and the same thread runs it next.
 pub fn start<W: Wire + Send + 'static>(pull: Arc<Pull>, books: PathBuf, job: Job, wire: W) -> Status {
     let claimed = match pull.begin(&job, wire.now()) {
         Ok(s) => s,
+        Err(_) if job.kind == dict::KIND && check_job(&job).is_ok() => return pull.enqueue(job),
         Err(running) => return running,
     };
     let runner = pull.clone();
     let spawned = std::thread::Builder::new().name("frank-pull".into()).spawn(move || {
         let mut wire = wire;
-        run(&books, &job, &mut wire, &runner);
+        let mut job = job;
+        loop {
+            run(&books, &job, &mut wire, &runner);
+            match runner.next_queued(wire.now()) {
+                Some(next) => job = next,
+                None => break,
+            }
+        }
     });
     if let Err(e) = spawned {
         pull.end(Some(format!("frank: could not start the pull -- {e}")), now_ms());
@@ -638,6 +766,9 @@ mod pull_tests {
         log: Vec<String>,
         stop_on: Option<(usize, Arc<Pull>)>,
         gets: usize,
+        /// Every GET takes this long (G-LANG: a pull that is still running
+        /// when the next press arrives).
+        slow_ms: u64,
     }
 
     impl Fake {
@@ -651,6 +782,7 @@ mod pull_tests {
                 log: Vec::new(),
                 stop_on: None,
                 gets: 0,
+                slow_ms: 0,
             }
         }
         fn drive(mut self, id: &str, bytes: &[u8]) -> Self {
@@ -667,6 +799,9 @@ mod pull_tests {
 
     impl Wire for Fake {
         fn get(&mut self, url: &str, bearer: Option<&str>) -> Reply {
+            if self.slow_ms > 0 {
+                std::thread::sleep(std::time::Duration::from_millis(self.slow_ms));
+            }
             self.gets += 1;
             self.log.push(format!("GET {url} {}", bearer.unwrap_or("-")));
             if let Some((n, pull)) = &self.stop_on {
@@ -738,6 +873,7 @@ mod pull_tests {
                 ..Auth::default()
             },
             books,
+            kind: String::new(),
             why: None,
         }
     }
@@ -1010,6 +1146,7 @@ mod pull_tests {
                 ],
                 ..book("hamlet", "aaaa", vec![])
             }],
+            kind: String::new(),
             why: None,
         };
         let (_, st) = go(&books, &job, &mut w);
@@ -1093,5 +1230,130 @@ mod pull_tests {
         assert!(auto_js("foreground").contains(r#"auto("foreground")"#));
         assert!(auto_js("\");alert(1);//").contains(r#"auto("foreground")"#), "only the two words ever reach the page");
         assert!(auto_js("launch").starts_with("try {"));
+    }
+
+
+    // ------------------------------------------------ G-LANG: a language
+
+    const PACK_HASH: &str = "0a1b2c3d4e5f6071";
+
+    /// Latin, as `dictionary/pack.py` would send it: the pack's bytes, the
+    /// gz, and the job the Languages tab hands over (`library/langs.js`).
+    fn latin() -> (Vec<u8>, Vec<u8>, Job) {
+        let src = crate::dict::dict_tests::scratch("latin-src");
+        let raw = fs::read(crate::dict::dict_tests::fixture(&src, "la")).unwrap();
+        let _ = fs::remove_dir_all(&src);
+        let gz = crate::dict::dict_tests::gz(&raw);
+        let mut job = drive_job(vec![Book {
+            slug: "la".into(),
+            hash: PACK_HASH.into(),
+            title: Some("Latin".into()),
+            meta: format!(r#"{{"code":"la","hash":"{PACK_HASH}","name":"Latin","bytes":{}}}"#, raw.len()),
+            files: vec![file("la.sqlite.gz", "L1", gz.len())],
+        }]);
+        job.kind = "language".into();
+        (raw, gz, job)
+    }
+
+    #[test]
+    fn a_language_is_one_more_job_for_the_same_runner_through_its_own_door() {
+        let app = scratch("lang");
+        let books = app.join("books");
+        fs::create_dir_all(&books).unwrap();
+        let langs = app.join(crate::dict::LANGUAGES_DIR);
+        let (raw, gz, job) = latin();
+        let mut w = Fake::new().drive("L1", &gz);
+        let (_, st) = go(&books, &job, &mut w);
+        assert_eq!(st.why, None, "{st:?}");
+        assert_eq!((st.kind.as_str(), st.pulled, st.book.as_deref(), st.done, st.total), ("language", 1, Some("Latin"), 1, 1));
+        assert_eq!(w.gets(), vec![format!("GET {} tok-1", url("L1"))], "the same fetch, the same bearer");
+        assert_eq!(fs::read(langs.join("la.sqlite")).unwrap(), raw, "inflated into <app data>/languages/");
+        assert!(crate::book_rows(&books).is_empty() && !books.join(crate::BOOKS_PART).exists(), "nothing in the books folder");
+        assert_eq!(crate::dict::installed(&langs)[0]["hash"], PACK_HASH);
+        let r = crate::dict::DictState::default().lookup(&langs, "la", "vocābant").unwrap();
+        assert_eq!(r["entries"][0]["lemma"], "voco", "and it answers");
+        // the same pack again: installed, skipped, nothing fetched
+        let mut w = Fake::new().drive("L1", &gz);
+        let (_, st) = go(&books, &job, &mut w);
+        assert_eq!((st.why.as_deref(), st.skipped, st.pulled), (None, 1, 0));
+        assert!(w.log.is_empty());
+        let _ = fs::remove_dir_all(&app);
+    }
+
+    #[test]
+    fn a_language_job_half_pulled_resumes_and_a_wrong_one_is_refused_before_a_byte() {
+        let app = scratch("lang-resume");
+        let books = app.join("books");
+        fs::create_dir_all(&books).unwrap();
+        let (raw, gz, job) = latin();
+        // the gz already whole in .part (a pull the phone's lock stopped after the last byte)
+        let door = crate::dict::Packs { root: app.join(crate::dict::LANGUAGES_DIR) };
+        door.write_from("la", PACK_HASH, "la.sqlite.gz", &mut &gz[..]).unwrap();
+        let mut w = Fake::new();
+        let (_, st) = go(&books, &job, &mut w);
+        assert_eq!((st.why.as_deref(), st.pulled), (None, 1));
+        assert!(w.log.is_empty(), "resumed by bytes: not fetched again");
+        assert_eq!(fs::read(app.join("languages").join("la.sqlite")).unwrap(), raw);
+
+        let bad = |f: &dyn Fn(&mut Job)| {
+            let (_, _, mut j) = latin();
+            f(&mut j);
+            j
+        };
+        for (job, words) in [
+            (bad(&|j| j.books[0].files[0].rel = "la.sqlite".into()), "a language's one file is la.sqlite.gz"),
+            (bad(&|j| j.books[0].files.push(file("book.json", "i1", 2))), "a language's one file"),
+            (bad(&|j| j.books[0].slug = "hamlet-2".into()), "a language's one file is hamlet-2.sqlite.gz"),
+            (bad(&|j| j.books[0].slug = "9la".into()), "not a language code"),
+            (bad(&|j| j.kind = "fonts".into()), "not a kind of job"),
+        ] {
+            let mut w = Fake::new().drive("L1", &gz);
+            let (_, st) = go(&books, &job, &mut w);
+            let why = st.why.unwrap_or_default();
+            assert!(why.contains(words), "{words:?} not in {why:?}");
+            assert!(w.log.is_empty(), "{words}: nothing fetched");
+        }
+        let _ = fs::remove_dir_all(&app);
+    }
+
+    #[test]
+    fn a_language_pressed_during_a_pull_waits_and_the_same_thread_runs_it_next() {
+        let app = scratch("lang-queue");
+        let books = app.join("books");
+        fs::create_dir_all(&books).unwrap();
+        let pull = Arc::new(Pull::default());
+        let (raw, gz, lang) = latin();
+        // one network for the thread: it is the runner's, and the queued job runs on it
+        let mut slow = Fake::new().drive("i1", b"{}").drive("i2", b"arma").drive("L1", &gz);
+        slow.slow_ms = 150;
+        let st = start(
+            pull.clone(),
+            books.clone(),
+            drive_job(vec![book("hamlet", "aaaa", vec![file("book.json", "i1", 2), file("chapters/c001.txt", "i2", 4)])]),
+            slow,
+        );
+        assert!(st.running && st.kind.is_empty());
+        // pressed while the books are coming: queued, not refused, and only once
+        let q = start(pull.clone(), books.clone(), lang.clone(), Fake::new().drive("L1", &gz));
+        assert!(q.running && q.kind.is_empty() && q.queued == 1, "{q:?}");
+        let q2 = start(pull.clone(), books.clone(), lang.clone(), Fake::new().drive("L1", &gz));
+        assert_eq!(q2.queued, 1, "the same language once");
+        // a BOOK job is still refused while a pull runs, as it always was
+        let b = start(pull.clone(), books.clone(), drive_job(vec![]), Fake::new());
+        assert_eq!((b.queued, b.kind.as_str()), (1, ""));
+        let t0 = std::time::Instant::now();
+        loop {
+            let s = pull.snapshot();
+            if !s.running && s.kind == "language" {
+                break;
+            }
+            assert!(t0.elapsed().as_secs() < 20, "the queue was never run: {s:?}");
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+        let st = pull.snapshot();
+        assert_eq!((st.why.as_deref(), st.pulled, st.queued), (None, 1, 0), "{st:?}");
+        assert_eq!(book_installed(&books, "hamlet").as_deref(), Some("aaaa"), "the books first");
+        assert_eq!(fs::read(app.join("languages").join("la.sqlite")).unwrap(), raw, "then the language, on the same thread");
+        let _ = fs::remove_dir_all(&app);
     }
 }

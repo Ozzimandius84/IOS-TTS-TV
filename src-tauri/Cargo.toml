@@ -78,3 +78,15 @@ tauri-plugin-opener = "2"
 # (default) decodes a gzipped answer. First build after this line needs
 # crates.io (Cargo.lock grows by ureq, rustls, ring, webpki-roots and theirs).
 ureq = "2.12"
+# The language packs (G-LANG, 11 Sep): a whole language is ONE SQLite file on
+# the phone (`src/dict.rs`), looked up from Rust -- G-DICT measured ~15 us a
+# lookup through SQLite's C API, and a file in app data is one WebKit cannot
+# evict. `bundled` compiles SQLite's own C into the crate with the same `cc`
+# toolchain as ios/*.m, so there is no system library to link on iOS, Android
+# or the desktop. First build after this line needs crates.io (Cargo.lock
+# grows by rusqlite, libsqlite3-sys, hashlink and theirs).
+rusqlite = { version = "0.37", features = ["bundled"] }
+# ...and the pack arrives gzipped (`dictionary/pack.py`, one gzip member per
+# 64 MiB): `MultiGzDecoder` inflates it once, at the commit. Already in the
+# lock through ureq's `gzip`; named here because dict.rs uses it directly.
+flate2 = "1"

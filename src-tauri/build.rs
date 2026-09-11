@@ -72,6 +72,10 @@ fn main() {
                 "sync_start",
                 "sync_status",
                 "sync_stop",
+                // the language packs (G-LANG, 11 Sep): src/dict.rs
+                "dict_langs",
+                "dict_lookup",
+                "dict_remove",
             ]),
         ),
     )

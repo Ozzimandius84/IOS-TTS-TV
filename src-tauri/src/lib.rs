@@ -98,6 +98,8 @@ use std::time::{Duration, Instant};
 use serde::Serialize;
 use tauri::{Manager, UriSchemeContext, WebviewUrl, WebviewWindowBuilder, Wry};
 use tauri_plugin_deep_link::DeepLinkExt;
+// The language packs (G-LANG): a whole language per file, looked up here.
+mod dict;
 mod pull;
 mod search;
 
@@ -2206,7 +2208,10 @@ pub fn run() {
             book_remove,
             sync_start,
             sync_status,
-            sync_stop
+            sync_stop,
+            dict::dict_langs,
+            dict::dict_lookup,
+            dict::dict_remove
         ])
         // The launch scheme (`frank-pair://`, NOT the asset scheme). The
         // plugin is what turns an OS open into an event on iOS, macOS and
@@ -2225,6 +2230,8 @@ pub fn run() {
         .manage(PendingGoogle::default())
         // The pull (G-SYNCBG): one runner per app, read by every page.
         .manage(PullState::default())
+        // The open language packs (G-LANG), one per language, read by any page.
+        .manage(dict::DictState::default())
         // `Wry` and not a generic `R`: `Builder::default()` is a
         // `Builder<Wry>`, and spelling it lets the closure's argument type be
         // written down rather than inferred through a `_`.
@@ -2370,6 +2377,9 @@ pub fn run() {
             // The pull's door (G-SYNCBG): `TTSTVHost.sync`, so a Sync hands
             // its books to the app and any page can read how it is going.
             .initialization_script(SYNC_JS)
+            // The pack door (G-LANG): `TTSTVHost.dict`, a word looked up in
+            // the language's pack from Rust.
+            .initialization_script(dict::DICT_JS)
             // Separate from HOST_JS, and unconditional -- see PAIR_JS's own
             // note. Both run before the document's own scripts, so a page that
             // reads the key at load reads a key a link has already written.
