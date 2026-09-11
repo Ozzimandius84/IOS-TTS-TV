@@ -4,6 +4,97 @@ Newest first. `REPORT_PROTOCOL.md` (TTSTV), nine headings. `README.md` says what
 
 ---
 
+## G-PULL — the phone can read Drive but cannot take a book · 11 Sep (Cowork, bridge VM + container), TTSTV `4e995d3` `2a1c1eb` `194bbd0` · phone `0a8240a` `f6f6554` (no GPU, no Kaggle, no Modal, 0 GPU-minutes)
+
+**Status line:** `library · G-PULL code done · 11 Sep · Cache.put refuses frank:// proved; the phone stores books through TTSTVHost.books; owed: cargo test + Osca's Sync press`
+
+### 1. What was asked
+`PROMPTS/phone-pull.md` (`> go`, 11 Sep). The phone's Sync read Drive's `library.json` (26 rows) and died at `Pulling 1 of 26 · Les Pensées · 0/31`, every press, and the reason was invisible. Two fixes: (small) a failed press leaves its reason on the Sync row's own line; (real) prove the hypothesis — `Cache.put` refuses `frank://` — then give the phone a host door for books and `import.js` a store seam, so the same `importFiles` writes to the Cache API on the web/Mac and to disk on the phone.
+
+### 2. What was done
+**TTSTV (`FRANK`)** — `4e995d3` settings · `2a1c1eb` store seam · `194bbd0` clean/
+- `settings/settings.js`: `var failed` (memory only — `last`, the last GOOD sync, is never overwritten); `finish()` sets it (`res.why || "Sync failed"`) and clears `say`; `paint()` puts it on `.tr-state` until the next press finishes. Nothing else in the file touched.
+- `library/import.js`: **the store** — `put / meta / list / remove`, two implementations. `CacheStore(href)` is the code that stood in `importBook`/`listInstalled`/`removeBook`, moved; `HostStore(TTSTVHost.books)` hands the same four calls to the phone's door. Chosen **once, at load** (`DOOR`), by whether the host offers a whole door; `useStore()` for tests. `importBook` calls `store.list()` (for `reimported`), one `store.put` per file, then `store.meta()` LAST — the commit, which answers what it replaced. Nothing outside the store names `caches`. `importFiles` alone ends a book at n/n (the Sync line); the zip door still ends at n-1 (`test_import.py` pins that).
+- `reader/context.js`: new fact `hostBooks`; `canHoldBooks` = (door **or** Cache API) + `crypto.subtle` + import.js; `device` = `(!app || hostBooks) && canHoldBooks && !studioLive`. **This was needed and the prompt did not name it:** Frank on the phone injects `TTSTVHost` like the desktop app, so by the old rule it was never a device and `library.html`'s "On this device" section — the only place `listInstalled` rows are drawn — would have stayed empty after a perfect pull.
+- `design/reader/settings-bench.js`: `drive: ok | fails`. `library/README.md`: the tree line for import.js.
+- Tests: `library/tests/test_import_store.py` (new, 6), `test_library_context.py` (+2, and its facts assertion gains `hostBooks: False`), `settings/tests/test_sync_drive.py` (+1).
+
+**Phone repo (`main`)** — `0a8240a` import shell · `f6f6554` the door
+- `src-tauri/src/lib.rs` "the books": `book_put` (raw IPC body, `frank-book-slug/-hash/-rel` headers percent-encoded; a JSON array from Tauri's postMessage fallback is taken, never asked for; logs its bytes and ms), `book_meta` (writes `.meta.json` + `.hash` into `.part/<slug>@<hash>/` and swaps it into `books/<slug>`, old version aside then gone, put back if the swap fails; answers what it replaced), `book_list`, `book_remove`. Books root `<app_data_dir>/books/`, beside `shell/`. `route()` serves `/books/<slug>/<rel>` from there with `resolve()`'s rules plus "no dot-named segment", then falls back to the dev shelf in `shell/books/`. `content_type` gains `txt`, `ogg`, `m4a`. `BOOKS_JS` injects `window.TTSTVHost.books` on its own. `build.rs` and `capabilities/default.json`: the four, nothing else. Module-head paragraph and `SHELL_DIR`'s doc corrected.
+- `tests/test_book_door.py` (new, 6). `SYNC.md` §2/§7 and `PHONE.md` §7 said the phone keeps books in the Cache API — reversed, corrected in the same commit.
+
+**Boundary.** TTSTV: `settings/` (settings.js, one test), `library/` (import.js, README line, two tests), `reader/context.js`, `design/reader/settings-bench.js`, and `clean/` by `export.py --shell`. `core/` untouched. Three module folders, one job: the prompt names each file (import.js + context.js + settings.js); it is not a move. Phone repo: `src-tauri/src/lib.rs`, `build.rs`, `capabilities/default.json`, `tests/test_book_door.py`, `SYNC.md`, `PHONE.md`, and `shell/` + `shell.manifest.json` by `import_shell.py`.
+**Left alone, dirty before this session:** TTSTV `PROMPTS/phone-pull.md` (untracked); phone repo `shell/library/library.json` (deleted), `gen/apple/frank.xcodeproj/project.pbxproj`, `…/frank_iOS.xcscheme`, `frank_iOS/Info.plist`, `frank_iOS.entitlements`, `scratch-float/`, `scratch-j13/`, `scratch26b/`.
+**Commit check.** Every commit pathspec-only, `GIT_OPTIONAL_LOCKS=0`, message file in the session home, `git show --stat HEAD` = exactly the files meant. TTSTV `4e995d3` (3 files) · `2a1c1eb` (5) · `194bbd0` (4); phone `0a8240a` (4) · `f6f6554` (6). HEAD did not move under me in either repo. No `--amend`, no `-a`.
+**Footprint.** Container only: Chromium harness + `/tmp` copies of 6 shell files; shallow GitHub clones of tauri 2.11.5, wry 0.55.1, WebKit's DOMCache.cpp and w3c/ServiceWorker (to cite, not to build). VM: a symlink shadow of TTSTV in the session home for the HEAD counts. No SSD, no GPU, no Kaggle, no Modal — 0 GPU-minutes.
+
+### 3. What the numbers are
+**Stage 0 — reproduced** (container Chromium 141 headless, from `http://localhost:<port>/`, a secure context):
+- `caches.open("t").then(c => c.put("frank://localhost/books/x/book.json", new Response("{}")))` → **`TypeError: Failed to execute 'put' on 'Cache': Request scheme 'frank' is unsupported`**
+- the same call on `http://localhost/books/x/book.json` → **ok**, and `match` finds it. `cache.add(frank://…)` → the same TypeError. `caches.keys()` → `["t"]`; `cache.match("frank://…")` → `undefined`, no throw.
+- WebKit, the phone's engine (WebKit main `52ff189c`, `Source/WebCore/Modules/cache/DOMCache.cpp`, `requestFromInfo`): `if (!request->url().protocolIsInHTTPFamily()) … return Exception { ExceptionCode::TypeError, "Request url is not HTTP/HTTPS"_s };` — and `doMatch` passes `&requestValidationFailed`, so a bad-scheme **match resolves "no match" instead of throwing**. That is exactly why `listInstalled` passed and the first `put` died.
+- Spec (w3c/ServiceWorker `index.bs`, `92aba3b`): Cache `put(request, response)` — "If innerRequest's url's scheme is not one of "http" and "https" … return a promise rejected with a TypeError" (line 2167; `addAll` line 2106). Start Register — script URL and scope URL "not one of http and https → reject with a TypeError" (lines 2730, 2741), and `ServiceWorkerContainer` is `[SecureContext]`: no worker can answer `frank://`.
+- wry's rule for the scheme: phone repo `src-tauri/src/lib.rs` `shell_origin()` — `frank://localhost` on iOS/macOS, `http://frank.localhost` on Windows/Android (wry maps a custom scheme to http there).
+- The line Osca could not see, as the bench now prints it: `Request url is not HTTP/HTTPS`.
+
+**Stage 1 — the failure is seen** (`settings/settings.js`, `finish()`/`paint()` + one state variable):
+- node (minidom, phone page `frank://localhost/settings/settings.html`, stubbed `runDriveSync` → `{ok:false, why:"X"}`): `.tr-state` = `"X"` after the press **and after `paint()`**; `why: ""` → `"Sync failed"`; a good press → `Last synced … · 26 books · 3 marks`, `.tr-say` `Pulled 26 books`. **RED at HEAD**: `.tr-state` `Never synced`, `.tr-say` `X`.
+- `design/reader/settings.html` (the real settings.js), new bench switch `drive press: fails`, Chromium 393×852 mobile: the line walks `Connecting to Drive… → Pushing marks… → Pushing position… → Asking what Drive has… → Pulling 1 of 26 · Les Pensées → … · 0/31 → Request url is not HTTP/HTTPS`; after `paint()` unchanged; `.tr-state` top **154 px**. HEAD's settings.js on the same bench: `Never synced`, the reason in `.tr-say` at top **988 px — below the 852 px viewport**. `drive press: pulls` still ends `Last synced 12:15 · 3 books · 12 marks` / `Pulled 1 book`, 0 page errors.
+
+**Tests, before → after** (VM, pytest 9.1.1 from `scratch/_studio_chrome/pylibs`; "before" = HEAD's files in a symlink shadow):
+- `library/tests` + `settings/tests`: **367 passed + 1 xfailed → 376 passed + 1 xfailed** (+6 `test_import_store.py`, +2 `test_library_context.py`, +1 `test_sync_drive.py`). `library/tests` alone 247 + 1 xfailed; `settings/tests` 129.
+- `test_import.py`, `test_library_import.py`, `test_store.py`, `reader/tests/test_library_store.py`, `test_sw_books.py`: **unchanged, pass** (59) — the Cache store is the old code moved.
+- `reader/tests`: 207 passed, 3 skipped (unchanged).
+- Phone repo `tests/`: **89 passed, 1 skipped, 4 failed** — `test_book_door.py` 6/6 (the last one failed before the shell import, as written); the 4 failures read files this job did not touch and fail at HEAD: `test_pair_link` (tauri.conf.json's scheme list gained Google's in 668142a), `test_phone_loop` ×2 (project.yml's PATH line), `test_phone_shell` (untracked `scratch26b/sync_md_patch.py`).
+- Rust: cargo unreachable from the bridge. The std-only half of the door + `mod book_tests` (7 tests) extracted and compiled with **rustc 1.95 `--test`: 7 passed, 0 warnings**; the four `#[tauri::command]` wrappers type-checked (rustc, exit 0) against a mock of `tauri::ipc::{Request, InvokeBody}` / `http::HeaderMap` with tauri 2.11.5's signatures.
+
+**The loop:** `git status --short` over the shell files before the build — only this lane's, committed. `python3 design/export.py --shell` → 61 files, 4 changed (`clean/library/import.js`, `clean/reader/context.js`, `clean/settings/settings.js`, `MANIFEST.json`). `--shell --verify` → **`VERIFY 56 identical, 5 known-and-named, 0 DRIFT`**, `ROUTES 159 … 0 land somewhere else`, exit 0. `python3 -m reader.tools.publish_shell --no-bump` → **exit 0**, 58 files, 1940.7 KB (after moving the old `out/shell` aside — see §5). Phone: `python3 tools/import_shell.py --ttstv <TTSTV>` → 59 files, 1,987,466 bytes, from `194bbd0` @ `ttstv-shell-v54`, and **`google: not carried -- no google.ios_client_id in …/TTSTV/depot/studio/account.json`** (the bridge's depot; google.json, tauri.conf.json, project.yml md5-identical before and after — 668142a's id stands). `md5sum languages/catalogue.json` `304915f7…` at the gate and at the last commit.
+
+### 4. What was NOT done
+- **`cargo test` / a build.** No cargo from the bridge (crates.io 403). The Rust is compiled only in the two partial ways in §2.
+- **Nothing pressed on a phone or the simulator.** Every claim about WKWebView is from WebKit's source, not a run: no WebKit engine in the container (Playwright's is not installed; `tests/webkit_smoke.mjs` needs `npx playwright install webkit` on the Mac).
+- **The time of one 5 MB `put`** — cannot be measured here. Osca reads it (§7).
+- `SHELL_CACHE` not bumped (`--no-bump`, as asked): the phone reads its shell embedded, but an installed PWA keeps v54's files until the next bump.
+- `library.html` untouched: its storage line still quotes `navigator.storage.estimate()` — on the phone that is WebKit's origin quota, not the books folder.
+- Not touched: `book-nav.js`, `surface.js`, `wordview.js`, the pinch, `settings.js` outside `finish()`/`paint()` (plus the one `var`), anything under the other lanes.
+
+### 5. What broke and how it was found
+- **The phone's shelf would have shown nothing** even with the door (context.js, §3) — found by reading `library.html`'s `deviceSection()` against `TTSTVContext.decide()`, then pinned by `test_on_frank_the_books_a_sync_pulled_are_on_the_shelf_and_open`.
+- **`publish_shell --no-bump` exited 1 first time**: `build_shell` `rmtree`s `out/shell`, and the bridge cannot unlink (`PermissionError … 'lookup.js'`). Nothing was removed (refused on the first file). Moved aside: **`_to_delete/out-shell.1789130260`** (TTSTV), then exit 0. `import_shell.py` did the same itself: **`_to_delete/shell.1789130268`** (phone repo).
+- Locks moved after each commit (the bridge cannot unlink them): TTSTV `_to_delete/HEAD.lock.*`, `next-index-*.lock.*` (3 commits); phone repo the same (2 commits). For Osca to clear.
+- `test_import.py::test_progress_counts_every_file_and_ends_at_one` pins the zip door's last progress at n-1, which conflicts with "onProgress reaching 31/31" if both doors share it — resolved by giving only `importFiles` the final n/n (§6).
+- My own first context test passed a row it should have failed: node's `globalThis.crypto` ignores plain assignment, so "no crypto.subtle" was never set up. It overrides with `Object.defineProperty` now and the row fails the way it should.
+
+### 6. Decisions made on Osca's behalf
+- **Books root** `<app_data_dir>/books/`, beside `shell/`; a version lands in `.part/<slug>@<hash>/` and `book_meta` swaps it in, so a half-pulled book has no row and the installed version is untouched (the promise the Cache store already made). Folder = slug, not slug@hash, because the reader asks `books/<slug>/…`.
+- **Meta shape** = import.js's own meta object, stored verbatim as `.meta.json`; the hash also as plain `.hash` so a commit can name what it replaced without a JSON parser.
+- **IPC** = raw body + headers (tauri 2.11.5: `ipc::Request`/`InvokeBody::Raw`, the shape of Tauri's own `examples/api` `echo`; `ipc-protocol.js` sends an `ArrayBuffer` view as `application/octet-stream` over `ipc://` on iOS; wry 0.55.1 reads `HTTPBody` or `HTTPBodyStream`). Android never uses the custom-protocol IPC ("does not have support to reading the request body"), so there the bytes arrive as a JSON array — accepted, slowly; Tauri's own doc suggests base64 for Android, owed if Android matters.
+- `book_put` is a **synchronous** command (main thread, one `fs::write`) — Tauri's documented raw-request shape; an async variant is a later measurement, not a guess.
+- `BOOKS_JS` is its **own** init script, not inside `HOST_JS` (the prompt said HOST_JS): HOST_JS's tests pin "two commands, two invokes", and google_js/PAIR_JS already set the one-script-per-concern pattern.
+- **`device` for a host with a door** (context.js) — see §3/§5.
+- Only `importFiles` reports n/n at the end of a book.
+- `/books/…` falls back to `shell/books/` so `tools/dev_books.py`'s simulator shelf keeps opening.
+
+### 7. What Osca must press
+1. `cd "IOS TTS TV/src-tauri" && cargo test` — first. Expect the old tests plus `book_tests` (7).
+2. `tools/phone.sh --shell --ttstv ~/Documents/RUNNERS/TTSTV/TTSTV` (on the Mac the import also carries the Google id — its `google:` line should say `already in place`).
+3. On the phone: Settings ▸ Sync ▸ **Sync**. Expected: the line walks to `Pulling 26 of 26 · … · n/n`, then `Last synced HH:MM · 26 books · …`, and the note `Pulled 26 books`. If it fails, the reason is now on that line — send it.
+4. Library: **On this device** lists the books; tap **Les Pensées** (`blaise-pascal`) — the book must open and a chapter must read.
+5. The cost of one put: Xcode's console for the debug build, filter `book_put` — lines like `frank: book_put blaise-pascal@<hash>/audio/c001.opus -- 5242880 bytes in NN ms`. The biggest `audio/` line is the 5 MB answer.
+
+### 8. What is owed
+- `cargo test` and the phone press (§7) — nothing here is "done" until then.
+- Audio from `frank://localhost/books/…/audio/*.opus` through a handler that ignores `Range`: the dev shelf played through the same handler before (PROBE_JS measured it), so it is expected to work; if a long chapter will not seek, Range support in the handler is the fix.
+- Android: base64 or the custom protocol for `book_put` (JSON array today).
+- The storage line on the phone's Library measures the wrong store (§4).
+- Clear the `_to_delete/` items in §5.
+
+### 9. Questions
+- Should `book_put` move off the main thread (`#[tauri::command(async)]`) if the per-file ms in §7 shows jank during a 26-book pull?
+- Should the phone's Library stop being a "bench" (`kind: app`, the Sources rail) now that it is a device? Not this job's; the flag is one line in `context.js`.
+
+---
+
 ## THE SHELL RE-IMPORTS WITH TWO REGRESSIONS FIXED — 2 across again, and the reader's header out from under the island · 7 Sep
 
 **Osca, 7 Sep:** *"two phone regressions found in the simulator, log both as lost/broken functionality. Repo TTSTV (FRANK), fix in design/ where the loop puts it … Prove both via the phone lane's probe loop."*
