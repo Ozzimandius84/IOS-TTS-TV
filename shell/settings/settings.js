@@ -2077,16 +2077,40 @@
   /* Pure: the row's line from the last record. "Last synced 09:41 · 31
    * books · 12 marks". `now` is for the date: a sync from another day says
    * the day rather than a time that would read as today's. */
-  function syncStateLine(last, now) {
-    if (!last || !last.at) return "Never synced";
-    var d = new Date(last.at), n = new Date(now == null ? Date.now() : now);
+  function syncWhen(at, now) {
+    var d = new Date(at), n = new Date(now == null ? Date.now() : now);
     var sameDay = d.getFullYear() === n.getFullYear() && d.getMonth() === n.getMonth() && d.getDate() === n.getDate();
     var pad = function (x) { return (x < 10 ? "0" : "") + x; };
-    var when = sameDay ? pad(d.getHours()) + ":" + pad(d.getMinutes())
+    return sameDay ? pad(d.getHours()) + ":" + pad(d.getMinutes())
       : d.getDate() + " " + ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][d.getMonth()];
+  }
+  function syncStateLine(last, now) {
+    if (!last || !last.at) return "Never synced";
+    var when = syncWhen(last.at, now);
     var books = Number(last.books) || 0, marks = Number(last.marks) || 0;
     return "Last synced " + when + " · " + books + (books === 1 ? " book" : " books")
       + " · " + marks + (marks === 1 ? " mark" : " marks");
+  }
+
+  /* Pure: the row's line from the APP's pull (G-SYNCBG, 11 Sep) --
+   * `TTSTVHost.sync.status()`, on the phone. What ran and why: running, the
+   * words the page's own pull used ("Pulling 3 of 26 · Hamlet · 12/31");
+   * over, "Synced over LAN · 2 books · 17:41", "Drive · up to date · 17:41",
+   * with "on opening" / "on return" when the app asked by itself; short,
+   * how far it got and the reason. "" when this launch has run nothing. */
+  var PULL_WHO = { drive: "Drive", lan: "LAN" };
+  var PULL_WHY = { launch: "on opening", foreground: "on return" };
+  function syncPullLine(st, now) {
+    if (!st || !st.since) return "";
+    var who = PULL_WHO[st.transport] || "Sync";
+    if (st.running) {
+      if (!st.i) return "Pulling · " + who + "…";
+      return "Pulling " + st.i + " of " + st.n + " · " + (st.book || st.slug || "") + " · " + st.done + "/" + st.total;
+    }
+    if (st.why) return who + " · " + (st.pulled ? st.pulled + " of " + st.n + " pulled · " : "") + st.why;
+    var tail = " · " + syncWhen(st.ended || st.since, now) + (PULL_WHY[st.trigger] ? " · " + PULL_WHY[st.trigger] : "");
+    if (st.pulled) return "Synced over " + who + " · " + st.pulled + (st.pulled === 1 ? " book" : " books") + tail;
+    return who + " · up to date" + tail;
   }
 
   /* Pure: the Connected-as line. The account when there is one; the paired
@@ -2225,6 +2249,15 @@
         if (!r.ok) throw new Error(r.why);
         var man = r.body;
         out.books = (man.books || []).length;
+        // G-SYNCBG: on the phone the books go to the app, which pulls them
+        // outside this page; this press only plans them (library/drive.js)
+        var D = driveModule();
+        if (o.pull && D && typeof D.syncHandOff === "function") {
+          say("Handing the books to Frank…");
+          return D.syncHandOff(o.pull, "lan", { base: remote.base, token: remote.token }, man.books || [],
+                               { bundle: bundle, href: href, trigger: "press" })
+            .then(function (h) { out.handed = h.handed; out.refused = h.refused; out.status = h.status; });
+        }
         if (!bundle || typeof bundle.importFiles !== "function") {
           throw new Error("this page cannot import books (library/import.js is not loaded)");
         }
@@ -2322,8 +2355,17 @@
   var SYNC_DRIVE_LAST_KEY = "ttstv.sync.driveLast";     // {at, books, marks, pushed}
   var SYNC_SETTINGS_KEY = "ttstv.reader.settings";      // prefs.js's record {version, saved, settings}
   var ACCOUNT_POLL_MS = 1000;
+  var PULL_POLL_MS = 1000;                              // the app's pull, polled while it runs (G-SYNCBG)
 
   function driveModule() { return global.TTSTVDrive || null; }
+  /* The app's pull (G-SYNCBG): `TTSTVHost.sync` on the phone, with drive.js
+   * here to plan for it -- else null, and every press is the page's own. */
+  function syncHostPull() {
+    var h = global.TTSTVHost, D = driveModule();
+    var s = h && h.sync;
+    return s && typeof s.start === "function" && typeof s.status === "function"
+      && D && typeof D.syncHandOff === "function" ? s : null;
+  }
   /* The store the adapter is handed: this page's own readers and writers. */
   function syncStore() {
     return {
@@ -2774,6 +2816,29 @@
      * pressed four times and saw nothing. Memory only: a reload is a fresh
      * look, and `last` (the last GOOD sync) is never overwritten by a bad one. */
     var failed = null;
+    /* THE APP'S PULL (G-SYNCBG, 11 Sep). On the phone a press plans the books
+     * and hands them to the app, which pulls them outside this page; the
+     * row paints the app's status -- polled while it runs, whoever started
+     * it (a press, or the app's own ask on opening and on return, which says
+     * so with `ttstv:sync`). A reload of this page reads the same status
+     * back. `pullHost` is null on the Mac and in a browser, and there the
+     * row is exactly what it was. */
+    var pullHost = isStudio ? null : syncHostPull();
+    var pullSt = null;
+    var watching = false;
+    function watchPull(st) {
+      if (!pullHost) return;
+      if (st) { pullSt = st; paint(); }
+      if (watching) return;
+      watching = true;
+      (function tick() {
+        Promise.resolve().then(function () { return pullHost.status(); }).then(function (s2) {
+          if (s2) pullSt = s2;
+          paint();
+          if (s2 && s2.running) global.setTimeout(tick, PULL_POLL_MS); else watching = false;
+        }, function () { watching = false; });
+      })();
+    }
     var found = [];
     /* Google is built (26b): on the Mac the press is Studio's loopback
      * flow, on the phone the host's browser + this page's PKCE. A page with
@@ -2825,7 +2890,7 @@
       gdPick.setAttribute("aria-pressed", useDrive ? "true" : "false");
       gdPick.disabled = !signed;
       gdPick.title = signed ? "" : "sign in with Google first";
-      if (!busy) paintLine(failed != null ? failed : syncStateLine(last));
+      if (!busy) paintLine(failed != null ? failed : (pullSt && pullSt.since ? syncPullLine(pullSt) : syncStateLine(last)));
       if (isStudio) {
         var s = studio || {};
         var on = !!s.port;
@@ -2917,6 +2982,12 @@
         failed = String(res.why || "") || "Sync failed";
         say.textContent = "";
       }
+      if (res.ok && res.handed != null) {
+        // the books are the app's now: the row follows its pull
+        var refused = res.refused || [];
+        if (refused.length) say.textContent = refused.length + (refused.length === 1 ? " book" : " books") + " not taken: " + refused[0].why;
+        watchPull(res.status);
+      }
       if (isStudio) return ask().then(paint);
       paint();
     }
@@ -2964,6 +3035,7 @@
         }
         return runSync({ kind: "drive", token: googleAccessToken }, {
           say: paintLine, bundle: global.TTSTVBundle || null, href: global.location && global.location.href,
+          pull: pullHost,
         }).then(finishDrive).then(finish);
       }
       var remote = syncRemote(origin(), pair);
@@ -2979,7 +3051,7 @@
       syncBtn.disabled = true;
       return runSync(remote, {
         say: paintLine, bundle: global.TTSTVBundle || null,
-        href: global.location && global.location.href,
+        href: global.location && global.location.href, pull: pullHost,
       }).then(finish);
     }
 
@@ -3081,8 +3153,15 @@
 
     paint();
     ask().then(paint);
+    if (pullHost) {
+      watchPull();
+      if (typeof global.addEventListener === "function") {
+        global.addEventListener("ttstv:sync", function (e) { watchPull(e && e.detail); });
+      }
+    }
 
     return { ask: ask, paint: paint, press: press, signIn: signIn, signOut: signOut,
+             get pull() { return pullSt; },
              get pair() { return pair; }, get last() { return last; }, get account() { return acctNow(); },
              get through() { return syncThrough(acctNow(), through); }, get driveLast() { return driveLast; } };
   }
@@ -4448,7 +4527,7 @@
   Object.assign(ROOT, {
     TABS: TABS, TAB_KEY: TAB_KEY, KAGGLE: KAGGLE, MODAL: MODAL,
     SYNC: SYNC, SYNC_PAIR_KEY: SYNC_PAIR_KEY, SYNC_LAST_KEY: SYNC_LAST_KEY, SYNC_ACCOUNT_KEY: SYNC_ACCOUNT_KEY,
-    syncStateLine: syncStateLine, syncWhoLine: syncWhoLine, syncCodeText: syncCodeText,
+    syncStateLine: syncStateLine, syncPullLine: syncPullLine, syncHostPull: syncHostPull, syncWhoLine: syncWhoLine, syncCodeText: syncCodeText,
     syncRemote: syncRemote, syncUrl: syncUrl, syncBaseOf: syncBaseOf, syncDeviceId: syncDeviceId,
     syncLocalMarginalia: syncLocalMarginalia, syncLocalPositions: syncLocalPositions,
     syncWriteMarginalia: syncWriteMarginalia, syncWritePositions: syncWritePositions,

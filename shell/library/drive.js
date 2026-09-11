@@ -45,6 +45,20 @@
    from `remote.token(force)`; a 401 refreshes once; anything else is a
    sentence in `why`, never a throw out of the press.
 
+   THE BOOKS GO TO THE APP WHEN THERE IS ONE (G-SYNCBG, 11 Sep). Osca: *"the
+   phone's pull is JavaScript inside the Settings page. Leave the page and it
+   cancels"* -- and opening a book is leaving the page. On Frank the host has
+   a door for the pull, `TTSTVHost.sync` {start, status, stop, auto}, and the
+   press hands it a JOB instead of fetching: this file still decides WHAT
+   (`syncJob`: library.json's rows or Studio's manifest, minus what
+   `book_list` says is here, each row's file set and the shelf's row), and
+   the app does the HOW on a thread of its own (the phone repo's
+   `src-tauri/src/pull.rs`). The ledgers stay here -- small, merged both ways.
+   The app also asks for a plan by itself, on launch and on every return to
+   the foreground (`syncAuto`, called by the door in whatever page is
+   showing). Where there is no such door -- the Mac's pages, the PWA -- the
+   press below is exactly what it was.
+
    The word a credential's name uses appears here only as Google's own wire
    vocabulary (`refresh_token`, `/token`, `nextPageToken`) -- which is why
    this is its own file and not a block in settings.js, whose test
@@ -457,6 +471,10 @@ function runDriveSync(remote, o) {
   }
   var device = o.device || (store.deviceId && store.deviceId());
   var out = { ok: false, books: 0, marks: 0, pulled: 0, why: null };
+  // G-SYNCBG: with the host's pull the books are PLANNED here and handed over
+  // after the ledgers; without it (every host but the phone) nothing changes
+  var pull = syncHostPull({ sync: o.pull });
+  var pullRows = null;
   var drive = driveClient(remote.token, fetchFn);
   var folder = driveFolder(drive);
   say("Connecting to Drive…");
@@ -498,6 +516,7 @@ function runDriveSync(remote, o) {
   }).then(function (lib) {
     var rows = (lib.books || []).filter(function (b) { return b && typeof b.slug === "string" && typeof b.hash === "string" && !b.superseded; });
     out.books = rows.length;
+    if (pull) { pullRows = rows; return null; }
     if (!rows.length) return null;
     if (!bundle || typeof bundle.importFiles !== "function") {
       throw new Error("this page cannot import books (library/import.js is not loaded)");
@@ -541,6 +560,11 @@ function runDriveSync(remote, o) {
       return null;
     });
   }).then(function () {
+    if (!pull) return null;
+    say("Handing the books to Frank…");
+    return syncHandOff(pull, "drive", syncDriveAuth, pullRows || [], { bundle: bundle, href: href, trigger: "press" })
+      .then(function (h) { out.handed = h.handed; out.refused = h.refused; out.status = h.status; });
+  }).then(function () {
     out.ok = true;
     out.calls = drive.calls;
     return out;
@@ -551,6 +575,219 @@ function runDriveSync(remote, o) {
   });
 }
 
+/* ============================================ THE PULL'S PLAN (G-SYNCBG)
+ * The app downloads; this decides what. A JOB is what `TTSTVHost.sync.start`
+ * takes and `src-tauri/src/pull.rs` (the phone repo) runs:
+ *
+ *   {transport: "drive" | "lan", trigger: "press" | "launch" | "foreground",
+ *    auth: {access, refresh, expires, clientId} | {base, token},
+ *    books: [{slug, hash, title, meta, files: [{rel, id | url, bytes}]}],
+ *    why?}                       -- set when there was nothing to plan WITH
+ *
+ * `meta` is the row the shelf shows, key for key what `import.js::importBook`
+ * writes -- built from Studio's row and the file list, because the app never
+ * reads book.json (`syncBookMeta`). A row the device already holds at that
+ * hash is not in the job; neither is a superseded one; a row import.js would
+ * refuse (no book.json, a schema above its ceiling) is in `refused`, with
+ * import.js's own sentence, and the rest go. The app commits each book's
+ * row LAST, as `book_meta` does, so a half-pulled book is never on the
+ * shelf and the next start resumes it by byte count. */
+var SYNC_PAIR_KEY = "ttstv.sync.pair";   // settings.js's pairing {base, token, name} -- READ here, for the app's own ask
+var SYNC_SCHEMA_MAX = 7;                  // import.js's SCHEMA_MAX, for a page that has not loaded import.js
+var SYNC_LAN_MS = 4000;                   // how long the app's ask waits for the paired Studio before trying Drive
+
+/* The host's pull, or null. Duck-typed on the two calls the press needs. */
+function syncHostPull(host) {
+  var s = host && host.sync;
+  return s && typeof s.start === "function" && typeof s.status === "function" ? s : null;
+}
+
+/* Pure: import.js's meta row for a book nobody has read yet. The shelf's
+ * facts come from Studio's row (title, author, lang, words, schema_version,
+ * and first_words / form when the row carries them); the rest -- counts,
+ * the has_* flags, bytes -- from its file list, which is what importBook
+ * derives them from too. `chapters` is the row's when it says, else the
+ * chapter texts (one per chapter, export_bundle's rule). */
+function syncBookMeta(row, rels, now) {
+  var has = function (rel) { return rels.indexOf(rel) >= 0; };
+  var count = function (re) { return rels.filter(function (r) { return re.test(r); }).length; };
+  var timed = count(/^timings\//), voiced = count(/^audio\//), texted = count(/^chapters\//);
+  var bytes = 0;
+  (row.files || []).forEach(function (f) { if (f && has(f.rel)) bytes += Number(f.bytes) || 0; });
+  return {
+    slug: row.slug, hash: row.hash, title: row.title || row.slug, author: row.author || null, lang: row.lang || null,
+    chapters: typeof row.chapters === "number" ? row.chapters : Math.max(texted, timed),
+    words: typeof row.words === "number" ? row.words : null, bytes: bytes,
+    has_timings: timed > 0, has_audio: voiced > 0,
+    chapters_timed: timed, chapters_voiced: voiced, chapters_texted: texted,
+    has_book_data: has("book-data.js"), has_word_map: texted > 0 && timed > 0,
+    has_spans: has("spans.json"), has_dictionary: has("dictionary.json"), has_cover: has("cover.jpg"),
+    first_words: typeof row.first_words === "string" ? row.first_words : null,
+    form: typeof row.form === "string" ? row.form : null,
+    files: rels.length, imported: now == null ? Date.now() : now, schema_version: row.schema_version || 1,
+  };
+}
+
+/* Pure: one row -> one book of the job, or {slug, why} when this device may
+ * not take it. The payload allowlist and the ceiling are import.js's when the
+ * page loaded it (`o.bundle`, else `window.TTSTVBundle`); the app refuses a
+ * bad path on its own either way. */
+function syncJobBook(row, transport, o) {
+  o = o || {};
+  var B = o.bundle !== undefined && o.bundle !== null ? o.bundle : global.TTSTVBundle;
+  var isPayload = B && typeof B.isPayload === "function" ? B.isPayload : function () { return true; };
+  var max = B && typeof B.SCHEMA_MAX === "number" ? B.SCHEMA_MAX : SYNC_SCHEMA_MAX;
+  var files = row.files.filter(function (f) { return f && typeof f.rel === "string" && isPayload(f.rel); });
+  var rels = files.map(function (f) { return f.rel; });
+  if (rels.indexOf("book.json") < 0) return { slug: row.slug, why: "Studio listed no book.json for " + row.slug };
+  var v = row.schema_version == null ? 1 : row.schema_version;
+  if (typeof v === "number" && v > max) {
+    return { slug: row.slug, why: "book.json is schema_version " + v + "; this reader knows up to " + max + " — update the app" };
+  }
+  return {
+    slug: row.slug, hash: row.hash, title: row.title || row.slug,
+    meta: syncBookMeta(row, rels, o.now),
+    files: files.map(function (f) {
+      var out = { rel: f.rel, bytes: typeof f.bytes === "number" ? f.bytes : null };
+      if (transport === "drive") out.id = f.id; else out.url = f.url;
+      return out;
+    }),
+  };
+}
+
+/* Pure: the job. `rows` are library.json's books (Drive) or the manifest's
+ * (LAN), in their order -- the app pulls in this order; `have` is
+ * `book_list`'s [{slug, hash}]. One book per slug (the last live row wins). */
+function syncJob(transport, auth, rows, have, o) {
+  o = o || {};
+  var got = {};
+  (have || []).forEach(function (b) { if (b && b.slug) got[b.slug + "@" + b.hash] = true; });
+  var order = [], bySlug = {};
+  (rows || []).forEach(function (r) {
+    if (!r || typeof r.slug !== "string" || typeof r.hash !== "string" || r.superseded || !Array.isArray(r.files)) return;
+    if (!(r.slug in bySlug)) order.push(r.slug);
+    bySlug[r.slug] = r;
+  });
+  var books = [], refused = [];
+  order.forEach(function (slug) {
+    var r = bySlug[slug];
+    if (got[r.slug + "@" + r.hash]) return;
+    var b = syncJobBook(r, transport, o);
+    if (b.why) refused.push(b); else books.push(b);
+  });
+  return { transport: transport, trigger: o.trigger || "press", auth: auth || {}, books: books, refused: refused };
+}
+
+/* The credentials, read when the job is handed over (a refresh a moment
+ * ago is in them). Drive: this file's own token record, the four names the
+ * app takes. LAN: the pairing. */
+function syncDriveAuth() {
+  var t = syncRead(GOOGLE_TOKEN_KEY) || {};
+  return { access: t.access || null, refresh: t.refresh || null, expires: Number(t.expires) || null, clientId: t.clientId || null };
+}
+
+/* What this device holds: the door's own list -- the folder the app writes
+ * into -- else import.js's (a page with no door has no app pull either). */
+function syncHave(o, host) {
+  o = o || {};
+  if (Array.isArray(o.have)) return Promise.resolve(o.have);
+  var door = host && host.books;
+  if (door && typeof door.list === "function") return Promise.resolve(door.list()).then(function (r) { return Array.isArray(r) ? r : []; });
+  var B = o.bundle || global.TTSTVBundle;
+  if (B && typeof B.listInstalled === "function") return Promise.resolve(B.listInstalled(o.href));
+  return Promise.resolve([]);
+}
+
+/* The press's last step on the phone: plan against what is here, hand the
+ * job over. Resolves {handed, refused, status}. `auth` may be a function,
+ * read at the moment of the hand-off. */
+function syncHandOff(pull, transport, auth, rows, o) {
+  o = o || {};
+  return syncHave(o, o.host || global.TTSTVHost).then(function (have) {
+    var job = syncJob(transport, typeof auth === "function" ? auth() : auth, rows, have, o);
+    return Promise.resolve(pull.start(job)).then(function (st) {
+      return { handed: job.books.length, refused: job.refused, status: st || null };
+    });
+  });
+}
+
+function whyOf(e) { return String((e && e.message) || e); }
+
+/* The paired Studio's manifest -> a LAN job, or a job whose `why` says
+ * Studio did not answer (in `SYNC_LAN_MS`). */
+function syncPlanLan(pair, o) {
+  var fetchFn = o.fetch || global.fetch;
+  var ctl = typeof AbortController === "function" ? new AbortController() : null;
+  var timer = ctl ? global.setTimeout(function () { ctl.abort(); }, o.lanMs || SYNC_LAN_MS) : null;
+  var url = pair.base + "/sync/manifest?t=" + encodeURIComponent(pair.token);
+  return Promise.resolve().then(function () {
+    return fetchFn(url, { cache: "no-store", signal: ctl ? ctl.signal : undefined });
+  }).then(function (res) {
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    return res.json();
+  }).then(function (man) {
+    return syncHave(o, o.host).then(function (have) {
+      return syncJob("lan", { base: pair.base, token: pair.token }, (man && man.books) || [], have, o);
+    });
+  }).catch(function (e) {
+    return { transport: "lan", trigger: o.trigger || "press", auth: {}, books: [], why: "Studio not reachable (" + whyOf(e) + ")" };
+  }).then(function (job) {
+    if (timer) global.clearTimeout(timer);
+    return job;
+  });
+}
+
+/* Drive's library.json -> a Drive job, or a job whose `why` is Drive's refusal. */
+function syncPlanDrive(o) {
+  var fetchFn = o.fetch || global.fetch;
+  var drive = driveClient(function (force) { return googleAccessToken(fetchFn, force); }, fetchFn);
+  var folder = driveFolder(drive);
+  return folder.open().then(function () { return folder.library(); }).then(function (lib) {
+    return syncHave(o, o.host).then(function (have) {
+      return syncJob("drive", syncDriveAuth(), lib.books, have, o);
+    });
+  }).catch(function (e) {
+    return { transport: "drive", trigger: o.trigger || "press", auth: {}, books: [], why: whyOf(e) };
+  });
+}
+
+/* The app's own ask (D2, D4 -- Osca, 11 Sep): nothing when this device is
+ * neither signed in nor paired; the paired Studio when it answers, the
+ * fastest way; Drive otherwise; and when neither could be read, a job that
+ * carries the reason, so the app's status says what was tried. Resolves
+ * the job or null. */
+function syncPlan(host, o) {
+  o = Object.assign({ host: host }, o || {});
+  var tok = syncRead(GOOGLE_TOKEN_KEY);
+  var signed = !!(tok && tok.refresh && tok.clientId);
+  var pair = o.pair !== undefined ? o.pair : syncRead(SYNC_PAIR_KEY);
+  var paired = !!(pair && pair.base && pair.token);
+  if (!signed && !paired) return Promise.resolve(null);
+  return (paired ? syncPlanLan(pair, o) : Promise.resolve(null)).then(function (lan) {
+    if (lan && !lan.why) return lan;
+    if (!signed) return lan;
+    return syncPlanDrive(o);
+  });
+}
+
+/* `TTSTVHost.sync.auto(trigger)` lands here: leave a running pull alone,
+ * else plan and start. Resolves the app's status, or null when there was
+ * nothing to ask. Never throws: the app asked, and a page has no one to
+ * tell. */
+function syncAuto(host, o) {
+  o = o || {};
+  var pull = syncHostPull(host);
+  if (!pull) return Promise.resolve(null);
+  return Promise.resolve(pull.status()).then(function (st) {
+    if (st && st.running) return st;
+    return syncPlan(host, o).then(function (job) {
+      if (!job) return null;
+      job.trigger = o.trigger || "foreground";
+      return pull.start(job);
+    });
+  }).catch(function () { return null; });
+}
+
 global.TTSTVDrive = {
   GOOGLE: GOOGLE, DRIVE: DRIVE, GOOGLE_TOKEN_KEY: GOOGLE_TOKEN_KEY, GOOGLE_REDIRECT_KEY: GOOGLE_REDIRECT_KEY,
   googlePkce: googlePkce, googleAuthUrl: googleAuthUrl, googleRedirectParams: googleRedirectParams,
@@ -558,5 +795,9 @@ global.TTSTVDrive = {
   googleSignInPhone: googleSignInPhone, googleSignOutPhone: googleSignOutPhone, googleAwaitRedirect: googleAwaitRedirect,
   driveClient: driveClient, driveFolder: driveFolder, runDriveSync: runDriveSync,
   syncMergeMarks: syncMergeMarks, syncMergePositions: syncMergePositions, syncMergeSettings: syncMergeSettings,
+  // the pull's plan (G-SYNCBG): the job the app runs
+  SYNC_PAIR_KEY: SYNC_PAIR_KEY, syncHostPull: syncHostPull, syncBookMeta: syncBookMeta, syncJobBook: syncJobBook,
+  syncJob: syncJob, syncDriveAuth: syncDriveAuth, syncHave: syncHave, syncHandOff: syncHandOff,
+  syncPlanLan: syncPlanLan, syncPlanDrive: syncPlanDrive, syncPlan: syncPlan, syncAuto: syncAuto,
 };
 })(typeof window !== "undefined" ? window : globalThis);
