@@ -40,6 +40,14 @@
 // `<shell>/books/<slug>/book.json` and so on -- so reader/sw.js answers them
 // with a plain cache-first match and `reader.html` needs no change at all.
 //
+// **That is the Cache store, and since 11 Sep it is one of two** (G-PULL,
+// "the store", below). On the phone the shell is `frank://localhost/`, the
+// Cache API refuses every non-http(s) URL, and the book goes to the host's
+// door instead -- files on disk under the app's data folder, answered at the
+// very same `frank://localhost/books/<slug>/...` URLs by Frank's own handler.
+// Which store is decided by the host, once; every other line here is the
+// same for both.
+//
 // Nothing here trusts the zip's filename. The slug is `book.json`'s own
 // `id`, the version is the hash of its word ids; a bundle renamed on the way
 // through AirDrop imports as exactly the same book.
@@ -151,6 +159,132 @@ const TTSTVBundle = (() => {
     return new URL("../books/", href || (typeof location !== "undefined" ? location.href : "http://localhost/reader/"));
   }
   function bookUrl(slug, rel, href) { return new URL(slug + "/" + rel, booksBase(href)).href; }
+
+  // ------------------------------------------------------------ the store
+  /** WHERE A BOOK IS KEPT: one seam, two stores (G-PULL, Osca, 11 Sep 2026).
+   *
+   *  The Cache API was the only store until the phone's first real pull. On
+   *  the real iPhone the Sync press read Drive's `library.json` (26 rows),
+   *  said `Pulling 1 of 26 · Les Pensées · 0/31`, and failed on the first
+   *  byte of the first file, every press. Frank serves the shell at
+   *  `frank://localhost/` (wry's custom scheme on WKWebView), and `Cache.put`
+   *  refuses any request whose scheme is not http or https -- the Service
+   *  Workers spec's own put() step ("return a promise rejected with a
+   *  TypeError"), in WebKit's words `Request url is not HTTP/HTTPS`
+   *  (DOMCache.cpp, requestFromInfo). `caches.keys()` and `match()` do NOT
+   *  throw -- WebKit answers a bad-scheme match with "no match" -- which is
+   *  exactly why `listInstalled` passed and the first `put` did not. And a
+   *  Cache there would be useless even if it took the bytes: nothing reads
+   *  it. A service worker needs http(s) as well, and on the phone
+   *  `frank://localhost/books/...` is answered by the crate's own handler,
+   *  off disk (the phone repo's `src-tauri/src/lib.rs`).
+   *
+   *  So there are two stores behind four verbs, and `importBook`,
+   *  `listInstalled` and `removeBook` call the store and nothing else --
+   *  nothing outside this block names `caches`:
+   *
+   *    put(slug, hash, rel, bytes, contentType)   one file of one version
+   *    meta(slug, hash, metaObj) -> [replaced]    the row the shelf shows,
+   *                                               written LAST: it is the
+   *                                               commit, and an older
+   *                                               version goes only now
+   *    list()   -> [row]                          what is on this device
+   *    remove(slug) -> n                          every version of the slug
+   *
+   *  `CacheStore` is the code that stood in importBook/listInstalled/
+   *  removeBook until today, moved and not rewritten: one Cache per version,
+   *  entries under the URLs the reader asks for, the meta entry, the older
+   *  caches of the slug dropped once the new one is complete. `HostStore`
+   *  hands the same four calls to `TTSTVHost.books` -- the phone's door,
+   *  which writes `<app data>/books/<slug>/<rel>` and serves it back at the
+   *  same URL. Which one is decided ONCE, when this file loads, by whether
+   *  the host offers a door (the phone injects it before any page script
+   *  runs); the PWA and the Mac's pages have none and keep the Cache. */
+  function hostDoor() {
+    const h = typeof globalThis !== "undefined" ? globalThis.TTSTVHost : undefined;
+    const d = h && h.books;
+    return (d && typeof d.put === "function" && typeof d.meta === "function"
+      && typeof d.list === "function" && typeof d.remove === "function") ? d : null;
+  }
+  const DOOR = hostDoor();
+  let forced = null;              // a test's store (useStore), else the host decides
+
+  function CacheStore(href) {
+    return {
+      kind: "cache",
+      async put(slug, hash, rel, bytes, type) {
+        const cache = await caches.open(cacheName(slug, hash));
+        await cache.put(bookUrl(slug, rel, href), new Response(bytes, {
+          headers: { "Content-Type": type, "Content-Length": String(bytes.length) },
+        }));
+      },
+      async meta(slug, hash, meta) {
+        const name = cacheName(slug, hash);
+        const cache = await caches.open(name);
+        await cache.put(bookUrl(slug, META_FILE, href), new Response(JSON.stringify(meta), {
+          headers: { "Content-Type": "application/json" },
+        }));
+        // Only once the new cache is complete: a power cut mid-import leaves
+        // the old book whole and the new one partial-but-unreferenced, never
+        // a slug with no book behind it.
+        const replaced = [];
+        for (const k of await caches.keys()) {
+          const p = parseCacheName(k);
+          if (!p || p.slug !== slug || k === name) continue;
+          await caches.delete(k);
+          replaced.push(k);
+        }
+        return replaced;
+      },
+      async list() {
+        const out = [];
+        for (const name of await caches.keys()) {
+          const parsed = parseCacheName(name);
+          if (!parsed) continue;
+          const cache = await caches.open(name);
+          const res = await cache.match(bookUrl(parsed.slug, META_FILE, href));
+          if (!res) { out.push({ slug: parsed.slug, hash: parsed.hash, title: parsed.slug, broken: true, bytes: 0, chapters: 0 }); continue; }
+          out.push(await res.json());
+        }
+        return out;
+      },
+      async remove(slug) {
+        let gone = 0;
+        for (const name of await caches.keys()) {
+          const parsed = parseCacheName(name);
+          if (parsed && parsed.slug === slug) { if (await caches.delete(name)) gone++; }
+        }
+        return gone;
+      },
+    };
+  }
+
+  /** The phone's door (`TTSTVHost.books`, lib.rs `BOOKS_JS`): `put` sends
+   *  the bytes as the raw IPC body, `meta` commits the version (the host
+   *  swaps the finished folder in and says which older version it took
+   *  out), `list` reads every `.meta.json`, `remove` takes the slug's folder.
+   *  The content type is not sent: the handler that serves the file back
+   *  types it by its extension, as it types every file of the shell. */
+  function HostStore(door) {
+    return {
+      kind: "host",
+      put: (slug, hash, rel, bytes) => Promise.resolve(door.put(slug, hash, rel, bytes)),
+      meta: (slug, hash, meta) => Promise.resolve(door.meta(slug, hash, meta))
+        .then(r => (Array.isArray(r) ? r : [])),
+      list: () => Promise.resolve(door.list()).then(rows => (Array.isArray(rows) ? rows : [])),
+      remove: slug => Promise.resolve(door.remove(slug)).then(n => Number(n) || 0),
+    };
+  }
+
+  /** The store for one call. A CacheStore is bound to the page's href
+   *  because its keys are URLs; the host's is not. */
+  function storeFor(href) {
+    if (forced) return forced;
+    return DOOR ? HostStore(DOOR) : CacheStore(href);
+  }
+  /** Tests only: put a store in front of the host's choice, or `null` to go
+   *  back to it. */
+  function useStore(s) { forced = s || null; return forced; }
 
   // ------------------------------------------------------------ book.json
   /** Every word id in the book, in document order -- the sequence
@@ -287,22 +421,18 @@ const TTSTVBundle = (() => {
     }
     const slug = book.id;
     const hash = await bookHash(check.wordIds);
-    const name = cacheName(slug, hash);
-    const already = (await caches.keys()).filter(k => {
-      const p = parseCacheName(k); return p && p.slug === slug;
-    });
-    const replaced = already.filter(k => k !== name);
+    const store = storeFor(href);
+    // "this exact book is already here" -- a version of the slug with this
+    // hash, finished or not (a Cache with no meta entry is listed, broken)
+    const reimported = (await store.list()).some(b => b && b.slug === slug && b.hash === hash);
 
-    const cache = await caches.open(name);
     let bytes = 0, chaptersTimed = 0, chaptersVoiced = 0, chaptersTexted = 0;
     for (const [rel, entry] of files) {
       onProgress({ done: count.done, total: count.total, label: rel, slug });
       // book.json was read once already, to validate: the same bytes are
       // stored, not a second read of them (one request fewer over the wire)
       const data = entry === bookEntry ? bookBytes : await read(entry);
-      await cache.put(bookUrl(slug, rel, href), new Response(data, {
-        headers: { "Content-Type": contentType(rel), "Content-Length": String(data.length) },
-      }));
+      await store.put(slug, hash, rel, data, contentType(rel));
       bytes += data.length;
       if (rel.startsWith("timings/")) chaptersTimed++;
       if (rel.startsWith("audio/")) chaptersVoiced++;
@@ -328,14 +458,12 @@ const TTSTVBundle = (() => {
       has_dictionary: files.has("dictionary.json"),
       files: files.size, imported: Date.now(), schema_version: book.schema_version || 1,
     };
-    await cache.put(bookUrl(slug, META_FILE, href), new Response(JSON.stringify(meta), {
-      headers: { "Content-Type": "application/json" },
-    }));
-    // Only once the new cache is complete: a power cut mid-import leaves the
-    // old book whole and the new one partial-but-unreferenced, never a slug
-    // with no book behind it.
-    for (const old of replaced) await caches.delete(old);
-    return { ok: true, prefix, replaced, reimported: already.includes(name), ...meta };
+    // The meta row LAST: it is the commit. In a Cache it is the entry the
+    // shelf reads; on the host it swaps the finished folder in. Either way a
+    // half-stored book has no row and is not on the shelf, and the older
+    // version of the slug goes only now (the store says which went).
+    const replaced = await store.meta(slug, hash, meta);
+    return { ok: true, prefix, replaced, reimported, ...meta };
   }
 
   /** Read a bundle zip and store every book it holds. `onProgress({done,
@@ -373,6 +501,11 @@ const TTSTVBundle = (() => {
     const count = { done: 0, total: files.size };
     const report = await importBook(slug + "/", files, rel => fetchRel(rel), o, count);
     report.ignored = ignored;
+    // The Sync line ends a book at n/n (`Pulling 1 of 26 · Les Pensées ·
+    // 31/31`), once its row is written. Only this door: the zip door's
+    // progress ends at n-1 and its row replaces the bar, as it always has
+    // (library/tests/test_import.py pins that).
+    if (report.ok && o.onProgress) o.onProgress({ done: count.done, total: count.total, label: META_FILE, slug });
     return report;
   }
 
@@ -381,15 +514,7 @@ const TTSTVBundle = (() => {
    *  meta entry written at import rather than by re-parsing a 2 MB
    *  book.json every time the Library paints. */
   async function listInstalled(href) {
-    const out = [];
-    for (const name of await caches.keys()) {
-      const parsed = parseCacheName(name);
-      if (!parsed) continue;
-      const cache = await caches.open(name);
-      const res = await cache.match(bookUrl(parsed.slug, META_FILE, href));
-      if (!res) { out.push({ slug: parsed.slug, hash: parsed.hash, title: parsed.slug, broken: true, bytes: 0, chapters: 0 }); continue; }
-      out.push(await res.json());
-    }
+    const out = (await storeFor(href).list()).slice();
     out.sort((a, b) => String(a.title || a.slug).localeCompare(String(b.title || b.slug)));
     return out;
   }
@@ -397,12 +522,7 @@ const TTSTVBundle = (() => {
   /** Delete one book's cache and nothing else -- not the shell, not another
    *  book. Returns how many caches went (0 if it was not installed). */
   async function removeBook(slug) {
-    let gone = 0;
-    for (const name of await caches.keys()) {
-      const parsed = parseCacheName(name);
-      if (parsed && parsed.slug === slug) { if (await caches.delete(name)) gone++; }
-    }
-    return gone;
+    return storeFor().remove(slug);
   }
 
   async function estimate() {
@@ -423,6 +543,7 @@ const TTSTVBundle = (() => {
     isPayload, cacheName, parseCacheName, booksBase, bookUrl,
     validateBook, walkWordIds, bookHash, planBundle, contentType,
     importBook, importZip, importFiles, listInstalled, removeBook, estimate, fmtBytes,
+    CacheStore, HostStore, storeFor, useStore,
   };
 })();
 

@@ -24,10 +24,16 @@
  *                  it already; they hand the answer here (`observe`). False
  *                  on the phone forever (the published shell is static),
  *                  false inside an exported bundle and over file://.
- *   canHoldBooks   the Cache API + a secure-context `crypto.subtle` +
+ *   canHoldBooks   a store for books + a secure-context `crypto.subtle` +
  *                  `library/import.js` -- i.e. this page could actually
- *                  import and keep a book (`library.html`'s own CAN_IMPORT
- *                  rule, unchanged, just moved behind one name).
+ *                  import and keep a book. The store is EITHER the Cache
+ *                  API OR the host's door (`TTSTVHost.books`, Frank on the
+ *                  phone), since G-PULL (11 Sep): on `frank://localhost/`
+ *                  the Cache API is present and refuses every put, and the
+ *                  book goes to the host instead (`library/import.js`,
+ *                  "the store").
+ *   hostBooks      the host offers that door -- `TTSTVHost.books` with its
+ *                  four verbs. Only Frank on the phone does.
  *
  * **The two questions the pages ask:**
  *   bench   -- is there a studio behind this page? `hostInjected ||
@@ -35,10 +41,15 @@
  *              and the Actions that push. In the app it is true immediately;
  *              in a plain browser at studio it turns true on the first poll.
  *   device  -- is this a device that holds its own books? `canHoldBooks &&
- *              !hostInjected && !studioLive`. Gates the "On this device"
- *              panel. Deliberately not "is it a phone": a laptop browser
- *              opening the published shell with no studio behind it really
- *              does hold its books in a Cache, and the panel is right there.
+ *              !studioLive && (!hostInjected || hostBooks)`. Gates the "On
+ *              this device" panel. Deliberately not "is it a phone": a laptop
+ *              browser opening the published shell with no studio behind it
+ *              really does hold its books in a Cache, and the panel is right
+ *              there. A host with no book door (the desktop app) is never a
+ *              device -- Osca's bug below; a host WITH one is (G-PULL, 11
+ *              Sep): Frank on the phone injects `TTSTVHost` too, so before
+ *              the door existed the books a Sync pulled would have had no
+ *              row to be on.
  *
  * A page whose bundle predates this file must still read, so every caller
  * guards on `window.TTSTVContext` and falls back to what it did before --
@@ -71,7 +82,7 @@
       app: app,
       studioLive: live,
       bench: bench,
-      device: !app && !!f.canHoldBooks && !live,
+      device: (!app || !!f.hostBooks) && !!f.canHoldBooks && !live,
       // one word for a data-attribute and a report, never for a decision
       kind: app ? "app" : (live ? "browser" : (f.canHoldBooks ? "shell" : "static")),
       benchReason: bench ? null
@@ -80,11 +91,21 @@
     };
   }
 
+  /* The host's book door, whole: all four verbs `library/import.js`'s
+   * HostStore calls, or it is not a door. */
+  function hostBookDoor(win) {
+    var h = win && win.TTSTVHost, b = h && h.books;
+    return !!(b && typeof b.put === "function" && typeof b.meta === "function"
+      && typeof b.list === "function" && typeof b.remove === "function");
+  }
+
   function detect(win) {
     win = win || global;
+    var hostBooks = hostBookDoor(win);
     return {
       hostInjected: !!win.TTSTVHost,
-      canHoldBooks: typeof win.caches !== "undefined"
+      hostBooks: hostBooks,
+      canHoldBooks: (hostBooks || typeof win.caches !== "undefined")
         && typeof win.crypto !== "undefined" && !!(win.crypto && win.crypto.subtle)
         && typeof win.TTSTVBundle !== "undefined",
     };

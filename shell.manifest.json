@@ -2,7 +2,7 @@
   "added_here": [
     "index.html"
   ],
-  "bytes": 1978932,
+  "bytes": 1987466,
   "count": 59,
   "files": {
     "bar/askbar.css": {
@@ -30,8 +30,8 @@
       "sha256": "d1dbde07adc37a8e16550708954d3255dd6e84350c7c2ac9069d51a13a935567"
     },
     "library/import.js": {
-      "bytes": 23176,
-      "sha256": "3e731b5a2c10b98d64a3e1feacc9e7c8776e5e9d6a786dc100b8fc385606a107"
+      "bytes": 29707,
+      "sha256": "94da71a2aee6b1007b4f0696b319a0f898b17805ffe2893c7d3655c0f90126b2"
     },
     "library/library.css": {
       "bytes": 79111,
@@ -66,8 +66,8 @@
       "sha256": "4dddb9bf4188833ee52a3b334d8a53c67df2d06dd6a21e3291a186e6b4bd0a03"
     },
     "reader/context.js": {
-      "bytes": 4903,
-      "sha256": "36ddf350f68a8c4cf6398841839c49dab38bb101b2bbbf2fc3a10b80214ad3b5"
+      "bytes": 6110,
+      "sha256": "b873b69924fb011e8494a6c996e38904cf4d3b146f309abe8f9dcb8f5a4838bd"
     },
     "reader/cursor.js": {
       "bytes": 10277,
@@ -202,8 +202,8 @@
       "sha256": "f9c835162bdb95c46c8df634663fbc117fd1712b82e8194d6696f3e6b51b550c"
     },
     "settings/settings.js": {
-      "bytes": 231954,
-      "sha256": "6d2bbb04b238d38c4b70ac24a134378a68a6d7c1a510bc2053c40e489237d514"
+      "bytes": 232750,
+      "sha256": "93c6c5ea953a24d0fb6dbfce5aec0244975c8e60ecc5a4d7494d6d1027bb6de1"
     },
     "voiceui/answers.js": {
       "bytes": 4253,
@@ -244,8 +244,8 @@
   },
   "home_page": "library/library.html",
   "source": {
-    "commit": "7fb18dc",
-    "repo": "/sessions/rcw-01f57s95hnnv2yybqbtckmu4/mnt/TTSTV",
+    "commit": "194bbd0",
+    "repo": "/sessions/rcw-01cwagw4pyw3cexfhf9plbuz/mnt/TTSTV",
     "shell_cache": "ttstv-shell-v54"
   }
 }

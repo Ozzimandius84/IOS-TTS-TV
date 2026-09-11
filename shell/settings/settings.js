@@ -2766,6 +2766,14 @@
     var driveLast = syncRead(SYNC_DRIVE_LAST_KEY);
     var through = syncRead(SYNC_THROUGH_KEY);
     var busy = false;
+    /* The last press's failure, in words, or null. It is the Sync row's own
+     * line until the next press finishes (G-PULL, 11 Sep): a failure written
+     * only into `say` -- the note at the foot of the whole tab, under "Your
+     * door" -- was off-screen on a phone, and `paint()` then put
+     * "Never synced" back on the line the progress had just been on. Osca
+     * pressed four times and saw nothing. Memory only: a reload is a fresh
+     * look, and `last` (the last GOOD sync) is never overwritten by a bad one. */
+    var failed = null;
     var found = [];
     /* Google is built (26b): on the Mac the press is Studio's loopback
      * flow, on the phone the host's browser + this page's PKCE. A page with
@@ -2817,7 +2825,7 @@
       gdPick.setAttribute("aria-pressed", useDrive ? "true" : "false");
       gdPick.disabled = !signed;
       gdPick.title = signed ? "" : "sign in with Google first";
-      if (!busy) paintLine(syncStateLine(last));
+      if (!busy) paintLine(failed != null ? failed : syncStateLine(last));
       if (isStudio) {
         var s = studio || {};
         var on = !!s.port;
@@ -2901,9 +2909,13 @@
         last = { at: Date.now(), books: res.books, marks: res.marks };
         if (isStudio) last.books = (studio && studio.books) != null ? studio.books : last.books;
         syncWrite(SYNC_LAST_KEY, last);
+        failed = null;
         say.textContent = res.pulled ? "Pulled " + res.pulled + (res.pulled === 1 ? " book" : " books") : "";
       } else {
-        say.textContent = res.why || "";
+        // on the row's own line, where the progress was -- never an empty
+        // line -- and not in `say`, which a phone cannot see (G-PULL)
+        failed = String(res.why || "") || "Sync failed";
+        say.textContent = "";
       }
       if (isStudio) return ask().then(paint);
       paint();
