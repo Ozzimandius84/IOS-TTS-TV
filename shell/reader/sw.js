@@ -82,6 +82,8 @@ const SHELL_FILES = [
   "./page.css",              // the reading column
   "./pane.css",              // a contents pane, as a solid column
   "./shell.css",             // the shell around them
+  "./pbar.css",          // THE PHONE BAR's picture, out of shell.css (11 Sep):
+                             // the Library mounts the same bar and loads no shell.css
   "./listen.css",            // ...and the two marks the audio moves (job 15 step 3a)
   "./marginalia.css",       // ...and the four colours a mark wears (job 15b step 2)
   /* JOB 24 LANDED THESE AND NEVER LISTED THEM. reader.html has asked for
@@ -114,6 +116,8 @@ const SHELL_FILES = [
   "./wordpane.js",           // ...and the caption under it (job 24)
   "./wordview.js",           // ...and the view itself: one word and no page (9 Sep)
   "./listen.js",             // the audio, the highlight, and window.ReaderControl
+  "./pbar.js",           // THE PHONE BAR's mount, out of reader.html (11 Sep),
+                             // so the Library can mount the same bar
   "./transport.js",          // ...and THE ONE TRANSPORT over it (7 Sep): the
                              // play/pause/seek/speed both playback bars say,
                              // guarded, so neither bar guesses at listen.js.

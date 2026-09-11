@@ -137,8 +137,15 @@ const TTSTVBundle = (() => {
   // none of them, so a cover arriving later is the same book at the same
   // hash. Osca's screenshot (17:34) is why it is here -- every book on the
   // phone a white slab, because no picture had ever been sent.
+  // `dictionary.json` LEFT this list on 11 Sep (G-LANG, Osca: dictionaries on
+  // the phone are per LANGUAGE, never per book -- "that will only land up with
+  // duplications"). It was 438 MB of Drive/Frank's ~900 for 28 books, the
+  // same words again in every book of a language. The phone now adds a whole
+  // language once (Settings > Languages, `library/langs.js`) and looks a word
+  // up through the app (`TTSTVHost.dict`, reader/lookup.js). A zip that still
+  // carries one has it counted and dropped like any other stranger.
   const PAYLOAD = new Set(["book.json", "book-data.js", "align.json", "render.json",
-                           "dictionary.json", "names.json", "grammar.json", "spans.json",
+                           "names.json", "grammar.json", "spans.json",
                            "cover.jpg"]);
   const META_FILE = ".bundle.json";             // this module's own, never fetched by the reader
 

@@ -515,8 +515,13 @@
 
   /* THE FOLD, one table. General and Reading as they are; Transfer becomes
    * Sync and Cloud GPU's two cards are drawn under its own; Models becomes
-   * Voices. Languages (studio's) and Hotkeys (a keyboard's) are not the
-   * phone's. `needsStudio` is dropped on the two folded panels: on a phone
+   * Voices. Hotkeys (a keyboard's) is not the phone's. LANGUAGES IS, since
+   * 11 Sep -- Osca, after G-DICT: "the iOS app gets a Languages tab in
+   * Settings -- add a language you don't have, exactly as Studio's Languages
+   * tab adds one on the Mac" -- which reverses the 6 Sep line that called it
+   * studio's alone; its phone panel is `buildPhoneLanguagesPanel` (the
+   * phone's packs and the Mac's catalogue, never `GET /languages`).
+   * `needsStudio` is dropped on the folded panels: on a phone
    * nothing is behind them and their builders say so in one line each
    * ("No studio behind this page ..."), which is the truth, where an absent
    * tab would be a hole. `by.transfer.build` is not called through `t.build`
@@ -536,6 +541,7 @@
         },
       }),
       Object.assign({}, by.models, { label: "Voices", sub: "the voices", needsStudio: false }),
+      Object.assign({}, by.languages, { needsStudio: false, build: buildPhoneLanguagesPanel }),
     ];
   }
 
@@ -1389,6 +1395,511 @@
              rows: languageRows, answer: languageAnswer, job: languageJob,
              line: languageLine, els: { list: list, note: note } };
   }
+
+  /* ================================ THE PHONE'S LANGUAGES (G-LANG, 11 Sep)
+   * Osca, 11 Sep, after G-DICT: *dictionaries on the phone are per LANGUAGE,
+   * never per book; the phone gets the whole language; the iOS app gets a
+   * Languages tab in Settings -- add a language you don't have, exactly as
+   * Studio's Languages tab adds one on the Mac; when a book arrives in a
+   * language with no pack, the phone notifies and prompts you to add it.*
+   *
+   * The Mac builds the packs (`dictionary/pack.py`, one SQLite file per
+   * language, gzipped) and sends them by the roads books take: the paired
+   * Studio's `GET /sync/manifest` carries `languages` (each row with the
+   * `url` it serves the gz at), Drive carries `Frank/languages.json` (each row
+   * with the gz's file `id`). THIS PAGE DECIDES NOTHING ABOUT WHICH
+   * LANGUAGES HAVE A PACK: it draws what the Mac's catalogue says, beside
+   * what the phone has (`TTSTVHost.dict.langs()`, the app's `dict.rs`).
+   *
+   * The rows are the Mac tab's rows, the same three states and the same
+   * one-thing-on-the-right (`buildLanguagesPanel` above):
+   *
+   *   added        on this phone: *Added*, and Remove in the row's ⋯
+   *   addable      in the Mac's catalogue: **Add**, the SIZE LAST in the line
+   *                -- the download and what it takes on the phone, so a 70 MB
+   *                Latin is a press you see, not a surprise
+   *   unavailable  a language a book here is in, with no pack on the Mac:
+   *                the reason, and no button
+   *
+   * ADD IS A DOWNLOAD, SO IT IS A JOB FOR THE APP'S PULL -- `TTSTVHost.sync.
+   * start({kind: "language", ...})`, the runner `pull.rs` already is (G-SYNCBG):
+   * the same fetch, retries, token refresh and resume, the same status the
+   * settings dot reads. Pressed while the auto-sync runs, it waits its turn in
+   * the app, not in this page. The pack lands in `<app data>/languages/`.
+   *
+   * The catalogue is remembered (`ttstv.lang.catalogue`), so the tab and the
+   * shelf's tile line draw with no network; opening the tab asks again, the
+   * paired Studio first (the fastest way, D4) and Drive otherwise (D13). */
+  var LANG_CATALOGUE_KEY = "ttstv.lang.catalogue";   // {at, from: "lan"|"drive", packs: [row]}
+  var LANG_NUDGE_KEY = "ttstv.lang.nudge";           // {codes: [code], seen: bool}
+  var LANG_EVENT = "ttstv:langs";
+  var LANG_PACK_KIND = "language";
+  var LANG_TAB = "languages";
+  var PACK_META = ["code", "name", "native_name", "entries", "words", "forms", "bytes", "gz_bytes",
+                   "sha256", "hash", "built_at", "schema", "source"];
+
+  function packHost(h) {
+    h = h === undefined ? global.TTSTVHost : h;
+    return h && h.dict && typeof h.dict.langs === "function" ? h : null;
+  }
+
+  /* A language's name: the Mac catalogue's own when it lists the language,
+   * else the browser's (`Intl.DisplayNames`), else the code. Never a table in
+   * this file -- two tables of language names already drifted once. */
+  function packName(code, catalogue) {
+    var row = (catalogue || []).filter(function (r) { return r && r.code === code; })[0];
+    if (row && row.name) return row.name;
+    try {
+      var n = new Intl.DisplayNames(["en"], { type: "language" }).of(code);
+      if (n && n !== code) return n;
+    } catch (e) { /* no Intl.DisplayNames: the code */ }
+    return code;
+  }
+
+  function packCount(n) {
+    return typeof n === "number" ? n.toLocaleString("en-GB") : "";
+  }
+
+  /* Pure. One row's line -- its source, its size in entries, what it takes
+   * on this phone; an addable row ends with the download, LAST (the Mac
+   * tab's rule: the size is the last thing on a row that offers Add). */
+  function packLine(r, state) {
+    r = r || {};
+    var parts = [];
+    var src = Array.isArray(r.source) ? r.source.map(function (s) {
+      return s && (s.id === "wiktionary" ? "Wiktionary" : (s.name || s.id));
+    }).filter(Boolean) : [];
+    if (src.length) parts.push(src.join(" + "));
+    if (typeof r.entries === "number") parts.push(packCount(r.entries) + " entries");
+    if (state === "added") {
+      if (r.installed_bytes || r.bytes) parts.push(bytesWord(r.installed_bytes || r.bytes) + " on this phone");
+    } else if (state === "addable") {
+      if (r.bytes) parts.push(bytesWord(r.bytes) + " on this phone");
+      if (r.gz_bytes) parts.push(bytesWord(r.gz_bytes) + " download");
+    }
+    return parts.join(" · ");
+  }
+
+  /* Pure. What the tab draws: the phone's packs, the Mac's catalogue, the
+   * languages of the books on this phone, and the app's pull status ->
+   * `{rows, note}`. Order by state (added, addable, unavailable) and, within
+   * a state, the order the phone and the Mac gave them. */
+  function packRows(o) {
+    o = o || {};
+    var cat = Array.isArray(o.catalogue) ? o.catalogue.filter(function (r) { return r && r.code; }) : [];
+    var inst = Array.isArray(o.installed) ? o.installed.filter(function (r) { return r && r.code; }) : [];
+    var have = {}, offered = {}, rows = [];
+    inst.forEach(function (r) { have[r.code] = r; });
+    cat.forEach(function (r) { offered[r.code] = r; });
+    var st = o.status && o.status.kind === LANG_PACK_KIND && o.status.running ? o.status : null;
+    var waiting = o.waiting || {};
+    function row(code, state, r) {
+      var own = (r && r.native_name) || "";
+      var name = packName(code, cat.concat(inst));
+      var out = { code: code, name: name, own: own === name ? "" : own, state: state,
+                  line: packLine(r, state), size: "", why: "", busy: null };
+      if (state === "addable" && r.gz_bytes) out.size = bytesWord(r.gz_bytes);
+      if (st && st.slug === code) out.busy = st.file === "installing" ? "installing" : "downloading";
+      else if (waiting[code]) out.busy = "waiting for the sync";
+      return out;
+    }
+    inst.forEach(function (r) {
+      var x = row(r.code, "added", r);
+      var newer = offered[r.code];
+      if (newer && newer.hash && r.hash && newer.hash !== r.hash) x.newer = true;
+      rows.push(x);
+    });
+    cat.forEach(function (r) { if (!have[r.code]) rows.push(row(r.code, "addable", r)); });
+    var seen = {};
+    (o.shelf || []).forEach(function (b) {
+      var code = b && typeof b.lang === "string" ? b.lang : "";
+      if (!code || have[code] || offered[code] || seen[code]) return;
+      seen[code] = true;
+      var x = row(code, "unavailable", null);
+      x.why = o.reached === false && !cat.length ? "the Mac's list not read -- pair or sign in"
+            : "no dictionary for it on the Mac";
+      rows.push(x);
+    });
+    var note = !packHost(o.host)
+      ? "Languages are added in the Frank app: this page has no door to keep one."
+      : (o.why ? o.why : (cat.length || inst.length ? "A language is added once and every book in it uses it."
+                                                   : "No languages yet: pair with Studio or sign in, then open this tab."));
+    return { rows: rows, note: note };
+  }
+
+  /* Pure. The job the app's pull runs for one pack -- `pull.rs::Job` with
+   * `kind: "language"`: the "book" is the language, its one file
+   * `<code>.sqlite.gz`, its row the catalogue's (written beside the pack at
+   * the commit). `reach` is how the catalogue was read: the paired Studio
+   * (`{transport: "lan", auth: {base, token}}`, the row's `url`) or Drive
+   * (`{transport: "drive", auth}`, the row's `id`). */
+  function packJob(r, reach) {
+    if (!r || !r.code || !r.hash) return { why: "no pack to add" };
+    if (!reach || !reach.transport) return { why: "not paired and not signed in" };
+    var file = { rel: r.code + ".sqlite.gz", bytes: typeof r.gz_bytes === "number" ? r.gz_bytes : null };
+    if (reach.transport === "lan") {
+      if (!r.url) return { why: "Studio listed no file for " + r.code };
+      file.url = r.url;
+    } else {
+      if (!r.id) return { why: "Drive has no file for " + r.code };
+      file.id = r.id;
+    }
+    var meta = {};
+    PACK_META.forEach(function (k) { if (r[k] !== undefined) meta[k] = r[k]; });
+    return { kind: LANG_PACK_KIND, transport: reach.transport, trigger: "press", auth: reach.auth || {},
+             books: [{ slug: r.code, hash: r.hash, title: r.name || r.code, meta: meta, files: [file] }] };
+  }
+
+  /* The Mac's catalogue, asked: the paired Studio first, Drive otherwise;
+   * remembered on success. Resolves `{from, packs}` or `{why}`. */
+  function packCatalogueFetch(o) {
+    o = o || {};
+    var f = o.fetch || global.fetch;
+    var D = o.drive || global.TTSTVDrive;
+    var pair = syncRead(SYNC_PAIR_KEY);
+    function save(from, packs) {
+      var doc = { at: Date.now(), from: from, packs: Array.isArray(packs) ? packs : [] };
+      syncWrite(LANG_CATALOGUE_KEY, doc);
+      return doc;
+    }
+    function lan() {
+      if (!(pair && pair.base && pair.token) || typeof f !== "function") return Promise.reject(new Error("not paired"));
+      return Promise.race([
+        f(pair.base + "/sync/manifest?t=" + encodeURIComponent(pair.token), { cache: "no-store" }),
+        new Promise(function (_, no) { global.setTimeout(function () { no(new Error("Studio did not answer")); }, o.lanMs || 5000); }),
+      ]).then(function (res) {
+        if (!res.ok) throw new Error("Studio: HTTP " + res.status);
+        return res.json();
+      }).then(function (man) { return save("lan", man && man.languages); });
+    }
+    function drive() {
+      var tok = D ? syncRead(D.GOOGLE_TOKEN_KEY) : null;
+      if (!D || !tok || !tok.refresh) return Promise.reject(new Error("not signed in"));
+      var client = D.driveClient(function (force) { return D.googleAccessToken(f, force); }, f);
+      var folder = D.driveFolder(client);
+      return folder.open().then(function () { return folder.readJSON("languages.json"); })
+        .then(function (doc) { return save("drive", doc && doc.packs); });
+    }
+    return lan().catch(function (e1) {
+      return drive().catch(function (e2) {
+        var a = String((e1 && e1.message) || e1), b = String((e2 && e2.message) || e2);
+        return { why: a === "not paired" ? (b === "not signed in" ? "Not paired and not signed in." : b) : a };
+      });
+    });
+  }
+
+  /* How a press reaches the pack: the road its catalogue came by. */
+  function packReach(from, o) {
+    o = o || {};
+    var D = o.drive || global.TTSTVDrive;
+    if (from === "lan") {
+      var pair = syncRead(SYNC_PAIR_KEY);
+      return pair && pair.base && pair.token ? { transport: "lan", auth: { base: pair.base, token: pair.token } } : null;
+    }
+    if (from === "drive" && D && typeof D.syncDriveAuth === "function") return { transport: "drive", auth: D.syncDriveAuth() };
+    return null;
+  }
+
+  /* Pure. The languages of the books here that have no pack on the phone:
+   * `[{code, titles}]`, each code once, in the books' order. */
+  function packMissing(books, installed) {
+    var have = {}, out = [], at = {};
+    (installed || []).forEach(function (r) { if (r && r.code) have[r.code] = true; });
+    (books || []).forEach(function (b) {
+      var code = b && typeof b.lang === "string" ? b.lang : "";
+      if (!code || have[code]) return;
+      if (!(code in at)) { at[code] = out.length; out.push({ code: code, titles: [] }); }
+      out[at[code]].titles.push(b.title || b.slug || "");
+    });
+    return out;
+  }
+
+  /* THE PROMPT (Osca: "notifies and prompts you to add that language").
+   * A language newly missing -- a book arrived in it and no pack is here --
+   * sets the Settings dot ONCE: `ttstv.lang.nudge` keeps the codes already
+   * told about and whether the Languages tab has been opened since. Answers
+   * whether the dot is wanted. Never a modal: the shelf's tile says the one
+   * sentence, the dot says where. */
+  function packNudge(missing) {
+    var codes = (missing || []).map(function (m) { return m.code; });
+    var was = syncRead(LANG_NUDGE_KEY) || { codes: [], seen: true };
+    var known = Array.isArray(was.codes) ? was.codes : [];
+    var fresh = codes.filter(function (c) { return known.indexOf(c) < 0; });
+    var now = { codes: known.filter(function (c) { return codes.indexOf(c) >= 0; }).concat(fresh),
+                seen: fresh.length ? false : !!was.seen };
+    if (JSON.stringify(now) !== JSON.stringify(was)) {
+      syncWrite(LANG_NUDGE_KEY, now);
+      try { global.dispatchEvent(new CustomEvent(LANG_EVENT, { detail: { dot: packDot() } })); } catch (e) { /* no window */ }
+    }
+    return packDot();
+  }
+  /* Lane 5's dot on the settings icon reads this (and `sync.status().running`). */
+  function packDot() {
+    var n = syncRead(LANG_NUDGE_KEY);
+    return !!(n && !n.seen && Array.isArray(n.codes) && n.codes.length);
+  }
+  function packNudgeSeen() {
+    var n = syncRead(LANG_NUDGE_KEY);
+    if (n && !n.seen) {
+      n.seen = true;
+      syncWrite(LANG_NUDGE_KEY, n);
+      try { global.dispatchEvent(new CustomEvent(LANG_EVENT, { detail: { dot: false } })); } catch (e) { /* no window */ }
+    }
+  }
+
+  /* ---- THE SHELF'S ONE LINE (the Library, on the phone). A device tile
+   * whose book's language has no pack here says so under its title --
+   * "Latin dictionary not on this phone · Add" -- and Add opens Settings on
+   * the Languages tab. `tileLineHTML` answers at once from what is known;
+   * the first call starts the one read of the phone's packs, and when it
+   * lands the lines already drawn are filled in place (no re-render). */
+  var packShelf = { installed: null, asked: false, wired: false };
+
+  function packTileText(lang) {
+    if (!lang || !packShelf.installed) return null;
+    if (packShelf.installed.some(function (r) { return r.code === lang; })) return null;
+    var cat = (syncRead(LANG_CATALOGUE_KEY) || {}).packs || [];
+    var offered = cat.some(function (r) { return r && r.code === lang; });
+    return { text: packName(lang, cat) + " dictionary not on this phone", add: offered };
+  }
+
+  function packTileFill(el) {
+    var t = packTileText(el.getAttribute("data-lang"));
+    el.hidden = !t;
+    el.innerHTML = "";
+    if (!t) return;
+    el.appendChild(el.ownerDocument.createTextNode(t.text));
+    if (t.add) {
+      el.appendChild(el.ownerDocument.createTextNode(" · "));
+      var b = el.ownerDocument.createElement("b");
+      b.textContent = "Add";
+      el.appendChild(b);
+    }
+  }
+
+  function packShelfRefresh(doc) {
+    var h = packHost();
+    if (!h || packShelf.asked) return Promise.resolve(packShelf.installed);
+    packShelf.asked = true;
+    return Promise.resolve(h.dict.langs()).then(function (rows) {
+      packShelf.installed = Array.isArray(rows) ? rows : [];
+    }, function () { packShelf.installed = []; }).then(function () {
+      doc = doc || global.document;
+      var els = doc ? Array.prototype.slice.call(doc.querySelectorAll(".tile-lang[data-lang]")) : [];
+      els.forEach(packTileFill);
+      packNudge(packMissing(els.map(function (el) { return { lang: el.getAttribute("data-lang") }; }),
+                            packShelf.installed));
+      return packShelf.installed;
+    });
+  }
+
+  function packOpenTab() {
+    try { global.localStorage.setItem(TAB_KEY, LANG_TAB); } catch (e) { /* the tab opens first */ }
+    var S = global.TTSTVSettings;
+    if (S && typeof S.openWindow === "function") S.openWindow();
+    else if (global.location) global.location.href = "../settings/settings.html";
+  }
+
+  function tileLineHTML(b) {
+    if (!b || !b.device || !b.lang || !packHost()) return "";
+    var doc = global.document;
+    if (doc && !packShelf.wired) {
+      packShelf.wired = true;
+      // a tap on the line is Settings > Languages, not the book: captured
+      // before the tile's own click opens it
+      doc.addEventListener("click", function (e) {
+        var t = e.target && e.target.closest ? e.target.closest(".tile-lang[data-lang]") : null;
+        if (!t || t.hidden) return;
+        e.preventDefault();
+        e.stopPropagation();
+        packOpenTab();
+      }, true);
+    }
+    if (!packShelf.asked) packShelfRefresh(doc);
+    var t = packTileText(b.lang);
+    var esc = function (s) { return String(s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); };
+    var inner = t ? esc(t.text) + (t.add ? " · <b>Add</b>" : "") : "";
+    return '<span class="railrow-by tile-lang" data-lang="' + esc(b.lang) + '"' + (t ? "" : " hidden") + ">" + inner + "</span>";
+  }
+
+  /* ---- THE TAB, on the phone. */
+  function buildPhoneLanguagesPanel(panel, ctx, opts) {
+    var doc = panel.ownerDocument;
+    var host = packHost();
+    panel.appendChild(kEl(doc, "div", "set-head", "Languages"));
+    var list = kEl(doc, "div", "set-card lang-list");
+    var note = kEl(doc, "div", "set-note lang-note", "");
+    panel.appendChild(list); panel.appendChild(note);
+    var remembered = syncRead(LANG_CATALOGUE_KEY) || {};
+    var state = { catalogue: remembered.packs || [], from: remembered.from || null, installed: [], shelf: [],
+                  status: null, reached: null, why: null, waiting: {}, said: {} };
+    var timer = null;
+
+    function paint() {
+      var model = packRows({ catalogue: state.catalogue, installed: state.installed, shelf: state.shelf,
+                             status: state.status, reached: state.reached, why: state.why,
+                             waiting: state.waiting, host: host });
+      list.innerHTML = "";
+      note.textContent = model.note;
+      model.rows.forEach(function (l) {
+        var r = kEl(doc, "div", "set-row lang-row");
+        r.dataset.lang = l.code;
+        r.dataset.state = l.state;
+        if (l.state === "unavailable") r.classList.add("lang-off");
+        var left = kEl(doc, "div", "set-l");
+        var top = kEl(doc, "div", "lang-top");
+        top.appendChild(kEl(doc, "span", "lang-name", l.name));
+        if (l.own) top.appendChild(kEl(doc, "span", "lang-own", l.own));
+        left.appendChild(top);
+        if (l.line) left.appendChild(kEl(doc, "small", "lang-line", l.line));
+        r.appendChild(left);
+        var right = kEl(doc, "div", "set-c");
+        if (state.said[l.code]) {
+          right.appendChild(kEl(doc, "span", "lang-said", state.said[l.code]));
+        } else if (l.busy) {
+          var wrap = kEl(doc, "div", "kag-installing lang-adding");
+          var bar = kEl(doc, "div", "kag-bar lang-bar");
+          bar.appendChild(kEl(doc, "i", null, null));
+          wrap.appendChild(bar);
+          wrap.appendChild(kEl(doc, "div", "kag-dim kag-stage", l.busy));
+          right.appendChild(wrap);
+        } else if (l.state === "added") {
+          right.appendChild(kEl(doc, "span", "lang-state", l.newer ? "Newer on the Mac" : "Added"));
+          var more = doc.createElement("button");
+          more.type = "button"; more.className = "lang-more"; more.dataset.more = l.code;
+          more.setAttribute("aria-label", "More for " + l.name);
+          more.textContent = "⋯";
+          right.appendChild(more);
+          var menu = kEl(doc, "div", "lang-menu");
+          menu.hidden = true;
+          if (l.newer) {
+            var up = doc.createElement("button");
+            up.type = "button"; up.className = "lang-remove"; up.dataset.add = l.code;
+            up.textContent = "Update";
+            menu.appendChild(up);
+          }
+          var rm = doc.createElement("button");
+          rm.type = "button"; rm.className = "lang-remove"; rm.dataset.remove = l.code;
+          rm.textContent = "Remove";
+          menu.appendChild(rm);
+          right.appendChild(menu);
+        } else if (l.state === "addable") {
+          var b = doc.createElement("button");
+          b.type = "button"; b.className = "lang-btn"; b.dataset.add = l.code;
+          b.textContent = "Add";
+          right.appendChild(b);
+        } else {
+          right.appendChild(kEl(doc, "span", "lang-why", l.why || "not available"));
+        }
+        r.appendChild(right);
+        list.appendChild(r);
+      });
+      return model;
+    }
+
+    /* What the phone has: its packs, its books' languages, the app's pull. */
+    function refresh() {
+      if (!host) return Promise.resolve(paint());
+      var books = host.books && typeof host.books.list === "function" ? host.books.list() : [];
+      var st = host.sync && typeof host.sync.status === "function" ? host.sync.status() : null;
+      return Promise.all([Promise.resolve(host.dict.langs()).catch(function () { return []; }),
+                          Promise.resolve(books).catch(function () { return []; }),
+                          Promise.resolve(st).catch(function () { return null; })])
+        .then(function (got) {
+          state.installed = Array.isArray(got[0]) ? got[0] : [];
+          state.shelf = Array.isArray(got[1]) ? got[1] : [];
+          state.status = got[2];
+          if (!(state.status && state.status.running)) state.waiting = {};
+          packShelf.installed = state.installed;
+          packNudge(packMissing(state.shelf, state.installed));
+          paint();
+          watchIfRunning();
+          return state;
+        });
+    }
+
+    /* While a pack is coming, ask the app how it is going -- every second,
+     * only while it runs and this page is showing. */
+    function watchIfRunning() {
+      var st = state.status;
+      var busy = st && st.running && (st.kind === LANG_PACK_KIND || Object.keys(state.waiting).length);
+      if (!busy || timer) return;
+      timer = ctx.after(opts && opts.langPollMs != null ? opts.langPollMs : 1000).then(function () {
+        timer = null;
+        return refresh();
+      });
+    }
+
+    function ask() {
+      return packCatalogueFetch(opts && opts.langFetch).then(function (r) {
+        if (r && r.packs) { state.catalogue = r.packs; state.from = r.from; state.reached = true; state.why = null; }
+        else { state.reached = false; state.why = state.catalogue.length ? null : (r && r.why) || null; }
+        return paint();
+      });
+    }
+
+    function row(code) {
+      return state.catalogue.filter(function (r) { return r && r.code === code; })[0] || null;
+    }
+
+    list.addEventListener("click", function (e) {
+      var t = e.target;
+      if (!t || !t.closest || !host) return;
+      var more = t.closest("[data-more]");
+      if (more) {
+        var menu = more.parentNode.querySelector(".lang-menu");
+        var open = menu && menu.hidden;
+        Array.prototype.forEach.call(list.querySelectorAll(".lang-menu"), function (m) { m.hidden = true; });
+        if (menu && open) menu.hidden = false;
+        return;
+      }
+      var rm = t.closest("[data-remove]");
+      if (rm && !rm.disabled) {
+        var gone = rm.dataset.remove;
+        rm.disabled = true;
+        Promise.resolve(host.dict.remove(gone)).then(function () { delete state.said[gone]; return refresh(); },
+          function (err) { state.said[gone] = String((err && err.message) || err); paint(); });
+        return;
+      }
+      var b = t.closest("[data-add]");
+      if (!b || b.disabled) return;
+      var code = b.dataset.add;
+      b.disabled = true;
+      var job = packJob(row(code), packReach(state.from, opts && opts.langFetch));
+      if (job.why || !(host.sync && typeof host.sync.start === "function")) {
+        state.said[code] = job.why || "this app cannot pull";
+        paint();
+        return;
+      }
+      delete state.said[code];
+      Promise.resolve(host.sync.start(job)).then(function (st) {
+        state.status = st || null;
+        // pressed during a pull: the app keeps it and runs it next
+        if (st && st.running && st.kind !== LANG_PACK_KIND) state.waiting[code] = true;
+        paint();
+        watchIfRunning();
+      }, function (err) { state.said[code] = String((err && err.message) || err); paint(); });
+    });
+
+    // THE DOT IS SEEN when this tab is: open now, or its tab pressed later
+    if (!panel.hidden) packNudgeSeen();
+    doc.addEventListener("click", function (e) {
+      var t = e.target && e.target.closest ? e.target.closest('.set-tab[data-tab="' + LANG_TAB + '"]') : null;
+      if (t) packNudgeSeen();
+    });
+    paint();
+    var ready = refresh().then(function () { return ask(); });
+    return { paint: paint, refresh: refresh, ask: ask, ready: ready, state: state, els: { list: list, note: note } };
+  }
+
+  global.TTSTVLangs = {
+    CATALOGUE_KEY: LANG_CATALOGUE_KEY, NUDGE_KEY: LANG_NUDGE_KEY, EVENT: LANG_EVENT, KIND: LANG_PACK_KIND,
+    name: packName, line: packLine, rows: packRows, job: packJob, missing: packMissing,
+    catalogue: packCatalogueFetch, reach: packReach, nudge: packNudge, dot: packDot, nudgeSeen: packNudgeSeen,
+    tileLineHTML: tileLineHTML, openTab: packOpenTab,
+    // the shelf's own state, for a test to reset between pages
+    _shelf: packShelf,
+  };
 
   function buildKagglePanel(panel, ctx, opts) {
     // a phone renders nowhere but the cloud: no "This Mac" to choose, no

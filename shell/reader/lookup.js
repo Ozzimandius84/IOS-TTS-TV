@@ -94,6 +94,39 @@ function mount(o) {
   let asked = false;          // the fetch has been started
   let failed = null;          // why it did not land, in the browser's words
 
+  /* ------------------------------------------------------------ the pack
+     G-LANG (Osca, 11 Sep): on the phone a dictionary is its LANGUAGE's, one
+     pack added once in Settings > Languages, and `dictionary.json` no longer
+     travels with a book. So where the app offers the pack door --
+     `TTSTVHost.dict.lookup(term, lang) -> {entries: [entry]}`, answered in
+     Rust from the language's one SQLite file (the phone repo's `dict.rs`, a
+     port of `dictionary/pack.py`, which answers what `lookup.py` answers) --
+     a word is asked THERE. The contract to voiceui is unchanged: synchronous,
+     null until the answer lands, and voiceui polls (app.js::lookupEntry). A
+     language with no pack on this phone falls back to the book's own file,
+     which a book pulled before 11 Sep still carries. `links` is not in a
+     pack's entry; nothing here reads it. */
+  const door = (window.TTSTVHost && window.TTSTVHost.dict
+                && typeof window.TTSTVHost.dict.lookup === "function") ? window.TTSTVHost.dict : null;
+  let viaDoor = !!door;
+  let doorAnswered = false;
+  const answered = new Map();  // bare word -> the entry, or null for a miss
+  const waiting = new Set();   // asked of the door, not answered yet
+  function askDoor(k) {
+    waiting.add(k);
+    Promise.resolve(door.lookup(k, lang)).then(r => {
+      waiting.delete(k);
+      doorAnswered = true;
+      answered.set(k, (r && Array.isArray(r.entries) && r.entries[0]) || null);
+    }, e => {
+      // no pack for this language here (or one this app cannot read): the book's file
+      waiting.delete(k);
+      failed = String((e && e.message) || e);
+      viaDoor = false;
+      load();
+    });
+  }
+
   /* ------------------------------------------------------------ the file
      Started on the first ask and never at mount. Answers null until it
      lands, which is the contract voiceui/app.js::lookupEntry is written
@@ -115,6 +148,13 @@ function mount(o) {
   /* SYNCHRONOUS, by contract. voiceui/app.js calls this straight out of a
      spoken command and cannot await; it polls instead. */
   function entry(text) {
+    if (viaDoor) {
+      const k = bare(text);
+      if (!k) return null;
+      if (answered.has(k)) return answered.get(k);
+      if (!waiting.has(k)) askDoor(k);
+      return null;
+    }
     load();
     if (!dict) return null;
     for (const k of keysFor(text)) if (Object.prototype.hasOwnProperty.call(dict, k)) return dict[k];
@@ -131,7 +171,8 @@ function mount(o) {
 
   return {
     entry, load,
-    get loaded() { return !!dict; },
+    get loaded() { return !!dict || doorAnswered; },
+    get viaPack() { return viaDoor; },
     get failed() { return failed; },
     get lang() { return lang; },
   };

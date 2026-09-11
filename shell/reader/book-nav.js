@@ -4412,6 +4412,11 @@ function mount(o){
      Mac does. The Mac has ONE continuous axis and one gesture that rides it
      the whole way. So has this now.
 
+     SUPERSEDED IN PART, 11 Sep (G-STOPS, ONE FINGER, ONE POSITION below): the
+     finger no longer feeds `axisPush`'s reach, except inside the LEAVING ZONE.
+     It chooses one of three positions and the axis travels there by the
+     wheel's own travel. What follows is the 8 Sep shape, kept as history.
+
      IT IS NOT A SECOND WAY OF OPENING THE CONTENTS. It opens nothing, animates
      nothing, and knows nothing about a pane: it calls `axisPush`, which is the
      sideways wheel's own function. Every behaviour along the axis therefore
@@ -4454,22 +4459,155 @@ function mount(o){
                   //    pane and a sixth, so a pane is open before the finger
                   //    reaches the far side and the last of the push is a flick
   };
+  /* ================ ONE FINGER, ONE POSITION (G-STOPS, 11 Sep) ================
+     Osca, 11 Sep, 17:40: *"in the phone reader, there is no kind of CANNOT
+     scroll past slides -- you just go straight through them."* The go: a touch
+     fling behaves as the wheel does on the Mac -- at most ONE resting position
+     per gesture, and it settles on a position when the finger lifts; no
+     free-scrolling between positions.
+
+     WHY THE WHEEL'S REACH WAS THE WRONG THING FOR A FINGER TO FEED. A trackpad
+     gesture is one push and a momentum tail, and the axis rounds the reach the
+     push built. A finger is not: it keeps going after the axis has arrived
+     (the travel it started is 200-700 ms, a thumb is on the glass for as long
+     as it likes), and every px it sends after arriving is a NEW push from the
+     new place -- the book is reached and the same finger carries on into the
+     next pane, or the one-word view is left and the same finger opens the
+     contents. Nothing on the Mac can do that: its tail dies. And the reach
+     has no velocity in it, so a quick short flick -- the phone's commonest
+     gesture -- rounded to nothing (measured in Chromium, trusted touches: a
+     189 px thumb flick from the first pane lost its first 27 px to the claim
+     and moved nothing).
+
+     So the finger CHOOSES A POSITION, one of three -- the one the gesture
+     started on (p0), or the one either side of it -- and the axis TRAVELS
+     there by the Mac's own travel: `snapStart` at WORD_SNAP (the zoom, as the
+     wheel runs it) or PANE_SNAP. A fourth cannot be named by any finger.
+
+       commit    px of finger travel, from where it touched down, that commits
+                 the next position. Decided while the finger is still down, so
+                 the travel starts under it; the finger back under
+                 (commit - back) undoes it. 40 is Osca's own number for the
+                 pull-out on a hand (PROMPTS/round-11-sep-evening.md, lane 5:
+                 "a drag of 40 px commits").
+       flickV    px/ms. A finger LIFTED moving at least this fast toward the
+                 next position commits it however short the drag... (0.3 is the
+                 phone bar's own flick, reader.html's lift.)
+       flickMin  px ...once it has travelled at least this far from touch-down.
+       flickWin  ms the lift's velocity is read over.
+       ...and a finger lifted moving BACK at flickV undoes a committed drag,
+       so a hand that changes its mind is not made to finish.
+
+     THE SETTLE is the Mac's travel, unchanged: smoothstep over
+     clamp(85 / power * sqrt(distance), 3, 45) frames -- one position of zoom
+     (WORD_SNAP 2) is 42.5 frames, ~708 ms; one pane (PANE_SNAP 7) 12.1 frames,
+     ~202 ms. Nothing coasts: the finger never writes dxInput/dxVel here.
+
+     THE PULL-OUT IS AN EDGE GESTURE (D19, Osca, 11 Sep, PROMPTS/sync-phone-
+     plan.md: *"edge zone, but wide: 24 px, and a drag of 40 px commits"*).
+     From the book, a finger travelling RIGHT -- toward the contents -- is only
+     the axis when it went down within `edge` px of the left edge (plus the
+     safe-area inset, in landscape). From anywhere else on the page it is not
+     claimed at all and nothing moves. Every other direction from every other
+     position is anywhere on the glass: into the view, home from it, deeper
+     into an open trail, back out of it. The numbers are G-CHROME2's gate's
+     (design/phone/test-pullout.mjs), which is written against this file.
+
+     THE ONE STRETCH STILL DRIVEN BY HAND is the LEAVING ZONE past the deepest
+     pane -- axisPush's, a LEAVE_STEP at a time, decided on release by
+     LEAVE_COMMIT exactly as on the Mac -- and it is open only to a gesture that
+     STARTED on the deepest pane after the axis came to rest there (exitArmed):
+     the library is that gesture's one position. */
+  const TOUCH = {
+    edge: 24,         // px from the left edge: where a pull-out from the book may start (D19)
+    commit: 40,       // px from touch-down: the next position is committed
+    back: 12,         // px: a committed drag is undone under (commit - back)
+    flickV: 0.3,      // px/ms at the lift, toward the next position: commits it
+    flickMin: 16,     // px from touch-down before a flick counts at all
+    flickWin: 80,     // ms of samples the lift's velocity is read over
+  };
   const PHONE = (() => { try{ return !!(document.documentElement
     && document.documentElement.hasAttribute("data-phone")); }catch(_){ return false; } })();
-  let swipe = null;
-  function swipeArm(x, y){
+  let swipe = null, lastTouch = null;
+  const tnow = t => (typeof t === "number" && t > 0) ? t
+    : ((typeof performance !== "undefined" && performance.now) ? performance.now() : Date.now());
+  let safeL = null, safeW = -1;
+  function safeLeft(){
+    const w = window.innerWidth || 0;
+    if(safeL !== null && safeW === w) return safeL;
+    safeW = w; safeL = 0;
+    try{
+      const d = document.createElement("div");
+      d.style.cssText = "position:fixed;left:0;top:0;width:0;height:0;visibility:hidden;"
+        + "padding-left:env(safe-area-inset-left,0px)";
+      document.body.appendChild(d);
+      safeL = parseFloat(getComputedStyle(d).paddingLeft) || 0;
+      d.remove();
+    }catch(_){ safeL = 0; }
+    return safeL;
+  }
+  function swipeArm(x, y, t){
     if(!PHONE) return false;
-    if(screen !== "open" || !book) return false;
-    swipe = { x0:x, y0:y, x:x, y:y, live:false, took:false, axis:null };
+    if(screen !== "open" || !book || leavingBook) return false;
+    swipe = { x0:x, y0:y, x:x, y:y, live:false, took:false, axis:null,
+              p0:0, goal:0, leave:0, leaving:false, samples:[{t:tnow(t), x:x}] };
     return true;
   }
+  /* the position a gesture starts from: where the axis stands, or -- if a
+     travel is already under way -- where it was already going. A second flick
+     during the first one's travel is therefore one position past the FIRST
+     one's choice, never two past where the axis happens to be. */
+  function touchFrom(){
+    const m = currentMaxLeft();
+    let p = wz.hold ? wz.goal : (snapTo != null ? Math.round(snapTo) : posNow());
+    return clamp(p, -m, DX_MAX);
+  }
+  /* a position the axis may be sent to: on the axis, and never across the
+     book from where it stands -- a finger that reverses through its own
+     touch-down comes home first, one leg at a time, as the wheel does. */
+  function touchLegal(p){
+    p = clamp(p, -currentMaxLeft(), DX_MAX);
+    if(dx > DX_REST && p < 0) return 0;
+    if(dx < -DX_REST && p > 0) return 0;
+    return p;
+  }
+  /* SEND THE AXIS TO A POSITION, by the travel the wheel itself uses -- and
+     only when the mark actually changes (snapStart restarts its clock). */
+  function touchGo(g){
+    dxVel = 0; dxInput = 0; detent = false; dxIdle = 0;
+    if(wz.hold){ wz.goal = Math.max(0, g); return; }   // wzRelease sends it there
+    const going = snapTo != null ? snapTo : dx;
+    if(g >= 0 && dx >= -DX_REST){
+      wordGoal = g; wordReach = g;
+      if(Math.abs(going - g) > DX_REST) snapStart(g, WORD_SNAP);
+    } else {
+      paneReach = g;           // a hand is on the ladder: nothing arms until it lifts
+      if(Math.abs(going - g) > DX_REST) snapStart(g, PANE_SNAP);
+    }
+    markPaint();
+  }
+  function touchV(s, tEnd){
+    /* px/ms over the last flickWin, ending at the lift -- a finger that stopped
+       and then lifted has a velocity of nothing, however fast it once was */
+    const S = s.samples, last = S[S.length - 1];
+    const end = Math.max(tEnd, last.t);
+    let old = null;
+    for(let i = S.length - 1; i >= 0; i--){ if(end - S[i].t <= TOUCH.flickWin) old = S[i]; else break; }
+    if(!old || old === last) return 0;
+    const dt = end - old.t;
+    return dt > 0 ? (last.x - old.x) / dt : 0;
+  }
   // returns true when it has taken the event
-  function swipeMove(x, y){
+  function swipeMove(x, y, t){
     if(!swipe) return false;
     if(!swipe.live){
       const ax = Math.abs(x - swipe.x0), ay = Math.abs(y - swipe.y0);
-      if(ax < SWIPE.slop && ay < SWIPE.slop) return false;   // still undecided
-      if(ax > ay) swipe.axis = "dx";
+      if(ax < SWIPE.slop && ay < SWIPE.slop){ swipe.samples.push({t:tnow(t), x:x}); return false; }   // still undecided
+      if(ax > ay){
+        swipe.axis = "dx"; swipe.p0 = swipe.goal = touchFrom();
+        /* D19: from the book, toward the contents, only from the edge */
+        if(swipe.p0 === 0 && x > swipe.x0 && swipe.x0 > TOUCH.edge + safeLeft()){ swipe = null; return false; }
+      }
       // UP AND DOWN READS ON, BUT ONLY INSIDE ONE WORD VIEW -- which is the
       // wheel's own rule at this level, said for a finger: there, deltaY is
       // the finest grain there is and the page has nothing left to scroll.
@@ -4480,6 +4618,7 @@ function mount(o){
       swipe.live = true; swipe.x = x; swipe.y = y;
       inputTick++;
       wakeSub();
+      if(swipe.axis === "word") return true;
     }
     const px = x - swipe.x, py = y - swipe.y;
     swipe.x = x; swipe.y = y;
@@ -4490,14 +4629,53 @@ function mount(o){
       if(py){ swipe.took = true; bumpWord(-py); markPaint(); }
       return true;
     }
-    if(px){
-      swipe.took = true;
-      // the panes come out as dx goes NEGATIVE and the finger travels the
-      // other way, so the sign is inverted here and nowhere else.
-      axisPush(-(px / Math.max(1, window.innerWidth || 1)) * SWIPE.gain);
+    const s = swipe;
+    s.samples.push({t:tnow(t), x:x});
+    if(s.samples.length > 24) s.samples.shift();
+    s.took = true;
+    dxIdle = 0;
+    /* the panes come out as dx goes NEGATIVE and the finger travels the other
+       way: a finger travelling RIGHT (dist > 0) asks for the position LEFT. */
+    const dist = x - s.x0, dir = dist > 0 ? -1 : 1, a = Math.abs(dist);
+    const m = currentMaxLeft();
+    /* PAST THE DEEPEST PANE: the leaving zone, by hand, the Mac's way -- and the
+       zone is the whole of this gesture's one position, so a hand that turns
+       round in it stops at the pane it came from. */
+    if(s.p0 === -m && dir < 0){
+      s.leaving = true;
+      const d = -(px / Math.max(1, window.innerWidth || 1)) * SWIPE.gain;
+      const was = s.leave;
+      s.leave = clamp(s.leave + d, -1, 0);
+      if(s.leave !== was) axisPush(s.leave - was);
       markPaint();
+      return true;
     }
+    if(s.leaving){ s.leaving = false; s.leave = 0; }
+    const next = touchLegal(s.p0 + dir);
+    let g;
+    if(a >= TOUCH.commit) g = next;
+    else if(s.goal === next && s.goal !== s.p0 && a >= TOUCH.commit - TOUCH.back) g = next;
+    else g = touchLegal(s.p0);
+    if(g !== s.goal){ s.goal = g; touchGo(g); }
+    else if(dx !== g && snapTo == null) touchGo(g);   // a travel something else stopped goes on
     return true;
+  }
+  /* THE FINGER IS OFF: the one decision that is taken on the lift. */
+  function swipeLift(t, cancelled){
+    const s = swipe; swipe = null;
+    if(!s || !s.live || s.axis !== "dx" || !s.took) return;
+    if(s.leaving){ paneEnd(); return; }     // LEAVE_COMMIT decides, in stepDx, as on the Mac
+    const dist = s.x - s.x0, a = Math.abs(dist), dir = dist > 0 ? -1 : 1;
+    const v = cancelled ? 0 : touchV(s, tnow(t));
+    const toward = dist > 0 ? v : -v;       // + = still travelling the drag's way
+    const next = touchLegal(s.p0 + dir);
+    let g = s.goal;
+    if(a >= TOUCH.flickMin && toward >= TOUCH.flickV) g = next;          // a flick commits
+    else if(g !== s.p0 && toward <= -TOUCH.flickV) g = touchLegal(s.p0); // thrown back: undone
+    s.lift = { dist: dist, v: v, goal: g, p0: s.p0 };
+    lastTouch = s.lift;
+    if(g !== s.goal){ s.goal = g; touchGo(g); }
+    paneEnd();                               // the hand is off: arming may follow the rest
   }
   function swipeDrop(){ swipe = null; }
   /* A LIVE SWIPE IS NOT A TAP ON A CHAPTER. wheel.js's Column measures its own
@@ -4542,19 +4720,18 @@ function mount(o){
     // preventDefault-ed here: until it has proved itself horizontal this is
     // still an ordinary touch on an ordinary page, and a page that scrolls
     // under it.
-    if(t.length === 1) swipeArm(t[0].clientX, t[0].clientY);
+    if(t.length === 1) swipeArm(t[0].clientX, t[0].clientY, e.timeStamp);
   }, {passive:false});
   addEventListener("touchmove", e=>{
     const t = e.touches || [];
-    if(swipe && t.length === 1 && swipeMove(t[0].clientX, t[0].clientY)){
+    if(swipe && t.length === 1 && swipeMove(t[0].clientX, t[0].clientY, e.timeStamp)){
       // only once the swipe is LIVE, which is the whole of why swipeMove
       // answers a boolean: an undecided touch must still be able to scroll.
       if(e.preventDefault) e.preventDefault();
     }
   }, {passive:false});
-  function dropTouch(){ swipeDrop(); }
-  addEventListener("touchend", dropTouch);
-  addEventListener("touchcancel", dropTouch);
+  addEventListener("touchend", e => swipeLift(e && e.timeStamp, false));
+  addEventListener("touchcancel", e => swipeLift(e && e.timeStamp, true));
 
   addEventListener("gesturestart", refusePinch, {passive:false});
   addEventListener("gesturechange", refusePinch, {passive:false});
@@ -4680,14 +4857,24 @@ function mount(o){
     tune(k, v){
       if(k === "swipeGain"){ SWIPE.gain = +v || SWIPE.gain; return SWIPE.gain; }
       if(k === "swipeSlop"){ SWIPE.slop = +v; return SWIPE.slop; }
+      if(k === "touchEdge"){ TOUCH.edge = +v; return TOUCH.edge; }
+      if(k === "touchCommit"){ TOUCH.commit = +v; return TOUCH.commit; }
+      if(k === "touchBack"){ TOUCH.back = +v; return TOUCH.back; }
+      if(k === "flickV"){ TOUCH.flickV = +v; return TOUCH.flickV; }
+      if(k === "flickMin"){ TOUCH.flickMin = +v; return TOUCH.flickMin; }
       if(k === "stick"){ STICK = clamp(+v || 0, 0, 0.99); return STICK; }
       if(k in T){ T[k] = +v; return T[k]; }
       return null;
     },
+    /* the last finger's decision, for the harness: where it started, how far
+       and how fast it lifted, and the position it chose (G-STOPS) */
+    get touchLast(){ return lastTouch ? Object.assign({}, lastTouch) : null; },
     get tuneNow(){
       return { gain:T.gain, vmax:T.vmax, coast:T.coast, decay:T.decay,
                couple:T.couple, snap:T.snap, grace:T.grace,
                swipeGain:SWIPE.gain, swipeSlop:SWIPE.slop, stick:STICK,
+               touchEdge:TOUCH.edge, touchCommit:TOUCH.commit, touchBack:TOUCH.back,
+               flickV:TOUCH.flickV, flickMin:TOUCH.flickMin,
                outSnap:OUT_SNAP_, leaveSnap:LEAVE_SNAP,
                stick:STICK, open:OPEN, opens:OPENS, pastAt:PAST_AT,
                paneSnap:PANE_SNAP };

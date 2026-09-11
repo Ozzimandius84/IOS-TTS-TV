@@ -1,0 +1,186 @@
+/* reader/pbar.css -- THE PHONE BAR's picture (the hand is pbar.js).
+   design/reader/pbar.css is the master; the module copy carries the same
+   bytes. Moved out of shell.css on 11 Sep (G-CHROME2), byte for byte, because
+   the Library mounts the same bar and does not load shell.css. */
+/* ====================== THE PHONE BAR — at the foot, three elements ========
+   Osca, 10 September, signed off (PROMPTS/phone-chrome.md): *"real estate is
+   scarce on the phone. Three elements. Nothing that a gesture already does."*
+   NO TOP BAR AT ALL, EVER. One small bar at the FOOT, modelled on iOS
+   Safari's bottom address bar:
+
+        ⚙ settings    [ the book / the chapter ]    the mic
+
+   The pill is Safari's address bar: a tap opens the surface, a slide switches
+   between the open books, a drag up is the library (reader.html is the hand;
+   this is the picture). The 7 Sep top bar, G-PHONE's way back, its grab, tab
+   row and scrim, the search door and the sun-like Settings glyph are deleted
+   from this sheet, not hidden by it.
+
+   THE MAC IS NOT IN THIS BLOCK. Every rule is inside the phone query AND keyed
+   on `html[data-phone]`; the Mac's DOM never has a `.pbar` (reader.html's
+   mount returns on its first line there).
+
+   SMALLER THAN THE BAR IT REPLACES, AND THE NUMBER SAYS SO: the row is 40px
+   (the top bar's was 44), plus the home indicator's inset below it, which a
+   bottom bar pays where a top bar paid the Island's. The ⚙ and the mic are
+   still 44x44 targets: they overhang the 40px row by 2px at each edge,
+   invisibly. The pill's box is the row less 6px, and it is the widest target
+   on the screen.
+
+   AWAY AS YOU READ, and a tap on the bottom edge brings it back (G-PHONE
+   step 1, kept). `--pbar-autohide: 0` makes it stay.
+
+   The dials, one property each:
+     --pbar-h         the row's height (40)
+     --pbar-autohide  1 = it hides as you read; 0 = it stays
+     --pbar-chapter   `block` = the book AND the chapter; `none` = the book
+     --pbar-mic       `bar` = the mic sits in the bar; `float` = voiceui's own
+                      pill, where voiceui puts it (read by the mount)
+     --pbar-pad --pbar-gap --pbar-type   the side margin, the gap, the type */
+@media (max-width: 600px), (max-height: 500px){
+  /* the running head does not paint on the phone: the pill says the book and
+     the chapter, once */
+  html[data-phone] .runhead{ display:none; }
+
+  html[data-phone]{
+    --pbar-h:40px;            /* the row -- the top bar's was 44 */
+    --pbar-pad:6px;           /* the side margin */
+    --pbar-gap:4px;
+    --pbar-type:13px;
+    --pbar-autohide:1;        /* read by the mount, not by a rule here */
+    --pbar-chapter:block;     /* `none` -> the book alone */
+    --pbar-mic:bar;           /* `float` -> voiceui's own pill */
+  }
+
+  /* THE BAR'S OWN FIVE COLOURS AND ITS TYPE (11 Sep, G-CHROME2). The reader
+     names them --ink --ground --rule --dim --ui (tokens.css); the Library,
+     which loads no tokens.css, names its own --fg --bg --border --fg-dim
+     --ui-font (library.css). The bar is mounted on both, so it reads the
+     reader's name, else the Library's, else a value -- and on the reader
+     every one of them computes exactly what it did before the Library had a
+     bar. The dot is a dial of its own. */
+  html[data-phone] .pbar{
+    --pb-ink:var(--ink, var(--fg, #0b0b0b));
+    --pb-ground:var(--ground, var(--bg, #fcfcfb));
+    --pb-rule:var(--rule, var(--border, #e4e3e0));
+    --pb-dim:var(--dim, var(--fg-dim, #7a776d));
+    --pb-ui:var(--ui, var(--ui-font, -apple-system, BlinkMacSystemFont, sans-serif));
+    --pbar-dot:#e0603a;       /* THE DOT's colour: a warm orange that reads on both grounds */
+  }
+  html[data-phone] .pbar{
+    position:fixed; left:0; right:0; bottom:0; z-index:60; box-sizing:border-box;
+    padding:0 var(--pbar-pad);
+    padding-bottom:var(--safe-bottom, env(safe-area-inset-bottom, 0px));
+    height:calc(var(--pbar-h) + var(--safe-bottom, env(safe-area-inset-bottom, 0px)));
+    display:flex; align-items:center; gap:var(--pbar-gap);
+    font-family:var(--pb-ui); color:var(--pb-ink);
+    background:var(--pb-ground);
+    background:color-mix(in srgb, var(--pb-ground) 86%, transparent);
+    -webkit-backdrop-filter:saturate(1.6) blur(14px);
+    backdrop-filter:saturate(1.6) blur(14px);
+    border-top:1px solid var(--pb-rule);
+    /* the pill's gestures are the bar's own: no pan, no zoom starts on it */
+    touch-action:none; -webkit-user-select:none; user-select:none;
+    transform:translateY(calc(0px - var(--pbar-lift, 0px)));
+    transition:transform .22s ease; will-change:transform; }
+  /* while a finger drives it, it is exactly under the finger */
+  html[data-phone] .pbar[data-drag]{ transition:none; }
+  /* AWAY. 101% clears the hairline as well as the box. */
+  html[data-phone] .pbar[data-shown="off"]{ transform:translateY(101%); }
+
+  /* THE ⚙, 44 square on a 40 row. A DOOR, so an `<a href>`. */
+  html[data-phone] .pbar-b{
+    flex:0 0 auto; display:flex; align-items:center; justify-content:center;
+    width:44px; height:44px; min-width:44px; min-height:44px; margin:-2px 0;
+    padding:0; border:0; background:none; border-radius:11px;
+    color:var(--pb-ink); text-decoration:none; opacity:.72;
+    -webkit-tap-highlight-color:transparent;
+    transition:opacity .18s ease, background-color .18s ease; }
+  html[data-phone] .pbar-b:active{ opacity:1; background:var(--pb-rule); }
+  html[data-phone] .pbar-b svg{ width:19px; height:19px; display:block; }
+
+  /* THE PILL: the book, and the chapter beneath it. Between two 44s, so it is
+     centred on the bar by construction. It moves with a slide
+     (`--pbar-slide`, written by the mount) and darkens when a release would
+     go somewhere (`data-armed`). */
+  /* A 44 TARGET, AND THE FILL STILL THE ROW LESS 6 (11 Sep, G-CHROME2): the
+     pill was the one control on the bar under 44 (34 tall -- the phone bench's
+     tap floor). Its BOX now overhangs the 40 row by 2 at each edge like the ⚙
+     and the mic, and a 5px transparent border top and bottom keeps the
+     painted fill exactly where it was: 44 - 2x5 = 34 = --pbar-h - 6, at any
+     --pbar-h. `11px / 16px` is what makes the fill's own corners round 11
+     (16 - 5 = 11 on the short side, 11 - 0 on the long). */
+  html[data-phone] .pbar-pill{
+    flex:1 1 auto; min-width:0; box-sizing:border-box;
+    height:calc(var(--pbar-h) + 4px); margin:-2px 0; padding:0 12px;
+    border:solid transparent; border-width:5px 0; border-radius:11px / 16px;
+    background-clip:padding-box;
+    background-color:color-mix(in srgb, var(--pb-ink) 7%, transparent);
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    font:inherit; color:var(--pb-ink); line-height:1.12; text-align:center;
+    touch-action:none; -webkit-tap-highlight-color:transparent;
+    transform:translateX(var(--pbar-slide, 0px));
+    transition:transform .22s ease, background-color .18s ease; }
+  html[data-phone] .pbar[data-drag] .pbar-pill{ transition:background-color .18s ease; }
+  html[data-phone] .pbar-pill:active,
+  html[data-phone] .pbar[data-armed] .pbar-pill{
+    background-color:color-mix(in srgb, var(--pb-ink) 14%, transparent); }
+  html[data-phone] .pbar-pill b{
+    display:block; max-width:100%; font-size:var(--pbar-type); font-weight:600;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  html[data-phone] .pbar-pill span{
+    display:var(--pbar-chapter); max-width:100%; margin-top:1px;
+    font-size:calc(var(--pbar-type) - 2.5px); color:var(--pb-dim);
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  html[data-phone] .pbar-pill span:empty{ display:none; }
+
+  /* THE MIC is voiceui's OWN element, moved into this slot by the mount --
+     one mic on the page -- so its state colours still come from voiceui's
+     sheet. The pill's other children (the listen chip, the pocket button, the
+     last thing heard) are voiceui's pill's, not the bar's. */
+  html[data-phone] .pbar-mic{
+    flex:0 0 auto; display:flex; align-items:center; justify-content:center;
+    min-width:44px; margin:-2px 0; }
+  html[data-phone] .pbar-mic .voiceui-pill{
+    position:static; right:auto; bottom:auto; z-index:auto;
+    background:none; box-shadow:none; border:0; padding:0; gap:0; }
+  html[data-phone] .pbar-mic .voiceui-listen,
+  html[data-phone] .pbar-mic .voiceui-pocket-btn,
+  html[data-phone] .pbar-mic .voiceui-last{ display:none; }
+  /* ...and the mic is a thumb's target wherever it is sitting (voiceui/app.js
+     draws it 34px, a mask the size of its box). */
+  html[data-phone] .voiceui-pill .voiceui-toggle{ width:44px; height:44px; }
+
+  /* THE BOTTOM EDGE. A strip the height of the home indicator's inset plus a
+     thumb's edge, which takes the pointer ONLY while the bar is away -- so a
+     tap at the foot brings it back and nothing is intercepted while it is
+     up. Not a control: no href, no role. */
+  /* THE DOT (Osca, 11 Sep, D5): 6px, on the ⚙'s top-right, while a sync
+     runs (pbar.js, THE DOT, sets `data-sync="on"`). It sits in the ⚙'s
+     own 44 box -- the glyph is the middle 19 of it -- at 9px from its top and
+     right edges, so it rests on the wheel's top-right teeth with a ring of the
+     bar's ground around it, the way an app badge does. Not a control: it takes
+     no pointer, and the ⚙ is still exactly one 44 target. It fades rather than
+     blinks, and nothing about it moves the bar. */
+  html[data-phone] .pbar-set{ position:relative; }
+  html[data-phone] .pbar-dot{
+    position:absolute; top:9px; right:9px; width:6px; height:6px;
+    box-sizing:border-box; border-radius:50%; pointer-events:none;
+    background:var(--pbar-dot); box-shadow:0 0 0 1.5px var(--pb-ground);
+    opacity:0; transform:scale(.4); transition:opacity .2s ease, transform .2s ease; }
+  html[data-phone] .pbar[data-sync="on"] .pbar-dot{ opacity:1; transform:none; }
+
+  /* THE LIBRARY MOUNTS THIS BAR TOO (Osca, 11 Sep: *"The Library on the phone
+     uses THIS bar"*), and its shelf scrolls to the very foot of the screen.
+     So the shelf's last row must clear the bar: the Library's own foot padding
+     (20px + the home indicator, library.css) plus the bar's row. One rule,
+     keyed on the page the bar says it is on -- library.css is not edited. */
+  html[data-phone][data-pbar="library"] #shelf.rail{
+    padding-bottom:calc(20px + var(--pbar-h) + var(--safe-bottom, env(safe-area-inset-bottom, 0px))); }
+
+  html[data-phone] .pbar-peek{
+    position:fixed; left:0; right:0; bottom:0; z-index:59;
+    height:calc(var(--safe-bottom, env(safe-area-inset-bottom, 0px)) + 30px);
+    pointer-events:none; }
+  html[data-phone] .pbar[data-shown="off"] + .pbar-peek{ pointer-events:auto; }
+}

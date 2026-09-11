@@ -66,6 +66,10 @@
      comparison is reported as a route that moved. Prose must not look
      like a route.) -->
 <link rel="stylesheet" href="../reader/surface.css">
+<!-- THE PHONE BAR's picture: the reader's bottom bar is this page's too on the
+     phone (G-CHROME2, 11 Sep; the mount is at the foot of <body>). Every rule
+     in it keys on html[data-phone], so the Mac draws nothing from it. -->
+<link rel="stylesheet" href="../reader/pbar.css">
 <link rel="stylesheet" href="library.css">
 </head>
 <body>
@@ -1617,6 +1621,8 @@ function tileHTML(b) {
     tileCoverHTML(b) +
     `<span class="railrow-title">${esc(b.title)}</span>` +
     `<span class="railrow-by">${esc(tileLine(b))}</span>` +
+    // G-LANG: a book here in a language with no pack says so -- settings.js TTSTVLangs
+    (b.device && window.TTSTVLangs ? TTSTVLangs.tileLineHTML(b) : "") +
     // 1 ¶'s pane: empty in the memo'd markup, filled by paintBookViews
     `<span class="tile-pane"></span>` +
     // an OPEN book's close (OPEN BOOKS COME FIRST, below) -- a span, because
@@ -5727,5 +5733,13 @@ window.__LIBRARY_DEBUG__ = {
   bookmarkPickerItems, readerUrl,
 };
 </script>
+<!-- THE PHONE BAR, AND IT IS THE READER'S (Osca, 11 Sep, G-CHROME2: *"The
+     Library on the phone uses THIS bar, not its own ≡/⚙/☾"*). The same mount
+     reader.html runs -- ⚙ · the pill · the mic, at the foot -- told which page
+     it is on: here the pill reads "Library", a drag up does nothing and it
+     never hides. It returns on its first line without html[data-phone], so
+     the Mac's Library gains no bar node (this tag and the <link> are all). Last in <body> because it mounts on
+     parse and moves voiceui's mic into its slot if one is ever drawn here. -->
+<script src="../reader/pbar.js" data-page="library"></script>
 </body>
 </html>
