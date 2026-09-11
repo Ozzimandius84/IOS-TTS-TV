@@ -93,6 +93,11 @@ targets:
           - CFBundleURLName: frank-pair
             CFBundleURLSchemes:
               - frank-pair
+          # Google's answer comes home on the reverse of the iOS client id
+          # (src-tauri/google.json); tests/test_google_link.py holds the two together.
+          - CFBundleURLName: google-oauth
+            CFBundleURLSchemes:
+              - com.googleusercontent.apps.831378567000-50bh7p37g80gssem6dq3l1f8ncj2j2o2
         CFBundleShortVersionString: 0.1.0
         CFBundleVersion: "0.1.0"
     entitlements:
