@@ -745,8 +745,16 @@ pub(crate) mod dict_tests {
     use super::*;
     use crate::pull::Door;
 
+    /// A directory no other call gets. The pid and the millisecond are NOT
+    /// enough: two calls in one test land in the same millisecond on a fast
+    /// machine, the second `fixture` opens the first one's pack and dies on
+    /// `table meta already exists` (Osca's Mac, 11 Sep -- green in the slower
+    /// container, red on an M-series). The counter is what makes it unique.
     pub(crate) fn scratch(name: &str) -> PathBuf {
-        let d = std::env::temp_dir().join(format!("frank-dict-{name}-{}-{}", std::process::id(), crate::pull::now_ms()));
+        static NTH: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+        let nth = NTH.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let d = std::env::temp_dir().join(format!(
+            "frank-dict-{name}-{}-{}-{nth}", std::process::id(), crate::pull::now_ms()));
         fs::create_dir_all(&d).unwrap();
         d
     }
