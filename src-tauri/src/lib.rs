@@ -433,10 +433,13 @@ pub const PAIR_JS: &str = r#"(function () {
 // build script writes into `CFBundleURLTypes`, and it is static JSON -- so
 // the scheme is written there by hand and `tests/test_google_scheme.py`
 // asserts it is exactly the reverse of the id in `google.json`. Two places,
-// one fact, and a test rather than a comment holding them together. Until
-// Osca pastes the id both are empty and `TTSTVHost.google` is not injected
-// at all -- the Settings page then says "no Google client on this device"
-// and stays on This network, which is the truthful state and not a stub.
+// one fact, and a test rather than a comment holding them together. The id
+// is CARRIED, not pasted (11 Sep): every `tools/import_shell.py` run reads
+// it out of TTSTV's account.json and writes google.json, tauri.conf.json and
+// project.yml (`carry_google`, tests/test_google_carry.py). With no id
+// `TTSTVHost.google` is not injected at all -- the Settings page then says
+// "no Google client on this device" and stays on This network, which is the
+// truthful state and not a stub.
 
 /// The iOS client id, from `src-tauri/google.json` at compile time. Empty
 /// until Osca pastes it (`studio/STATUS.md` job 26 §6.3: Credentials ▸

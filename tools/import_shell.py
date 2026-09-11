@@ -138,6 +138,85 @@ def _restore(held: list, tmp: Path, out: Path) -> None:
         shutil.move(str(tmp / rel.rstrip("/").replace("/", "__")), str(dst))
 
 
+# ---------------------------------------------------------------- Google
+# "That should be automatic BTW, should always push/export these things to
+# the IOS app" (Osca, 11 Sep). The iOS client id lives where Studio keeps the
+# account -- TTS_DATA/studio/account.json, `google.ios_client_id` -- and
+# until 11 Sep it had to be pasted by hand into three files of this repo.
+# Now every import carries it: google.json (compiled into lib.rs), the
+# reverse scheme in tauri.conf.json (the deep-link plugin writes it into
+# Info.plist) and in gen/apple/project.yml (what xcodegen puts back).
+# tests/test_google_link.py holds the three together. No account.json, or
+# no id in it, changes nothing and says so -- Settings then truthfully reads
+# "no Google client on this device".
+GOOGLE_JSON = SHELL.parent / "src-tauri" / "google.json"
+TAURI_CONF = SHELL.parent / "src-tauri" / "tauri.conf.json"
+PROJECT_YML = SHELL.parent / "src-tauri" / "gen" / "apple" / "project.yml"
+GOOGLE_SUFFIX = ".apps.googleusercontent.com"
+YML_ANCHOR = ("          - CFBundleURLName: frank-pair\n"
+              "            CFBundleURLSchemes:\n"
+              "              - frank-pair\n")
+YML_BLOCK_HEAD = ("          # Google's answer comes home on the reverse of the iOS client id\n"
+                  "          # (src-tauri/google.json); tests/test_google_link.py holds the two together.\n"
+                  "          - CFBundleURLName: google-oauth\n"
+                  "            CFBundleURLSchemes:\n")
+
+
+def _ios_client_id(root: Path) -> tuple[str, str]:
+    """(id, where): the id out of TTSTV's own account.json, resolved by
+    TTSTV's own code (`studio.google.account_path`, so the depot rule is
+    theirs, not a second copy here). ("", why) when there is none."""
+    code = ("import json; from studio.google import account_path; p = account_path(); "
+            "d = json.load(open(p)) if p.is_file() else {}; "
+            "print(p); print(str((d.get('google') or {}).get('ios_client_id') or ''))")
+    r = subprocess.run([sys.executable, "-c", code], cwd=root, capture_output=True, text=True)
+    if r.returncode != 0:
+        return "", f"TTSTV could not resolve account.json ({r.stderr.strip().splitlines()[-1] if r.stderr.strip() else 'no output'})"
+    lines = r.stdout.strip().splitlines()
+    path = lines[0] if lines else "?"
+    cid = lines[1].strip() if len(lines) > 1 else ""
+    if not cid:
+        return "", f"no google.ios_client_id in {path}"
+    if not cid.endswith(GOOGLE_SUFFIX):
+        return "", f"{path}: ios_client_id does not look like one ({cid!r})"
+    return cid, path
+
+
+def carry_google(root: Path) -> str:
+    """Write the id and its reverse scheme into the three files. Returns one
+    line for the log. Idempotent: an unchanged repo is left untouched."""
+    import json
+    cid, where = _ios_client_id(root)
+    if not cid:
+        return f"google: not carried -- {where}"
+    scheme = "com.googleusercontent.apps." + cid[: -len(GOOGLE_SUFFIX)]
+    changed = []
+
+    want = json.dumps({"ios_client_id": cid}, indent=2) + "\n"
+    if not GOOGLE_JSON.is_file() or GOOGLE_JSON.read_text() != want:
+        GOOGLE_JSON.write_text(want); changed.append(GOOGLE_JSON.name)
+
+    conf = json.loads(TAURI_CONF.read_text())
+    mobile = conf["plugins"]["deep-link"]["mobile"]
+    schemes = mobile[0].setdefault("scheme", [])
+    stale = [s for s in schemes if s.startswith("com.googleusercontent.apps.") and s != scheme]
+    if stale or scheme not in schemes:
+        mobile[0]["scheme"] = [s for s in schemes if s not in stale] + ([scheme] if scheme not in schemes else [])
+        TAURI_CONF.write_text(json.dumps(conf, indent=2) + "\n"); changed.append(TAURI_CONF.name)
+
+    yml = PROJECT_YML.read_text()
+    if scheme not in yml:
+        import re
+        yml2 = re.sub(re.escape(YML_BLOCK_HEAD) + r"              - com\.googleusercontent\.apps\.[^\n]*\n", "", yml)
+        if YML_ANCHOR not in yml2:
+            return f"google: {cid} -- but project.yml has no frank-pair CFBundleURLTypes block to sit beside"
+        yml2 = yml2.replace(YML_ANCHOR, YML_ANCHOR + YML_BLOCK_HEAD + "              - " + scheme + "\n", 1)
+        PROJECT_YML.write_text(yml2); changed.append(PROJECT_YML.name)
+
+    what = ", ".join(changed) if changed else "already in place"
+    return f"google: {cid} from {where} -- {what}"
+
+
 def import_shell(ttstv: Path, out: Path = SHELL, bump: bool = False) -> dict:
     root = _ttstv(ttstv)
     sys.path.insert(0, str(root))
@@ -203,6 +282,7 @@ def import_shell(ttstv: Path, out: Path = SHELL, bump: bool = False) -> dict:
         "shell_cache": _cache_version(root),
     }
     save(data)
+    print(carry_google(root))
     return data
 
 
