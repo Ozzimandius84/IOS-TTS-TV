@@ -1450,14 +1450,130 @@ async function loadCoverFacts(slugs) {
   const want = (slugs || []).filter(s => s && !coverFacts.has(s));
   if (!want.length) return false;
   let got = false;
+  const disk = bookWordsOnDisk();
   await Promise.all(want.map(async slug => {
     coverFacts.set(slug, {});       // asked: never ask twice, even if it 404s
     try {
-      const facts = await coverFactsFor("../books/" + encodeURIComponent(slug) + "/book.json");
+      const facts = disk ? await coverFactsFromDisk(slug)
+        : await coverFactsFor("../books/" + encodeURIComponent(slug) + "/book.json");
       if (facts && (facts.form || facts.first_words)) { coverFacts.set(slug, facts); got = true; }
     } catch (e) { /* a static host with no books/: the plain fallback stands */ }
   }));
   return got;
+}
+
+/* ================================ THE BOOK'S OWN WORDS, FROM TWO PLACES
+ * (G-COVERS, 11 Sep). Two things on this page draw a book's words rather
+ * than its name: the typeset cover's foot (`first_words`, twelve of them, and
+ * `form`) and 1 ¶'s pane (the opening paragraph and the chapter titles). ONE
+ * reduction each, and two places the text can come from:
+ *
+ *   studio   the Mac, or a browser at studio. The cover's two strings off
+ *            cover.json / book.json's tail (FOUR RUNGS, above) and the pane's
+ *            record off `GET /book` -- exactly as before.
+ *   disk     a device that keeps its books itself -- Frank on the phone
+ *            above all, where there is no studio (`/book` does not exist at
+ *            `frank://`) and where a Range request is answered with the WHOLE
+ *            file (the phone's handler reads and sends it, 200): the cover's
+ *            four rungs would have read 354 MB of book.json there. The row
+ *            import.js wrote carries `first_words`/`form` for every book
+ *            imported since this change (placeDeviceBooks takes them, no
+ *            request); for the rest, and for the pane, it is the book's own
+ *            `book-data.js` -- the file the reader opens the book with --
+ *            read ONCE per book and version, reduced by the parser's own rule
+ *            (`parser/facts.py`: skip a chapter titled as front matter or
+ *            shorter than 150 words; the first paragraph of six words or more;
+ *            its first twelve), and the two strings remembered under
+ *            `slug@hash` so the next paint asks for nothing.
+ *
+ * The parser's rule reads paragraph KINDS (body, verse) that book-data.js
+ * folds into one role (`l`), so on disk a heading of six words or more
+ * could be taken for the opening where the parser would not. The row's own
+ * `first_words` -- the parser's exact answer -- replaces it at the book's
+ * next pull. */
+const BOOK_FRONT_MATTER = new RegExp("^\\s*(front matter|back matter|(table of )?contents|copyright|colophon|"
+  + "dedication|epigraph|half[- ]?title|title page|frontispiece|foreword|acknowledge?ments?|"
+  + "about the (author|book)|also by|by the same author|note on the text|list of (illustrations|plates))\\b", "i");
+const BOOK_OPENING_MIN_CHAPTER = 150;     // parser/facts.py MIN_CHAPTER_WORDS
+const BOOK_FIRST_WORDS = 12;              // parser/facts.py FIRST_WORDS
+const COVER_FACTS_KEY = "ttstv.library.coverFacts";
+
+function bookWordsOnDisk() {
+  const c = libraryContext();
+  return !!(c.device && !c.bench);
+}
+
+// the parser's opening, from book-data.js's chapters: {paragraph, first_words, form} or null
+function bookOpening(chapters) {
+  const words = t => String(t || "").split(/\s+/).filter(Boolean);
+  let verse = 0, prose = 0, open = null;
+  for (const ch of Array.isArray(chapters) ? chapters : []) {
+    if (!ch || BOOK_FRONT_MATTER.test(String(ch.n || ""))) continue;
+    const ls = (ch.blocks || []).filter(b => b && b.r === "l" && typeof b.t === "string");
+    if (ls.reduce((n, b) => n + words(b.t).length, 0) < BOOK_OPENING_MIN_CHAPTER) continue;
+    for (const b of ls) { if (b.st != null) verse++; else prose++; }
+    if (open) continue;
+    for (const b of ls) {
+      const w = words(b.t);
+      if (w.length < 6) continue;
+      // a prose paragraph ends a sentence somewhere; a chapter's argument
+      // ("Childhood in Tennessee - Runs away - ...") and a running title do
+      // not -- the two kinds book-data.js folds into `l` that the parser
+      // skips by name. A verse line (`st`) need not.
+      if (b.st == null && !/[.!?\u2026]/.test(b.t)) continue;
+      open = { paragraph: b.t.trim(), first_words: w.slice(0, BOOK_FIRST_WORDS).join(" ").replace(/[\s,;:\-\u2014\u2013]+$/, "") };
+      break;
+    }
+  }
+  return open ? Object.assign(open, { form: verse > prose ? "verse" : "prose" }) : null;
+}
+
+// book-data.js, parsed once per slug for this page: `window.__LIB_BOOK = {...};`
+const bookDataAsked = new Map();          // slug -> Promise<object|null>
+function bookDataOf(slug) {
+  if (!bookDataAsked.has(slug)) bookDataAsked.set(slug, (async () => {
+    try {
+      const res = await fetch("../books/" + encodeURIComponent(slug) + "/book-data.js");
+      if (!res.ok) return null;
+      const t = await res.text();
+      const a = t.indexOf("{"), z = t.lastIndexOf("}");
+      return a >= 0 && z > a ? JSON.parse(t.slice(a, z + 1)) : null;
+    } catch (e) { return null; }
+  })());
+  return bookDataAsked.get(slug);
+}
+
+function coverFactsMemo() {
+  try { const v = JSON.parse(localStorage.getItem(COVER_FACTS_KEY) || "{}"); return v && typeof v === "object" ? v : {}; }
+  catch (e) { return {}; }
+}
+async function coverFactsFromDisk(slug) {
+  const row = (libraryBooks || []).find(b => b.slug === slug) || {};
+  const key = slug + "@" + (row.hash || "");
+  const memo = coverFactsMemo();
+  if (memo[key] && (memo[key].first_words || memo[key].form)) return memo[key];
+  const data = await bookDataOf(slug);
+  const o = data && bookOpening(data.chapters);
+  if (!o) return null;
+  const facts = { form: o.form, first_words: o.first_words };
+  try { const m = coverFactsMemo(); m[key] = Object.assign({}, m[key], facts); localStorage.setItem(COVER_FACTS_KEY, JSON.stringify(m)); } catch (e) { /* a memo */ }
+  return facts;
+}
+
+// 1 ¶'s record from the book's own file, in `bookRecordFrom`'s shape: what the
+// disk has (the opening, the chapters) and nothing it has not (no blurb, no
+// publisher -- a fact the record does not have is not drawn)
+async function bookRecordFromDisk(slug) {
+  const data = await bookDataOf(slug);
+  if (!data || !Array.isArray(data.chapters)) return null;
+  const o = bookOpening(data.chapters);
+  return {
+    description: "", opening: o ? o.paragraph : "", publisher: "", published: "", identifier: "",
+    subjects: "", langName: "",
+    chapters: data.chapters.map(c => String((c && c.n) || "").replace(/\s+/g, " ").trim().replace(/\.$/, ""))
+      .filter(Boolean),
+    voice: "", voiced: 0,
+  };
 }
 
 function tileCoverHTML(b) {
@@ -1475,7 +1591,11 @@ function tileCoverHTML(b) {
     `<span class="t">${esc(title)}</span>` +
     (author ? `<span class="a">${esc(author)}</span>` : "") +
     (first ? `<span class="fw">${esc(first)}</span>` : "") +
-    (slug && coverChoice(slug) === "source"
+    // `has_cover === false` is a device row that KNOWS it has none (import.js
+    // writes it, G-COVERS): no request for a picture that is not there. A row
+    // that does not say (the Mac's, or a book imported before the field) asks,
+    // and a 404 removes itself as it always has.
+    (slug && coverChoice(slug) === "source" && b.has_cover !== false
       ? `<img class="covimg" alt="" loading="lazy" decoding="async" src="${
           esc(coverUrl(slug))}">` : "") +
     `</span>`;
@@ -1488,8 +1608,12 @@ function tileHTML(b) {
     ? `${bookTitle(m.members[0].slug)} above ${bookTitle(m.members[1].slug)} \u2014 always opens both`
       + (stale.length ? ` \u00b7 one of these has changed since the pair was made` : "")
     : (b.voiced != null ? b.voiced + " of " + b.chapters + " voiced" : "");
-  return `<button class="railrow tile${m ? " merged" : ""}${stale.length ? " stale" : ""}" data-slug="${esc(b.slug)}"${
-    m ? ' data-merge="1"' : ""} aria-selected="false" title="${esc(title)}">` +
+  // A BOOK ON THIS DEVICE (the phone, G-COVERS) is a tile like any other and
+  // keeps the device row's two marks -- `.device`/`data-device` (a tap opens
+  // it straight through the host, a long-press is the device menu with
+  // "Remove from this device") and `data-hash`, the version it is.
+  return `<button class="railrow tile${b.device ? " device" : ""}${m ? " merged" : ""}${stale.length ? " stale" : ""}" data-slug="${esc(b.slug)}"${
+    m ? ' data-merge="1"' : ""}${b.device ? ` data-device="1" data-hash="${esc(b.hash || "")}"` : ""} aria-selected="false" title="${esc(title)}">` +
     tileCoverHTML(b) +
     `<span class="railrow-title">${esc(b.title)}</span>` +
     `<span class="railrow-by">${esc(tileLine(b))}</span>` +
@@ -1601,7 +1725,7 @@ function libraryContext() {
   if (window.TTSTVContext) return TTSTVContext.read();
   // a shell published before context.js existed: the old rule, unchanged
   const bench = !!window.TTSTVHost || studioLive;
-  return { app: !!window.TTSTVHost, bench, device: CAN_IMPORT && !window.TTSTVHost && !studioLive,
+  return { app: !!window.TTSTVHost, phone: false, bench, device: CAN_IMPORT && !window.TTSTVHost && !studioLive,
            kind: "static", benchReason: bench ? null : "no studio behind this page" };
 }
 
@@ -1635,10 +1759,18 @@ function paintContext() {
 // crypto.subtle (the book hash is sha256 of the word ids -- core/provenance.py's
 // own rule). Over file:// there is neither, and the section stays away rather
 // than offering a button that would fail on the first click.
-const CAN_IMPORT = typeof caches !== "undefined"
+// THE STORE IS THE CACHE OR THE HOST'S DOOR (G-PULL's rule, context.js
+// `canHoldBooks`), and this line now says so too (G-COVERS): it still asked
+// for the Cache API alone, so a webview that offers the door and no `caches`
+// would have drawn no shelf at all. WebKit exposes `caches` at
+// `frank://localhost` (and refuses every put), which is why the phone
+// never showed the difference.
+const CAN_IMPORT = (typeof caches !== "undefined"
+    || !!(window.TTSTVContext && TTSTVContext.detect().hostBooks))
   && typeof crypto !== "undefined" && !!(crypto && crypto.subtle)
   && typeof TTSTVBundle !== "undefined";
 let deviceBooks = [];     // TTSTVBundle.listInstalled(): one row per installed book
+let deviceListed = false; // the first list has answered (so "no books" is true, not "not asked yet")
 let storage = null;       // navigator.storage.estimate(), or null where it is not offered
 let importing = null;     // {name, label, fraction} while a zip is being read
 let importError = null;   // {name, lines} until the next import replaces it
@@ -1649,7 +1781,67 @@ async function refreshDevice() {
     deviceBooks = await TTSTVBundle.listInstalled();
     storage = await TTSTVBundle.estimate();
   } catch (e) { note("Couldn't read what's on this device: " + (e.message || e)); }
+  deviceListed = true;
+  if (deviceIsShelf()) placeDeviceBooks();
   return deviceBooks;
+}
+
+/* ON THE PHONE, THE BOOKS ON THE PHONE ARE THE SHELF (G-COVERS, Osca's
+ * screenshot, 11 Sep 17:34: "each book is a full-screen-tall white tile with
+ * no cover, a ✕ in a huge square box").
+ *
+ * WHAT IT WAS, MEASURED (Chromium, 393x852, this page at 8903c12 with the
+ * door answering eight real books): the phone's shelf was `deviceSection()`
+ * alone -- eight `.railrow.device` LIST rows, no cover markup at all, laid out
+ * by the 30 Aug phone rule `#shelf .railrow { aspect-ratio: 2/3 }` at the
+ * full 365 px of the column: 365x547.5 each, outside any `.shelfgrid`, so the
+ * zoom (which was 4, not 1) never reached them. The ✕ was the row's
+ * `.rmbook`, 44x44 with a border: the square box. `libraryBooks` -- what the
+ * tiles are drawn from -- is `/state` on the Mac and was EMPTY here (no
+ * studio, no library.json in the shell), so the covers, the band, the order
+ * and the pinch had nothing to draw.
+ *
+ * So on a host with the book door (`libraryContext().phone`) the installed
+ * rows are handed to the shelf as its books: the same `.railrow.tile` with the
+ * same typeset cover and `books/<slug>/cover.jpg` over it, in the same band
+ * (open books first, each with its ✕) and the same order, and the device
+ * section keeps only its heading and the storage line. A phone PWA or a
+ * laptop browser holding books in a Cache (a device, no door) keeps the list
+ * rows exactly as they were -- `test_library_import.py` holds that. */
+function deviceIsShelf() {
+  const c = libraryContext();
+  return !!(c.phone && c.device);
+}
+function deviceShelfRow(b) {
+  return { slug: b.slug, title: b.title || b.slug, author: b.author || null, lang: b.lang || null,
+           chapters: Number(b.chapters) || 0, has_audio: !!b.has_audio, has_timings: !!b.has_timings,
+           voiced: Number(b.chapters_voiced) || 0, device: true, hash: b.hash || "",
+           has_cover: typeof b.has_cover === "boolean" ? b.has_cover : null };
+}
+function placeDeviceBooks() {
+  const memo = coverFactsMemo();
+  const rows = deviceBooks.filter(b => b && b.slug && !b.broken).map(b => {
+    const r = deviceShelfRow(b);
+    // a row that does not say whether it has a cover (imported before
+    // `has_cover`) and whose picture 404'd here once is not asked again
+    // for this version -- the error listener remembers it (THE COVER)
+    const m = memo[r.slug + "@" + r.hash];
+    if (r.has_cover === null && m && m.cover === false) r.has_cover = false;
+    return r;
+  });
+  const mine = new Set(rows.map(b => b.slug));
+  libraryBooks = (libraryBooks || []).filter(b => !b.device && !mine.has(b.slug)).concat(rows);
+  // the row's own two strings when import.js wrote them, else what this page
+  // worked out once before (THE BOOK'S OWN WORDS): no fetch, and no second
+  // paint to put them on the cover
+  for (const b of deviceBooks) {
+    if (!b || !b.slug || (coverFacts.get(b.slug) || {}).first_words) continue;
+    const m = memo[b.slug + "@" + (b.hash || "")];
+    const f = (b.first_words || b.form) ? b : (m && (m.first_words || m.form)) ? m : null;
+    if (f) coverFacts.set(b.slug, { form: f.form || null, first_words: f.first_words || null });
+  }
+  loadCoverFacts(rows.map(b => b.slug)).then(got => { if (got) renderShelf(); });
+  return rows.length;
 }
 
 function deviceStatus(b) {
@@ -1710,12 +1902,18 @@ function deviceSection() {
   // browser with studio behind it -- the books are on the SSD and this panel
   // was measuring the wrong disk (READER_FIRST.md, 30 Aug).
   if (!CAN_IMPORT || !libraryContext().device) return "";
-  const rows = (importing ? importingRowHTML() : "") + deviceBooks.map(deviceRowHTML).join("");
+  // on the phone the books are tiles on the shelf (placeDeviceBooks), so the
+  // section is its heading, a bundle being read, and what went wrong -- and
+  // the storage line moves under the shelf (renderShelf)
+  const onShelf = deviceIsShelf();
+  const rows = (importing ? importingRowHTML() : "") + (onShelf ? "" : deviceBooks.map(deviceRowHTML).join(""));
   const head = `<div class="devicehead"><h2>On this device</h2>` +
     `<button id="importBtn" type="button"${importing ? " disabled" : ""}>` +
     `${importing ? "Importing…" : "Import bundle…"}</button></div>`;
-  const body = rows || `<div class="empty">No books here yet. AirDrop a bundle .zip to this phone, then Import bundle… and pick it out of Files.</div>`;
-  return head + importErrorHTML() + body + storageLine();
+  const body = rows || (onShelf
+    ? (deviceBooks.length || !deviceListed ? "" : `<div class="empty">No books on this phone yet. Sync, in Settings, brings them from the Mac.</div>`)
+    : `<div class="empty">No books here yet. AirDrop a bundle .zip to this phone, then Import bundle… and pick it out of Files.</div>`);
+  return head + importErrorHTML() + body + (onShelf ? "" : storageLine());
 }
 
 // One import, start to finish. Everything that can go wrong says which file
@@ -2036,7 +2234,10 @@ function bookRecordFrom(r) {
 async function loadBookRecord(slug) {
   if (!slug || bookRecords.has(slug)) return false;
   bookRecords.set(slug, null);                   // asked: never twice, even if it 404s
-  const rec = bookRecordFrom(await getJSON("/book?" + new URLSearchParams({ slug })));
+  // THE BOOK'S OWN WORDS, FROM TWO PLACES (above): studio's record, or the
+  // book's own file on a device that keeps it
+  const rec = bookWordsOnDisk() ? await bookRecordFromDisk(slug)
+    : bookRecordFrom(await getJSON("/book?" + new URLSearchParams({ slug })));
   if (!rec) return false;
   bookRecords.set(slug, rec);
   return true;
@@ -2108,14 +2309,15 @@ function bookViewHTML(b) {
 
 // Fill every tile's pane from the map, writing only a pane whose text has
 // changed. Called from paintShelfZoom (so from renderShelf and every zoom)
-// and whenever a record lands. Off 1 ¶ it does nothing and asks for nothing
-// -- and ON THE PHONE it does nothing at any rung: the phone draws its one
-// size whatever step the record remembers (library.css fences 1 ¶ off
-// `html[data-phone]`, the same flag), so there is no pane to fill, and a
-// record asked for there would be fourteen requests for a hidden span.
+// and whenever a record lands. Off 1 ¶ it does nothing and asks for nothing.
+// ON THE PHONE TOO, since G-COVERS (11 Sep): the phone walks the Mac's rungs
+// by pinch and 1 ¶ is the step between 2 and 1 there as here (Osca: "as on
+// the Mac"), so its pane is filled -- from the book's own file, THE BOOK'S
+// OWN WORDS above -- where until today the phone drew one size and a record
+// asked for would have been a request for a hidden span.
 function paintBookViews() {
   const el = document.getElementById("shelf");
-  if (!el || shelfZoom() !== BOOK_VIEW_ZOOM || document.documentElement.hasAttribute("data-phone")) {
+  if (!el || shelfZoom() !== BOOK_VIEW_ZOOM) {
     watchBookViews(null); return;
   }
   if (!bookBuiltAsked) loadBookBuilt().then(got => { if (got) paintBookViews(); });
@@ -2385,9 +2587,11 @@ function renderShelf() {
   // heading for something that cannot exist there. The heading is now a
   // collapse control with a count, like every named shelf above it -- Osca
   // named the count twice, so it shows open or closed.
+  const devShelf = deviceIsShelf();
   const shelf = !hasNamed
     // no named shelves -> the books ARE the page; no "Shelf" heading over them
-    ? (rows || `<div class="empty">${empty}</div>`)
+    // (and on the phone an empty one is the device section's to say)
+    ? (rows || (devShelf ? "" : `<div class="empty">${empty}</div>`))
     : (studioLive || n || !CAN_IMPORT)
     ? shelfHeadHTML(MAIN_SHELF, "Shelf", n, collapsed, "") +
       (collapsed ? "" : (rows || `<div class="empty">${empty}</div>`))
@@ -2423,7 +2627,8 @@ function renderShelf() {
      attribute true across a skip, and fills the 1 ¶ panes from
      `bookViewEntries` -- the entries every tile on this page was drawn from,
      named shelves included, since each is `entries` filtered. */
-  const html = sortbarHTML(entries) + deviceSection() + namedShelvesHTML(entries) + shelf + line;
+  const html = sortbarHTML(entries) + deviceSection() + namedShelvesHTML(entries) + shelf + line
+    + (devShelf && CAN_IMPORT ? storageLine() : "");
   if (html !== shelfDrawn) { el.innerHTML = html; shelfDrawn = html; }
   bookViewEntries = new Map(entries.map(b => [b.slug, b]));
   paintShelfZoom();
@@ -5155,7 +5360,16 @@ document.addEventListener("load", (e) => {
 
 document.addEventListener("error", (e) => {
   const el = e.target;
-  if (el && el.classList && el.classList.contains("covimg")) el.remove();
+  if (el && el.classList && el.classList.contains("covimg")) {
+    // a book on this device with no picture: remembered for its version, so
+    // the next paint does not ask (placeDeviceBooks reads it)
+    const row = el.closest && el.closest('.railrow[data-device="1"]');
+    if (row && row.dataset.hash) {
+      try { const m = coverFactsMemo(), k = row.dataset.slug + "@" + row.dataset.hash;
+            m[k] = Object.assign({}, m[k], { cover: false }); localStorage.setItem(COVER_FACTS_KEY, JSON.stringify(m)); } catch (err) { /* a memo */ }
+    }
+    el.remove();
+  }
   // `{capture: true}`, not a bare `true`: both are the capture phase in a
   // browser, but testkit/minidom.js reads the option off an object and would
   // silently file this as a bubble listener -- which never runs, because
@@ -5279,6 +5493,51 @@ shelfEl.addEventListener("wheel", (e) => {
   shelfZoomAt = now;
   shelfZoomStep(e.deltaY < 0 ? +1 : -1);
 }, { passive: false });
+
+/* ---- the zoom on the PHONE: two fingers on the shelf (G-COVERS, 11 Sep).
+ * Osca's decision: "library zoom on the phone has the Mac's five rungs
+ * 16/8/4/2/1 by pinch" -- the same ladder, `1t` the step between 2 and 1 as
+ * on the Mac, the same `shelfZoomStep`, the same record. The listener above
+ * is the Mac's and is not touched: a trackpad pinch arrives as ctrl+wheel,
+ * a finger pinch as two touches, and this one answers only under the phone's
+ * flag (`html[data-phone]`, set in <head>).
+ *
+ * THE NUMBERS. Fingers spreading to 1.25x the distance they started at is one
+ * rung in (fewer, bigger books); closing to 1/1.25 (0.8x) is one rung out.
+ * After a rung the distance NOW is the new start, so a long spread walks
+ * several rungs and a short one exactly one, and no rung is taken twice for
+ * one movement. No time gate: a step is a distance, and a finger that stops
+ * takes nothing more. The two-finger touch is refused to the page (WebKit
+ * would zoom the whole page: `gesturestart`/`gesturechange` too, the reader's
+ * refusePinch shape) -- a ONE-finger touch is never touched, so the shelf
+ * scrolls as it did. */
+const PHONE_PINCH_RATIO = 1.25;
+let phonePinch = null;                    // {base, steps} while two fingers are down
+function pinchSpan(t) { return Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY); }
+function phoneFlag() { return document.documentElement.hasAttribute("data-phone"); }
+shelfEl.addEventListener("touchstart", (e) => {
+  const t = e.touches || [];
+  if (!phoneFlag() || t.length !== 2) return;
+  e.preventDefault();
+  phonePinch = { base: Math.max(1, pinchSpan(t)), steps: 0 };
+}, { passive: false });
+shelfEl.addEventListener("touchmove", (e) => {
+  const t = e.touches || [];
+  if (!phonePinch || t.length !== 2) return;
+  e.preventDefault();
+  const span = pinchSpan(t), r = span / phonePinch.base;
+  const dir = r >= PHONE_PINCH_RATIO ? +1 : r <= 1 / PHONE_PINCH_RATIO ? -1 : 0;
+  if (!dir) return;
+  phonePinch.base = Math.max(1, span);
+  phonePinch.steps += dir;
+  shelfZoomStep(dir);
+}, { passive: false });
+function phonePinchEnd(e) { if (!e.touches || e.touches.length < 2) phonePinch = null; }
+shelfEl.addEventListener("touchend", phonePinchEnd);
+shelfEl.addEventListener("touchcancel", phonePinchEnd);
+for (const g of ["gesturestart", "gesturechange"]) {
+  shelfEl.addEventListener(g, (e) => { if (phoneFlag() && e.preventDefault) e.preventDefault(); }, { passive: false });
+}
 
 // ---- import: the button, the file input, and a bundle shared into the app
 const importInput = document.getElementById("importFile");
@@ -5453,7 +5712,9 @@ window.__LIBRARY_DEBUG__ = {
   selSet, selToggle, selExtend, selClear, openSelection, openEntry, readerPairUrl,
   shelfMenuItems, shelfEmptyMenuItems, pickerItems, shelfPickerItems, shelfActionItems, menuItems, renderShelf,
   // the six shelf zooms (design/reader/bench-library.html), and 1 ¶'s pane
-  SHELF_ZOOMS, SHELF_ZOOM_DEFAULT, shelfZoom, setShelfZoom, shelfZoomStep,
+  SHELF_ZOOMS, SHELF_ZOOM_DEFAULT, shelfZoom, setShelfZoom, shelfZoomStep, PHONE_PINCH_RATIO,
+  get phonePinch() { return phonePinch; },
+  deviceIsShelf, deviceShelfRow, placeDeviceBooks, bookOpening, bookWordsOnDisk, bookRecordFromDisk, coverFactsFromDisk,
   paintShelfZoom, shelfNearestTile,
   BOOK_VIEW_ZOOM, BOOK_VIEW_CHAPTERS, bookRecords, bookRecordFrom, blurbText, loadBookRecord,
   loadBookBuilt, get bookBuilt() { return bookBuilt; }, bookViewHTML, paintBookViews,

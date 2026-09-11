@@ -108,6 +108,7 @@ const TTSTVBundle = (() => {
     txt: "text/plain; charset=utf-8",
     opus: "audio/ogg", ogg: "audio/ogg",
     mp3: "audio/mpeg", m4a: "audio/mp4", wav: "audio/wav",
+    jpg: "image/jpeg",
   };
   // The book half of a bundle, by name. Everything else in the zip -- the
   // shell copy, dictionary/links.json, library.json, .DS_Store -- is counted
@@ -127,8 +128,18 @@ const TTSTVBundle = (() => {
   // `attrib/`'s output, an input to `voice/`'s render, and the reading page
   // has never fetched it; it is in the allowlist so a book on a phone is a
   // whole book -- see SCHEMA_MAX above for the decision and its date.
+  // `cover.jpg` (G-COVERS, 11 Sep) is the picture the source carried --
+  // `parser/cover.py` writes it FROM THE FILE OR NOT AT ALL, so its absence is
+  // the signal the Library draws the typeset cover by, and it is OPTIONAL here
+  // on exactly those terms: stored when the book has one, reported as
+  // `has_cover` on the row, never asked for when it has not. It is not a
+  // version of the book: the hash below is the word ids' and a cover changes
+  // none of them, so a cover arriving later is the same book at the same
+  // hash. Osca's screenshot (17:34) is why it is here -- every book on the
+  // phone a white slab, because no picture had ever been sent.
   const PAYLOAD = new Set(["book.json", "book-data.js", "align.json", "render.json",
-                           "dictionary.json", "names.json", "grammar.json", "spans.json"]);
+                           "dictionary.json", "names.json", "grammar.json", "spans.json",
+                           "cover.jpg"]);
   const META_FILE = ".bundle.json";             // this module's own, never fetched by the reader
 
   function isPayload(rel) {
@@ -456,6 +467,18 @@ const TTSTVBundle = (() => {
       // page; it says the round trip back to a bench would be lossy.
       has_spans: files.has("spans.json"),
       has_dictionary: files.has("dictionary.json"),
+      // THE SHELF'S OWN FACTS, off the book.json already parsed above (G-COVERS,
+      // 11 Sep). The Library draws a coverless book in type -- its title, its
+      // author, its first words -- and on the Mac it reads `first_words` and
+      // `form` off the tail of book.json with a Range request. A host that
+      // keeps books on disk answers the whole file to a Range (Frank's handler
+      // reads it and sends it, 200, no Range), which is 354 MB of book.json
+      // across the 28 books on Drive, on every paint. So the two strings ride
+      // on the row, where `listInstalled` already reads them for free.
+      // `has_cover` lets the tile skip the <img> for a book that has none.
+      has_cover: files.has("cover.jpg"),
+      first_words: typeof book.first_words === "string" ? book.first_words : null,
+      form: typeof book.form === "string" ? book.form : null,
       files: files.size, imported: Date.now(), schema_version: book.schema_version || 1,
     };
     // The meta row LAST: it is the commit. In a Cache it is the entry the
@@ -509,6 +532,40 @@ const TTSTVBundle = (() => {
     return report;
   }
 
+  // ------------------------------------------------------- the top-up
+  /** WHAT A ROW HAS GAINED AT THE SAME HASH (G-COVERS, 11 Sep). A book is its
+   *  word ids' hash, and a file that changes no word -- the cover -- can
+   *  arrive after the book did: the Mac's Sync press adds `cover.jpg` INTO the
+   *  folder Drive's row already names and appends it to the row's `files`
+   *  (studio/drive.py TOPUP), and Studio's LAN manifest lists it the moment
+   *  the folder has one. The hash does not move, so "pull the books whose hash
+   *  this device lacks" never sees it. THIS is the signal, and all of it:
+   *
+   *    the row (Drive's library.json, or the manifest) lists a TOPUP name in
+   *    `files`, at the (slug, hash) this device has installed, and the
+   *    installed row does not say it has that file (`has_cover !== true`).
+   *
+   *  Pure: `rows` are the Mac's rows, `installed` is `listInstalled()`'s (or
+   *  book_list's) rows; the answer is one entry per book, `{slug, hash,
+   *  files: [the row's own file entries]}` -- the same shape as a book of
+   *  the pull's job, so the host writes those files into the INSTALLED
+   *  version (not a `.part/`: nothing else of the book changes) and sets
+   *  `has_cover` on its row. A superseded row is never topped up. */
+  const TOPUP = { "cover.jpg": "has_cover" };
+  function topUps(rows, installed) {
+    const have = new Map();
+    for (const b of installed || []) if (b && b.slug) have.set(b.slug + "@" + b.hash, b);
+    const out = [];
+    for (const r of rows || []) {
+      if (!r || !r.slug || !r.hash || r.superseded || !Array.isArray(r.files)) continue;
+      const mine = have.get(r.slug + "@" + r.hash);
+      if (!mine) continue;
+      const files = r.files.filter(f => f && TOPUP[f.rel] && mine[TOPUP[f.rel]] !== true);
+      if (files.length) out.push({ slug: r.slug, hash: r.hash, files });
+    }
+    return out;
+  }
+
   // ------------------------------------------------------------- the shelf
   /** What is on the device: one row per book cache, read from the little
    *  meta entry written at import rather than by re-parsing a 2 MB
@@ -542,7 +599,7 @@ const TTSTVBundle = (() => {
     CACHE_PREFIX, SCHEMA_MAX, META_FILE, PAYLOAD, AUDIO_EXTS,
     isPayload, cacheName, parseCacheName, booksBase, bookUrl,
     validateBook, walkWordIds, bookHash, planBundle, contentType,
-    importBook, importZip, importFiles, listInstalled, removeBook, estimate, fmtBytes,
+    importBook, importZip, importFiles, listInstalled, removeBook, estimate, fmtBytes, topUps, TOPUP,
     CacheStore, HostStore, storeFor, useStore,
   };
 })();

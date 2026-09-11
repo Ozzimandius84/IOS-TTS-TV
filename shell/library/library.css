@@ -1229,3 +1229,132 @@
   html[data-phone] #shelf[data-zoom] .railrow.tile .railrow-title { display: block; }
   html[data-phone] #shelf[data-zoom] .railrow.tile .railrow-by { display: block; }
 }
+
+/* ==================================================================
+   THE PHONE'S SHELF, ROUND TWO (G-COVERS, 11 Sep 2026). After THE PHONE,
+   WHOLE on purpose: that block is design/phone/library.html's contract,
+   byte for byte (test-phone.mjs), and it is not this lane's to re-cut --
+   so what it said that is no longer true is overruled HERE, by coming
+   later at the same weight, and the re-cut is asked of the phone lane
+   (library/STATUS.md §6).
+
+   WHAT IT SAID THAT STOPPED BEING TRUE: "one size, 2 across ... zoom by
+   pinch, later". Osca, 11 Sep: the phone has the Mac's rungs by pinch
+   (library.html, "the zoom on the PHONE"). So the phone gets a ladder of
+   its own NUMBERS on the Mac's own STEPS -- the Mac's widths cannot be
+   used at 393: under its own container step-downs 8 up comes out SMALLER
+   than 16 up there (68 px against 75) and 4 up bigger than 2 up (294
+   against 157), because each was tuned for a window and not a hand.
+   Measured at 393x852 (365 px of shelf), out to in:
+
+     16   four across, covers only            84 x 114
+      8   three across, covers only           112 x 153
+      4   THE APP: two across, title + byline  150 x 205 -- PHONE FIT's
+          own tile and gap, untouched, and the rung the phone opens on
+          (SHELF_ZOOM_DEFAULT; the default is the round's, flagged, Osca's
+          to move)
+      2   two across, covers only, the caption's room given to the cover
+                                              176 x 239
+     1 ¶  one book and its words: the cover, the title, the byline, the
+          pane -- the Mac's own narrow 1 ¶ (its @container <= 820 stack)
+      1   one jacket, the width of the shelf, one screen a book
+
+   Every rule keys on `html[data-phone]` inside the phone's media query,
+   the contract's own fence: the Mac is untouched.
+   ================================================================== */
+@media (max-width: 600px), (max-height: 500px) {
+  /* NO MAC CHROME ON THE PHONE (PROMPTS/phone-chrome.md: "Top bar: nothing.
+     No top bar at all, ever."). The header's three -- the Sources toggle,
+     the settings door, the theme -- go with it; the phone's one bar is at
+     the foot and is the reader's (lane 5 mounts it here). Import bundle…
+     goes too: the phone's books arrive by Sync. The Sources rail is already
+     hidden by context.js (a host with the door is not a bench); this is the
+     belt to that brace. */
+  html[data-phone] header { display: none; }
+  html[data-phone] #importBtn { display: none; }
+  html[data-phone] .srcbar, html[data-phone] #sourcesScrim { display: none !important; }
+  /* with no header, the shelf clears the status bar itself -- and so does a
+     line in `#note` ("Removed …"), which the header used to push down */
+  html[data-phone] #shelf.rail { padding-top: calc(12px + var(--safe-top, 0px)); }
+  html[data-phone] #note:not(:empty) { padding-top: calc(6px + var(--safe-top, 0px)); }
+
+  /* A TILE IS AS TALL AS WHAT IS IN IT. The 30 Aug phone rule gives every
+     `#shelf .railrow` `aspect-ratio: 2/3` -- written for the list rows, before
+     there were tiles -- and a tile took it too: at 4 up a 150x225 box, the
+     cover SHRUNK to 100x137 to leave the caption room inside it (measured,
+     393x852), and at 1 up a 735-tall tile forced 490 wide on a 365 shelf.
+     THE PHONE, WHOLE measured the jacket it meant, 149x203 at 88/120; this
+     restores it by letting the tile be its cover plus its caption. The same
+     rule's `justify-content: flex-end` (a flex row's) also lands on the
+     tile's GRID, where it stops the one column stretching: the cover is
+     `width: 100%` of a column sized by its caption (114 px at 4 up) or by
+     nothing (2 px at 16, 8, 2 and 1 up). One column, the tile's width. */
+  html[data-phone] #shelf .railrow.tile { aspect-ratio: auto; justify-content: stretch;
+    grid-template-columns: minmax(0, 1fr); }
+
+  /* AN OPEN BOOK'S ✕, ON THE PHONE: a 28 px disc at the cover's top-right,
+     round, no box -- the element IS the disc (the Mac's is a 36 px square
+     holding a 22 px disc, for a pointer). */
+  html[data-phone] #shelf .railrow.tile .tile-close {
+    width: 28px; height: 28px; top: 6px; right: 6px; border-radius: 50%;
+    background: var(--fg); opacity: 0.82; font-size: 12px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.25); }
+  html[data-phone] #shelf .railrow.tile .tile-close::before { display: none; }
+
+  /* ---- 16: four across, covers only */
+  html[data-phone] #shelf[data-zoom="16"] .shelfgrid { --cols: 4; --bookw: 100px; }
+  html[data-phone] #shelf[data-zoom="16"] .railrow.tile { grid-template-rows: auto; row-gap: 0; }
+  html[data-phone] #shelf[data-zoom="16"] .railrow.tile .railrow-title,
+  html[data-phone] #shelf[data-zoom="16"] .railrow.tile .railrow-by { display: none; }
+  /* ---- 8: three across, covers only */
+  html[data-phone] #shelf[data-zoom="8"] .shelfgrid { --cols: 3; --bookw: 200px; }
+  html[data-phone] #shelf[data-zoom="8"] .railrow.tile { grid-template-rows: auto; row-gap: 0; }
+  html[data-phone] #shelf[data-zoom="8"] .railrow.tile .railrow-title,
+  html[data-phone] #shelf[data-zoom="8"] .railrow.tile .railrow-by { display: none; }
+  /* ---- 4: PHONE FIT and THE PHONE, WHOLE, as they stand */
+  /* ---- 2: two across, covers only, filling the shelf */
+  html[data-phone] #shelf[data-zoom="2"] .shelfgrid { --cols: 2; --bookw: 400px; }
+  html[data-phone] #shelf[data-zoom="2"] .railrow.tile { grid-template-rows: auto; row-gap: 0; }
+  html[data-phone] #shelf[data-zoom="2"] .railrow.tile .railrow-title,
+  html[data-phone] #shelf[data-zoom="2"] .railrow.tile .railrow-by { display: none; }
+  /* ---- 1 ¶ and 1 take the whole shelf: `100cqw` of the `shelf` container,
+     a length, where `100%` would resolve against a band that is
+     `width: fit-content` and collapse its one book to 44 px (measured) */
+  /* ---- 1 ¶: the Mac's narrow stack -- cover, title, byline, the pane */
+  html[data-phone] #shelf[data-zoom="1t"] .shelfgrid { --cols: 1; --bookw: 100cqw; }
+  html[data-phone] #shelf[data-zoom="1t"] .railrow.tile {
+    grid-template-columns: minmax(0, 1fr); grid-template-rows: auto auto auto auto;
+    justify-items: start; row-gap: 0.75rem; padding: 1.4rem 0 2.2rem; }
+  html[data-phone] #shelf[data-zoom="1t"] .railrow.tile .tilecov {
+    grid-column: 1; grid-row: 1; width: auto; height: 38vh; margin: 0; }
+  html[data-phone] #shelf[data-zoom="1t"] .railrow.tile .railrow-title {
+    grid-column: 1; grid-row: 2; font-size: 1.8rem; line-height: 1.12; height: auto; -webkit-line-clamp: 4; }
+  html[data-phone] #shelf[data-zoom="1t"] .railrow.tile .railrow-by { grid-column: 1; grid-row: 3; font-size: 0.78rem; }
+  html[data-phone] #shelf[data-zoom="1t"] .railrow.tile .tile-pane {
+    grid-column: 1; grid-row: 4; width: 100%; display: grid; gap: 1.15rem; align-content: start; padding-top: 0.6rem; }
+  html[data-phone] #shelf[data-zoom="1t"] .tile-slotrow { grid-template-columns: minmax(0, 1fr); }
+  /* the ✕ rides the cover's corner, not the tile's, where the cover is narrower */
+  html[data-phone] #shelf[data-zoom="1t"] .railrow.tile .tile-close { right: auto; left: calc(38vh * 88 / 120 - 34px); top: calc(1.4rem + 6px); }
+  /* ---- 1: one jacket, the shelf's width, one screen a book */
+  html[data-phone] #shelf[data-zoom="1"] { scroll-snap-type: y proximity; }
+  html[data-phone] #shelf[data-zoom="1"] .shelfgrid { --cols: 1; --bookw: 100cqw; }
+  html[data-phone] #shelf[data-zoom="1"] .railrow.tile {
+    grid-template-rows: auto; row-gap: 0; scroll-snap-align: center;
+    min-height: calc(100dvh - var(--safe-top, 0px) - var(--safe-bottom, 0px) - 24px); align-content: center; }
+  html[data-phone] #shelf[data-zoom="1"] .railrow.tile .railrow-title,
+  html[data-phone] #shelf[data-zoom="1"] .railrow.tile .railrow-by { display: none; }
+  /* the jacket is centred in a screen-high tile; the ✕ sits on its corner:
+     half the tile, less half the jacket (the shelf's width, 100cqw of the
+     `shelf` container, at 120/88), plus the 6 px inset */
+  html[data-phone] #shelf[data-zoom="1"] .railrow.tile .tile-close { top: calc(50% - 68.182cqw + 6px); }
+
+  /* THE PHONE'S SPACING, one block in ladder order as the Mac's is (THE
+     SPACING, above: `gap: <row> <column>`, and no rung carries a gap of its
+     own). 4 is PHONE FIT's --ph-gap and is not restated. Mine, measured at
+     393, one place to dial them. */
+  html[data-phone] #shelf[data-zoom="16"] .shelfgrid { gap: 10px 10px; }
+  html[data-phone] #shelf[data-zoom="8"]  .shelfgrid { gap: 14px 14px; }
+  html[data-phone] #shelf[data-zoom="2"]  .shelfgrid { gap: 18px 14px; }
+  html[data-phone] #shelf[data-zoom="1t"] .shelfgrid { gap: 0 0; }
+  html[data-phone] #shelf[data-zoom="1"]  .shelfgrid { gap: 0 0; }
+}

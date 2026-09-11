@@ -35,9 +35,10 @@
  *   hostBooks      the host offers that door -- `TTSTVHost.books` with its
  *                  four verbs. Only Frank on the phone does.
  *
- * **The two questions the pages ask:**
- *   bench   -- is there a studio behind this page? `hostInjected ||
- *              studioLive`. Gates the Sources rail, ingest, the phone shelf,
+ * **The questions the pages ask:**
+ *   bench   -- is there a studio behind this page? `(hostInjected &&
+ *              !hostBooks) || studioLive` (G-COVERS: the phone is a host and
+ *              not a bench -- `phone`, below). Gates the Sources rail, ingest, the phone shelf,
  *              and the Actions that push. In the app it is true immediately;
  *              in a plain browser at studio it turns true on the first poll.
  *   device  -- is this a device that holds its own books? `canHoldBooks &&
@@ -50,6 +51,14 @@
  *              Sep): Frank on the phone injects `TTSTVHost` too, so before
  *              the door existed the books a Sync pulled would have had no
  *              row to be on.
+ *   phone   -- is this Frank on the phone? `hostInjected && hostBooks`: the
+ *              one host that keeps books behind a door (G-COVERS, 11 Sep).
+ *              A host with the door is a device AND a phone, and so it is
+ *              NOT a bench: `bench` was `hostInjected || studioLive` until
+ *              11 Sep, which made the phone -- a host -- draw the Mac's Sources rail,
+ *              its toggle and the bench's actions (Osca's screenshot, 17:34:
+ *              "a top bar with ≡ · ⚙ · ☾"). The desktop app has no door and
+ *              is untouched: a bench always, a device never.
  *
  * A page whose bundle predates this file must still read, so every caller
  * guards on `window.TTSTVContext` and falls back to what it did before --
@@ -71,22 +80,24 @@
     return read();
   }
 
-  /* Pure -- the whole rule in six lines, so the node tests can drive every
+  /* Pure -- the whole rule in seven lines, so the node tests can drive every
    * combination without a DOM. */
   function decide(f) {
     f = f || {};
     var app = !!f.hostInjected;
     var live = !!f.studioLive;
-    var bench = app || live;
+    var phone = app && !!f.hostBooks;            // a host with the door: a device AND a phone
+    var bench = (app && !phone) || live;
     return {
       app: app,
+      phone: phone,
       studioLive: live,
       bench: bench,
       device: (!app || !!f.hostBooks) && !!f.canHoldBooks && !live,
       // one word for a data-attribute and a report, never for a decision
-      kind: app ? "app" : (live ? "browser" : (f.canHoldBooks ? "shell" : "static")),
+      kind: phone ? "phone" : app ? "app" : (live ? "browser" : (f.canHoldBooks ? "shell" : "static")),
       benchReason: bench ? null
-        : (app ? "studio isn't answering on this Mac yet"
+        : (app && !phone ? "studio isn't answering on this Mac yet"
                : "no studio behind this page — this is the app on the phone"),
     };
   }
