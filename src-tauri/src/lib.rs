@@ -2426,7 +2426,9 @@ mod tests {
         let cap = include_str!("../capabilities/default.json");
         assert!(cap.contains(r#""allow-sync-discover""#));
         let build = include_str!("../build.rs");
-        assert!(build.contains(r#"commands(&["sync_discover"])"#));
+        // the list has grown since this was the only command (google_sign_in,
+        // audio_session_start, the book door); what matters is that it is IN it
+        assert!(build.contains(r#""sync_discover","#), "build.rs declares sync_discover");
     }
 
     /// The 6 Sep phone bug, as an assertion. The Brotli bytes are real: they
