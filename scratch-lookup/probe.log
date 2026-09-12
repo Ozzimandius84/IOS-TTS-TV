@@ -1,0 +1,202 @@
+  1339.8 (a) menu install on LPWryWebView (super WKWebView): added
+  2199.9 === start 2026-09-11 17:45:06 +0000 | iOS 26.5 | iPhone 17 Pro | langs en-US,fr-GB,de-GB,en-GB,el-GB,zh-Hans-GB,sa-GB
+  5775.8 page loaded 2ad7lg
+  5799.4 page env {"langs":"en-US,fr-GB,de-GB,en-GB,el-GB,zh-Hans-GB,sa-GB","locale":"en_US@rg=gbzzzz","ios":"26.5","machine":"arm64","sim":"iPhone 17 Pro"}
+ 35452.6 page press -> lookup_apple("fagi") mode=sheet from float: tap {"load":"2ad7lg","scrollY":0,"sel":0,"audio":null,"vis":"visible","raf":1319,"cursor":null}
+ 35570.8 lookup_apple("fagi") mode=sheet init=117.3ms anchor={{262, 784}, {128, 44}}
+ 35575.2 present UIReferenceLibraryViewController over LPViewController (style asked 1)
+ 36308.2 UP UIReferenceLibraryViewController via _UIPageSheetPresentationController frame={{0, 0}, {402, 812}} screen={{0, 0}, {402, 874}}
+ 36313.0 page state while-up {"load":"2ad7lg","scrollY":0,"sel":0,"audio":null,"vis":"visible","raf":1321,"cursor":null}
+ 36822.6 lookup_apple("fagi") mode=sheet ON SCREEN (present completion) at 1369.1ms from the call
+ 37147.2 tree of UIReferenceLibraryViewController at +800ms: views=13 depth=6 text-views=0 chars=0 remote-hosts=0 wkwebviews=0 scrollviews=0 buttons=[] classes=[UIViewx2 _UIPointerInteractionAssistantEffectContainerViewx2 UINavigationBarx1 UILayoutContainerViewx1 _TtGC5UIKitP10$186ecd81022FloatingBarHostingViewVS_20FloatingBarContainer_x1 UIImageViewx1 _UIBarBackgroundx1 UIViewControllerWrapperViewx1 _UIFloatingBarContainerViewx1 UIActivityIndicatorViewx1]
+ 38933.1 tree of UIReferenceLibraryViewController at +2500ms: views=16 depth=9 text-views=0 chars=0 remote-hosts=2 wkwebviews=0 scrollviews=0 buttons=[] classes=[UIViewx2 _UIPointerInteractionAssistantEffectContainerViewx2 _UIBarBackgroundx1 _UIScenePresentationViewx1 UIViewControllerWrapperViewx1 _UIContextLayerHostViewx1 UILayoutContainerViewx1 _UITouchPassthroughViewx1 _UISceneHostingViewx1 UINavigationTransitionViewx1]
+ 52189.1 dismiss asked of DDParsecCollectionViewController (its presented: (null))
+ 52744.0 dismiss asked of DDParsecCollectionViewController (its presented: (null))
+ 52757.0 GONE UIReferenceLibraryViewController after 16449ms on screen
+ 52758.6 page state after-dismiss {"load":"2ad7lg","scrollY":0,"sel":0,"audio":null,"vis":"visible","raf":2295,"cursor":null}
+ 52758.8 page lookup_apple("fagi") closed; press->gone 17311ms {"gone":true,"onScreenMs":16449.282458343077}
+ 78757.5 page RUN start {"load":"2ad7lg","scrollY":0,"sel":0,"audio":{"t":0,"paused":false},"vis":"visible","raf":3774,"cursor":null}
+ 78778.9 dictionaryHasDefinitionForTerm("shepherd") = NO in 20.6ms
+ 78800.4 dictionaryHasDefinitionForTerm("beech") = NO in 3.8ms
+ 78806.8 dictionaryHasDefinitionForTerm("reed") = NO in 5.2ms
+ 78814.9 dictionaryHasDefinitionForTerm("berger") = NO in 3.3ms
+ 78819.6 dictionaryHasDefinitionForTerm("Buche") = NO in 2.9ms
+ 78827.7 dictionaryHasDefinitionForTerm("faggio") = NO in 5.2ms
+ 78832.5 dictionaryHasDefinitionForTerm("haya") = NO in 3.7ms
+ 78836.2 dictionaryHasDefinitionForTerm("fagus") = NO in 2.7ms
+ 78840.1 dictionaryHasDefinitionForTerm("fagi") = NO in 3.0ms
+ 78846.8 dictionaryHasDefinitionForTerm("Tityre") = NO in 6.1ms
+ 78851.0 dictionaryHasDefinitionForTerm("recubans") = NO in 2.4ms
+ 78856.0 dictionaryHasDefinitionForTerm("tegmine") = NO in 4.0ms
+ 78911.8 dictionaryHasDefinitionForTerm("μῆνιν") = NO in 5.6ms
+ 78919.8 dictionaryHasDefinitionForTerm("βιβλίο") = NO in 4.0ms
+ 78927.1 dictionaryHasDefinitionForTerm("qqxzv") = NO in 3.5ms
+ 78928.4 page dictionaryHasDefinition en:shepherd=n(20.6ms) en:beech=n(3.8ms) en:reed=n(5.2ms) fr:berger=n(3.3ms) de:Buche=n(2.9ms) it:faggio=n(5.2ms) es:haya=n(3.7ms) la:fagus=n(2.7ms) la:fagi=n(3.0ms) la:Tityre=n(6.1ms) la:recubans=n(2.4ms) la:tegmine=n(4.0ms) grc:μῆνιν=n(5.6ms) el:βιβλίο=n(4.0ms) xx:qqxzv=n(3.5ms)
+ 78931.6 dictionaryHasDefinitionForTerm("shepherd") = NO in 3.0ms
+ 78970.4 dictionaryHasDefinitionForTerm("beech") = NO in 3.4ms
+ 78976.7 dictionaryHasDefinitionForTerm("reed") = NO in 4.1ms
+ 78984.4 dictionaryHasDefinitionForTerm("berger") = NO in 5.2ms
+ 78991.5 dictionaryHasDefinitionForTerm("Buche") = NO in 5.4ms
+ 78997.5 dictionaryHasDefinitionForTerm("faggio") = NO in 3.2ms
+ 79012.8 dictionaryHasDefinitionForTerm("haya") = NO in 3.3ms
+ 79017.6 dictionaryHasDefinitionForTerm("fagus") = NO in 2.6ms
+ 79022.8 dictionaryHasDefinitionForTerm("fagi") = NO in 3.0ms
+ 79030.7 dictionaryHasDefinitionForTerm("Tityre") = NO in 4.1ms
+ 79034.9 dictionaryHasDefinitionForTerm("recubans") = NO in 3.6ms
+ 79039.6 dictionaryHasDefinitionForTerm("tegmine") = NO in 4.0ms
+ 79049.2 dictionaryHasDefinitionForTerm("μῆνιν") = NO in 6.8ms
+ 79055.6 dictionaryHasDefinitionForTerm("βιβλίο") = NO in 3.8ms
+ 79063.2 dictionaryHasDefinitionForTerm("qqxzv") = NO in 5.5ms
+ 79065.8 page dictionaryHasDefinition en:shepherd=n(3.0ms) en:beech=n(3.4ms) en:reed=n(4.1ms) fr:berger=n(5.2ms) de:Buche=n(5.4ms) it:faggio=n(3.2ms) es:haya=n(3.3ms) la:fagus=n(2.6ms) la:fagi=n(3.0ms) la:Tityre=n(4.1ms) la:recubans=n(3.6ms) la:tegmine=n(4.0ms) grc:μῆνιν=n(6.8ms) el:βιβλίο=n(3.8ms) xx:qqxzv=n(5.5ms)
+ 79074.0 lookup_apple("shepherd") mode=sheet init=4.7ms anchor={{146.359375, 414}, {71.78125, 51}}
+ 79074.8 present UIReferenceLibraryViewController over LPViewController (style asked 1)
+ 79723.9 page tone playing
+ 79776.9 UP UIReferenceLibraryViewController via _UIPageSheetPresentationController frame={{0, 0}, {402, 812}} screen={{0, 0}, {402, 874}}
+ 79794.1 page state while-up {"load":"2ad7lg","scrollY":0,"sel":0,"audio":{"t":0.14,"paused":false},"vis":"visible","raf":3789,"cursor":null}
+ 80220.4 lookup_apple("shepherd") mode=sheet ON SCREEN (present completion) at 1151.2ms from the call
+ 80615.7 tree of UIReferenceLibraryViewController at +800ms: views=16 depth=9 text-views=0 chars=0 remote-hosts=2 wkwebviews=0 scrollviews=0 buttons=[] classes=[UIViewx2 _UIPointerInteractionAssistantEffectContainerViewx2 _UIBarBackgroundx1 _UIScenePresentationViewx1 UIViewControllerWrapperViewx1 _UIContextLayerHostViewx1 UILayoutContainerViewx1 _UITouchPassthroughViewx1 _UISceneHostingViewx1 UINavigationTransitionViewx1]
+ 82401.3 tree of UIReferenceLibraryViewController at +2500ms: views=16 depth=9 text-views=0 chars=0 remote-hosts=2 wkwebviews=0 scrollviews=0 buttons=[] classes=[UIViewx2 _UIPointerInteractionAssistantEffectContainerViewx2 _UIBarBackgroundx1 _UIScenePresentationViewx1 UIViewControllerWrapperViewx1 _UIContextLayerHostViewx1 UILayoutContainerViewx1 _UITouchPassthroughViewx1 _UISceneHostingViewx1 UINavigationTransitionViewx1]
+ 82845.9 dismiss asked of LPViewController (its presented: UIReferenceLibraryViewController)
+ 83562.5 dismiss asked of DDParsecCollectionViewController (its presented: (null))
+ 83569.4 programmatic dismiss of sheet done in 723.5ms
+ 83583.5 GONE UIReferenceLibraryViewController after 3807ms on screen
+ 83594.1 page state after-dismiss {"load":"2ad7lg","scrollY":0,"sel":0,"audio":{"t":3.94,"paused":false},"vis":"visible","raf":3987,"cursor":null}
+ 83604.4 page RUN shepherd/sheet: call->gone 4538ms; same doc true; scroll 0->0; raf +200; tone advanced 3.96s (4.54s wall), paused=false; {"gone":true,"onScreenMs":3806.8698333227076}
+ 84336.7 lookup_apple("fagus") mode=sheet init=3.7ms anchor={{146.359375, 414}, {71.78125, 51}}
+ 84337.2 present UIReferenceLibraryViewController over LPViewController (style asked 1)
+ 84377.6 UP UIReferenceLibraryViewController via _UIPageSheetPresentationController frame={{0, 0}, {402, 812}} screen={{0, 0}, {402, 874}}
+ 84383.2 page state while-up {"load":"2ad7lg","scrollY":0,"sel":0,"audio":{"t":4.74,"paused":false},"vis":"visible","raf":4030,"cursor":null}
+ 84873.9 lookup_apple("fagus") mode=sheet ON SCREEN (present completion) at 540.9ms from the call
+ 85218.0 tree of UIReferenceLibraryViewController at +800ms: views=16 depth=9 text-views=0 chars=0 remote-hosts=2 wkwebviews=0 scrollviews=0 buttons=[] classes=[UIViewx2 _UIPointerInteractionAssistantEffectContainerViewx2 _UIBarBackgroundx1 _UIScenePresentationViewx1 UIViewControllerWrapperViewx1 _UIContextLayerHostViewx1 UILayoutContainerViewx1 _UITouchPassthroughViewx1 _UISceneHostingViewx1 UINavigationTransitionViewx1]
+ 87001.8 tree of UIReferenceLibraryViewController at +2500ms: views=16 depth=9 text-views=0 chars=0 remote-hosts=2 wkwebviews=0 scrollviews=0 buttons=[] classes=[UIViewx2 _UIPointerInteractionAssistantEffectContainerViewx2 _UIBarBackgroundx1 _UIScenePresentationViewx1 UIViewControllerWrapperViewx1 _UIContextLayerHostViewx1 UILayoutContainerViewx1 _UITouchPassthroughViewx1 _UISceneHostingViewx1 UINavigationTransitionViewx1]
+ 87498.2 dismiss asked of LPViewController (its presented: UIReferenceLibraryViewController)
+ 88112.3 dismiss asked of DDParsecCollectionViewController (its presented: (null))
+ 88113.3 programmatic dismiss of sheet done in 615.2ms
+ 88117.2 GONE UIReferenceLibraryViewController after 3740ms on screen
+ 88118.6 page state after-dismiss {"load":"2ad7lg","scrollY":0,"sel":0,"audio":{"t":8.47,"paused":false},"vis":"visible","raf":4244,"cursor":null}
+ 88119.1 page RUN fagus/sheet: call->gone 3786ms; same doc true; scroll 0->0; raf +215; tone advanced 3.79s (3.79s wall), paused=false; {"gone":true,"onScreenMs":3739.8607916547917}
+ 88823.1 lookup_apple("shepherd") mode=half init=2.9ms anchor={{146.359375, 414}, {71.78125, 51}}
+ 88823.8 present UIReferenceLibraryViewController over LPViewController (style asked 1)
+ 88877.9 UP UIReferenceLibraryViewController via _UIPageSheetPresentationController frame={{0, 0}, {402, 469.66666666666669}} screen={{0, 0}, {402, 874}}
+ 88880.0 page state while-up {"load":"2ad7lg","scrollY":0,"sel":0,"audio":{"t":9.23,"paused":false},"vis":"visible","raf":4287,"cursor":null}
+ 89370.1 lookup_apple("shepherd") mode=half ON SCREEN (present completion) at 550.4ms from the call
+ 89718.2 tree of UIReferenceLibraryViewController at +800ms: views=16 depth=9 text-views=0 chars=0 remote-hosts=2 wkwebviews=0 scrollviews=0 buttons=[] classes=[UIViewx2 _UIPointerInteractionAssistantEffectContainerViewx2 _UIBarBackgroundx1 _UIScenePresentationViewx1 UIViewControllerWrapperViewx1 _UIContextLayerHostViewx1 UILayoutContainerViewx1 _UITouchPassthroughViewx1 _UISceneHostingViewx1 UINavigationTransitionViewx1]
+ 91503.1 tree of UIReferenceLibraryViewController at +2500ms: views=16 depth=9 text-views=0 chars=0 remote-hosts=2 wkwebviews=0 scrollviews=0 buttons=[] classes=[UIViewx2 _UIPointerInteractionAssistantEffectContainerViewx2 _UIBarBackgroundx1 _UIScenePresentationViewx1 UIViewControllerWrapperViewx1 _UIContextLayerHostViewx1 UILayoutContainerViewx1 _UITouchPassthroughViewx1 _UISceneHostingViewx1 UINavigationTransitionViewx1]
+ 91988.3 dismiss asked of LPViewController (its presented: UIReferenceLibraryViewController)
+ 92566.4 dismiss asked of DDParsecCollectionViewController (its presented: (null))
+ 92567.3 programmatic dismiss of half done in 579.0ms
+ 92571.2 GONE UIReferenceLibraryViewController after 3693ms on screen
+ 92573.4 page state after-dismiss {"load":"2ad7lg","scrollY":0,"sel":0,"audio":{"t":12.93,"paused":false},"vis":"visible","raf":4500,"cursor":null}
+ 92573.9 page RUN shepherd/half: call->gone 3753ms; same doc true; scroll 0->0; raf +215; tone advanced 3.76s (3.75s wall), paused=false; {"gone":true,"onScreenMs":3693.508666707203}
+ 93276.7 lookup_apple("shepherd") mode=popover init=3.3ms anchor={{146.359375, 414}, {71.78125, 51}}
+ 93277.6 present UIReferenceLibraryViewController over LPViewController (style asked 7)
+ 94516.3 UP UIReferenceLibraryViewController via UIPopoverPresentationController frame={{0, 0}, {340, 365}} screen={{0, 0}, {402, 874}}
+ 94533.9 page state while-up {"load":"2ad7lg","scrollY":0,"sel":0,"audio":{"t":14.87,"paused":false},"vis":"visible","raf":4542,"cursor":null}
+ 95005.2 lookup_apple("shepherd") mode=popover ON SCREEN (present completion) at 1732.4ms from the call
+ 95355.0 tree of UIReferenceLibraryViewController at +800ms: views=16 depth=9 text-views=0 chars=0 remote-hosts=2 wkwebviews=0 scrollviews=0 buttons=[] classes=[UIViewx2 _UIPointerInteractionAssistantEffectContainerViewx2 _UIBarBackgroundx1 _UIScenePresentationViewx1 UIViewControllerWrapperViewx1 _UIContextLayerHostViewx1 UILayoutContainerViewx1 _UITouchPassthroughViewx1 _UISceneHostingViewx1 UINavigationTransitionViewx1]
+ 97141.4 tree of UIReferenceLibraryViewController at +2500ms: views=16 depth=9 text-views=0 chars=0 remote-hosts=2 wkwebviews=0 scrollviews=0 buttons=[] classes=[UIViewx2 _UIPointerInteractionAssistantEffectContainerViewx2 _UIBarBackgroundx1 _UIScenePresentationViewx1 UIViewControllerWrapperViewx1 _UIContextLayerHostViewx1 UILayoutContainerViewx1 _UITouchPassthroughViewx1 _UISceneHostingViewx1 UINavigationTransitionViewx1]
+ 97629.5 dismiss asked of LPViewController (its presented: UIReferenceLibraryViewController)
+ 98231.3 dismiss asked of DDParsecCollectionViewController (its presented: (null))
+ 98233.3 programmatic dismiss of popover done in 603.9ms
+ 98251.1 GONE UIReferenceLibraryViewController after 3735ms on screen
+ 98254.6 page state after-dismiss {"load":"2ad7lg","scrollY":0,"sel":0,"audio":{"t":18.61,"paused":false},"vis":"visible","raf":4752,"cursor":null}
+ 98254.8 page RUN shepherd/popover: call->gone 4982ms; same doc true; scroll 0->0; raf +211; tone advanced 4.98s (4.98s wall), paused=false; {"gone":true,"onScreenMs":3735.003166657407}
+ 98956.0 lookup_apple("fagus") mode=ours init=1.0ms anchor={{146.359375, 414}, {71.78125, 51}}
+ 98956.4 present LPCombo over LPViewController (style asked 1)
+ 99000.7 UP LPCombo via _UIPageSheetPresentationController frame={{0, 0}, {402, 812}} screen={{0, 0}, {402, 874}}
+ 99006.8 page state while-up {"load":"2ad7lg","scrollY":0,"sel":0,"audio":{"t":19.36,"paused":false},"vis":"visible","raf":4795,"cursor":null}
+ 99503.7 (c) child slot={{0, 80.333333333333314}, {402, 731.66666666666663}} child view={{0, 0}, {402, 731.66666666666663}} child's own tree: views=16 depth=9 text-views=0 chars=0 remote-hosts=2 wkwebviews=0 scrollviews=0 buttons=[] classes=[UIViewx2 _UIPointerInteractionAssistantEffectContainerViewx2 _UIBarBackgroundx1 _UIScenePresentationViewx1 UIViewControllerWrapperViewx1 _UIContextLayerHostViewx1 UILayoutContainerViewx1 _UITouchPassthroughViewx1 _UISceneHostingViewx1 UINavigationTransitionViewx1]
+ 99505.8 lookup_apple("fagus") mode=ours ON SCREEN (present completion) at 550.9ms from the call
+ 99839.4 tree of LPCombo at +800ms: views=19 depth=11 text-views=1 chars=41 remote-hosts=2 wkwebviews=0 scrollviews=0 buttons=[] classes=[UIViewx4 _UIPointerInteractionAssistantEffectContainerViewx2 UILabelx1 _UIBarBackgroundx1 _UIScenePresentationViewx1 UIViewControllerWrapperViewx1 _UIContextLayerHostViewx1 UILayoutContainerViewx1 _UITouchPassthroughViewx1 _UISceneHostingViewx1]
+101621.9 tree of LPCombo at +2500ms: views=19 depth=11 text-views=1 chars=41 remote-hosts=2 wkwebviews=0 scrollviews=0 buttons=[] classes=[UIViewx4 _UIPointerInteractionAssistantEffectContainerViewx2 UILabelx1 _UIBarBackgroundx1 _UIScenePresentationViewx1 UIViewControllerWrapperViewx1 _UIContextLayerHostViewx1 UILayoutContainerViewx1 _UITouchPassthroughViewx1 _UISceneHostingViewx1]
+102138.3 dismiss asked of LPViewController (its presented: LPCombo)
+102711.1 dismiss asked of DDParsecCollectionViewController (its presented: (null))
+102712.0 programmatic dismiss of ours done in 573.7ms
+102715.0 GONE LPCombo after 3714ms on screen
+102716.9 page state after-dismiss {"load":"2ad7lg","scrollY":0,"sel":0,"audio":{"t":23.07,"paused":false},"vis":"visible","raf":5010,"cursor":null}
+102717.3 page RUN fagus/ours: call->gone 3762ms; same doc true; scroll 0->0; raf +216; tone advanced 3.76s (3.76s wall), paused=false; {"gone":true,"onScreenMs":3714.7373749758117}
+103421.5 lookup_apple("shepherd") mode=ours init=2.8ms anchor={{146.359375, 414}, {71.78125, 51}}
+103422.3 present LPCombo over LPViewController (style asked 1)
+103454.4 UP LPCombo via _UIPageSheetPresentationController frame={{0, 0}, {402, 812}} screen={{0, 0}, {402, 874}}
+103455.3 page state while-up {"load":"2ad7lg","scrollY":0,"sel":0,"audio":{"t":23.81,"paused":false},"vis":"visible","raf":5053,"cursor":null}
+103953.3 (c) child slot={{0, 80.333333333333314}, {402, 731.66666666666663}} child view={{0, 0}, {402, 731.66666666666663}} child's own tree: views=16 depth=9 text-views=0 chars=0 remote-hosts=2 wkwebviews=0 scrollviews=0 buttons=[] classes=[UIViewx2 _UIPointerInteractionAssistantEffectContainerViewx2 _UIBarBackgroundx1 _UIScenePresentationViewx1 UIViewControllerWrapperViewx1 _UIContextLayerHostViewx1 UILayoutContainerViewx1 _UITouchPassthroughViewx1 _UISceneHostingViewx1 UINavigationTransitionViewx1]
+103956.0 lookup_apple("shepherd") mode=ours ON SCREEN (present completion) at 537.3ms from the call
+104293.8 tree of LPCombo at +800ms: views=19 depth=11 text-views=1 chars=49 remote-hosts=2 wkwebviews=0 scrollviews=0 buttons=[] classes=[UIViewx4 _UIPointerInteractionAssistantEffectContainerViewx2 UILabelx1 _UIBarBackgroundx1 _UIScenePresentationViewx1 UIViewControllerWrapperViewx1 _UIContextLayerHostViewx1 UILayoutContainerViewx1 _UITouchPassthroughViewx1 _UISceneHostingViewx1]
+105988.4 tree of LPCombo at +2500ms: views=19 depth=11 text-views=1 chars=49 remote-hosts=2 wkwebviews=0 scrollviews=0 buttons=[] classes=[UIViewx4 _UIPointerInteractionAssistantEffectContainerViewx2 UILabelx1 _UIBarBackgroundx1 _UIScenePresentationViewx1 UIViewControllerWrapperViewx1 _UIContextLayerHostViewx1 UILayoutContainerViewx1 _UITouchPassthroughViewx1 _UISceneHostingViewx1]
+106580.4 dismiss asked of LPViewController (its presented: LPCombo)
+107143.9 dismiss asked of DDParsecCollectionViewController (its presented: (null))
+107145.2 programmatic dismiss of ours done in 564.8ms
+107150.4 GONE LPCombo after 3696ms on screen
+107151.1 page state after-dismiss {"load":"2ad7lg","scrollY":0,"sel":0,"audio":{"t":27.5,"paused":false},"vis":"visible","raf":5267,"cursor":null}
+107151.7 page RUN shepherd/ours: call->gone 3734ms; same doc true; scroll 0->0; raf +216; tone advanced 3.74s (3.73s wall), paused=false; {"gone":true,"onScreenMs":3696.3156249839813}
+107852.3 page RUN end {"load":"2ad7lg","scrollY":0,"sel":0,"audio":{"t":28.21,"paused":false},"vis":"visible","raf":5308,"cursor":null}
+127185.1 page page click detail=1 gap=121806ms sel=0 word=Tityrus
+136170.0 page page click detail=1 gap=9005ms sel=0 word=Tityrus
+136175.1 page press -> lookup_apple("Tityrus") mode=sheet from page: tap on the cursor's word {"load":"2ad7lg","scrollY":0,"sel":0,"audio":{"t":56.53,"paused":false},"vis":"visible","raf":6995,"cursor":"Tityrus"}
+136183.9 lookup_apple("Tityrus") mode=sheet init=8.6ms anchor={{12, 298}, {61, 23}}
+136184.5 present UIReferenceLibraryViewController over LPViewController (style asked 1)
+136345.3 UP UIReferenceLibraryViewController via _UIPageSheetPresentationController frame={{0, 0}, {402, 812}} screen={{0, 0}, {402, 874}}
+136354.3 page state while-up {"load":"2ad7lg","scrollY":0,"sel":0,"audio":{"t":56.7,"paused":false},"vis":"visible","raf":6997,"cursor":"Tityrus"}
+136839.3 lookup_apple("Tityrus") mode=sheet ON SCREEN (present completion) at 663.9ms from the call
+137185.1 tree of UIReferenceLibraryViewController at +800ms: views=16 depth=9 text-views=0 chars=0 remote-hosts=2 wkwebviews=0 scrollviews=0 buttons=[] classes=[UIViewx2 _UIPointerInteractionAssistantEffectContainerViewx2 _UIBarBackgroundx1 _UIScenePresentationViewx1 UIViewControllerWrapperViewx1 _UIContextLayerHostViewx1 UILayoutContainerViewx1 _UITouchPassthroughViewx1 _UISceneHostingViewx1 UINavigationTransitionViewx1]
+138969.6 tree of UIReferenceLibraryViewController at +2500ms: views=16 depth=9 text-views=0 chars=0 remote-hosts=2 wkwebviews=0 scrollviews=0 buttons=[] classes=[UIViewx2 _UIPointerInteractionAssistantEffectContainerViewx2 _UIBarBackgroundx1 _UIScenePresentationViewx1 UIViewControllerWrapperViewx1 _UIContextLayerHostViewx1 UILayoutContainerViewx1 _UITouchPassthroughViewx1 _UISceneHostingViewx1 UINavigationTransitionViewx1]
+143724.6 dismiss asked of DDParsecCollectionViewController (its presented: (null))
+144305.2 dismiss asked of DDParsecCollectionViewController (its presented: (null))
+144312.6 GONE UIReferenceLibraryViewController after 7967ms on screen
+144317.7 page state after-dismiss {"load":"2ad7lg","scrollY":0,"sel":0,"audio":{"t":64.67,"paused":false},"vis":"visible","raf":7468,"cursor":"Tityrus"}
+144318.2 page lookup_apple("Tityrus") closed; press->gone 8142ms {"gone":true,"onScreenMs":7967.570875014644}
+653085.5 page page click detail=1 gap=516875ms sel=0 word=patulae
+653102.1 page page click detail=2 gap=57ms sel=0 word=patulae
+653105.5 page page dblclick sel=0
+673571.2 page page click detail=1 gap=20469ms sel=0 word=patulae
+673585.0 page press -> lookup_apple("patulae") mode=sheet from page: tap on the cursor's word {"load":"2ad7lg","scrollY":0,"sel":0,"audio":{"t":0,"paused":false},"vis":"visible","raf":10226,"cursor":"patulae"}
+674211.8 lookup_apple("patulae") mode=sheet init=622.0ms anchor={{93, 244}, {64, 23}}
+674214.1 present UIReferenceLibraryViewController over LPViewController (style asked 1)
+674297.7 UP UIReferenceLibraryViewController via _UIPageSheetPresentationController frame={{0, 0}, {402, 812}} screen={{0, 0}, {402, 874}}
+674306.1 page state while-up {"load":"2ad7lg","scrollY":0,"sel":0,"audio":{"t":0,"paused":false},"vis":"visible","raf":10228,"cursor":"patulae"}
+674787.8 lookup_apple("patulae") mode=sheet ON SCREEN (present completion) at 1198.0ms from the call
+675136.4 tree of UIReferenceLibraryViewController at +800ms: views=16 depth=9 text-views=0 chars=0 remote-hosts=2 wkwebviews=0 scrollviews=0 buttons=[] classes=[UIViewx2 _UIPointerInteractionAssistantEffectContainerViewx2 _UIBarBackgroundx1 _UIScenePresentationViewx1 UIViewControllerWrapperViewx1 _UIContextLayerHostViewx1 UILayoutContainerViewx1 _UITouchPassthroughViewx1 _UISceneHostingViewx1 UINavigationTransitionViewx1]
+676922.1 tree of UIReferenceLibraryViewController at +2500ms: views=16 depth=9 text-views=0 chars=0 remote-hosts=2 wkwebviews=0 scrollviews=0 buttons=[] classes=[UIViewx2 _UIPointerInteractionAssistantEffectContainerViewx2 _UIBarBackgroundx1 _UIScenePresentationViewx1 UIViewControllerWrapperViewx1 _UIContextLayerHostViewx1 UILayoutContainerViewx1 _UITouchPassthroughViewx1 _UISceneHostingViewx1 UINavigationTransitionViewx1]
+690413.8 dismiss asked of DDParsecCollectionViewController (its presented: (null))
+691029.5 dismiss asked of DDParsecCollectionViewController (its presented: (null))
+691051.2 GONE UIReferenceLibraryViewController after 16753ms on screen
+691056.7 page state after-dismiss {"load":"2ad7lg","scrollY":0,"sel":0,"audio":{"t":0,"paused":false},"vis":"visible","raf":11221,"cursor":"patulae"}
+691057.7 page lookup_apple("patulae") closed; press->gone 17473ms {"gone":true,"onScreenMs":16753.846041683573}
+703365.4 (a) buildMenu #1 system=context, as built by WebKit: root[standard-edit["Cut", "Copy", "Paste", "Delete", "Select", "Select All"], replace["Replace…", "简⇄繁", "Insert Drawing", "Writing Tools", autofill"AutoFill"[insert-from-external-sources[…], "Scan Text"]], open[], format"Format"[text-style"Text Style"["Bold", "Italic", "Underline"], writing-direction"Writing Direction"["Right to Left", "Left to Right"], "More…"], lookup["Find Selection", "Look Up", "Translate"], learn["Learn…"], com.apple.command.speech"Speech"["Speak", "Speak…", "Pause"], share["Share…"]]
+703366.0 (a) Frank inserted as a sibling AFTER com.apple.menu.lookup
+703374.8 present _UIContextMenuActionsOnlyViewController over LPViewController (style asked 2)
+703504.7 UP _UIContextMenuActionsOnlyViewController via _UIContextMenuPreviewPresentationController frame={{0, 0}, {118, 36}} screen={{0, 0}, {402, 874}}
+703592.7 page state while-up {"load":"2ad7lg","scrollY":0,"sel":0,"audio":{"t":0,"paused":false},"vis":"visible","raf":11948,"cursor":"patulae"}
+704344.3 tree of _UIContextMenuActionsOnlyViewController at +800ms: views=1 depth=0 text-views=0 chars=0 remote-hosts=0 wkwebviews=0 scrollviews=0 buttons=[] classes=[UIViewx1]
+706130.1 tree of _UIContextMenuActionsOnlyViewController at +2500ms: views=1 depth=0 text-views=0 chars=0 remote-hosts=0 wkwebviews=0 scrollviews=0 buttons=[] classes=[UIViewx1]
+708588.3 dismiss asked of _UIContextMenuActionsOnlyViewController (its presented: (null))
+708605.9 GONE _UIContextMenuActionsOnlyViewController after 5101ms on screen
+708611.0 page state after-dismiss {"load":"2ad7lg","scrollY":0,"sel":0,"audio":{"t":0,"paused":false},"vis":"visible","raf":12245,"cursor":"patulae"}
+708755.8 page press -> lookup_apple("fagi") mode=ours from one-word view: tap on the word {"load":"2ad7lg","scrollY":0,"sel":0,"audio":{"t":0,"paused":false},"vis":"visible","raf":12253,"cursor":"patulae"}
+708779.9 lookup_apple("fagi") mode=ours init=23.7ms anchor={{146.359375, 414}, {71.78125, 51}}
+708780.2 present LPCombo over LPViewController (style asked 1)
+708871.6 UP LPCombo via _UIPageSheetPresentationController frame={{0, 0}, {402, 812}} screen={{0, 0}, {402, 874}}
+708884.1 page state while-up {"load":"2ad7lg","scrollY":0,"sel":0,"audio":{"t":0,"paused":false},"vis":"visible","raf":12254,"cursor":"patulae"}
+709370.2 (c) child slot={{0, 80.333333333333314}, {402, 731.66666666666663}} child view={{0, 0}, {402, 731.66666666666663}} child's own tree: views=16 depth=9 text-views=0 chars=0 remote-hosts=2 wkwebviews=0 scrollviews=0 buttons=[] classes=[UIViewx2 _UIPointerInteractionAssistantEffectContainerViewx2 _UIBarBackgroundx1 _UIScenePresentationViewx1 UIViewControllerWrapperViewx1 _UIContextLayerHostViewx1 UILayoutContainerViewx1 _UITouchPassthroughViewx1 _UISceneHostingViewx1 UINavigationTransitionViewx1]
+709371.2 lookup_apple("fagi") mode=ours ON SCREEN (present completion) at 615.1ms from the call
+709712.1 tree of LPCombo at +800ms: views=19 depth=11 text-views=1 chars=52 remote-hosts=2 wkwebviews=0 scrollviews=0 buttons=[] classes=[UIViewx4 _UIPointerInteractionAssistantEffectContainerViewx2 UILabelx1 _UIBarBackgroundx1 _UIScenePresentationViewx1 UIViewControllerWrapperViewx1 _UIContextLayerHostViewx1 UILayoutContainerViewx1 _UITouchPassthroughViewx1 _UISceneHostingViewx1]
+711497.1 tree of LPCombo at +2500ms: views=19 depth=11 text-views=1 chars=52 remote-hosts=2 wkwebviews=0 scrollviews=0 buttons=[] classes=[UIViewx4 _UIPointerInteractionAssistantEffectContainerViewx2 UILabelx1 _UIBarBackgroundx1 _UIScenePresentationViewx1 UIViewControllerWrapperViewx1 _UIContextLayerHostViewx1 UILayoutContainerViewx1 _UITouchPassthroughViewx1 _UISceneHostingViewx1]
+718141.8 dismiss asked of DDParsecCollectionViewController (its presented: (null))
+718739.1 dismiss asked of DDParsecCollectionViewController (its presented: (null))
+718750.7 GONE LPCombo after 9879ms on screen
+718752.1 page state after-dismiss {"load":"2ad7lg","scrollY":0,"sel":0,"audio":{"t":0,"paused":false},"vis":"visible","raf":12831,"cursor":"patulae"}
+718752.3 page lookup_apple("fagi") closed; press->gone 9996ms {"gone":true,"onScreenMs":9879.335374978837}
+730661.1 page press -> lookup_apple("fagi") mode=ours from one-word view: tap on the word {"load":"2ad7lg","scrollY":0,"sel":0,"audio":{"t":0,"paused":false},"vis":"visible","raf":13544,"cursor":"patulae"}
+730717.3 lookup_apple("fagi") mode=ours init=55.2ms anchor={{146.359375, 414}, {71.78125, 51}}
+730717.7 present LPCombo over LPViewController (style asked 1)
+730763.3 UP LPCombo via _UIPageSheetPresentationController frame={{0, 0}, {402, 812}} screen={{0, 0}, {402, 874}}
+730764.9 page state while-up {"load":"2ad7lg","scrollY":0,"sel":0,"audio":{"t":0,"paused":false},"vis":"visible","raf":13545,"cursor":"patulae"}
+731256.7 (c) child slot={{0, 80.333333333333314}, {402, 731.66666666666663}} child view={{0, 0}, {402, 731.66666666666663}} child's own tree: views=16 depth=9 text-views=0 chars=0 remote-hosts=2 wkwebviews=0 scrollviews=0 buttons=[] classes=[UIViewx2 _UIPointerInteractionAssistantEffectContainerViewx2 _UIBarBackgroundx1 _UIScenePresentationViewx1 UIViewControllerWrapperViewx1 _UIContextLayerHostViewx1 UILayoutContainerViewx1 _UITouchPassthroughViewx1 _UISceneHostingViewx1 UINavigationTransitionViewx1]
+731260.1 lookup_apple("fagi") mode=ours ON SCREEN (present completion) at 598.1ms from the call
+731601.9 tree of LPCombo at +800ms: views=19 depth=11 text-views=1 chars=52 remote-hosts=2 wkwebviews=0 scrollviews=0 buttons=[] classes=[UIViewx4 _UIPointerInteractionAssistantEffectContainerViewx2 UILabelx1 _UIBarBackgroundx1 _UIScenePresentationViewx1 UIViewControllerWrapperViewx1 _UIContextLayerHostViewx1 UILayoutContainerViewx1 _UITouchPassthroughViewx1 _UISceneHostingViewx1]
+733388.4 tree of LPCombo at +2500ms: views=19 depth=11 text-views=1 chars=52 remote-hosts=2 wkwebviews=0 scrollviews=0 buttons=[] classes=[UIViewx4 _UIPointerInteractionAssistantEffectContainerViewx2 UILabelx1 _UIBarBackgroundx1 _UIScenePresentationViewx1 UIViewControllerWrapperViewx1 _UIContextLayerHostViewx1 UILayoutContainerViewx1 _UITouchPassthroughViewx1 _UISceneHostingViewx1]
+737305.4 dismiss asked of DDParsecCollectionViewController (its presented: (null))
+737872.5 dismiss asked of DDParsecCollectionViewController (its presented: (null))
+737902.2 GONE LPCombo after 7139ms on screen
+737903.0 page state after-dismiss {"load":"2ad7lg","scrollY":0,"sel":0,"audio":{"t":0,"paused":false},"vis":"visible","raf":13966,"cursor":"patulae"}
+737903.2 page lookup_apple("fagi") closed; press->gone 7242ms {"gone":true,"onScreenMs":7139.244916674215}

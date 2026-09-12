@@ -11,11 +11,14 @@
 		31EF958AEDD05BE187301002 /* QuartzCore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 9281B675111FEE571C1E3E02 /* QuartzCore.framework */; };
 		375DF7E6E3429A74DE31BBF1 /* assets in Resources */ = {isa = PBXBuildFile; fileRef = 50479E9876539E1B7B2881C9 /* assets */; };
 		42A6F02218CB17305B4819C3 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = C031E208F61D570AC3B0E44C /* Assets.xcassets */; };
+		529798039211BEEE221B3A75 /* SafariServices.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 3BB52128005B7EA0917BDDDE /* SafariServices.framework */; };
 		56E1D89A141A34749AB5490E /* Security.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = F83C0421DFA94CE5FB4842FC /* Security.framework */; };
 		87432A6A965794EC3D8B32A3 /* Metal.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 61C3E47422911C9EF21790ED /* Metal.framework */; };
 		96F527420263EED288374F35 /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = D47BB6E32D6AA02A4CF4FCB0 /* LaunchScreen.storyboard */; };
+		A2A99B9E5EDC0D4632C7B6FA /* AVFoundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 0C12A6B894BC6ADDBE724451 /* AVFoundation.framework */; };
 		B493A5FB637960EC011FF476 /* main.mm in Sources */ = {isa = PBXBuildFile; fileRef = 3A816F28391F2E91EAC6BD30 /* main.mm */; };
 		C500F5CB2225D8044F3EC87D /* MetalKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 7833E0CA4351903EC745FCAC /* MetalKit.framework */; };
+		D4F074DC660C43619BF55F16 /* libapp.a in Resources */ = {isa = PBXBuildFile; fileRef = FB1905908705C9449CB18187 /* libapp.a */; };
 		D9A22963651B609D6C0A1C96 /* UIKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 69B5EFEA1E823B2A414D7E86 /* UIKit.framework */; };
 		DA949EEB3C2165999BF64201 /* libapp.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 2D4A2FA21DC3D5D04E31883A /* libapp.a */; };
 		E287D3A2D3A6CC71CC86BF09 /* CoreGraphics.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 0212ABFDBC4D11D109B8410D /* CoreGraphics.framework */; };
@@ -24,11 +27,14 @@
 /* Begin PBXFileReference section */
 		0212ABFDBC4D11D109B8410D /* CoreGraphics.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreGraphics.framework; path = System/Library/Frameworks/CoreGraphics.framework; sourceTree = SDKROOT; };
 		07CE73800D5C729538042AFD /* frank_iOS.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = frank_iOS.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		0C12A6B894BC6ADDBE724451 /* AVFoundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AVFoundation.framework; path = System/Library/Frameworks/AVFoundation.framework; sourceTree = SDKROOT; };
 		2D4A2FA21DC3D5D04E31883A /* libapp.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; path = libapp.a; sourceTree = "<group>"; };
 		3A816F28391F2E91EAC6BD30 /* main.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = main.mm; sourceTree = "<group>"; };
+		3BB52128005B7EA0917BDDDE /* SafariServices.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SafariServices.framework; path = System/Library/Frameworks/SafariServices.framework; sourceTree = SDKROOT; };
 		4842EC4A4EA72D9517EB090E /* lib.rs */ = {isa = PBXFileReference; path = lib.rs; sourceTree = "<group>"; };
 		50479E9876539E1B7B2881C9 /* assets */ = {isa = PBXFileReference; lastKnownFileType = folder; path = assets; sourceTree = SOURCE_ROOT; };
 		50A67DF6A7CB7AD195755F40 /* WebKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WebKit.framework; path = System/Library/Frameworks/WebKit.framework; sourceTree = SDKROOT; };
+		5E1EB6040519FC8B48691D35 /* dict.rs */ = {isa = PBXFileReference; path = dict.rs; sourceTree = "<group>"; };
 		602F1C9DABE3D9581BF783ED /* main.rs */ = {isa = PBXFileReference; path = main.rs; sourceTree = "<group>"; };
 		61C3E47422911C9EF21790ED /* Metal.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Metal.framework; path = System/Library/Frameworks/Metal.framework; sourceTree = SDKROOT; };
 		69B5EFEA1E823B2A414D7E86 /* UIKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = UIKit.framework; path = System/Library/Frameworks/UIKit.framework; sourceTree = SDKROOT; };
@@ -39,7 +45,10 @@
 		C031E208F61D570AC3B0E44C /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		CC6735C7B69E5BF23B54241A /* bindings.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = bindings.h; sourceTree = "<group>"; };
 		D47BB6E32D6AA02A4CF4FCB0 /* LaunchScreen.storyboard */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; path = LaunchScreen.storyboard; sourceTree = "<group>"; };
+		EA0AE8D3473D9C74F2047CE3 /* search.rs */ = {isa = PBXFileReference; path = search.rs; sourceTree = "<group>"; };
 		F83C0421DFA94CE5FB4842FC /* Security.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Security.framework; path = System/Library/Frameworks/Security.framework; sourceTree = SDKROOT; };
+		FA75CA6244BF961E70D733CB /* pull.rs */ = {isa = PBXFileReference; path = pull.rs; sourceTree = "<group>"; };
+		FB1905908705C9449CB18187 /* libapp.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; path = libapp.a; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -48,6 +57,8 @@
 			buildActionMask = 2147483647;
 			files = (
 				DA949EEB3C2165999BF64201 /* libapp.a in Frameworks */,
+				A2A99B9E5EDC0D4632C7B6FA /* AVFoundation.framework in Frameworks */,
+				529798039211BEEE221B3A75 /* SafariServices.framework in Frameworks */,
 				E287D3A2D3A6CC71CC86BF09 /* CoreGraphics.framework in Frameworks */,
 				87432A6A965794EC3D8B32A3 /* Metal.framework in Frameworks */,
 				C500F5CB2225D8044F3EC87D /* MetalKit.framework in Frameworks */,
@@ -61,6 +72,14 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		158EB290FA03C01BC77CAE0B /* arm64 */ = {
+			isa = PBXGroup;
+			children = (
+				4E3338EF32D576EBFCD5F5BE /* debug */,
+			);
+			path = arm64;
+			sourceTree = "<group>";
+		};
 		22265B3C3D3A0CC7CAB49F00 /* frank_iOS */ = {
 			isa = PBXGroup;
 			children = (
@@ -81,8 +100,11 @@
 		4ABA65BEDB8E8AD347EC4F3D /* src */ = {
 			isa = PBXGroup;
 			children = (
+				5E1EB6040519FC8B48691D35 /* dict.rs */,
 				4842EC4A4EA72D9517EB090E /* lib.rs */,
 				602F1C9DABE3D9581BF783ED /* main.rs */,
+				FA75CA6244BF961E70D733CB /* pull.rs */,
+				EA0AE8D3473D9C74F2047CE3 /* search.rs */,
 			);
 			name = src;
 			path = ../../src;
@@ -94,6 +116,14 @@
 				A17DE51C3FA7E60DCDC0B3FA /* frank */,
 			);
 			path = Sources;
+			sourceTree = "<group>";
+		};
+		4E3338EF32D576EBFCD5F5BE /* debug */ = {
+			isa = PBXGroup;
+			children = (
+				FB1905908705C9449CB18187 /* libapp.a */,
+			);
+			path = debug;
 			sourceTree = "<group>";
 		};
 		830B0E1968D8F40C55AFC670 = {
@@ -123,11 +153,13 @@
 		A74D33C3D73233C24D75D4AF /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
+				0C12A6B894BC6ADDBE724451 /* AVFoundation.framework */,
 				0212ABFDBC4D11D109B8410D /* CoreGraphics.framework */,
 				2D4A2FA21DC3D5D04E31883A /* libapp.a */,
 				61C3E47422911C9EF21790ED /* Metal.framework */,
 				7833E0CA4351903EC745FCAC /* MetalKit.framework */,
 				9281B675111FEE571C1E3E02 /* QuartzCore.framework */,
+				3BB52128005B7EA0917BDDDE /* SafariServices.framework */,
 				F83C0421DFA94CE5FB4842FC /* Security.framework */,
 				69B5EFEA1E823B2A414D7E86 /* UIKit.framework */,
 				50A67DF6A7CB7AD195755F40 /* WebKit.framework */,
@@ -138,6 +170,7 @@
 		A93904C9FDAA1637B05060A7 /* Externals */ = {
 			isa = PBXGroup;
 			children = (
+				158EB290FA03C01BC77CAE0B /* arm64 */,
 			);
 			path = Externals;
 			sourceTree = "<group>";
@@ -148,6 +181,13 @@
 				CC6735C7B69E5BF23B54241A /* bindings.h */,
 			);
 			path = bindings;
+			sourceTree = "<group>";
+		};
+		"TEMP_3733926D-0905-4505-AF43-750AA719BE3E" /* x86_64 */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			path = x86_64;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -182,6 +222,10 @@
 				BuildIndependentTargetsInParallel = YES;
 				LastUpgradeCheck = 1430;
 				TargetAttributes = {
+					E887BB49B0A831422746216E = {
+						DevelopmentTeam = DC5G53NN4R;
+						ProvisioningStyle = Automatic;
+					};
 				};
 			};
 			buildConfigurationList = B354A01E564766E8C692AE71 /* Build configuration list for PBXProject "frank" */;
@@ -211,6 +255,7 @@
 				42A6F02218CB17305B4819C3 /* Assets.xcassets in Resources */,
 				96F527420263EED288374F35 /* LaunchScreen.storyboard in Resources */,
 				375DF7E6E3429A74DE31BBF1 /* assets in Resources */,
+				D4F074DC660C43619BF55F16 /* libapp.a in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -236,7 +281,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "npm run -- tauri ios xcode-script -v --platform ${PLATFORM_DISPLAY_NAME:?} --sdk-root ${SDKROOT:?} --framework-search-paths \"${FRAMEWORK_SEARCH_PATHS:?}\" --header-search-paths \"${HEADER_SEARCH_PATHS:?}\" --gcc-preprocessor-definitions \"${GCC_PREPROCESSOR_DEFINITIONS:-}\" --configuration ${CONFIGURATION:?} ${FORCE_COLOR} ${ARCHS:?}";
+			shellScript = "export PATH=\"$HOME/.cargo/bin:/opt/homebrew/bin:/usr/local/bin:$PATH\"\nnpm run -- tauri ios xcode-script -v --platform ${PLATFORM_DISPLAY_NAME:?} --sdk-root ${SDKROOT:?} --framework-search-paths \"${FRAMEWORK_SEARCH_PATHS:?}\" --header-search-paths \"${HEADER_SEARCH_PATHS:?}\" --gcc-preprocessor-definitions \"${GCC_PREPROCESSOR_DEFINITIONS:-}\" --configuration ${CONFIGURATION:?} ${FORCE_COLOR} ${ARCHS:?}\n";
 		};
 /* End PBXShellScriptBuildPhase section */
 
@@ -262,6 +307,8 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = frank_iOS/frank_iOS.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = DC5G53NN4R;
 				ENABLE_BITCODE = NO;
 				"EXCLUDED_ARCHS[sdk=iphoneos*]" = x86_64;
 				FRAMEWORK_SEARCH_PATHS = (
@@ -334,7 +381,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 14.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
@@ -356,6 +403,8 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = frank_iOS/frank_iOS.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = DC5G53NN4R;
 				ENABLE_BITCODE = NO;
 				"EXCLUDED_ARCHS[sdk=iphoneos*]" = x86_64;
 				FRAMEWORK_SEARCH_PATHS = (
@@ -422,7 +471,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 14.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";

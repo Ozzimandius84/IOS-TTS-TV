@@ -1,0 +1,209 @@
+<!doctype html>
+<html lang="la"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>G-LOOKUP probe</title>
+<style>
+  :root { color-scheme: light dark; --red: #c8102e; }
+  body { font: 15px -apple-system, system-ui, sans-serif; margin: 0;
+         padding: calc(env(safe-area-inset-top) + 4px) 12px 24px; -webkit-text-size-adjust: 100%; }
+  button, select { font: 15px -apple-system, system-ui; padding: 7px 10px; margin: 2px 1px;
+                   border-radius: 8px; border: 1px solid #8886; background: #8881; color: inherit; }
+  .row { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+  h2 { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; margin: 10px 0 2px; opacity: .65; font-weight: 600; }
+  #page { font: 19px/1.45 Georgia, serif; padding: 2px 0; }
+  ::highlight(cursor) { background: #ffd54a99; }
+  #word { position: relative; height: 70px; border: 1px solid #8884; border-radius: 10px; overflow: hidden;
+          font: 44px Georgia, serif; -webkit-user-select: none; user-select: none; }
+  #word .w { position: absolute; top: 8px; white-space: pre; }
+  #word .pv { color: var(--red); }
+  #float { position: fixed; right: 12px; bottom: calc(env(safe-area-inset-bottom) + 12px); width: 128px; height: 44px;
+           border-radius: 12px; background: #111; color: #fff; font: 21px Georgia, serif; display: flex;
+           align-items: center; justify-content: center; -webkit-user-select: none; user-select: none;
+           box-shadow: 0 2px 10px #0006; }
+  #log { font: 10.5px/1.3 ui-monospace, Menlo, monospace; white-space: pre-wrap; height: 30vh; overflow: auto;
+         border-top: 1px solid #8884; margin-top: 6px; -webkit-user-select: text; }
+</style></head>
+<body>
+<div class="row"><b>G-LOOKUP</b><span id="env" style="font-size:11px;opacity:.7"></span></div>
+<div class="row">
+  <button id="run">▶ Run all</button><button id="has">Has?</button><button id="tone">♪</button>
+  <select id="mode"><option>sheet</option><option>half</option><option>popover</option><option value="ours">ours+Apple</option></select>
+  <select id="auto"><option value="0">stay</option><option value="2500">2.5 s</option></select>
+</div>
+<h2>1 · page — tap = cursor · tap the cursor's word = Look Up · hold = OS menu</h2>
+<div id="page">Tityre, tu patulae recubans sub tegmine fagi silvestrem tenui Musam meditaris avena. Tityrus, lying back beneath the spreading beech, you practise the woodland Muse on a slender reed.</div>
+<h2>2 · one-word view — tap the word</h2>
+<div id="word"><span class="w"><span class="a"></span><span class="pv"></span><span class="b"></span></span></div>
+<div class="row"><button id="prev">◀</button><button id="next">▶</button><button id="wbtn">Look Up</button>
+  <button id="voice">🎙 "look up"</button><span id="wi" style="font-size:12px;opacity:.7"></span></div>
+<div id="log"></div>
+<div id="float"></div>
+<script>
+(function () {
+  "use strict";
+  const LOAD_ID = Math.random().toString(36).slice(2, 8);
+  const $ = id => document.getElementById(id);
+  const logEl = $("log");
+  const H = window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.frank;
+  let seq = 0, raf = 0, audio = null;
+  const waiting = new Map();
+  (function frame() { raf++; requestAnimationFrame(frame); })();
+
+  function line(s) { logEl.textContent = s + "\n" + logEl.textContent; }
+  function plog(s) {
+    line("page " + s);
+    if (H) H.postMessage({ id: "0", cmd: "log", args: { line: s } });
+  }
+  function send(cmd, args) {
+    return new Promise(res => {
+      const id = String(++seq);
+      if (!H) { line("no host for " + cmd); res(null); return; }
+      waiting.set(id, res);
+      H.postMessage({ id, cmd, args: args || {} });
+    });
+  }
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+  function snapshot() {
+    const sel = window.getSelection();
+    return { load: LOAD_ID, scrollY: Math.round(scrollY), sel: sel ? String(sel).length : -1,
+             audio: audio ? { t: +audio.currentTime.toFixed(2), paused: audio.paused } : null,
+             vis: document.visibilityState, raf, cursor: cursor ? cursor.text : null };
+  }
+  window.probe = {
+    nativeLine(s) { line(s); },
+    reply(id, obj) { const r = waiting.get(id); if (r) { waiting.delete(id); r(obj); } },
+    state(tag) { plog("state " + tag + " " + JSON.stringify(snapshot())); },
+  };
+
+  /* ---------------------------------------------------------------- the press */
+  function rectOf(el) { const r = el.getBoundingClientRect(); return { x: r.left, y: r.top, w: r.width, h: r.height }; }
+  function bare(w) { return String(w || "").replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, ""); }
+  async function lookup(term, rect, why) {
+    const mode = $("mode").value, auto = +$("auto").value;
+    plog(`press -> lookup_apple("${term}") mode=${mode} from ${why} ${JSON.stringify(snapshot())}`);
+    const t0 = performance.now();
+    const r = await send("lookup_apple", { term, mode, x: rect.x, y: rect.y, w: rect.w, h: rect.h, autoDismissMs: auto });
+    plog(`lookup_apple("${term}") closed; press->gone ${(performance.now() - t0).toFixed(0)}ms ${JSON.stringify(r)}`);
+  }
+
+  /* ------------------------------------------- 1 · the page: tap is the cursor */
+  const page = $("page");
+  let cursor = null, lastClick = 0;
+  const L = /[\p{L}\p{N}'’]/u;
+  function wordAtPoint(x, y) {
+    const r = document.caretRangeFromPoint && document.caretRangeFromPoint(x, y);
+    if (!r || r.startContainer.nodeType !== 3) return null;
+    const n = r.startContainer, t = n.data;
+    let s = r.startOffset, e = r.startOffset;
+    while (s > 0 && L.test(t[s - 1])) s--;
+    while (e < t.length && L.test(t[e])) e++;
+    if (s === e) return null;
+    return { node: n, start: s, end: e, text: t.slice(s, e) };
+  }
+  function rangeOf(h) { const r = new Range(); r.setStart(h.node, h.start); r.setEnd(h.node, h.end); return r; }
+  function paintCursor() {
+    if (!(window.CSS && CSS.highlights)) return;
+    CSS.highlights.clear();
+    if (cursor) CSS.highlights.set("cursor", new Highlight(rangeOf(cursor)));
+  }
+  page.addEventListener("click", e => {
+    const now = performance.now(), gap = now - lastClick; lastClick = now;
+    const sel = window.getSelection();
+    const hit = wordAtPoint(e.clientX, e.clientY);
+    plog(`page click detail=${e.detail} gap=${gap.toFixed(0)}ms sel=${sel && !sel.isCollapsed ? String(sel).length : 0} word=${hit ? hit.text : "-"}`);
+    if (e.detail > 1 || !hit) return;
+    if (sel && !sel.isCollapsed) return;
+    if (cursor && cursor.node === hit.node && cursor.start === hit.start) {
+      const r = rangeOf(hit).getBoundingClientRect();
+      lookup(hit.text, { x: r.left, y: r.top, w: r.width, h: r.height }, "page: tap on the cursor's word");
+      return;
+    }
+    cursor = hit; paintCursor();
+  });
+  page.addEventListener("dblclick", () => plog("page dblclick sel=" + String(window.getSelection()).length));
+  let lastSel = 0;
+  document.addEventListener("selectionchange", () => {
+    const n = String(window.getSelection()).length;
+    if ((n > 0) !== (lastSel > 0)) plog("selection " + (n ? n + " chars: " + String(window.getSelection()) : "cleared"));
+    lastSel = n;
+  });
+
+  /* --------------------------------------- 2 · the one-word view, the float, voice */
+  const WORDS = page.textContent.split(/\s+/).filter(Boolean);
+  let wi = 6;   /* "fagi" */
+  const box = $("word"), wEl = box.querySelector(".w"), a = box.querySelector(".a"),
+        pv = box.querySelector(".pv"), b = box.querySelector(".b"), flo = $("float");
+  function orp(w) { const n = w.replace(/[^\p{L}\p{N}']/gu, "").length || w.length;
+    return n <= 1 ? 0 : n <= 5 ? 1 : n <= 9 ? 2 : n <= 13 ? 3 : 4; }
+  function pivotIndex(w) { const k = orp(w); let c = -1;
+    for (let i = 0; i < w.length; i++) if (L.test(w[i]) && ++c === k) return i; return 0; }
+  function showWord() {
+    const w = WORDS[wi], p = pivotIndex(w);
+    a.textContent = w.slice(0, p); pv.textContent = w[p] || ""; b.textContent = w.slice(p + 1);
+    wEl.style.left = "0px";
+    const bx = box.getBoundingClientRect(), pr = pv.getBoundingClientRect(), wr = wEl.getBoundingClientRect();
+    wEl.style.left = (bx.width * 0.42 - ((pr.left - wr.left) + pr.width / 2)) + "px";
+    flo.textContent = bare(w);
+    $("wi").textContent = (wi + 1) + "/" + WORDS.length;
+  }
+  $("prev").onclick = () => { wi = (wi + WORDS.length - 1) % WORDS.length; showWord(); };
+  $("next").onclick = () => { wi = (wi + 1) % WORDS.length; showWord(); };
+  box.addEventListener("click", () => lookup(bare(WORDS[wi]), rectOf(wEl), "one-word view: tap on the word"));
+  $("wbtn").onclick = () => lookup(bare(WORDS[wi]), rectOf(wEl), "one-word view: button");
+  flo.addEventListener("click", () => lookup(bare(WORDS[wi]), rectOf(flo), "float: tap"));
+  $("voice").onclick = () => lookup(bare(WORDS[wi]), rectOf(wEl), "voice: 'look up' (the reading position)");
+
+  /* ---------------------------------------------------------------- the tone */
+  function startTone() {
+    if (audio) return;
+    const sr = 8000, n = sr * 120, buf = new ArrayBuffer(44 + n * 2), v = new DataView(buf);
+    const w = (o, s) => { for (let i = 0; i < s.length; i++) v.setUint8(o + i, s.charCodeAt(i)); };
+    w(0, "RIFF"); v.setUint32(4, 36 + n * 2, true); w(8, "WAVE"); w(12, "fmt "); v.setUint32(16, 16, true);
+    v.setUint16(20, 1, true); v.setUint16(22, 1, true); v.setUint32(24, sr, true); v.setUint32(28, sr * 2, true);
+    v.setUint16(32, 2, true); v.setUint16(34, 16, true); w(36, "data"); v.setUint32(40, n * 2, true);
+    for (let i = 0; i < n; i++) v.setInt16(44 + i * 2, Math.round(Math.sin(2 * Math.PI * 220 * i / sr) * 900), true);
+    audio = new Audio(URL.createObjectURL(new Blob([buf], { type: "audio/wav" })));
+    audio.loop = true;
+    audio.play().then(() => plog("tone playing"), e => plog("tone refused: " + e));
+  }
+  $("tone").onclick = () => { if (audio && !audio.paused) { audio.pause(); plog("tone paused"); } else if (audio) audio.play(); else startTone(); };
+
+  /* ------------------------------------------------------------ the measured run */
+  const TERMS = [["en", "shepherd"], ["en", "beech"], ["en", "reed"], ["fr", "berger"], ["de", "Buche"],
+                 ["it", "faggio"], ["es", "haya"], ["la", "fagus"], ["la", "fagi"], ["la", "Tityre"],
+                 ["la", "recubans"], ["la", "tegmine"], ["grc", "μῆνιν"], ["el", "βιβλίο"], ["xx", "qqxzv"]];
+  async function hasTable() {
+    const out = [];
+    for (const [l, t] of TERMS) {
+      const r = await send("has", { term: t });
+      out.push(`${l}:${t}=${r && r.has ? "Y" : "n"}(${r ? r.ms.toFixed(1) : "?"}ms)`);
+    }
+    plog("dictionaryHasDefinition " + out.join(" "));
+  }
+  $("has").onclick = hasTable;
+  $("run").onclick = async () => {
+    startTone();
+    plog("RUN start " + JSON.stringify(snapshot()));
+    await hasTable();
+    await hasTable();   /* the second pass is the warm number */
+    const steps = [["shepherd", "sheet"], ["fagus", "sheet"], ["shepherd", "half"], ["shepherd", "popover"],
+                   ["fagus", "ours"], ["shepherd", "ours"]];
+    for (const [t, m] of steps) {
+      const before = snapshot(), t0 = performance.now();
+      const r = await send("lookup_apple", Object.assign({ term: t, mode: m, autoDismissMs: 2500 }, rectOf(wEl)));
+      const after = snapshot(), wall = performance.now() - t0;
+      const dt = before.audio && after.audio ? (after.audio.t - before.audio.t) : null;
+      plog(`RUN ${t}/${m}: call->gone ${wall.toFixed(0)}ms; same doc ${before.load === after.load}; ` +
+           `scroll ${before.scrollY}->${after.scrollY}; raf +${after.raf - before.raf}; ` +
+           `tone advanced ${dt === null ? "n/a" : dt.toFixed(2) + "s"} (${(wall / 1000).toFixed(2)}s wall), paused=${after.audio ? after.audio.paused : "n/a"}; ${JSON.stringify(r)}`);
+      await sleep(700);
+    }
+    plog("RUN end " + JSON.stringify(snapshot()));
+  };
+
+  showWord();
+  plog("loaded " + LOAD_ID);
+  send("env").then(e => { if (e) { $("env").textContent = ` iOS ${e.ios} · ${e.sim} · ${e.langs}`; plog("env " + JSON.stringify(e)); } });
+})();
+</script>
+</body></html>

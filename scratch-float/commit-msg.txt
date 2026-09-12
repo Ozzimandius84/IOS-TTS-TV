@@ -1,0 +1,18 @@
+the float, half one: the audio survives the app switcher, and the lock screen gets the sentence (job 8b)
+
+UIBackgroundModes: [audio] and an AVAudioSession Playback category -- neither
+works without the other, and Frank had neither, so its sound stopped the moment
+you left the app. ios/FrankAudio.m exports two C symbols; lib.rs sets the
+category at launch and takes the session on the page's first `play`, because
+activating a Playback session at launch would stop the phone's music.
+NOW_PLAYING_JS puts the SENTENCE on the lock screen and enforces one write a
+second at the seam: the corpus runs at 3.56 words a second and 25 at the floor,
+so a per-word title would show 61.7% of nothing. Deployment target 14.0 -> 15.0
+for the float's native road.
+
+15 new tests, 62 green. Nothing has been near Xcode: `xcodegen generate` and
+four presses are owed, and STATUS.md's 8b names the four hunks in this commit
+that another session put in the tree between 14:22 and 14:26.
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_011JatVDYrG8c27WNKzXJ4nC

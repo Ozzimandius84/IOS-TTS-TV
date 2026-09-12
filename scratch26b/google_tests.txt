@@ -1,0 +1,41 @@
+
+    // ------------------------------------------------- Google (job 26b)
+
+    #[test]
+    fn the_client_id_is_read_from_google_json_and_the_scheme_is_its_reverse() {
+        // the file exists and is the shape the ONE field is scanned out of
+        assert!(GOOGLE_JSON.contains("ios_client_id"), "google.json has lost its field");
+        assert_eq!(json_field(r#"{"a": "x", "ios_client_id": "12-ab.apps.googleusercontent.com"}"#,
+                              "ios_client_id"), "12-ab.apps.googleusercontent.com");
+        assert_eq!(json_field(r#"{"ios_client_id": ""}"#, "ios_client_id"), "");
+        assert_eq!(json_field(r#"{"other": "x"}"#, "ios_client_id"), "");
+        // and whatever is pasted, the redirect is Google's own reverse form
+        let id = google_ios_client_id();
+        if id.is_empty() {
+            assert_eq!(google_redirect_uri(), "", "no id -> no redirect, and no host object");
+            assert_eq!(google_js(), "", "no id -> the page is told there is no Google here");
+            assert!(!is_google_redirect("com.googleusercontent.apps.12-ab:/oauth?code=x"));
+        } else {
+            let number = id.strip_suffix(".apps.googleusercontent.com")
+                .expect("an iOS client id ends .apps.googleusercontent.com");
+            assert_eq!(google_redirect_scheme(), format!("com.googleusercontent.apps.{number}"));
+            assert_eq!(google_redirect_uri(), format!("com.googleusercontent.apps.{number}:/oauth"));
+            assert!(is_google_redirect(&format!("{}:/oauth?code=4/x", google_redirect_scheme())));
+            assert!(!is_google_redirect("frank-pair://v1?url=x"));
+            let js = google_js();
+            assert!(js.contains(r#"invoke("google_sign_in""#) && js.contains("window.TTSTVHost.google"));
+            assert!(js.contains("if (!TAURI"), "a page outside Frank gets no sign-in");
+            assert!(!js.contains("client_secret"), "an iOS client has none, and this crate carries none");
+        }
+    }
+
+    #[test]
+    fn the_redirect_is_written_into_the_one_key_the_shell_polls() {
+        // the key `library/drive.js` polls, and one setItem -- nothing else
+        assert_eq!(GOOGLE_REDIRECT_KEY, "ttstv.sync.googleRedirect");
+        let js = google_write_js("com.googleusercontent.apps.12-ab:/oauth?code=4/x&state=s");
+        assert!(js.contains(r#""ttstv.sync.googleRedirect""#));
+        assert!(js.contains(r#"4\/x"#), "the URL is a JSON string, escaped by json_string");
+        assert_eq!(js.matches("setItem").count(), 1);
+        assert!(!js.contains("eval") && !js.contains("<script"));
+    }

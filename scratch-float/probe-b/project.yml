@@ -1,0 +1,47 @@
+# float probe (b) -- a standalone app, deliberately NOT Frank.
+#
+# The question is only whether iOS will keep a picture-in-picture window
+# painting arbitrary content (one word) while the app is in the background,
+# and with which Info.plist keys. Answering it inside Frank would mix that
+# question with Tauri's, xcodegen's and the shell's; this is 200 lines of
+# Swift that answers it alone, in a minute, and is thrown away afterwards.
+#
+#   cd scratch-float/probe-b && xcodegen generate && open floatprobe.xcodeproj
+#   (or: xcodebuild -scheme floatprobe -destination 'platform=iOS Simulator,name=iPhone 16' build)
+name: floatprobe
+options:
+  bundleIdPrefix: com.ttstv.floatprobe
+  deploymentTarget:
+    # 15.0, not Frank's 14.0: AVPictureInPictureController.ContentSource
+    # (sampleBufferDisplayLayer:) is iOS 15. If this road is chosen, Frank's
+    # project.yml moves to 15.0 too -- that is part of the cost, said here.
+    iOS: 15.0
+targets:
+  floatprobe:
+    type: application
+    platform: iOS
+    sources: [Sources]
+    resources: [Resources]
+    info:
+      path: Info.plist
+      properties:
+        UILaunchScreen: {}
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        # THE key, and the whole entitlement question in one line. This is a
+        # plist value, not a provisioning entitlement, so a FREE personal team
+        # can set it -- that is the claim this probe is here to confirm on a
+        # real device, because the simulator never checks signing at all.
+        UIBackgroundModes: [audio]
+    dependencies:
+      - sdk: AVFoundation.framework
+      - sdk: AVKit.framework
+      - sdk: CoreMedia.framework
+      - sdk: CoreVideo.framework
+      - sdk: UIKit.framework
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.ttstv.floatprobe
+        TARGETED_DEVICE_FAMILY: "1"

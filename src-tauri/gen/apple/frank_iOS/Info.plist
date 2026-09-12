@@ -16,14 +16,41 @@
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
 	<string>0.1.0</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>frank-pair</string>
+				<string>com.googleusercontent.apps.831378567000-50bh7p37g80gssem6dq3l1f8ncj2j2o2</string>
+			</array>
+			<key>CFBundleURLName</key>
+			<string>frank-pair</string>
+		</dict>
+	</array>
 	<key>CFBundleVersion</key>
 	<string>0.1.0</string>
+	<key>LSRequiresIPhoneOS</key>
+	<true/>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
+	</dict>
+	<key>NSBonjourServices</key>
+	<array>
+		<string>_ttstv._tcp</string>
+	</array>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>Frank looks for Frank Studio on this network to sync your books, marks and reading position with it. Nothing leaves your network.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Frank listens for the hands-free trigger and for the phrase after it. Nothing is recorded or sent anywhere; the audio is used on this phone and discarded.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
-	<string>Frank turns what you say into text on this phone so it can act on it -- "read on", "what?", the name of a chapter.</string>
-	<key>LSRequiresIPhoneOS</key>
-	<true/>
+	<string>Frank turns what you say into text on this phone so it can act on it -- &quot;read on&quot;, &quot;what?&quot;, the name of a chapter.</string>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>audio</string>
+	</array>
 	<key>UILaunchStoryboardName</key>
 	<string>LaunchScreen</string>
 	<key>UIRequiredDeviceCapabilities</key>
