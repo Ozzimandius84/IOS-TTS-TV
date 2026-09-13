@@ -98,6 +98,46 @@ targets:
           - CFBundleURLName: google-oauth
             CFBundleURLSchemes:
               - com.googleusercontent.apps.831378567000-50bh7p37g80gssem6dq3l1f8ncj2j2o2
+        # INGEST, ROAD ONE -- "Copy to Frank" (C2/K8, 13 Sep). The cheapest
+        # ingest there is: THREE plist keys, no second target, no entitlement,
+        # no App Group, and a free personal team signs it unchanged. Declaring
+        # the types puts Frank in the share sheet's "Copy to..." row for a PDF,
+        # an EPUB or a text file, and the OS copies the file into the app's own
+        # `<Documents>/Inbox/` -- which `src/inbox.rs` reads and nothing else
+        # writes. Road two (the share extension) is the FrankShare target
+        # below and costs an App Group; the two are deliberately separate
+        # commits so one can be reverted without the other.
+        #
+        # `LSSupportsOpeningDocumentsInPlace: false` ON PURPOSE, and it is the
+        # load-bearing key: `true` means "open the file where it lives", and
+        # Frank would then hold a security-scoped URL into another app's
+        # container that stops working the moment the share sheet closes.
+        # `false` means the OS COPIES, and a copy in our own container is the
+        # only thing an inbox can be.
+        #
+        # `LSHandlerRank: Alternate` because Frank is not the system's PDF
+        # reader and must not try to become it; Alternate is the rank that
+        # says "offer me, do not prefer me".
+        LSSupportsOpeningDocumentsInPlace: false
+        # The Documents folder in the Files app, so a capture can also be
+        # dragged in -- and so the inbox can be LOOKED AT on the phone without
+        # a debugger, which is most of how this spike gets checked.
+        UIFileSharingEnabled: true
+        CFBundleDocumentTypes:
+          - CFBundleTypeName: PDF
+            CFBundleTypeRole: Viewer
+            LSHandlerRank: Alternate
+            LSItemContentTypes: [com.adobe.pdf]
+          - CFBundleTypeName: EPUB
+            CFBundleTypeRole: Viewer
+            LSHandlerRank: Alternate
+            # Both spellings: `org.idpf.epub-container` is the one Apple's own
+            # declarations use and `public.epub` is what some apps export.
+            LSItemContentTypes: [org.idpf.epub-container, public.epub]
+          - CFBundleTypeName: Text
+            CFBundleTypeRole: Viewer
+            LSHandlerRank: Alternate
+            LSItemContentTypes: [public.plain-text]
         CFBundleShortVersionString: 0.1.0
         CFBundleVersion: "0.1.0"
     entitlements:

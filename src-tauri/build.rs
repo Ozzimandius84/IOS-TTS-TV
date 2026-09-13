@@ -50,6 +50,19 @@ fn main() {
             .flag("-fobjc-arc")
             .flag("-fmodules")
             .compile("franksearch");
+        // ios/FrankInbox.m -> `frank_inbox_documents` and `frank_inbox_group`,
+        // the two roots an incoming share can land in (C2/K8, 13 Sep). Its own
+        // archive, for the reason above. Neither path is computable in Rust --
+        // a container is a per-install UUID -- and the group call answering nil
+        // is the MEASUREMENT of whether this build's team can carry the App
+        // Group entitlement at all. `src/inbox.rs` is its only caller and holds
+        // the whole of the why. No framework beyond Foundation.
+        println!("cargo:rerun-if-changed=ios/FrankInbox.m");
+        cc::Build::new()
+            .file("ios/FrankInbox.m")
+            .flag("-fobjc-arc")
+            .flag("-fmodules")
+            .compile("frankinbox");
         // Said here for the record and for a non-Xcode link; the build that
         // matters is Xcode's, and it is `gen/apple/project.yml`'s
         // `dependencies:` that actually names these -- a `staticlib` crate
@@ -76,6 +89,8 @@ fn main() {
                 "dict_langs",
                 "dict_lookup",
                 "dict_remove",
+                // the inbox (C2/K8, 13 Sep): src/inbox.rs, read-only
+                "inbox_list",
             ]),
         ),
     )

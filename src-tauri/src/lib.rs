@@ -100,6 +100,8 @@ use tauri::{Manager, UriSchemeContext, WebviewUrl, WebviewWindowBuilder, Wry};
 use tauri_plugin_deep_link::DeepLinkExt;
 // The language packs (G-LANG): a whole language per file, looked up here.
 mod dict;
+// The inbox (C2/K8, 13 Sep): what a share put on this phone, read only.
+mod inbox;
 mod pull;
 mod search;
 
@@ -2211,7 +2213,10 @@ pub fn run() {
             sync_stop,
             dict::dict_langs,
             dict::dict_lookup,
-            dict::dict_remove
+            dict::dict_remove,
+            // The inbox (C2/K8, 13 Sep). ONE registration line, said here because
+            // this file is another lane's (G-TOPUP owns lib.rs when it runs).
+            inbox::inbox_list
         ])
         // The launch scheme (`frank-pair://`, NOT the asset scheme). The
         // plugin is what turns an OS open into an event on iOS, macOS and
@@ -2336,6 +2341,13 @@ pub fn run() {
                 take_pair_links(&handle, event.urls().iter().map(|u| u.to_string()));
                 flush_pair(&handle);
             });
+
+            // The inbox, said once at start-up and nowhere else (C2/K8): which
+            // of the two roads exists on THIS build and what is waiting on it.
+            // A spike gets a log line and no UI -- and the line that says
+            // "the App Group entitlement is absent or unsigned" is the answer
+            // K8 exists to give, so it must be printed even when it is bad news.
+            inbox::log_at_start();
 
             // The sound's category, before any page can play anything. Not
             // the ACTIVATION -- that would stop the phone's music the moment
