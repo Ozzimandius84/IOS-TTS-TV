@@ -107,6 +107,10 @@ mod inbox;
 mod lookup;
 mod pull;
 mod search;
+// The native voice (D1(b), 13 Sep): AVSpeechSynthesizer behind the door the
+// page already opens for `speechSynthesis` -- a QUEUE that goes on speaking
+// with this webview suspended, which is the whole of the lock screen.
+mod speech;
 
 /// The scheme. One word, and it is in three places that must agree: here, the
 /// window URL built by [`shell_url`], and `tauri.conf.json`'s CSP (which is
@@ -2440,7 +2444,20 @@ pub fn run() {
             // paired Studio, and the item taken off this phone afterwards.
             inbox::inbox_list,
             inbox::inbox_send,
-            inbox::inbox_drop
+            inbox::inbox_drop,
+            // The native voice (D1(b), 13 Sep). SEVEN registration lines, said
+            // here for the same reason as the three above -- this file is
+            // shared. `speech_speak` takes the REST OF THE CHAPTER, not a
+            // sentence: a queued AVSpeechUtterance goes on speaking with this
+            // webview's JavaScript suspended, and that is the difference
+            // between D1(a) and a phone in a pocket (`src/speech.rs`).
+            speech::speech_available,
+            speech::speech_voices,
+            speech::speech_speak,
+            speech::speech_stop,
+            speech::speech_pause,
+            speech::speech_resume,
+            speech::speech_speaking,
         ])
         // The launch scheme (`frank-pair://`, NOT the asset scheme). The
         // plugin is what turns an OS open into an event on iOS, macOS and
@@ -2582,6 +2599,13 @@ pub fn run() {
                 Err(why) => log::error!("frank: audio session category NOT set: {why}"),
             }
 
+            // The native voice (D1(b)), beside the category and for the same
+            // reason: both are about sound that outlives the front app, and
+            // the door has to be open before a page can ask through it. This
+            // hands `FrankSpeech.m` the callback a word boundary comes back
+            // on; it starts no synthesiser and makes no sound.
+            speech::open(app.handle());
+
             let root = shell_root(app.handle());
             match unpack_shell(app.handle(), &root) {
                 Ok(n) => log::info!("frank: shell ready, {n} files"),
@@ -2620,6 +2644,10 @@ pub fn run() {
             // HOST_JS, whose two `invoke`s are pinned by two tests in this
             // file -- `dict.rs` set the same precedent for the same reason.
             .initialization_script(lookup::LOOKUP_JS)
+            // The native voice (D1(b)): `TTSTVHost.speech`, and the one global
+            // `__frankSpeech` that a word boundary is delivered through. Its
+            // own script, like the two above and for the same two reasons.
+            .initialization_script(speech::SPEECH_JS)
             // The inbox (G-INBOX): `TTSTVHost.inbox`, and -- on the Library
             // page alone -- the row a shared PDF waits on. Above `#shelf`
             // and not in it, because the shelf rail is re-rendered.

@@ -75,6 +75,23 @@ fn main() {
             .flag("-fobjc-arc")
             .flag("-fmodules")
             .compile("frankinbox");
+        // ios/FrankSpeech.m -> the native voice (D1(b), 13 Sep):
+        // `frank_speech_init`, `_speak`, `_cancel`, `_pause`, `_resume`,
+        // `_speaking`, `_voices`. Its own archive, for the reason above.
+        // `src/speech.rs` is its only caller and holds the whole of the why --
+        // above all why `speak` takes a BATCH: a queued AVSpeechUtterance goes
+        // on speaking with this webview's JavaScript suspended, and a
+        // sentence-at-a-time reader stops at the lock screen. No framework
+        // beyond Foundation and AVFoundation, and AVFoundation has been named
+        // below and in `gen/apple/project.yml` since FrankAudio.m -- so this
+        // file adds no `sdk:` line to that spec, which is the link-time trap
+        // job 8b wrote down.
+        println!("cargo:rerun-if-changed=ios/FrankSpeech.m");
+        cc::Build::new()
+            .file("ios/FrankSpeech.m")
+            .flag("-fobjc-arc")
+            .flag("-fmodules")
+            .compile("frankspeech");
         // Said here for the record and for a non-Xcode link; the build that
         // matters is Xcode's, and it is `gen/apple/project.yml`'s
         // `dependencies:` that actually names these -- a `staticlib` crate
@@ -112,6 +129,16 @@ fn main() {
                 // parses it, and the item off this phone once it is there.
                 "inbox_send",
                 "inbox_drop",
+                // the native voice (D1(b), 13 Sep): src/speech.rs. SEVEN, and
+                // the batch is the point -- `speech_speak` is handed the rest
+                // of the chapter so the reading survives the lock screen.
+                "speech_available",
+                "speech_voices",
+                "speech_speak",
+                "speech_stop",
+                "speech_pause",
+                "speech_resume",
+                "speech_speaking",
             ]),
         ),
     )
