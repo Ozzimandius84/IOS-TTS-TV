@@ -4,6 +4,79 @@ Newest first. `REPORT_PROTOCOL.md` (TTSTV), nine headings. `README.md` says what
 
 ---
 
+## T-SIM — the simulator, pressed from Cowork · 13 Sep (Cowork, bridge VM + computer-use, background tier), no commit to the phone tree (no GPU, 0 GPU-minutes)
+
+**Status line:** `phone · T-SIM run B attempted · 13 Sep · the simulator CAN be driven from this shell end to end — Frank launched on iPhone 17 and answered — but the only Frank on any simulator is a PRE-11-SEP build with an empty shelf, so B1.2/1.3/1.7a/1.7c/B3.18/system-voice could not run at all. What did run: B1.1 partial (no mic in the bottom bar), B2.8 FAILED — Sync found no Studio on the network with Studio running on the same Mac, and the Sync line still read "Never synced". Osca must press ONE command: npm run -- tauri ios dev "iPhone 17".`
+
+### 1. Built
+Nothing built. This is a tester lane; no file in either repo changed except the three logs named in §4.
+
+### 2. Verified — and how
+**live, simulator** throughout. Every line below is a **simulator** result; Osca's press on the real phone stays the release.
+
+*The shell can drive the simulator.* Granted Simulator + Frank (Studio) at `full` tier, Terminal at `click`. `app_menu` **works** on Simulator (`File ▸ Open Simulator ▸ iPhone 17` booted the 7-Sep device) — that reverses nothing in [[the_simulator_is_pressed_from_cowork]] but adds it. Taps by coordinate and by `element_index` **both** landed (AXPress named the real element: `AXLink 'Settings'`, `AXRadioButton 'Sync'`) — the 7-Sep note that `element_index` is refused on the device screen no longer holds on iOS 26.5. **`app_scroll` does NOT move the webview** (it sets a scrollbar AXValue the webview does not expose; two presses, no movement); a **vertical `app_drag` does** — that is the scroll gesture from this shell. Horizontal `app_drag` also landed (home-screen page 2). Drags were **not** refused: both simulator windows were on the current Space.
+
+*The app is alive and the eye works.* `scratch-probe/probe.log` grew while I pressed — `17:18:06`, `frank: page /library/library.html`, `k=viewport … cssW=402&cssH=874&band=0&phone=1&safeTop=62&safeBottom=34`, `frank: webview fills the screen -- window was 402x874, root now 402x874`. So the installed build serves its embedded assets through the `frank://` handler with **no dev server running**, and `probe.log` is still the whole feedback channel.
+
+*The build is stale, and here is the proof rather than the guess.* Settings ▸ Sync ▸ ACCOUNT reads **"Not signed in · This device only — no Google client on this device"** — that is verbatim the empty `ios_client_id` symptom fixed by `668142a` on 11 Sep ([[sync-landed-11-sep]] cause 1), so the build predates it. It also has no `sysvoice.js` behaviour and the old "No Studio paired yet — press Sync to find one" copy, not chat 1's `pairedStudio()`. **not verified:** the exact commit — *there is no shell-commit stamp anywhere in Settings on this build* (I read General and Sync to their bottoms). `TESTING.md` Run B's line 3 ("on the phone it is the shell commit in Settings") is therefore not satisfiable here.
+
+*B1.1 — partial.* Opens to Library; **no top bar** (pass). Bottom bar is **⚙ · pill only — no mic** (fail). Tiles-two-across not judgeable: the shelf is empty. The empty-shelf sentence is the Mac's copy — *"No ingested books yet. Double-click a source, or drag one here."* — and a phone has neither a double-click nor a drag-in.
+
+*B2.8 — FAILED, and this is the one worth acting on.* Frank Studio was **running on the same Mac** (`com.ttstv.desktop` pid 28830, window "Library — Frank"). Pressed Sync. "This network" answered **"No Studio found on this network — type the address and code Studio's row shows"** and revealed manual fields (`192.168.1.5:41499` placeholder, `code`). The **SYNC line above still read "Never synced"** — no count, no "what it used"; on this build the outcome is still painted into the transport row, which is 11-Sep cause 3(a) and predates the `finish()` fix. Twice out of two.
+
+*B2.8 layout — FAILED.* With that message and the two pairing inputs painted, the whole Settings page **overflowed horizontally**: the tab strip lost "Languages" off the right edge and the "This network" label wrapped one word per line. Reproducible whenever the row is in that state.
+
+*Invariant checked:* nothing in either working tree changed as a result of pressing the app. `md5sum` gate not applicable — no server started here and no route pressed from a shell; the presses were the app's own UI on the simulator.
+
+### 3. Judgment calls
+- *The prompt assumes a current Frank on a simulator; there is none* → I booted the 7-Sep `iPhone 17` device from Simulator's own File menu and ran what that build could still answer, marking every line stale → because "cannot be driven from this shell" would have been the wrong report: the shell drives the simulator fine; the **build** is what is missing.
+- *Could I install today's build?* → No, and I did not try to route around it → `tauri ios dev` must be typed into a macOS terminal; Terminal and VS Code resolve at `click` tier, which forbids typing, and the grant text forbids reaching them by any other means. Xcode's ▶ cannot start a Debug build anyway ([[the-phone-loop-is-one-press]] §0), and there is no `aarch64-apple-ios-sim` target in `src-tauri/target` — the first `ios dev` will be a cold Rust build, not a quick one.
+- *Studio was mid-search on a live "Shelley poems" surface (an Archive 403 on screen), which is another lane's work* → I read Studio only by screenshot and pressed nothing in it → B3.18 needs the works pane, and navigating Studio away from that search would have destroyed a concurrent session's state.
+- *The manual pairing fields were on screen and I could have typed an address and code* → did not → it would mean opening Studio's Settings to read the code (same interference), and a pre-11-Sep pairing protocol against today's Studio proves nothing either way.
+- *Which STATUS.md* → this one (the phone repo) → the lane's subject is the phone; the two logs it must also write live in TTSTV and are named in §4.
+
+### 4. Boundary check
+Files touched, all three logs, no code:
+- `IOS TTS TV/STATUS.md` (this entry) — phone repo.
+- `TTSTV/TESTING.md` — five log lines, each marked `· simulator`.
+- `TTSTV/PROMPTS/INTENT.md` — one line under `## Inbox`, nothing else.
+
+`core/` untouched. No module folder touched in either repo. Not a move and not a re-wire, so the two-folder exception does not apply; the two repos are the tester's own logs, not a second piece of work.
+
+**Dirty and left alone (another session's, unstageable by me):** TTSTV — `design/reader/book-nav.js`, `design/reader/page.js`, `design/reader/transport.js`, `reader/book-nav.js`, `reader/reader.html`, `reader/transport.js`, `voiceui/app.js`, `voiceui/tts.js`, `?? design/reader/follow.js`. Phone repo — `shell/reader/reader.html`, `shell/reader/surface.js`, `shell/reader/sw.js`, `shell/reader/transport.js`, `shell.manifest.json`, `src-tauri/gen/apple/*` (Info.plist, pbxproj, xcscheme, both entitlements), `?? shell/reader/sysvoice.js`, `?? src-tauri/gen/apple/FrankShare/Info.plist`, and the whole of `scratch-lookup/`.
+
+### 5. Footprint
+Nothing added to disk by this lane. No env, no model, no download, no cache, no scratch file. One extra simulator device was **booted** (`iPhone 17`, iOS 26.5) alongside the `iPhone 17 Pro` another lane is using for SweepProbe — it is left running with Frank open on the Library; shut it from Simulator ▸ File ▸ Close Window if it is in the way. Ran with the SSD irrelevant (no depot access). `scratch-probe/probe.log` grew by ~150 bytes as the app logged its own load — the app wrote that, not me.
+
+### 6. Requests to core / other modules
+- **To whoever owns Settings on the phone:** put the **shell commit in Settings**, visibly. `TESTING.md` Run B tells every tester to note it before starting and this build shows it nowhere, so every phone line in the log is unattributable to a build.
+- **To the sync lane:** the Sync line must carry the outcome (count + which transport) even when the outcome is "found nothing" — on this build the failure is only legible in the transport row, which is the same disease `finish()` was written to cure.
+- **To the settings lane:** the pairing row's message + two inputs overflow the 402 px page horizontally. Numbers are in §2; a rectangle can be taken on request.
+
+### 7. Known gaps
+- **Nothing in the assignment's main body actually ran.** B1.2, B1.3, B1.7a, B1.7c, B3.18 and the space-bar/system-voice item are all untouched, and B2.9–B2.13 had nothing to leave running.
+- Every line here is a **stale build**, so any of these may already be fixed in today's tree; none of it should be treated as a regression report.
+- No Studio-side observation at all beyond "it is running with a search open" — deliberately, per §3.
+- The empty shelf means B1.1's "tiles two across" is still unpressed.
+
+### 8. Next
+**One command from Osca, and the whole of Run B becomes available to this shell:**
+
+```
+cd "<phone repo>" && npm run -- tauri ios dev "iPhone 17"
+```
+
+No `--host` (a simulator shares localhost with the Mac). Expect a **cold** build — there is no `aarch64-apple-ios-sim` target yet. Before it, `cd src-tauri/gen/apple && xcodegen generate` if `project.yml` has moved since the last generate (§1 of [[the-phone-loop-is-one-press]]); `gen/apple` is dirty with the FrankShare work, so that is a judgement for the C2/K8 lane, not for me.
+
+Once it is up, this shell can press the rest unattended: the simulator answers taps, drags and the menu bar in the background, and `probe.log` reports. **The single question that blocks it:** is the `iPhone 17` simulator free for the loop, or is the FrankShare/SweepProbe lane going to want it?
+
+Stopping here, as instructed.
+
+### 8b. Commit check
+Two repos, both by pathspec, `GIT_OPTIONAL_LOCKS=0` on every call, no `-a`, no `-A`, no `--amend`. Hashes and `git show --stat HEAD` for each are in the chat reply. No lock was moved. Other sessions' dirty files listed in §4 were left unstaged.
+
+---
+
 ## C2/K8 — the share target · 13 Sep (Cowork, bridge VM + container), phone `9b7fbaf` `a6e72e5` (no GPU, 0 GPU-minutes)
 
 **Status line:** `phone · C2/K8 spike built · 13 Sep · TWO roads into Frank, and they cost differently: "Copy to Frank" is three plist keys and no entitlement, the share extension is a second target + an App Group; both read by src/inbox.rs, which says which one a row came in by. Owed: xcodegen, cargo test, the build, and Osca's Safari press.`
