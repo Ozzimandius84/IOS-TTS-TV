@@ -163,6 +163,22 @@ targets:
         EXCLUDED_ARCHS[sdk=iphoneos*]: x86_64
       groups: [app]
     dependencies:
+      # INGEST, ROAD TWO -- the share extension (C2/K8, 13 Sep). `embed: true`
+      # is what puts FrankShare.appex inside Frank.app; an extension that is
+      # built but not embedded is a share sheet with no Frank row in it and no
+      # error to say why. `codeSign: true` because an appex is signed
+      # separately from its host.
+      #
+      # THE COST, said where it bites: this pair carries
+      # `com.apple.security.application-groups` on BOTH binaries, and that
+      # capability has to exist on the signing team. If automatic signing
+      # refuses it, DELETE THIS DEPENDENCY AND THE FrankShare TARGET BELOW and
+      # the app builds exactly as it did -- "Copy to Frank"
+      # (CFBundleDocumentTypes above) needs neither, and `src/inbox.rs` reads
+      # both roads and says which one a row came in by.
+      - target: FrankShare
+        embed: true
+        codeSign: true
       - framework: libapp.a
         embed: false
       # FrankAudio.m (job 8b). AVAudioSession's framework, and it has to be
@@ -215,3 +231,64 @@ targets:
         outputFiles:
           - $(SRCROOT)/Externals/x86_64/${CONFIGURATION}/libapp.a
           - $(SRCROOT)/Externals/arm64/${CONFIGURATION}/libapp.a
+
+  # ------------------------------------------------------------- FrankShare
+  # The share sheet's Frank row. C2/K8, 13 September -- a spike, and the whole
+  # of it is: accept a PDF, a web address or a selection, write it into the App
+  # Group container, and get out of the way. No UI; `ShareViewController.swift`
+  # says why.
+  #
+  # IT INHERITS NOTHING FROM THE APP ON PURPOSE. `settingGroups: [app]` sets
+  # PRODUCT_NAME Frank and PRODUCT_BUNDLE_IDENTIFIER com.ttstv.frank, and an
+  # extension that carried the app's own bundle id would be refused at install
+  # with a message about a duplicate identifier. Its id is the app's with one
+  # component added, which is Apple's convention and the only shape automatic
+  # signing will make a profile for.
+  #
+  # NO RUST. There is deliberately no "Build Rust Code" phase here: the
+  # extension writes files and reads none of ours, so it needs neither libapp.a
+  # nor the crate -- and an extension that linked the app's static library
+  # would double a 100 MB binary for nothing.
+  FrankShare:
+    type: app-extension
+    platform: iOS
+    deploymentTarget: "15.0"
+    sources:
+      - path: FrankShare
+    info:
+      path: FrankShare/Info.plist
+      properties:
+        CFBundleDisplayName: Frank
+        CFBundleShortVersionString: 0.1.0
+        CFBundleVersion: "0.1.0"
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.share-services
+          # An Objective-C class name. `ShareViewController.swift` carries
+          # `@objc(ShareViewController)` so this string finds the class; without
+          # it the name is mangled and the row does nothing at all.
+          NSExtensionPrincipalClass: ShareViewController
+          NSExtensionAttributes:
+            # What puts Frank in the sheet. A file (the PDF), a web address
+            # (the article), or a selection -- one of each, because a spike
+            # that took ten files would be a queue design nobody asked for.
+            NSExtensionActivationRule:
+              NSExtensionActivationSupportsFileWithMaxCount: 1
+              NSExtensionActivationSupportsWebURLWithMaxCount: 1
+              NSExtensionActivationSupportsText: true
+    entitlements:
+      path: FrankShare/FrankShare.entitlements
+    settings:
+      base:
+        PRODUCT_NAME: FrankShare
+        PRODUCT_BUNDLE_IDENTIFIER: com.ttstv.frank.share
+        # The same team as the app, and written HERE for the same reason it is
+        # written in the app's settings: xcodegen rewrites the project from this
+        # file and a team picked by hand in Xcode's Signing tab is wiped by the
+        # next `xcodegen generate`.
+        DEVELOPMENT_TEAM: DC5G53NN4R
+        CODE_SIGN_STYLE: Automatic
+        ENABLE_BITCODE: false
+        ARCHS: [arm64]
+        EXCLUDED_ARCHS[sdk=iphoneos*]: x86_64
+        SWIFT_VERSION: "5.0"
+        ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES: false

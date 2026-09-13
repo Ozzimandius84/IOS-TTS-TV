@@ -1,5 +1,19 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
-<dict/>
+<dict>
+	<!-- C2/K8, 13 Sep. The app's half of the App Group the share extension
+	     writes into; FrankShare/FrankShare.entitlements is the other half and
+	     `src/inbox.rs`'s GROUP_ID is the third copy of the string.
+	     If automatic signing refuses the App Groups capability on this team,
+	     put this file back to `<dict/>` and delete the FrankShare target from
+	     project.yml -- "Copy to Frank" (CFBundleDocumentTypes) needs neither.
+	     NOTE: `tauri-plugin-deep-link`'s build script also rewrites this file
+	     (it removes `associated-domains` when no app link is configured); it
+	     leaves other keys alone. -->
+	<key>com.apple.security.application-groups</key>
+	<array>
+		<string>group.com.ttstv.frank</string>
+	</array>
+</dict>
 </plist>

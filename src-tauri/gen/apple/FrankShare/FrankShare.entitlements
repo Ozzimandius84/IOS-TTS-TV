@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- C2/K8, 13 Sep. The share extension and the app are two processes with
+	     two containers, and this is the only supported thing they can share.
+	     It must be IDENTICAL in frank_iOS.entitlements, and `src/inbox.rs`'s
+	     GROUP_ID is the third copy; a test holds all three equal.
+	     THE COST, said plainly: this entitlement needs the App Groups
+	     capability on the signing team. If automatic signing refuses it, the
+	     extension half of this spike does not build and "Copy to Frank"
+	     (gen/apple/project.yml, CFBundleDocumentTypes) is the whole answer. -->
+	<key>com.apple.security.application-groups</key>
+	<array>
+		<string>group.com.ttstv.frank</string>
+	</array>
+</dict>
+</plist>
