@@ -244,13 +244,15 @@ commit at all**, which is the whole claim of this lane. No `git add -A`, no `-a`
 `GIT_OPTIONAL_LOCKS=0` on every git call. Nine other paths were dirty from other lanes (§4) and
 every one was left unstaged.
 
-**Locks — two moved to `_to_delete/`, and Osca clears them** (`rm _to_delete/*.lock.*`). Git
-printed *"unable to unlink"* for `.git/HEAD.lock` (0 bytes) and `.git/next-index-9.lock` (21,265
-bytes) after the commit took — the bridge refusing a delete inside the repo — and `HEAD.lock` left
-in place breaks every later git command in the tree, so both were moved on CLAUDE.md's rule, both
-over 3 s untouched, as `*.<epoch>`. Also refused and LEFT where they are, because they are git's
-own temporaries and not locks: five `.git/objects/*/tmp_obj_*`. `_to_delete/` already held 22 from
-earlier lanes.
+**Locks — FOUR moved to `_to_delete/`, two per commit, and Osca clears them**
+(`rm _to_delete/*.lock.*`). Git printed *"unable to unlink"* for `.git/HEAD.lock` (0 bytes) and
+`.git/next-index-9.lock` (21,265 bytes) after `4ae2cd1`, and `HEAD.lock` + `.git/next-index-10.lock`
+again after `78c7a54` — the bridge refusing a delete inside the repo — and `HEAD.lock` left in
+place breaks every later git command in the tree, so all four were moved on CLAUDE.md's rule, each
+over 3 s untouched, as `*.<epoch>`. **`.git/*.lock` counts 0 after each**, checked both times;
+`_to_delete/` now holds **26** lock files, 22 of them earlier lanes'. Also refused and LEFT where
+they are, because they are git's own temporaries and not locks: eight
+`.git/objects/*/tmp_obj_*`. A third commit carries this paragraph and the corrected Inbox line.
 
 **The co-edited-file trap, and how it was dodged.** `STATUS.md` is this repo's `design/ship.py`:
 G-INBOX's own §8b records another lane's commit taking its whole entry from the working tree, and
