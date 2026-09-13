@@ -57,6 +57,7 @@ The single question that blocks K12: **does the personal team sign the App Group
 
 ### 8b. Commit check
 `9b7fbaf` (road one, 6 files) and `a6e72e5` (road two, 4 files) — every path on the commit line, `GIT_OPTIONAL_LOCKS=0` on every git call, `git add --` for the four new paths, no `-a`, no `-A`, no `--amend`. `a6e72e5` needed the lock-retry loop (first attempt died on `HEAD.lock`); the loop's second pass landed it, and the two stale locks are named in §5. `git show --stat HEAD` listed exactly the four files meant.
+**And the co-edited-file trap fired once, in the OTHER repo:** `TTSTV a3eb959` was meant to be my one `PROMPTS/BOARD.md` Inbox line and carried **two** — another lane appended the G-QUIET line between my read and my commit, and a pathspec commit takes the whole working-tree file, which is exactly the `design/ship.py` case `CLAUDE.md` names. Nothing was lost or changed; their line is in my commit under my message. The rule that would have caught it is `git status --short PROMPTS/BOARD.md` immediately before the commit, not before the edit.
 
 ### 9. Status line
 `phone · C2/K8 spike built · 13 Sep · two roads in (plist types, no entitlement · share extension, App Group), both read by src/inbox.rs; owed: xcodegen, cargo test, the build, Osca's Safari press`
