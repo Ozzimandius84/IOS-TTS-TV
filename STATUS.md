@@ -6,7 +6,7 @@ Newest first. `REPORT_PROTOCOL.md` (TTSTV), nine headings. `README.md` says what
 
 ## K25-PHONE — the phone was already the shape the Mac just changed into; nothing ported · 13 Sep (Cowork, bridge VM only — no simulator, no press, no GPU, 0 GPU-minutes), phone HEAD `5ced2da`
 
-**Status line:** `phone · K25-PHONE measured, NOTHING PORTED · 13 Sep · the phone holds ONE webview at every N: 1 builder in the whole crate, label "main", 0 add_child, 0 WKWebView allocations in six .m files, and every door is location.assign — 10 book opens made 11 navigations and 0 surfaces. An open book is ALREADY a record (ttstv.openBooks: 78 / 236 / 635 bytes at N=1/3/10) beside wordcursor:<slug>, which is exactly what K25(b) built for the Mac. tabs.rs untouched, the phone's Rust untouched, one new probe. 3 red controls. The simulator cell is Osca's.`
+**Status line:** `phone · K25-PHONE measured, NOTHING PORTED, and the real bug is next door · 13 Sep · COST B NEVER EXISTED HERE: one webview at every N (1 builder, label "main", 0 add_child, 0 WKWebView allocs in six .m files, every door location.assign — 10 opens → 11 navigations, 0 surfaces), and an open book is ALREADY a record (ttstv.openBooks 78/236/635 bytes at N=1/3/10) beside wordcursor:<slug>, which is what K25(b) has just built for the Mac. BUT COST A IS ON THE PHONE AND UNFIXED: the shipped shell is 7addad4, 18 of 61 files behind, and shell/reader/page.js is 264 lines against out/shell's 681 with NO G-TYPO and NO K25-a window — so a phone opening the complete Shakespeare mounts 380,382 nodes where the fixed tree mounts 10,195. No Rust changed, one 211-line probe, 3 red controls. The simulator cell is Osca's.`
 
 ### 1. Built
 
@@ -71,6 +71,17 @@ was pressed, and no number below came off a phone or a simulator.**
   `window.open` → 5 MISS, `doorNavigations` 11 → 0 and `doorSurfaces` 0 → **11**. **C**: the two
   lines that keep the record deleted from `pbar.js` → 5 MISS, `recordsAt` `{1,3,10}` → `{0,0,0}`.
   So none of the three claims is asserted by accident.
+- **AND THE COST THE PHONE *DOES* HAVE, found while checking the prompt's own read-first note.**
+  That note says *"the window is in the shared reader and already on the phone via the shell"*.
+  **It is not.** `shell/reader/page.js` on the phone is **264 lines** against `out/shell/reader/page.js`'s
+  **681**, and `grep -c` on it gives **0** for `G-TYPO` and **0** for `const NEAR` — neither half of
+  Cost A's fix (`4d4526b` G-TYPO, `26b65ee` K25-a's window, `f64c83b`) is in the shipped shell,
+  because the shell was imported at `7addad4` and both landed after. So on the phone as it would
+  build today, the book **you are reading** still mounts whole: K25-a's own `shape` numbers for the
+  complete Shakespeare at N=1 are **380,382 DOM nodes / 1,643 MB / 7,322 ms to open** without the
+  window and **10,195 / 556 MB / 1,066 ms** with it. That is the cost K25-a called *"already broken
+  at N=1"*, it is the one cost a single-webview device cannot dodge, and the fix is not a port —
+  it is `tools/import_shell.py`. §6.
 - **not verified** — the simulator cell (`npm run -- tauri ios dev "iPhone 17"`, memory and
   renderer count at 393×852), `cargo test`, and any press. §8 is Osca's. There is no "after" to
   measure because nothing changed.
@@ -106,13 +117,18 @@ This lane's module is the phone repo (`TTSTV_IOS`). **One file written: `tests/o
 (`shell/**`, and TTSTV's `reader/**`) — read and lifted from, never written. TTSTV is written to in
 exactly one place, the one line under `## Inbox` in `PROMPTS/INTENT.md` the standing rules ask for.
 
-**Other lanes were dirty throughout**, in this repo: `shell/reader/{reader.html,surface.js,sw.js,transport.js}`,
-`shell/reader/sysvoice.js` (untracked), `shell.manifest.json`, `src-tauri/gen/apple/**`,
-`src-tauri/ios/FrankSpeech.m` (untracked) and `scratch-lookup/**`. All left unstaged. Two of them
-touch numbers here and both are declared: the objc census read **six** `.m` files, one of which
-(`FrankSpeech.m`) is another lane's untracked WIP — its allocation count is 0 and the census is 0
-with or without it; and the shell-drift count in §6 is a working-tree count taken while a shell
-import is evidently half-done.
+**Other lanes were dirty throughout, and the set GREW under this session** — a speech lane's
+`src-tauri/src/{lib.rs,speech.rs}`, `src-tauri/build.rs`, `src-tauri/ios/FrankSpeech.m` and
+`capabilities/default.json` appeared between the census and the commit, on top of
+`shell/reader/{reader.html,surface.js,sw.js,transport.js}`, `shell/reader/sysvoice.js`,
+`shell.manifest.json`, `src-tauri/gen/apple/**` and the whole of `scratch-lookup/` — **21 paths,
+all left unstaged**. That matters because `lib.rs` is where the census counts builders, so **the
+whole probe was re-run against `HEAD` alone** (every `src-tauri/src/*.rs` and `src-tauri/ios/*.m`
+written out with `git show HEAD:<path> >` into the VM's scratch, 7 `.rs` and 5 `.m`, no
+`speech.rs` and no `FrankSpeech.m`): **identical JSON line, all ok, verdict `one-webview`**. So no
+number here rests on another lane's uncommitted work. The shell-drift count in §6 is the one
+figure that is a working-tree count, and it is a working-tree count on purpose — it describes what
+would be built today.
 
 **The loop does not apply.** Nothing this lane wrote has a master in `design/`, nothing is in
 `reader/sw.js`'s `SHELL_FILES`, and `export.py --shell` / `publish_shell` were **not run** — which
@@ -131,20 +147,29 @@ No source file changed. No file deleted, no file moved, no dependency added — 
 
 ### 6. Requests to other modules — and one for Osca
 
-- **THE ONE THAT MATTERS, and it is not this lane's to fix: the phone is shipping a stale shell.**
+- **THE ONE THAT MATTERS, and it is bigger than the question this lane was asked: the phone is
+  shipping a stale shell, and Cost A's fix is in the part that is stale.**
   `shell.manifest.json` says `source.commit` **`7addad4`**, and against TTSTV's `out/shell/` as it
   stands **18 of the 61 shell files differ**: `reader/{book-nav,page,transport,listen,pbar,sysvoice,scrub,sw}.js`,
   `reader/{reader.html,shell.css,page.css,pbar.css,listen.css}`, `settings/settings.js`,
-  `library/{library.html,library.css}`, `voiceui/{tts,app}.js`. The one I read closely:
-  `pbar.js` is **60 lines behind in two hunks** and is missing the whole 11 Sep light/dark
-  long-press on the ⚙ — so on the phone as it would build today, a long press on the gear does
-  nothing. Four of the eighteen are dirty in the working tree right now, so an import looks
-  half-done; whoever owns it should finish `tools/import_shell.py` and re-stamp the manifest
-  before the build. **Not done here** because the shared reader is explicitly not this lane's.
-- **For chat 34 (K25 fix (a)), a boundary that is worth knowing:** the Mac's remaining cost — two
-  large books live at once contending on `page.js::render()` and `placeAxis()` — **cannot arise on
-  the phone**, because two are never live. Whatever (a) does for the Mac, the phone's version of
-  that cost is the single live book's own open, and nothing else.
+  `library/{library.html,library.css}`, `voiceui/{tts,app}.js`. The two that matter, measured:
+  **`page.js` 264 lines against 681**, with no G-TYPO and no K25-a window (§2) — the reading book
+  mounts whole, 380,382 nodes on the complete Shakespeare; and **`pbar.js` 60 lines behind in two
+  hunks**, missing the 11 Sep light/dark long-press, so a long press on the ⚙ does nothing on the
+  phone. Four of the eighteen are dirty in the working tree right now, so an import looks
+  half-done. `tools/import_shell.py`, then `tools/prebuild.py`, then re-stamp the manifest, before
+  anything is built for the 13th. **Not done here** because the shared reader is explicitly not
+  this lane's, and because rewriting 18 shell files while four of them are another lane's
+  uncommitted work is the exact sweep the pathspec rule exists to prevent.
+- **And the read-first note in `PROMPTS/lanes/wave-4.md` chat 60 should be corrected when someone
+  next edits it** (not by me — INTENT.md's rule is one Inbox line and nothing else). It says the
+  window *"is already on the phone via the shell"*; it is not, and that is the finding, not a
+  quibble: had it been true, this lane would have had nothing to report at all.
+- **For chat 34 (K25 fix (a)):** the Mac's remaining cost — two large books live at once
+  contending on `page.js::render()` and `placeAxis()` — **cannot arise on the phone**, because two
+  are never live. But the single-book half of (a) is the phone's whole story, and it is the fix
+  that has not reached it (above). Nothing for that lane to build; everything for whoever runs the
+  import.
 - **For chat 17 / G-MEMORY, the mirror of K25(b) §6's finding.** K25(b) found the Mac's ledger
   cannot survive a launch: the studio port changes every launch, an origin includes its port, and
   `localStorage` belongs to the origin. **The phone's origin is `frank://localhost`
@@ -156,11 +181,16 @@ No source file changed. No file deleted, no file moved, no dependency added — 
 
 ### 7. Known gaps
 
-- **No simulator number, and none is claimed.** The gate's "393×852 on the simulator" is one
-  command on Osca's Mac and this shell cannot run it. What is claimed instead is the count of
-  things that could make a renderer, which is 1 at every N and cannot be otherwise. If the
-  simulator shows memory climbing with N, it is not renderers — it is one document's own growth,
-  and that is a different lane.
+- **No simulator number, and none is claimed. The reason is on file, in this same STATUS.md,
+  from today.** T-SIM (13 Sep, three entries below) established two things at first hand: the
+  simulator CAN be driven from this shell, and **the only Frank installed on any simulator is a
+  pre-11-Sep build** — it has no `sysvoice.js`, no `668142a`, an empty shelf — because
+  `npm run -- tauri ios dev "iPhone 17"` must be typed into a macOS terminal and Terminal resolves
+  at `click` tier here. So a run today would have measured a build older than the shell it ships,
+  and reported it as the phone. What is claimed instead is the count of things that could make a
+  renderer, which is 1 at every N and cannot be otherwise. And if the simulator ever shows memory
+  climbing with N, it will not be renderers — it will be the one document's own growth, which is
+  §6's stale `page.js`.
 - **The probe stands in for the engine, not for the phone.** It runs `HOST_JS` in node against a
   stand-in window; WKWebView's real refusal of `window.open` is what makes the doors necessary in
   the first place, and `tests/doors_are_navigations.mjs --engine webkit` on the Mac is where that
@@ -179,8 +209,10 @@ No source file changed. No file deleted, no file moved, no dependency added — 
 
 ### 8. Next
 
-**Osca — there is nothing to build and nothing to press for this lane.** The one thing worth doing,
-if you want the cell in your own hand, is the run the prompt named, and it will show a flat line:
+**Osca — there is nothing to build and nothing to press for THIS lane, and one thing to do about
+the lane next to it (§6: `tools/import_shell.py`).** If you want the cell in your own hand, it is
+the run the prompt named — but note T-SIM's finding first: the Frank sitting on the simulator is
+pre-11-Sep, so the command below is what makes the measurement mean anything, not an extra:
 
     npm run -- tauri ios dev "iPhone 17"
     # then, in the simulator: open a book, back to the Library, open another, ten times.
@@ -202,11 +234,41 @@ The real question this lane leaves you is §6's first bullet: **the shell on the
 `7addad4`, 18 files behind.** That is a bigger deal for the 13th than anything about renderers.
 
 ### 8b. Commit check
-_(filled by the second commit, below)_
+
+**`4ae2cd1`**, one pathspec commit, `-F` from a message file in the session home, **two paths named
+on the line**: `tests/open_books_shape.mjs` and `STATUS.md` (and a second, **this section's own**,
+for the hashes and the Inbox line). `git add --` for the one new file first — a pathspec refuses an
+untracked path. `git show --stat HEAD` confirmed **exactly those two**: STATUS.md +206,
+open_books_shape.mjs +211 new — 417 insertions, 0 deletions, and **no `src-tauri/` path in the
+commit at all**, which is the whole claim of this lane. No `git add -A`, no `-a`, no `--amend`;
+`GIT_OPTIONAL_LOCKS=0` on every git call. Nine other paths were dirty from other lanes (§4) and
+every one was left unstaged.
+
+**Locks — two moved to `_to_delete/`, and Osca clears them** (`rm _to_delete/*.lock.*`). Git
+printed *"unable to unlink"* for `.git/HEAD.lock` (0 bytes) and `.git/next-index-9.lock` (21,265
+bytes) after the commit took — the bridge refusing a delete inside the repo — and `HEAD.lock` left
+in place breaks every later git command in the tree, so both were moved on CLAUDE.md's rule, both
+over 3 s untouched, as `*.<epoch>`. Also refused and LEFT where they are, because they are git's
+own temporaries and not locks: five `.git/objects/*/tmp_obj_*`. `_to_delete/` already held 22 from
+earlier lanes.
+
+**The co-edited-file trap, and how it was dodged.** `STATUS.md` is this repo's `design/ship.py`:
+G-INBOX's own §8b records another lane's commit taking its whole entry from the working tree, and
+its advice was *"when your entry is long, commit it FIRST and by itself"*. This entry is 206 lines,
+so `git status --short STATUS.md` was read immediately before each of the two commits and the file
+was clean of any other lane's edit both times.
+
+**The controls were built in the VM's own scratch (`$HOME/ctl`), never in the repo** — a copy of
+the six `.rs`, the six `.m` and `pbar.js`, ~300 KB, outside every mounted folder, deleted at the
+end. Nothing was written to `~/Desktop`, nothing to `books/`; no server was started and no route
+pressed, so `languages/catalogue.json` was never at risk.
+
+**HEAD was `5ced2da` at the gate and did not move under this session** — `git log 5ced2da..HEAD`
+was empty until this lane's own commit.
 
 ### 9. Status line
 
-`phone · K25-PHONE: the phone was ALREADY the shape K25(b) just gave the Mac — one webview at every N (1 builder, label "main", 0 add_child, 0 WKWebView allocs in six .m files, 10 opens → 11 navigations and 0 surfaces), an open book already a record in ttstv.openBooks (78 / 236 / 635 bytes at 1 / 3 / 10) beside wordcursor:<slug> · NOTHING PORTED, no Rust changed, one 211-line probe and 3 red controls · the finding that matters is elsewhere: the shipped shell is 7addad4, 18 of 61 files behind · the simulator cell is Osca's`
+`phone · K25-PHONE: the phone was ALREADY the shape K25(b) just gave the Mac — one webview at every N (1 builder, label "main", 0 add_child, 0 WKWebView allocs in six .m files, 10 opens → 11 navigations and 0 surfaces), an open book already a record in ttstv.openBooks (78 / 236 / 635 bytes at 1 / 3 / 10) beside wordcursor:<slug> · NOTHING PORTED, no Rust changed, one 211-line probe and 3 red controls · and the finding that matters is next door: the shipped shell is 7addad4, 18 of 61 files behind, shell/reader/page.js 264 lines against 681 with NO G-TYPO and NO K25-a window, so the book you are reading still mounts whole (380,382 nodes vs 10,195 on the complete Shakespeare) — Cost A is live on the phone and the fix is an import, not a port · the simulator cell is Osca's`
 
 ---
 
