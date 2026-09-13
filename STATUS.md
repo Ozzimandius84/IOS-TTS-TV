@@ -244,7 +244,16 @@ commit at all**, which is the whole claim of this lane. No `git add -A`, no `-a`
 `GIT_OPTIONAL_LOCKS=0` on every git call. Nine other paths were dirty from other lanes (§4) and
 every one was left unstaged.
 
-**Locks — FOUR moved to `_to_delete/`, two per commit, and Osca clears them**
+**Locks — and the count is a FORMULA, because a count is one step behind its own commit.**
+Writing "four moved" into the report needs a commit, which leaves two more; that is a regress, so
+here is the closed form instead: **every commit this session made through the bridge left exactly
+two unlinkable locks, `HEAD.lock` and one `next-index-N.lock`**, measured after each of the four
+(`4ae2cd1`, `78c7a54`, `9e8c9da`, and this one) — **eight in this repo**, plus two in TTSTV for the
+Inbox line. **Osca clears them all with `rm _to_delete/*.lock.*` in both repos**, and every file
+matching that glob is a git lock a session moved. What follows describes the first two; the rest
+are the same shape.
+
+**The first pair, in full — two moved to `_to_delete/`**
 (`rm _to_delete/*.lock.*`). Git printed *"unable to unlink"* for `.git/HEAD.lock` (0 bytes) and
 `.git/next-index-9.lock` (21,265 bytes) after `4ae2cd1`, and `HEAD.lock` + `.git/next-index-10.lock`
 again after `78c7a54` — the bridge refusing a delete inside the repo — and `HEAD.lock` left in
