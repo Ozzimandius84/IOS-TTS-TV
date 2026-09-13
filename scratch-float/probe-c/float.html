@@ -1,0 +1,339 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>probe-c — the float, road (a)</title>
+<!--
+  probe-c -- road (a) pressed properly: a <video> whose frames are a CANVAS
+  painting the current word, entered with picture-in-picture, fed by the word
+  clock, over ONE WHOLE REAL CHAPTER (eclogues-en/c001, 794 words, 263.3 s,
+  MMS_FA aligned, 0% of its gaps the 350 ms divider).
+
+  probe-web.html (6 Sep) asked "does the feature exist"; this asks the four
+  questions F0 was set:
+    K26a  does the WORD keep up  -- dropped words counted against the clock
+    K26b  does AUDIO continue    -- while the app is not in front
+    K26c  does tapping the PiP return to the same WORD ID
+    K28   does it survive TEN MINUTES backgrounded
+
+  Nothing here is Frank. It reads Frank's timeline and writes Frank's cursor
+  key shape and nothing else; no file of the app is touched by pressing it.
+
+  Four clocks are counted separately and on purpose, because "it froze" is not
+  a finding: rAF, a 60 Hz timer, the audio element's own timeupdate, and an
+  AudioWorklet tick on the AUDIO thread (the one clock iOS keeps running for a
+  backgrounded app that is playing). Whichever of them still ticks while the
+  app is away IS road (a)'s painter -- and if none does, road (a) is a frozen
+  word in a floating box and the answer is road (b).
+-->
+<style>
+  :root { color-scheme: light dark; }
+  body { margin:0; font:14px/1.5 -apple-system,system-ui,sans-serif; padding:16px 16px 40px; }
+  h1 { font-size:15px; margin:0 0 4px; letter-spacing:.02em }
+  p.sub { margin:0 0 14px; opacity:.62 }
+  button { font:inherit; padding:11px 14px; margin:0 6px 8px 0; border-radius:9px;
+           border:1px solid currentColor; background:transparent; color:inherit }
+  button[disabled] { opacity:.35 }
+  #stage { display:flex; gap:12px; align-items:flex-start; flex-wrap:wrap; margin:10px 0 }
+  canvas, video { width:200px; height:112px; background:#111; border-radius:8px }
+  pre { white-space:pre-wrap; word-break:break-word; font:11px/1.45 ui-monospace,Menlo,monospace;
+        background:rgba(127,127,127,.12); padding:10px; border-radius:8px; max-height:46vh; overflow:auto }
+  .k { display:inline-block; min-width:9.5em; opacity:.62 }
+</style>
+
+<h1>probe-c — the float, road (a)</h1>
+<p class="sub" id="head">loading…</p>
+
+<div>
+  <button id="b1">1 · features</button>
+  <button id="b2">2 · play + PiP</button>
+  <button id="b3">3 · stop &amp; answer</button>
+  <button id="b4">4 · copy answer</button>
+</div>
+<div id="stage">
+  <canvas id="cv" width="480" height="270"></canvas>
+  <video id="vid" playsinline muted autoplay></video>
+</div>
+<pre id="out">press 1</pre>
+
+<script src="wordclock.js"></script>
+<script>
+(function () {
+  "use strict";
+  var Q = new URLSearchParams(location.search);
+  var MODE  = Q.get("mode") || "auto";                 /* auto | manual */
+  var FPS   = +(Q.get("fps") || 30);
+  var AUDIO = Q.get("audio") || "audio.wav";
+  var SLUG  = Q.get("slug")  || "eclogues-en";
+  var CHAP  = Q.get("ch")    || "c001";
+
+  var out = document.getElementById("out"), head = document.getElementById("head");
+  var cv = document.getElementById("cv"), vid = document.getElementById("vid");
+  var ctx2d = cv.getContext("2d", { alpha: false });
+  var log = [];
+  function say(s) { log.push(s); out.textContent = log.join("\n"); }
+
+  /* ---------------------------------------------------------- the timeline */
+  var clock = null, TL = null;
+  fetch("timeline.json").then(function (r) { return r.json(); }).then(function (j) {
+    TL = j.timeline; clock = WordClock.make(TL);
+    head.textContent = j.words + " words · " + j.span + " s · " + j.source;
+  }).catch(function (e) { head.textContent = "timeline.json missing: " + e; });
+
+  /* ------------------------------------------------------------- the audio */
+  var audio = new Audio();
+  audio.preload = "auto"; audio.src = AUDIO; audio.loop = false;
+  var virtual = false, vt0 = 0, vpaused = true, vbase = 0;
+  audio.addEventListener("error", function () {
+    virtual = true;
+    say("! audio.wav did not load — falling back to a VIRTUAL clock.\n"
+      + "  The word half is still measured; the BACKGROUND-AUDIO half (K26b) is\n"
+      + "  NOT, and any 'away' number below is then about a page with no sound,\n"
+      + "  which iOS suspends for a different reason. Fix step 0 of RUN.md.");
+  });
+  function now() {
+    if (!virtual) return audio.currentTime;
+    return vpaused ? vbase : vbase + (performance.now() - vt0) / 1000;
+  }
+
+  /* ------------------------------------------------- the four clocks, counted */
+  var C = { raf:0, timer:0, tu:0, worklet:0, paint:0, frameReq:0 };
+  var AWAY = { raf:0, timer:0, tu:0, worklet:0, paint:0 };
+  var hidden = false, running = false;
+  var seen = new Set(), seenAway = new Set(), lastIdx = -2;
+  var trace = [], t0 = 0, awayAt = 0, awaySpan = 0;
+
+  function bump(k) { C[k]++; if (hidden) AWAY[k]++; }
+
+  function paint() {                       /* the ONLY place the canvas is drawn */
+    if (!clock) return;
+    var i = clock.indexAt(now());
+    bump("paint");
+    if (i !== lastIdx) {
+      lastIdx = i;
+      if (i >= 0) { seen.add(i); if (hidden) seenAway.add(i); }
+      var w = i < 0 ? "" : TL[i].w;
+      ctx2d.fillStyle = "#0b0b0c"; ctx2d.fillRect(0, 0, cv.width, cv.height);
+      ctx2d.fillStyle = "#f4f2ee";
+      ctx2d.textAlign = "center"; ctx2d.textBaseline = "middle";
+      var size = 96; do { ctx2d.font = "600 " + size + "px -apple-system,Georgia,serif";
+                          size -= 4; } while (size > 20 && ctx2d.measureText(w).width > cv.width - 40);
+      ctx2d.fillText(w, cv.width / 2, cv.height / 2);
+      ctx2d.font = "500 15px -apple-system,sans-serif"; ctx2d.fillStyle = "#8b8b8f";
+      ctx2d.fillText(i + " / " + TL.length + "   " + now().toFixed(1) + "s",
+                     cv.width / 2, cv.height - 26);
+      if (MODE === "manual" && track && track.requestFrame) { track.requestFrame(); C.frameReq++; }
+    }
+  }
+
+  function rafLoop() { if (!running) return; bump("raf"); paint(); requestAnimationFrame(rafLoop); }
+  var timerId = null;
+  audio.addEventListener("timeupdate", function () { if (running) { bump("tu"); paint(); } });
+
+  /* the audio-thread tick. An AudioWorklet's `process` runs on the render
+     thread every 128 frames (~375 Hz at 48 kHz) and iOS keeps that graph alive
+     for a backgrounded app that is PLAYING. It cannot draw -- drawing is the
+     main thread's -- so what this counts is whether the main thread is still
+     there to be told. If `worklet` climbs while away and `paint` does not, the
+     page is alive and the COMPOSITOR is what stopped, and that is a different
+     (and better) answer than a dead page. */
+  var actx = null;
+  function startWorklet() {
+    try {
+      var AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return "no AudioContext";
+      actx = new AC();
+      var code = 'class T extends AudioWorkletProcessor{constructor(){super();this.n=0}' +
+                 'process(){if(++this.n%6===0)this.port.postMessage(1);return true}}' +
+                 'registerProcessor("t",T)';
+      var url = URL.createObjectURL(new Blob([code], { type: "text/javascript" }));
+      return actx.audioWorklet.addModule(url).then(function () {
+        var n = new AudioWorkletNode(actx, "t");
+        n.port.onmessage = function () { if (running) { bump("worklet"); paint(); } };
+        n.connect(actx.destination);
+        if (!virtual) { try { actx.createMediaElementSource(audio).connect(actx.destination); } catch (e) {} }
+        return actx.resume().then(function () { return "ok " + actx.sampleRate + " Hz"; });
+      });
+    } catch (e) { return "threw " + e; }
+  }
+
+  /* ------------------------------------------------------------------ PiP */
+  var stream = null, track = null, pipOn = false, pipErr = null;
+  function features() {
+    var f = {
+      canvas_captureStream: typeof cv.captureStream === "function",
+      video_requestPictureInPicture: typeof vid.requestPictureInPicture === "function",
+      document_pictureInPictureEnabled: !!document.pictureInPictureEnabled,
+      webkitSupportsPresentationMode:
+        typeof vid.webkitSupportsPresentationMode === "function"
+          ? vid.webkitSupportsPresentationMode("picture-in-picture") : null,
+      webkitSetPresentationMode: typeof vid.webkitSetPresentationMode === "function",
+      documentPictureInPicture: !!window.documentPictureInPicture,
+      audioWorklet: (function () { try { var A = window.AudioContext || window.webkitAudioContext;
+                       return !!(A && new A().audioWorklet); } catch (e) { return "threw " + e; } })(),
+      mediaSession: !!navigator.mediaSession,
+      ua: navigator.userAgent
+    };
+    return f;
+  }
+
+  /* ------------------------------------------------------- K27, in the same press */
+  var K27 = { registered: {}, fired: [] };
+  function wireMediaSession() {
+    if (!navigator.mediaSession) return;
+    ["play","pause","stop","seekbackward","seekforward","seekto",
+     "previoustrack","nexttrack","skipad","togglemicrophone","togglecamera","hangup"]
+    .forEach(function (a) {
+      try {
+        navigator.mediaSession.setActionHandler(a, function () {
+          K27.fired.push({ a: a, at: +(now().toFixed(2)),
+                           word: clock ? clock.indexAt(now()) : -1,
+                           wall: Math.round(performance.now() - t0) });
+          say("  [mediaSession] " + a + " @ word " + (clock ? clock.indexAt(now()) : -1));
+        });
+        K27.registered[a] = true;
+      } catch (e) { K27.registered[a] = false; }
+    });
+    try {
+      navigator.mediaSession.metadata = new MediaMetadata({
+        title: "probe-c — the sentence goes here", artist: "Frank", album: SLUG + " " + CHAP });
+      K27.metadata = true;
+    } catch (e) { K27.metadata = String(e); }
+  }
+
+  /* ----------------------------------------------------------- the presses */
+  document.getElementById("b1").onclick = function () {
+    log = []; say("=== 1 · FEATURES ===");
+    var f; try { f = features(); } catch (e) { say("  features() threw " + e); return; }
+    Object.keys(f).forEach(function (k) { say("  " + k.padEnd(34) + " " + f[k]); });
+    say("\nIf canvas_captureStream is false, or BOTH video_requestPictureInPicture and");
+    say("webkitSupportsPresentationMode are false/null, road (a) is closed here and");
+    say("you can stop: the answer is road (b), probe-b/.");
+  };
+
+  document.getElementById("b2").onclick = function () {
+    log = []; say("=== 2 · PLAY + PiP  (mode=" + MODE + ", fps=" + FPS + ") ===");
+    if (!clock) { say("no timeline"); return; }
+    t0 = performance.now(); running = true;
+    seen = new Set(); seenAway = new Set(); trace = []; awaySpan = 0;
+    Object.keys(C).forEach(function (k) { C[k] = 0; });
+    Object.keys(AWAY).forEach(function (k) { AWAY[k] = 0; });
+
+    try {
+      stream = cv.captureStream(MODE === "manual" ? 0 : FPS);
+      track = stream.getVideoTracks()[0];
+      vid.srcObject = stream;
+      say("  captureStream ok, track=" + (track ? track.readyState : "none"));
+    } catch (e) { say("  captureStream threw " + e); }
+
+    var p = virtual ? (vpaused = false, vt0 = performance.now(), Promise.resolve())
+                    : audio.play();
+    Promise.resolve(p).then(function () {
+      say("  audio " + (virtual ? "VIRTUAL" : "playing"));
+      return vid.play();
+    }).then(function () {
+      if (typeof vid.requestPictureInPicture === "function") return vid.requestPictureInPicture();
+      if (typeof vid.webkitSetPresentationMode === "function")
+        return vid.webkitSetPresentationMode("picture-in-picture");
+      throw new Error("no PiP entry point");
+    }).then(function () {
+      pipOn = true; say("  PiP OPENED");
+    }).catch(function (e) {
+      pipErr = String(e); say("  PiP did NOT open: " + pipErr);
+    });
+
+    rafLoop();
+    timerId = setInterval(function () { bump("timer"); paint(); }, 16);
+    Promise.resolve(startWorklet()).then(function (r) { say("  audioWorklet: " + r); });
+    wireMediaSession();
+
+    /* the trace -- one row a second, so a ten-minute background is readable */
+    var tick = setInterval(function () {
+      if (!running) { clearInterval(tick); return; }
+      trace.push([Math.round((performance.now() - t0) / 1000), +now().toFixed(2),
+                  hidden ? 1 : 0, C.paint, C.raf, C.timer, C.tu, C.worklet, seen.size]);
+    }, 1000);
+
+    say("\n  Now: leave Frank (Home / app switcher), wait — TEN MINUTES for K28 —");
+    say("  come back, TAP THE PiP WINDOW to return, then press 3.");
+  };
+
+  document.addEventListener("visibilitychange", function () {
+    hidden = document.hidden;
+    if (hidden) awayAt = performance.now();
+    else if (awayAt) { awaySpan += performance.now() - awayAt; awayAt = 0; }
+    trace.push([Math.round((performance.now() - t0) / 1000), +now().toFixed(2),
+                hidden ? 1 : 0, C.paint, C.raf, C.timer, C.tu, C.worklet, seen.size, "VIS"]);
+  });
+  ["enterpictureinpicture","leavepictureinpicture","webkitpresentationmodechanged"]
+    .forEach(function (ev) { vid.addEventListener(ev, function () {
+      var i = clock ? clock.indexAt(now()) : -1;
+      say("  [" + ev + "] at word " + i + " (" + now().toFixed(2) + "s)");
+      if (ev === "leavepictureinpicture") RETURN_AT = i;
+    }); });
+  var RETURN_AT = null;
+
+  document.getElementById("b3").onclick = function () {
+    running = false; clearInterval(timerId);
+    var span = now(), spanIdx = clock ? clock.indexAt(span) : -1;   /* READ the clock */
+    if (!virtual) audio.pause(); else { vbase = span; vpaused = true; }  /* then stop it */
+    var expected = spanIdx + 1;                     /* words the clock passed */
+    var dropped = [], firstAway = null;
+    for (var i = 0; i <= spanIdx; i++) if (!seen.has(i)) dropped.push(i);
+
+    /* the word the reader would resume on -- Frank's OWN key shape, and the
+       word id, never a scroll offset (reader/cursor.js, K24). */
+    var wid = RETURN_AT != null ? RETURN_AT : spanIdx;
+    var key = "wordcursor:" + SLUG;
+    try { localStorage.setItem(key, JSON.stringify({ chapter: CHAP, word: wid, v: null })); } catch (e) {}
+
+    log = []; say("=== ANSWER ===  (paste everything from this line down)");
+    say("probe-c  mode=" + MODE + " fps=" + FPS + "  " + new Date().toISOString());
+    say("ua: " + navigator.userAgent);
+    say("");
+    say("K26a  word keeps up");
+    say("  audio ran to        " + span.toFixed(2) + " s  (word " + spanIdx + " of " + TL.length + ")");
+    say("  words the clock passed  " + expected);
+    say("  words the float DREW    " + seen.size);
+    say("  NEVER DRAWN             " + dropped.length
+        + "   (" + (expected ? (100 * dropped.length / expected).toFixed(1) : "0") + "%)");
+    say("  first ten never drawn   " + dropped.slice(0, 10).join(","));
+    say("");
+    say("K26b  audio while away");
+    say("  seconds backgrounded    " + (awaySpan / 1000).toFixed(1));
+    say("  audio_kept_playing      " + (awaySpan > 2000 && span > 2 ? "see trace: audioTime must climb across hidden=1 rows" : "not backgrounded long enough"));
+    say("  words drawn while away  " + seenAway.size);
+    say("  paints while away       " + AWAY.paint
+        + "   raf " + AWAY.raf + "   timer " + AWAY.timer
+        + "   timeupdate " + AWAY.tu + "   worklet " + AWAY.worklet);
+    say("  (paints_while_away = 0 WITH the PiP open is a frozen word in a floating box)");
+    say("");
+    say("K26c  return on the same word");
+    say("  word under the clock when PiP was left   " + RETURN_AT);
+    say("  word under the clock at stop             " + spanIdx);
+    say("  wrote " + key + " = " + (localStorage.getItem(key) || "(refused)"));
+    say("");
+    say("K28   ten minutes");
+    say("  wall seconds running    " + ((performance.now() - t0) / 1000).toFixed(1));
+    say("  PiP still open at stop  " + (!!document.pictureInPictureElement
+        || (vid.webkitPresentationMode === "picture-in-picture")));
+    say("  PiP error, if any       " + pipErr);
+    say("");
+    say("K27   mediaSession");
+    say("  registered " + JSON.stringify(K27.registered));
+    say("  metadata   " + K27.metadata);
+    say("  FIRED      " + JSON.stringify(K27.fired));
+    say("");
+    say("counters  " + JSON.stringify(C));
+    say("");
+    say("trace  s,audioTime,hidden,paint,raf,timer,timeupdate,worklet,words");
+    trace.forEach(function (r) { say("  " + r.join(",")); });
+    say("=== END ===");
+  };
+
+  document.getElementById("b4").onclick = function () {
+    navigator.clipboard.writeText(out.textContent).then(
+      function () { head.textContent = "copied"; },
+      function (e) { head.textContent = "clipboard refused: " + e + " — select and copy by hand"; });
+  };
+})();
+</script>

@@ -4,6 +4,75 @@ Newest first. `REPORT_PROTOCOL.md` (TTSTV), nine headings. `README.md` says what
 
 ---
 
+## F0 + F1 — the float: the iOS spike and the Mac panel's shape · 13 Sep (Cowork, bridge VM + container Chromium), no GPU, 0 GPU-minutes
+
+**Status line:** `float · F0 built + F1 designed · 13 Sep · road (a) drew 794/794 words of a real chapter in a desktop engine and the probe is built to answer the three questions only a phone can; K27 answered NO; no Float button landed.`
+
+### 1. Built
+- `IOS TTS TV/scratch-float/probe-c/float.html` — the road (a) spike: a canvas painting one word → `captureStream` → `<video>` → PiP, fed by the word clock. **Four clocks counted separately** (`rAF`, a 60 Hz `setInterval`, `timeupdate`, and an **AudioWorklet tick on the audio thread**), in the foreground and while backgrounded, so "it froze" can never be the finding. `?mode=manual` swaps `captureStream(30)`'s pull for `captureStream(0)` + `track.requestFrame()`. Writes the reader's own `wordcursor:<slug>` on leaving PiP; registers and logs twelve `mediaSession` actions (K27).
+- `…/probe-c/build-timeline.mjs` — builds `timeline.json` by lifting `tokenise` and `paraIndexOf` **verbatim out of `reader/listen.js` at run time**, with listen.js's own count check.
+- `…/probe-c/timeline.json` — `eclogues-en/c001`, 794 words, 263.3 s, 101 paragraphs exact / 0 refused.
+- `…/probe-c/drops.mjs` — the rate table, plus the number the 6 Sep table did not print: how long the WRONG word stands on the float.
+- `…/probe-c/test-probe-c.cjs` — 16 assertions, no browser, no phone.
+- `…/probe-c/wordclock.js` (the parent's, byte for byte), `F0.md`, `RUN.md`, `README.md`, `.gitignore`.
+- `TTSTV/design/reader/FLOAT.md` — F1: the platform truth table, the Mac always-on-top panel (window, type, drag, tap→strip, dismiss), the one door to the reader's state, what "return to the reader" restores, and five questions left to Osca. **No code.**
+
+### 2. Verified — and how
+- **live (container Chromium 141, real time, whole chapter):** `float.html` over `eclogues-en/c001` end to end, 265 s, **794 words the clock passed / 794 drawn / 0 NEVER DRAWN**; counters `raf 15906, timer 16566, worklet 15215, paint 47687`. The AudioWorklet clock ticks at **57 Hz** (one message per 6 quanta).
+- **live:** canvas cost **0.0416 ms per full 480×270 repaint** (9,041 repaints in 300 ms) — **1.3% of a 30 Hz frame budget**.
+- **live, the honest scare:** an earlier run dropped exactly **1** word — word 54, `god`, gap to the next **120 ms** — because the driver had blocked the main thread for 300 ms to time the canvas. A 300 ms main-thread stall costs a word; road (a)'s painter lives on that thread.
+- **unit:** `node test-probe-c.cjs` — **16 passed, 0 failed**: `probe-c/wordclock.js` is `scratch-float/`'s byte for byte (probe-b and probe-c count the same word); `timeline.json` rebuilds word-for-word from `listen.js`'s own `tokenise`; the chapter is really aligned, not the 350 ms divider; 60 Hz and 30 Hz miss 0, 4 Hz misses 125, 1 Hz misses 534; `indexAt`'s four edges.
+- **unit:** `node drops.mjs` over all five genuinely-aligned chapters (1,739 words): **0 never-drawn at 60 and 30 Hz on every one**; staleness on c001 — 60 Hz late p95 **15.7 ms** (9.9% of a word's life), 30 Hz **31.7 ms** (20.6%), 10 Hz 95 ms (58.8%), 4 Hz 235 ms (89.2%), 1 Hz 667 ms (96.7%). Real-aligned gaps n=1,734: min 40 ms, p01 61, p05 100, median 281 → 3.56 words/s typical, 16.4/s at p01.
+- **unit (the corpus, for FLOAT.md's measure):** 3,729 chapter files, **5,210,789 words** — character length median 4, p90 8, p99 12, **p99.9 16**, max 77 (a hyphen-welded OCR run in *Les Misérables*, not a word). 16ch holds 99.9% of the book at full size.
+- **not verified, and it is the point:** K26b (audio away), K28 (ten minutes), and road (a)'s painter while backgrounded. **No phone, no simulator, no WebKit in this session.** `RUN.md` is the three presses and the ten-minute wait.
+- **Invariant:** nothing of the app was read at run time and nothing of it changed. `md5sum languages/catalogue.json` not applicable — no server started, no route pressed.
+
+### 3. Judgment calls
+- *Which chapter the probe plays* → `eclogues-en/c001`, not the 6 Sep `poems/c002`. The corpus has **five** real alignments now, not one, and c001 is the only **whole chapter** among them (794 words, 263 s). The other 40 timings files are still the 350 ms divider and flatter every road.
+- *Whether to rebuild the word list in the probe* → no: lift `tokenise`/`paraIndexOf` out of `listen.js` verbatim. A probe that re-cut the chapter would be a second word index disagreeing with the page's, and every drop count would be about a different book.
+- *The 6 Sep table counted drops only* → added **staleness**. A road can score 0 drops and still be a bad float, because the eye is on it; 30 Hz spends a fifth of every word's life showing the last one, 60 Hz a tenth.
+- *A fourth clock nobody asked for* → the AudioWorklet tick. iOS keeps the audio graph alive for a backgrounded app that is playing; it cannot draw, but `worklet` climbing while `paint` does not is **a live page with a stopped compositor**, which is a different and much better answer than a dead page — and it is what `?mode=manual` exists to rescue.
+- *Osca's Define/Ask/Explain/Translate vs the ring's what/ground/again* → mapped Ask→`what`, Explain→`ground`, Define→`lookup.js`, Translate→`align/`'s pair, and **flagged Explain=ground as Osca's to confirm** (FLOAT.md §6.1) rather than deciding it.
+- *Transport on the float* → QUIET.md forbids transport on the ring ("a second, worse copy"). Reversed on the float, and the reason written down so it cannot spread: **on a float there is no transport to be a copy of** — the capsule is behind whatever the user is working in.
+- *Where the report goes* → this lane spans two repos, so the same nine headings sit at the top of `IOS TTS TV/STATUS.md` and `design/reader/STATUS.md`.
+
+### 4. Boundary check
+Touched, and nothing else:
+- `TTSTV`: **`design/reader/FLOAT.md`** (new), `design/reader/STATUS.md` (this report).
+- `IOS TTS TV`: **`scratch-float/probe-c/`** (new folder, 9 files), `STATUS.md` (this report).
+
+`core/` untouched. No module's code touched in either repo — `reader/listen.js`, `reader/sysvoice.js`, `reader/cursor.js`, `reader/book-nav.js`, `voiceui/`, `desktop/src-tauri/src/settingswin.rs` and `tabs.rs` were **read only**. Not a MOVE or a RE-WIRE; the two repos are two deliverables the prompt named, not a second folder taken.
+
+**Found dirty and LEFT ALONE (another session's, unstaged, uncommitted by me):**
+`TTSTV` — `parser/README.md`, `parser/cli.py`, `parser/facts.py`, `parser/langid.py`, `parser/readers.py`, `parser/tests/test_facts.py`, `parser/tools/p0_audit.py`, `parser/triage.py`, `reader/lookup.js`, `reader/tests/test_lookup_search.py`, `settings/routes.py`, `settings/settings.js`, `studio/kaggle.py`, `studio/modal.py`, and untracked `cloud/tools/deploy_to_my_modal.py`, `parser/check.py`, `parser/form.py`, `parser/forms-hand.json`, `parser/measures.py`, `parser/tests/test_form.py`, `parser/tests/test_reparse_cost.py`, `parser/tools/form_score.py`, `parser/tools/relang.py`, `parser/tools/reparse_cost.py`, `parser/tools/reparse_migrate.py`, `reader/tests/test_lookup_card.py`.
+`IOS TTS TV` — `shell.manifest.json`, `shell/reader/{reader.html,surface.js,sw.js,transport.js}`, `src-tauri/build.rs`, `src-tauri/capabilities/default.json`, `src-tauri/gen/apple/**` (5 files), `src-tauri/src/{inbox.rs,lib.rs}`, `scratch-lookup/**` (3), and an Xcode `xcuserstate`.
+
+### 5. Footprint
+`IOS TTS TV/scratch-float/probe-c/` — **86 KB committed** (45 KB of it `timeline.json`). `audio.wav` is a **symlink, gitignored, never committed** (the wav is 12.6 MB and already in `TTSTV/books/`). In the cloud container: `/tmp/pc` (a copy of three probe files + a Playwright driver), ephemeral, nothing installed. No env, no model, no download, no cache. Nothing written to `~/Desktop`; nothing on the SSD; no server started, so nothing was written into the checkout by an unguarded `paths.py`.
+
+### 6. Requests to core / other modules
+- **`reader/`** — when the Mac float is built it needs the chapter's `{words, starts}` **read off `listen.js`'s existing per-chapter map** (its `sentWords`/`bySentId` by-products), published once per chapter. No new file, no new cut, no per-word message. Proposal only; not made.
+- **`voiceui/`** — the float's four labels enter at `handleUtterance`, exactly where a heard utterance and QUIET.md's flick already do. Nothing in `grammar.js`/`detour.js`/`resolve.js`/`answers.js` changes.
+- **`desktop/`** — the panel is `settingswin.rs` with four builder differences (`always_on_top`, `decorations(false)`, no Dock tile, `resizable(false)`). Proposal only.
+
+### 7. Known gaps
+- **`reader/oneword.js` does not exist** — the prompt named it as read-first. The one-word view is a **POSITION on book-nav.js's axis** (`nav.go(1)`, `levelOf(dx)>=0.5`), and the word's size is `WORD.height = 0.12` of the reference height, with `fill`/`fillH` deliberately deleted so height is never a function of word length. FLOAT.md inherits that rule and not the number.
+- `float.html`'s painter **shrinks a long word to fit the canvas.** That is a probe convenience and is **wrong for the product** — it is exactly what `WORD.height` forbids. FLOAT.md sizes the panel to 16ch instead.
+- K26b, K28 and road (a)'s backgrounded painter are **unanswered**. So is whether wry's `WKWebViewConfiguration` allows PiP inside Frank; `RUN.md` step 2 answers it by difference.
+- Android's `RemoteAction`s — the one platform whose system float could take our buttons — is in the truth table as **unmeasured**.
+- `probe-b/`'s Swift has still never seen a compiler.
+
+### 8. Next
+**Osca picks the road.** `RUN.md`: step 0 (one `ln -sf`), step 1 (Safari, three presses + a ten-minute wait), step 2 (the same page inside Frank), step 3 only if `paints while away` was 0. The single question that blocks everything after: **does anything paint while the app is away?** Then FLOAT.md §6's five. **Stopping here — no Float button, no code in `reader/`, `voiceui/` or `desktop/`.**
+
+### 8b. Commit check
+Pathspec commits only, `GIT_OPTIONAL_LOCKS=0` on every git call, `-F` with the message in the session home. `git add -- <the new paths>` first (a pathspec refuses an untracked path, and a pathspec commit **silently drops** a new untracked file — the `follow.js` trap, 19 of 20). Two repos, two commits; `git show --stat HEAD` on each, below. No other lane's file staged. HEAD movement under the session: stated below.
+
+### 9. Status line
+`float · F0 built + F1 designed · 13 Sep · 794/794 in a desktop engine, K27 no, three presses and a ten-minute wait owed`
+
+---
+
 ## T-SIM — the simulator, pressed from Cowork · 13 Sep (Cowork, bridge VM + computer-use, background tier), no commit to the phone tree (no GPU, 0 GPU-minutes)
 
 **Status line:** `phone · T-SIM run B attempted · 13 Sep · the simulator CAN be driven from this shell end to end — Frank launched on iPhone 17 and answered — but the only Frank on any simulator is a PRE-11-SEP build with an empty shelf, so B1.2/1.3/1.7a/1.7c/B3.18/system-voice could not run at all. What did run: B1.1 partial (no mic in the bottom bar), B2.8 FAILED — Sync found no Studio on the network with Studio running on the same Mac, and the Sync line still read "Never synced". Osca must press ONE command: npm run -- tauri ios dev "iPhone 17".`
