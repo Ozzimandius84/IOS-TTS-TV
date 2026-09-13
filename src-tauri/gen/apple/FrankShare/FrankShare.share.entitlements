@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- ROAD TWO ONLY, AND NOTHING SIGNS THIS FILE TODAY (G-INBOX, 13 Sep).
+	     the share extension's half of the App Group the share extension writes into. It sits
+	     beside the empty .entitlements the ship build actually signs, and
+	     FrankShare/road-two.yml (a file xcodegen never reads) is the one page
+	     that says how to point a target at this one.
+	     THE COST, unchanged and still unanswered: this key needs the App
+	     Groups capability on the signing team, and whether a free personal
+	     team carries it is K8's open question. On 13 Sep the string was
+	     removed from BOTH real entitlements files by the generate and build
+	     itself, which is why road two is out of the spec rather than in it.
+	     src/inbox.rs GROUP_ID is the other copy of the string, and a test
+	     holds every file that names one equal to it. -->
+	<key>com.apple.security.application-groups</key>
+	<array>
+		<string>group.com.ttstv.frank</string>
+	</array>
+</dict>
+</plist>

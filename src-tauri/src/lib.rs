@@ -102,6 +102,9 @@ use tauri_plugin_deep_link::DeepLinkExt;
 mod dict;
 // The inbox (C2/K8, 13 Sep): what a share put on this phone, read only.
 mod inbox;
+// Apple's own Look Up panel (G-LOOKUP2, 13 Sep): the SECOND press, and the
+// once-per-book question that decides whether its control is drawn at all.
+mod lookup;
 mod pull;
 mod search;
 
@@ -1468,6 +1471,215 @@ pub const SYNC_JS: &str = r#"(function () {
 })();
 "#;
 
+// ------------------------------------------------------------- the inbox
+//
+// G-INBOX (13 Sep). `src/inbox.rs` is the whole of what this is: the two
+// roads a share lands on, the send to the paired Studio, and the take-away.
+// Here is the door the page comes through and the row a person actually sees.
+//
+// WHY THE ROW IS IN THIS STRING AND NOT IN `library.html`. `shell/` is
+// imported from TTSTV byte for byte (`tools/import_shell.py`; README: "NEVER
+// EDITED BY HAND"), so a row typed into the Library page here would be gone at
+// the next import, and typed into TTSTV it would be a row on the Mac's shelf
+// for an inbox no Mac has. The inbox is the phone's alone, so its row is the
+// phone's alone -- an init script, exactly like [`BOOKS_JS`] and [`SYNC_JS`],
+// and it hangs its own element ABOVE `#shelf` rather than inside it, because
+// the shelf rail is re-rendered by the page and anything inside it would be
+// wiped on the next draw.
+
+/// `window.TTSTVHost.inbox` -- three commands -- and the row on the shelf.
+///
+/// The door exists on every page in Frank (guarded like [`BOOKS_JS`]: no
+/// `__TAURI__`, no door, so the PWA and the Mac's own pages are untouched);
+/// the ROW draws only on `/library/library.html`.
+///
+/// The row has three states and every one of them is a sentence (F10):
+/// `waiting` ("Awaiting a parse"), `sending`, and `stuck`, which carries
+/// whichever sentence `inbox.rs` answered -- the phone is not paired, Studio
+/// parses a PDF or an EPUB and this is neither, this Studio has not opened
+/// `/upload` to a phone, the Mac is asleep. On a 200 the item is dropped from
+/// the phone's inbox and the row goes, leaving one line saying where it went.
+///
+/// It re-lists when the app comes back to the front, which is the case that
+/// matters: a person shares a PDF out of Safari and arrives here from the
+/// share sheet, and the row has to be waiting for them.
+pub const INBOX_JS: &str = r#"(function () {
+  "use strict";
+  var TAURI = window.__TAURI__ && window.__TAURI__.core;
+  if (!TAURI || typeof TAURI.invoke !== "function") return;
+  window.TTSTVHost = window.TTSTVHost || {};
+  var host = {
+    // list() -> Promise<row[]>  (read-only; the two roads, newest road first)
+    list: function () { return TAURI.invoke("inbox_list"); },
+    // send(id, via, base, token) -> Promise<{ok, status, why, saved, bytes}>
+    send: function (id, via, base, token) {
+      return TAURI.invoke("inbox_send", { id: id, via: via, base: base, token: token });
+    },
+    // drop(id, via) -> Promise<boolean>: the item leaves this phone's inbox
+    drop: function (id, via) { return TAURI.invoke("inbox_drop", { id: id, via: via }); }
+  };
+  window.TTSTVHost.inbox = host;
+
+  /* ---------------------------------------------------------------- the row */
+  if (!/\/library\/library\.html$/.test(window.location.pathname)) return;
+
+  var PAIR_KEY = "ttstv.sync.pair";
+  var NEEDS = "Frank needs Studio on your Mac to read this. Pair this phone in Settings ▸ Transfer, then tap again.";
+  var WAITING = "Awaiting a parse";
+  var esc = function (s) {
+    return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+    });
+  };
+  /* settings.js's own pairing record, read and never written here. */
+  var pair = function () {
+    try {
+      var p = JSON.parse(window.localStorage.getItem(PAIR_KEY) || "null");
+      return p && p.base && p.token ? p : null;
+    } catch (e) { return null; }
+  };
+  var studio = function (p) { return (p && p.name) || "Studio"; };
+
+  var CSS = [
+    "\n#frankInbox{font:14px/1.4 var(--ui,-apple-system,sans-serif);color:var(--ink,#222);",
+    "background:var(--ground,#fff);border-bottom:1px solid var(--rule,#ddd);padding:10px 14px}",
+    "\n#frankInbox[hidden]{display:none}",
+    "\n#frankInbox .fi-cap{font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--dim,#777);margin:0 0 6px}",
+    "\n#frankInbox .fi-row{display:flex;align-items:center;gap:10px;padding:7px 0;border-top:1px solid var(--rule,#eee)}",
+    "\n#frankInbox .fi-row:first-of-type{border-top:0}",
+    "\n#frankInbox .fi-what{font-family:var(--serif,Georgia,serif);font-size:16px;flex:0 1 auto;",
+    "overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:45%}",
+    "\n#frankInbox .fi-says{flex:1 1 auto;color:var(--dim,#777);font-size:13px}",
+    "\n#frankInbox .fi-go{flex:0 0 auto;font:inherit;padding:5px 12px;border:1px solid var(--rule,#ccc);",
+    "border-radius:999px;background:transparent;color:inherit}",
+    "\n#frankInbox .fi-row[data-state=sending] .fi-go{opacity:.45}",
+    "\n#frankInbox .fi-row[data-state=stuck] .fi-says{color:var(--ink,#222)}",
+    "\n#frankInbox .fi-note{color:var(--dim,#777);font-size:13px;padding:4px 0}"
+  ].join("");
+
+  var box = null, busy = false;
+  function mount() {
+    if (box && box.isConnected) return box;
+    box = document.getElementById("frankInbox");
+    if (!box) {
+      var style = document.createElement("style");
+      style.id = "frankInboxCSS";
+      style.textContent = CSS;
+      (document.head || document.documentElement).appendChild(style);
+      box = document.createElement("section");
+      box.id = "frankInbox";
+      box.setAttribute("aria-label", "Inbox");
+      box.hidden = true;
+      /* ABOVE the shelf, never inside it: `#shelf` is re-rendered by the
+         page and anything in it would be wiped on the next draw. */
+      var shell = document.querySelector(".shell");
+      if (shell && shell.parentNode) shell.parentNode.insertBefore(box, shell);
+      else document.body.insertBefore(box, document.body.firstChild);
+      box.addEventListener("click", function (e) {
+        var row = e.target && e.target.closest ? e.target.closest(".fi-row") : null;
+        if (row) tap(row);
+      });
+    }
+    return box;
+  }
+
+  function say(row, state, sentence) {
+    row.setAttribute("data-state", state);
+    var s = row.querySelector(".fi-says");
+    if (s) s.textContent = sentence;
+    var b = row.querySelector(".fi-go");
+    if (b) b.textContent = state === "sending" ? "Sending" : "Parse";
+  }
+
+  /* The caption counts what is still waiting, so it cannot say "2 waiting"
+     over one row. */
+  function recount() {
+    var b = mount(), cap = b.querySelector(".fi-cap");
+    var n = b.querySelectorAll(".fi-row").length;
+    if (cap) cap.textContent = n ? "Inbox · " + n + " waiting" : "Inbox";
+    if (!n && !b.querySelector(".fi-note")) { b.hidden = true; b.innerHTML = ""; }
+  }
+
+  /* One line, kept. It replaces the ROW and never the box: a second item
+     waiting must not be wiped because the first one went, and the line has to
+     outlast the tap that caused it -- so nothing re-lists on its own here.
+     The next time the app comes to the front, `refresh` draws what is really
+     there and that line goes with it. */
+  function note(row, text) {
+    var b = mount();
+    var line = document.createElement("p");
+    line.className = "fi-note";
+    line.textContent = text;
+    if (row && row.parentNode) row.parentNode.replaceChild(line, row);
+    else b.appendChild(line);
+    b.hidden = false;
+    recount();
+  }
+
+  function tap(row) {
+    if (row.getAttribute("data-state") === "sending") return;
+    var id = row.getAttribute("data-id"), via = row.getAttribute("data-via");
+    var what = row.getAttribute("data-what") || id;
+    var p = pair();
+    if (!p) { say(row, "stuck", NEEDS); return; }
+    busy = true;
+    say(row, "sending", "Sending to " + studio(p) + "…");
+    host.send(id, via, p.base, p.token).then(function (r) {
+      r = r || {};
+      if (!r.ok) { busy = false; say(row, "stuck", r.why || "Studio did not take it."); return; }
+      /* It is on the Mac's drive now (TTS_DATA/sources is write-once) and
+         the ingest has started, so the phone's copy is the second copy of a
+         file that is already kept -- and the row goes. */
+      return host.drop(id, via).catch(function () { return false; }).then(function () {
+        busy = false;
+        note(row, what + " is with " + studio(p) + " — it will arrive with the next Sync.");
+      });
+    }).catch(function (e) {
+      busy = false;
+      say(row, "stuck", "Frank could not send it: " + (e && e.message ? e.message : e));
+    });
+  }
+
+  function draw(rows) {
+    var b = mount();
+    if (!rows.length) { b.hidden = true; b.innerHTML = ""; return; }
+    var p = pair();
+    var first = p ? WAITING + " — tap to send it to " + studio(p) : WAITING + " — " + NEEDS;
+    b.hidden = false;
+    b.innerHTML = '<p class="fi-cap">Inbox · ' + rows.length + " waiting</p>" +
+      rows.map(function (r) {
+        var what = r.title || r.file || r.id;
+        return '<div class="fi-row" data-state="waiting" data-id="' + esc(r.id) + '" data-via="' +
+          esc(r.via) + '" data-what="' + esc(what) + '">' +
+          '<span class="fi-what">' + esc(what) + "</span>" +
+          '<span class="fi-says">' + esc(first) + "</span>" +
+          '<button type="button" class="fi-go">Parse</button></div>';
+      }).join("");
+  }
+
+  function refresh() {
+    if (busy) return Promise.resolve(null);
+    return host.list().then(function (rows) {
+      draw(Array.isArray(rows) ? rows : []);
+      return rows;
+    }).catch(function () { return null; });
+  }
+  host.refresh = refresh;
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", refresh);
+  } else {
+    refresh();
+  }
+  /* THE CASE THAT MATTERS: share out of Safari, come back to Frank, and the
+     row is there without a reload. */
+  document.addEventListener("visibilitychange", function () {
+    if (!document.hidden) refresh();
+  });
+  window.addEventListener("pageshow", function () { refresh(); });
+})();
+"#;
+
 /// The content type for a file of the shell, by extension.
 ///
 /// Every extension the app shell actually contains is named here, and
@@ -2214,9 +2426,21 @@ pub fn run() {
             dict::dict_langs,
             dict::dict_lookup,
             dict::dict_remove,
-            // The inbox (C2/K8, 13 Sep). ONE registration line, said here because
-            // this file is another lane's (G-TOPUP owns lib.rs when it runs).
-            inbox::inbox_list
+            // Apple's Look Up panel (G-LOOKUP2, 13 Sep). TWO registration
+            // lines, said here for the same reason as the three below, and
+            // there is no third command: a per-word `dictionaryHasDefinition`
+            // is 31-95 ms and the whole of the recommendation this implements
+            // is that nothing of Apple's sits on the path of a press
+            // (`src/lookup.rs` holds the numbers).
+            lookup::lookup_apple,
+            lookup::lookup_apple_offered,
+            // The inbox (C2/K8, 13 Sep; G-INBOX, 13 Sep). THREE registration
+            // lines, said here because this file is another lane's (G-TOPUP
+            // owns lib.rs when it runs): what is waiting, one item sent to the
+            // paired Studio, and the item taken off this phone afterwards.
+            inbox::inbox_list,
+            inbox::inbox_send,
+            inbox::inbox_drop
         ])
         // The launch scheme (`frank-pair://`, NOT the asset scheme). The
         // plugin is what turns an OS open into an event on iOS, macOS and
@@ -2392,6 +2616,14 @@ pub fn run() {
             // The pack door (G-LANG): `TTSTVHost.dict`, a word looked up in
             // the language's pack from Rust.
             .initialization_script(dict::DICT_JS)
+            // Apple's panel (G-LOOKUP2): its own script and NOT a line in
+            // HOST_JS, whose two `invoke`s are pinned by two tests in this
+            // file -- `dict.rs` set the same precedent for the same reason.
+            .initialization_script(lookup::LOOKUP_JS)
+            // The inbox (G-INBOX): `TTSTVHost.inbox`, and -- on the Library
+            // page alone -- the row a shared PDF waits on. Above `#shelf`
+            // and not in it, because the shelf rail is re-rendered.
+            .initialization_script(INBOX_JS)
             // Separate from HOST_JS, and unconditional -- see PAIR_JS's own
             // note. Both run before the document's own scripts, so a page that
             // reads the key at load reads a key a link has already written.
@@ -3234,5 +3466,85 @@ mod pull_door_tests {
         at("if payload.event() == tauri::webview::PageLoadEvent::Finished {");
         at("sync_on_load(window.app_handle());");
         at("window.on_window_event(move |event| sync_on_window(&handle, event));");
+    }
+
+    /// The inbox's wiring (G-INBOX): three commands declared, granted and
+    /// handled; one door that calls them and nothing else; the row drawn on
+    /// the Library page only, ABOVE the shelf and never inside it.
+    #[test]
+    fn the_inbox_door_is_three_commands_and_the_row_is_not_inside_the_shelf() {
+        let js = INBOX_JS;
+        assert_eq!(js.matches("invoke(").count(), 3, "three commands, three calls");
+        assert!(js.contains(r#"TAURI.invoke("inbox_list")"#));
+        assert!(js.contains(r#"TAURI.invoke("inbox_send", { id: id, via: via, base: base, token: token })"#));
+        assert!(js.contains(r#"TAURI.invoke("inbox_drop", { id: id, via: via })"#));
+        assert!(js.contains("if (!TAURI"), "a page outside Frank gets no door");
+        // The row is the Library page's alone, and it hangs off `.shell` --
+        // `#shelf` is re-rendered by the page and would wipe it.
+        assert!(js.contains(r#"if (!/\/library\/library\.html$/.test(window.location.pathname)) return;"#));
+        assert!(js.contains(r#"var shell = document.querySelector(".shell");"#));
+        assert!(!js.contains(r#"getElementById("shelf")"#), "nothing of ours goes inside the rail");
+        // The pairing record is settings.js's, read and never written.
+        assert!(js.contains(r#"var PAIR_KEY = "ttstv.sync.pair";"#));
+        assert!(!js.contains("setItem"), "the inbox never writes the pairing");
+        // F10: a sentence, never silence -- and the three states are these.
+        assert!(js.contains("function recount()"), "the caption counts what is left");
+        for state in ["waiting", "sending", "stuck"] {
+            assert!(js.contains(state), "the row has no {state} state");
+        }
+        assert!(js.contains("Awaiting a parse"));
+        assert!(js.contains("Settings ▸ Transfer"), "unpaired says what it needs");
+        // ...and it re-lists when the app comes back to the front, which is
+        // how a person arrives here from Safari's share sheet.
+        assert!(js.contains(r#"document.addEventListener("visibilitychange""#));
+        assert_eq!(BOOKS_JS.matches("invoke(").count(), 4, "the book door keeps its four");
+
+        let build = include_str!("../build.rs");
+        let cap = include_str!("../capabilities/default.json");
+        let lib = include_str!("lib.rs");
+        let run_fn = &lib[lib.find("pub fn run() {").unwrap()..lib.find("fn flush_google<").unwrap()];
+        for (cmd, perm) in [
+            ("inbox_list", "allow-inbox-list"),
+            ("inbox_send", "allow-inbox-send"),
+            ("inbox_drop", "allow-inbox-drop"),
+        ] {
+            assert!(build.contains(&format!("\"{cmd}\"")), "build.rs declares {cmd}");
+            assert!(cap.contains(&format!("\"{perm}\"")), "the capability grants {perm}");
+            assert!(
+                run_fn.contains(&format!("            inbox::{cmd},\n"))
+                    || run_fn.contains(&format!("            inbox::{cmd}\n")),
+                "handled: {cmd}"
+            );
+        }
+        let at = |s: &str| run_fn.find(s).unwrap_or_else(|| panic!("run() has no {s}"));
+        assert!(at(".initialization_script(HOST_JS)") < at(".initialization_script(INBOX_JS)"));
+    }
+
+    /// Road two is out of the spec and behind a file xcodegen never reads, and
+    /// nothing the 13th signs carries an App Group (G-INBOX).
+    #[test]
+    fn the_share_extension_is_not_in_the_project_and_the_entitlements_are_empty() {
+        let spec = include_str!("../gen/apple/project.yml");
+        assert!(!spec.contains("\n  FrankShare:"), "project.yml still declares the target");
+        assert!(!spec.contains("- target: FrankShare"), "the app still depends on it");
+        assert!(spec.contains("CFBundleDocumentTypes"), "road one is what ships");
+        assert!(spec.contains("LSSupportsOpeningDocumentsInPlace: false"));
+        for rel in [
+            "../gen/apple/frank_iOS/frank_iOS.entitlements",
+            "../gen/apple/FrankShare/FrankShare.entitlements",
+        ] {
+            let text = std::fs::read_to_string(
+                std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join(rel.trim_start_matches("../")),
+            )
+            .unwrap_or_default();
+            assert!(
+                !text.contains("application-groups"),
+                "{rel} carries an App Group the ship build would have to sign"
+            );
+        }
+        let road = include_str!("../gen/apple/FrankShare/road-two.yml");
+        assert!(road.contains("group.com.ttstv.frank"), "it says what it would need");
+        assert!(road.contains("- target: FrankShare"), "BLOCK A is whole");
+        assert!(road.contains("type: app-extension"), "BLOCK B is whole");
     }
 }

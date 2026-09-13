@@ -1,0 +1,133 @@
+# ROAD TWO -- the share extension, cut out of `project.yml` and kept whole.
+# G-INBOX, 13 September. **XCODEGEN NEVER READS THIS FILE.**
+#
+# WHY IT IS OUT. Road two puts a real "Frank" row in the iOS share sheet, and
+# it costs `com.apple.security.application-groups` on BOTH binaries -- the app
+# and the appex. Whether a FREE PERSONAL TEAM can sign that entitlement is
+# K8's one unanswered question (C2/K8's own report, §7), and the answer is not
+# knowable from anything but a build on Osca's Mac. The 13th ships road one
+# ("Copy to Frank": three `CFBundleDocumentTypes` keys, no entitlement, no
+# second target), so road two waits behind this file rather than sitting in
+# the spec where one `xcodegen generate` would put an unsignable capability
+# into the ship build.
+#
+# AND IT WAS ALREADY TAKEN OUT ONCE, BY SOMETHING THAT IS NOT A PERSON. On
+# 13 Sep, between `a6e72e5` and this commit, BOTH entitlements files came back
+# `<dict/>` in the working tree after Osca's generate-and-build -- the App
+# Group string gone from each. C2/K8 §7 named `tauri-plugin-deep-link`'s build
+# script as the thing that rewrites `frank_iOS.entitlements`; whatever did it,
+# an entitlement that a build removes by itself is not one to ship a date on.
+# The empty files are what this project now signs, on purpose.
+#
+# THE APP GROUP IT WOULD NEED, spelt once and the same in four places:
+#
+#     group.com.ttstv.frank
+#
+# `src/inbox.rs::GROUP_ID`, `FrankShare/FrankShare.share.entitlements`,
+# `frank_iOS/frank_iOS.share.entitlements`, and
+# `FrankShare/ShareViewController.swift`. `inbox_tests::
+# the_group_id_is_the_same_in_every_file` holds every file that names one
+# equal to it.
+#
+# ---------------------------------------------------------------------------
+# TO TURN IT ON -- three edits to `project.yml`, then one generate:
+#
+# 1. put BLOCK A back under the `frank_iOS` target's `dependencies:`, where
+#    the "ROAD TWO IS NOT HERE" note now stands;
+# 2. put BLOCK B back at the end of the file, as a second entry under
+#    `targets:` (it is already indented for it);
+# 3. point both entitlements at the `.share.` copies:
+#       frank_iOS:  entitlements.path -> frank_iOS/frank_iOS.share.entitlements
+#       FrankShare: entitlements.path -> FrankShare/FrankShare.share.entitlements
+#    (BLOCK B below already names its own.)
+# 4. `cd src-tauri/gen/apple && xcodegen generate`, then build. If automatic
+#    signing refuses the App Groups capability, that is K8 answered: undo
+#    these three edits and nothing else -- road one and `src/inbox.rs` never
+#    depended on any of it.
+#
+# The Swift itself (`FrankShare/ShareViewController.swift`) was not moved and
+# was not changed. With no target naming it in `sources:`, nothing compiles it.
+# ---------------------------------------------------------------------------
+
+# ============================================================ BLOCK A
+# goes under: targets: frank_iOS: dependencies:
+      # INGEST, ROAD TWO -- the share extension (C2/K8, 13 Sep). `embed: true`
+      # is what puts FrankShare.appex inside Frank.app; an extension that is
+      # built but not embedded is a share sheet with no Frank row in it and no
+      # error to say why. `codeSign: true` because an appex is signed
+      # separately from its host.
+      #
+      # THE COST, said where it bites: this pair carries
+      # `com.apple.security.application-groups` on BOTH binaries, and that
+      # capability has to exist on the signing team. If automatic signing
+      # refuses it, DELETE THIS DEPENDENCY AND THE FrankShare TARGET BELOW and
+      # the app builds exactly as it did -- "Copy to Frank"
+      # (CFBundleDocumentTypes above) needs neither, and `src/inbox.rs` reads
+      # both roads and says which one a row came in by.
+      - target: FrankShare
+        embed: true
+        codeSign: true
+
+
+# ============================================================ BLOCK B
+# goes under: targets:  (a sibling of frank_iOS)
+  # ------------------------------------------------------------- FrankShare
+  # The share sheet's Frank row. C2/K8, 13 September -- a spike, and the whole
+  # of it is: accept a PDF, a web address or a selection, write it into the App
+  # Group container, and get out of the way. No UI; `ShareViewController.swift`
+  # says why.
+  #
+  # IT INHERITS NOTHING FROM THE APP ON PURPOSE. `settingGroups: [app]` sets
+  # PRODUCT_NAME Frank and PRODUCT_BUNDLE_IDENTIFIER com.ttstv.frank, and an
+  # extension that carried the app's own bundle id would be refused at install
+  # with a message about a duplicate identifier. Its id is the app's with one
+  # component added, which is Apple's convention and the only shape automatic
+  # signing will make a profile for.
+  #
+  # NO RUST. There is deliberately no "Build Rust Code" phase here: the
+  # extension writes files and reads none of ours, so it needs neither libapp.a
+  # nor the crate -- and an extension that linked the app's static library
+  # would double a 100 MB binary for nothing.
+  FrankShare:
+    type: app-extension
+    platform: iOS
+    deploymentTarget: "15.0"
+    sources:
+      - path: FrankShare
+    info:
+      path: FrankShare/Info.plist
+      properties:
+        CFBundleDisplayName: Frank
+        CFBundleShortVersionString: 0.1.0
+        CFBundleVersion: "0.1.0"
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.share-services
+          # An Objective-C class name. `ShareViewController.swift` carries
+          # `@objc(ShareViewController)` so this string finds the class; without
+          # it the name is mangled and the row does nothing at all.
+          NSExtensionPrincipalClass: ShareViewController
+          NSExtensionAttributes:
+            # What puts Frank in the sheet. A file (the PDF), a web address
+            # (the article), or a selection -- one of each, because a spike
+            # that took ten files would be a queue design nobody asked for.
+            NSExtensionActivationRule:
+              NSExtensionActivationSupportsFileWithMaxCount: 1
+              NSExtensionActivationSupportsWebURLWithMaxCount: 1
+              NSExtensionActivationSupportsText: true
+    entitlements:
+      path: FrankShare/FrankShare.share.entitlements
+    settings:
+      base:
+        PRODUCT_NAME: FrankShare
+        PRODUCT_BUNDLE_IDENTIFIER: com.ttstv.frank.share
+        # The same team as the app, and written HERE for the same reason it is
+        # written in the app's settings: xcodegen rewrites the project from this
+        # file and a team picked by hand in Xcode's Signing tab is wiped by the
+        # next `xcodegen generate`.
+        DEVELOPMENT_TEAM: DC5G53NN4R
+        CODE_SIGN_STYLE: Automatic
+        ENABLE_BITCODE: false
+        ARCHS: [arm64]
+        EXCLUDED_ARCHS[sdk=iphoneos*]: x86_64
+        SWIFT_VERSION: "5.0"
+        ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES: false

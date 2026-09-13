@@ -57,6 +57,18 @@ fn main() {
         // is the MEASUREMENT of whether this build's team can carry the App
         // Group entitlement at all. `src/inbox.rs` is its only caller and holds
         // the whole of the why. No framework beyond Foundation.
+        // ios/FrankLookup.m -> `frank_lookup_present`, Apple's own Look Up
+        // panel for one word, as a half sheet over the reader (G-LOOKUP2,
+        // 13 Sep). Its own archive, for the reason above. `src/lookup.rs` is
+        // its only caller and holds the whole of the why -- including why
+        // `dictionaryHasDefinitionForTerm:` is NOT in it (31-95 ms a word).
+        // No framework beyond Foundation and UIKit, both already named below.
+        println!("cargo:rerun-if-changed=ios/FrankLookup.m");
+        cc::Build::new()
+            .file("ios/FrankLookup.m")
+            .flag("-fobjc-arc")
+            .flag("-fmodules")
+            .compile("franklookup");
         println!("cargo:rerun-if-changed=ios/FrankInbox.m");
         cc::Build::new()
             .file("ios/FrankInbox.m")
@@ -89,8 +101,17 @@ fn main() {
                 "dict_langs",
                 "dict_lookup",
                 "dict_remove",
+                // Apple's Look Up panel (G-LOOKUP2, 13 Sep): src/lookup.rs.
+                // TWO, and no per-word `lookup_has` -- that Bool is 31-95 ms.
+                "lookup_apple",
+                "lookup_apple_offered",
                 // the inbox (C2/K8, 13 Sep): src/inbox.rs, read-only
                 "inbox_list",
+                // ...and (G-INBOX, 13 Sep) the two that make it finishable:
+                // one item up to the paired Studio's own `POST /upload`, which
+                // parses it, and the item off this phone once it is there.
+                "inbox_send",
+                "inbox_drop",
             ]),
         ),
     )
