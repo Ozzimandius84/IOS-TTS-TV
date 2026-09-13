@@ -140,6 +140,7 @@ Pathspec commits only, `GIT_OPTIONAL_LOCKS=0` on every git call, `-F` with the m
 
 No other lane's file was staged in either repo (§4 lists what was found dirty and left). **HEAD did not move under the session in either repo** (TTSTV `9f20311` at the gate, `f7aeb54` mine; IOS `e32b316` at the gate, `7afd971` mine) — 0 moves, so nothing taken at the gate is stale. No `.git/*.lock` had to be moved aside; the bridge's "Operation not permitted" warnings on `.git/objects/*/tmp_obj_*` are the known unlink refusal and left **6 stray tmp_obj files in TTSTV and 14 in IOS TTS TV** for Osca to sweep — they are loose-object temporaries, not locks, and no git command fails on them.
 - **Miss, stated:** `f7aeb54` went in **without** the `Co-Authored-By` / `Claude-Session` trailers this repo uses. `7afd971` carries them. It cannot be amended and is not worth a rewrite.
+- **Second miss, the co-edit trap, stated:** between `7afd971` and `c89b734` the G-INBOX lane prepended its own report to this same `STATUS.md`, and `c89b734`'s pathspec **carried 74 of their lines in under my message** — `CLAUDE.md`'s own warning that *the pathspec rule guards against OTHER files; it cannot split ONE co-edited file* (`12d2068`, `4d4526b`). Nothing of theirs was lost or altered; only the attribution is wrong, and it is not worth a rewrite. `git status --short STATUS.md` was clean before this correction commit.
 
 ### 9. Status line
 `float · F0 built + F1 designed · 13 Sep · 794/794 in a desktop engine, K27 no, three presses and a ten-minute wait owed`
