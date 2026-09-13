@@ -4,6 +4,65 @@ Newest first. `REPORT_PROTOCOL.md` (TTSTV), nine headings. `README.md` says what
 
 ---
 
+## C2/K8 — the share target · 13 Sep (Cowork, bridge VM + container), phone `9b7fbaf` `a6e72e5` (no GPU, 0 GPU-minutes)
+
+**Status line:** `phone · C2/K8 spike built · 13 Sep · TWO roads into Frank, and they cost differently: "Copy to Frank" is three plist keys and no entitlement, the share extension is a second target + an App Group; both read by src/inbox.rs, which says which one a row came in by. Owed: xcodegen, cargo test, the build, and Osca's Safari press.`
+
+### 1. Built
+`src-tauri/src/inbox.rs` (new, 473 lines): `rows_flat` (the OS's flat `<Documents>/Inbox`), `rows_nested` (`<group>/inbox/<id>/` + `source.json`), `documents_inbox` / `group_inbox` / `root_why`, the `inbox_list` command (read-only — it moves, parses and deletes nothing), `log_at_start`, `GROUP_ID`/`GROUP_INBOX`/`DOCUMENTS_INBOX`/`SOURCE_JSON`.
+`src-tauri/ios/FrankInbox.m` (new, 101): `frank_inbox_documents`, `frank_inbox_group` — neither root is computable in Rust (a container is a per-install UUID), so both are asked of Foundation; a nil group container is a **result** (code 2), not a crash.
+`gen/apple/project.yml`: **road one** — `CFBundleDocumentTypes` (PDF / EPUB / plain text, `LSHandlerRank: Alternate`), `LSSupportsOpeningDocumentsInPlace: false`, `UIFileSharingEnabled: true`; **road two** — the `FrankShare` `app-extension` target (`com.apple.share-services`, one file / one web URL / one text selection) and `- target: FrankShare, embed: true, codeSign: true` on the app.
+`gen/apple/FrankShare/ShareViewController.swift` (new, 168): no UI; payload written `.part` then renamed, `source.json` (`url`, `title`, `time`, `kind`) written last.
+`gen/apple/FrankShare/FrankShare.entitlements` + `gen/apple/frank_iOS/frank_iOS.entitlements`: `com.apple.security.application-groups` = `group.com.ttstv.frank`.
+`build.rs` (the `frankinbox` archive + `"inbox_list"`), `capabilities/default.json` (`allow-inbox-list`), `src/lib.rs` (`mod inbox;`, one `generate_handler!` line, `inbox::log_at_start()` in `setup`).
+
+### 2. Verified — and how
+**unit, container** — `src/inbox.rs` lifted whole into a scratch crate (real `serde_json`, real `log`, the one `#[tauri::command]` attribute stripped; the extraction route of [[the-pairing-is-one-key]]): **9 passed, 0 failed, 0 warnings**. **5 RED controls, each one red:** dot files no longer skipped · a `.part` counted as a payload · rows unsorted · the title fallback removed · an off-iOS root pretending to exist. Two more on the group-id wiring test: a typo in one of the three files goes red; the pre-extension `<dict/>` state stays green.
+**unit, bridge VM** — `python3 -m pytest tests`: **95 passed, 4 failed, 1 skipped** — byte-identical to the count in the G-LANG entry, and all four fail at `HEAD` as well (checked by putting `HEAD`'s `project.yml` back and re-running: the same three `test_pair_link`/`test_phone_loop` failures, plus `test_phone_shell`'s `scratch26b` one, which is not mine). `capabilities/default.json` re-parses as JSON.
+**eyeballed / schema** — `project.yml` parses under `yaml.safe_load`; both targets and the dependency come back in the expected shape; every key used (`type: app-extension`, a per-target `deploymentTarget` string, `dependencies` `target`/`embed`/`codeSign`, `info.path` + `properties`, `entitlements.path`, `settings.base`) is XcodeGen's documented form, and the path-only `entitlements` has precedent in this very file.
+**NOT VERIFIED, and none of it should read as verified:** `xcodegen generate` (the round-trip gate), `cargo check` / `cargo test` on this crate, any build, and **anything at all on a phone or a simulator**. The bridge shell is a **Linux** VM — no Xcode, no `xcodegen`, no `swift`, no `cargo` (`uname -a`, `command -v` on all five). The Swift file has never been compiled by anything.
+
+### 3. Judgment calls
+- *The prompt says "build a share extension"; `plan-12-sep.md`'s own K8 row says "Info.plist document/URL types, a receiving handler"* → **both, in two commits.** Road one is three plist keys and **no entitlement** — it is the thing that can ship on the 13th under a free personal team, and it is what C2 means by *cheapest*. Road two is the row a person actually presses. Building only road two would have made the answer to K8 depend entirely on a signing question nobody has answered yet.
+- *An App Group on the app target could break a working build on ship day* → **the entire extension half is one commit (`a6e72e5`), revertable alone.** `git revert a6e72e5` puts `frank_iOS.entitlements` back to `<dict/>` and removes the target; road one and `inbox.rs` survive untouched. This is why `project.yml` was written twice rather than once.
+- *Where to get the two roots* → **Objective-C, not Rust.** `app_data_dir()`-relative guessing would have worked until it didn't; `NSSearchPathForDirectoriesInDomains` and `containerURLForSecurityApplicationGroupIdentifier:` are the answers, and the second one **answering nil is the measurement**.
+- *`inbox_list` with no page to call it* → registered properly (`build.rs`, capability, handler) but given **no init script**. A spike gets a log line; a `TTSTVHost.inbox` is a door someone else should design.
+- *`LSSupportsOpeningDocumentsInPlace`* → **`false`.** `true` hands Frank a security-scoped URL into another app's container that stops working when the sheet closes; an inbox has to be a copy.
+
+### 4. Boundary check
+`src-tauri/src/inbox.rs`, `src-tauri/ios/FrankInbox.m`, `src-tauri/src/lib.rs`, `src-tauri/build.rs`, `src-tauri/capabilities/default.json`, `src-tauri/gen/apple/project.yml`, `src-tauri/gen/apple/frank_iOS/frank_iOS.entitlements`, `src-tauri/gen/apple/FrankShare/{ShareViewController.swift,FrankShare.entitlements}`, and this file. This is the phone repo only; `TTSTV` is untouched apart from the one `PROMPTS/BOARD.md` Inbox line. `pull.rs`, the web shell and `TTSTV` proper were not opened. **Not a move or a re-wire — the single-folder confirmation stands.** `src/lib.rs` is named here because **G-TOPUP owns that file when it runs**: the change to it is three lines (`mod inbox;`, `inbox::inbox_list` in `generate_handler!`, `inbox::log_at_start();` in `setup`).
+**Found dirty and left alone:** `scratch-lookup/Resources/words.json`, `scratch-lookup/Sources/sweep.m`, `scratch-lookup/SweepProbe.xcodeproj/` (untracked, another session's).
+
+### 5. Footprint
+Nothing on the SSD; the SSD was not touched and the depot was not read. In the container: one scratch crate (`~/scratchpad/inboxcrate`, ~30 MB with `target/`), gone with the session. On the bridge VM: `pip install pytest` into the session's own `~/.local`. In the repo: `_to_delete/HEAD.lock.*` and `_to_delete/next-index-38.lock.*` — two locks the bridge could not unlink, moved after the commit they belonged to had landed; **`.git/objects/*/tmp_obj_*` residue the bridge also cannot unlink is still there and only Osca can clear it.** No models, no downloads, no venv.
+
+### 6. Requests to core / other modules
+None that block. For whoever drains the inbox (G-STUDIOPHONE, or C1/P8): the row shape is `{id, via, title, url, kind, at, file, bytes}` and `via` is `"share-extension"` or `"open-in"` — please take a row by `id` and leave the shape alone, or say so here first.
+
+### 7. Known gaps
+- **The signing question is not answered and this spike cannot answer it.** Whether a *free personal team* can carry `com.apple.security.application-groups` is the one fact road two stands on; nothing on the bridge can test it, and the web did not settle it either way. `frank_inbox_group` returning code 2 with `-- the entitlement is absent or unsigned` in the log is the designed way for Osca's first build to answer it in one line.
+- No UI, deliberately. Nothing drains the inbox; nothing parses a PDF; an item sits there forever.
+- `Cargo.lock` untouched (no new crate), but `cargo check` has never been run on this crate here — `inbox.rs`'s non-iOS half is what the container compiled, and the `extern "C"` block and the two `cfg(target_os = "ios")` roots have never been compiled by anything.
+- The share extension takes **one** attachment type per provider (the first match of pdf → epub → file-url → url → text), because Safari offers a PDF as both a file and an address and taking both writes the same bytes twice.
+- `tauri-plugin-deep-link`'s build script also rewrites `frank_iOS.entitlements`; it has only ever removed `associated-domains`, but it has not been watched with an App Group in that file.
+
+### 8. Next
+**Osca, four presses, in this order — and the first two are the gates:**
+1. `cd src-tauri/gen/apple && xcodegen generate` — does the `FrankShare` target survive, and does `frank_iOS/Info.plist` come out with `CFBundleDocumentTypes` in it? (`xcodegen` is the step nothing else runs.)
+2. `cd src-tauri && cargo test` (and the build).
+3. Build to the phone. **Read the log for the two `frank: inbox …` lines** — they say which roads exist on that build. If the group line says *the entitlement is absent or unsigned*, that is K8's answer and road two should be reverted (`git revert a6e72e5`); road one is unaffected.
+4. Safari → a PDF → share sheet. Look for **Frank** as a row (road two) and under *Copy to…* (road one). Then Files ▸ On My iPhone ▸ Frank ▸ Inbox.
+
+The single question that blocks K12: **does the personal team sign the App Group?** Then stop.
+
+### 8b. Commit check
+`9b7fbaf` (road one, 6 files) and `a6e72e5` (road two, 4 files) — every path on the commit line, `GIT_OPTIONAL_LOCKS=0` on every git call, `git add --` for the four new paths, no `-a`, no `-A`, no `--amend`. `a6e72e5` needed the lock-retry loop (first attempt died on `HEAD.lock`); the loop's second pass landed it, and the two stale locks are named in §5. `git show --stat HEAD` listed exactly the four files meant.
+
+### 9. Status line
+`phone · C2/K8 spike built · 13 Sep · two roads in (plist types, no entitlement · share extension, App Group), both read by src/inbox.rs; owed: xcodegen, cargo test, the build, Osca's Safari press`
+
+---
+
 ## G-LANG — languages are packs the phone adds · 11 Sep (Cowork, bridge VM + container), phone `c525c0a` `aa9eea2` · TTSTV `07433d6`…`b7e9518` (no GPU, 0 GPU-minutes)
 
 **Status line:** `dictionary · G-LANG built · 11 Sep · a whole language per SQLite file, looked up in Rust (dict.rs), added from Settings > Languages as one more pull job; owed: cargo test, the build, Osca's Add Latin press`
