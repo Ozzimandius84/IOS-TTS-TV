@@ -4,7 +4,7 @@ Newest first. `REPORT_PROTOCOL.md` (TTSTV), nine headings. `README.md` says what
 
 ---
 
-## G-INBOX — the inbox is a row, and the row finishes · 13 Sep (Cowork, bridge VM + container), phone `PENDING` (no GPU, 0 GPU-minutes)
+## G-INBOX — the inbox is a row, and the row finishes · 13 Sep (Cowork, bridge VM + container), phone `6f0f199` (no GPU, 0 GPU-minutes)
 
 **Status line:** `phone · G-INBOX built · 13 Sep · road one SHIPS: a PDF copied into Frank is a row on the shelf that says "Awaiting a parse", a tap sends it to the paired Studio's own POST /upload, and the row goes. Road two is OUT of project.yml and behind gen/apple/FrankShare/road-two.yml, which xcodegen never reads; nothing the 13th signs carries an App Group. THE ONE THING THAT BLOCKS THE LAST PRESS: /upload is not in studio/serve.py::_SYNC_STUDIO, so a paired phone gets a 404 today — and the row says exactly that in words. Owed: xcodegen, cargo test, the build, Osca's Safari press.`
 
@@ -63,7 +63,9 @@ For whoever drains the inbox next: the row shape is unchanged (`{id, via, title,
 Then stop.
 
 ### 8b. Commit check
-COMMITCHECK
+`6f0f199` (12 files) — every path on the commit line, `GIT_OPTIONAL_LOCKS=0` on every git call, `git add --` for the five new paths, no `-a`, no `-A`, no `--amend`. `git show --stat HEAD` lists exactly the twelve meant: `inbox.rs`, `lib.rs`, `build.rs`, `capabilities/default.json`, `project.yml`, `road-two.yml`, the two `*.share.entitlements`, the two `*.entitlements`, and the two tests. The first attempt died on `HEAD.lock` + `index.lock`; the lock-retry loop's second pass landed it, and **eight** lock files are named in `_to_delete/` (`index.lock.*` ×2, `next-index-*.lock` ×6) for Osca to clear, along with the standing `.git/objects/*/tmp_obj_*` residue this shell cannot unlink. No lock was left behind: `.git/*.lock` is empty as of the last check.
+**AND THE CO-EDITED-FILE TRAP FIRED AGAINST THIS ENTRY, THE OTHER WAY ROUND.** I wrote this report into `STATUS.md` and, before I committed anything, another lane's pathspec commit — **`c89b734` "FLOAT: the Inbox line, and the two hashes into §8b"** — took `STATUS.md` whole from the working tree and carried this entire G-INBOX entry under its message. Nothing was lost or changed; `git diff -- STATUS.md` was empty because HEAD already held it. That is exactly the `design/ship.py` case `CLAUDE.md` names, and C2/K8's own §8b reported it firing in the other direction eight hours earlier. **The rule that catches it is still `git status --short <the co-edited file>` immediately before the commit, not before the edit** — and for a file this size the honest addition is: when your entry is long, commit it FIRST and by itself.
+`STATUS.md` was therefore committed separately, with only §8b and the commit hash filled in.
 
 ### 9. Status line
 `phone · G-INBOX built · 13 Sep · the inbox is a row that says "Awaiting a parse" and a tap that sends it to Studio's POST /upload; road two out of project.yml and behind road-two.yml; /upload is not in the phone's allow-list yet and the row says so; owed: xcodegen, cargo test, the build, Osca's Safari press`
