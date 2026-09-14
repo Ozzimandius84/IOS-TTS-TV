@@ -173,12 +173,16 @@ paths belonging to other lanes — `scratch-lookup/**` (five),
 Every commit here is by explicit file path; the four new files were
 `git add -- <one path>`ed first. No `.lock` file was moved.
 
-**Locks moved, for Osca to clear.** Three, all older than 3 s and all left by
-this lane's own commits, into each repo's `_to_delete/`:
-`TTSTV_IOS/.git/HEAD.lock`, `TTSTV_IOS/.git/next-index-11.lock`,
-`TTSTV/.git/next-index-40.lock`. The INTENT.md commit took three passes of the
-retry loop because of the second pair; `git log -1` in both repos is this
-lane's commit and `git status --short` on every path is clean.
+**Locks moved, for Osca to clear.** Through this bridge **every** commit leaves
+a `HEAD.lock` and a `next-index-N.lock` behind it -- git says "unable to unlink"
+and the commit succeeds anyway -- so the count is two per commit and not a
+number worth carrying: all of them, older than 3 s and all this lane's own, are
+moved into each repo's `_to_delete/` (`TTSTV_IOS/.git/HEAD.lock`,
+`next-index-{11,7}.lock`, and in `TTSTV` `next-index-40.lock`), including the
+pair this very commit will leave. The INTENT.md commit took three passes of the
+retry loop because of them. `git log -1` in both repos is this lane's commit,
+`git status --short` on every path of mine is clean, and no other lane's file
+was staged.
 
 **And a trap, paid for once and written down: `/tmp` on the bridge VM is shared
 between lanes.** This report was first written to `/tmp/report.md`; the
