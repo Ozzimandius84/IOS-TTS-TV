@@ -78,7 +78,7 @@ var DRIVE = {
   UPLOAD: "https://www.googleapis.com/upload/drive/v3",
   FOLDER: "application/vnd.google-apps.folder",
   ROOT: "Frank", LIBRARY: "library.json", POSITIONS: "positions.json", SETTINGS: "settings.json",
-  MARKS: "marks", BOOKS: "books",
+  MARKS: "marks", BOOKS: "books", DEVICES: "devices",
 };
 var GOOGLE_TOKEN_KEY = "ttstv.sync.google";           // {access, refresh, expires, clientId} -- this file's only store
 var GOOGLE_REDIRECT_KEY = "ttstv.sync.googleRedirect"; // the host writes the redirect URL here; this file takes it
@@ -354,7 +354,7 @@ function driveClient(token, fetchFn) {
 /* `studio/drive.py::Folder`, in JS: `Frank/` found or made, its root
  * listed once, the ledgers read and written by name. */
 function driveFolder(drive) {
-  var root = null, names = {}, marksDir = null, marksNames = null;
+  var root = null, names = {}, marksDir = null, marksNames = null, devDir = null, devNames = null;
   function open() {
     return drive.list("name='" + DRIVE.ROOT + "' and mimeType='" + DRIVE.FOLDER + "' and 'root' in parents and trashed=false")
       .then(function (found) {
@@ -401,8 +401,17 @@ function driveFolder(drive) {
       .then(function (by) { marksNames = by; return marksDir; }))
       .then(function (id) { return writeJSON(slug + ".json", rec, id, marksNames); });
   }
+  /* `devices/<id>.json` (G-DELETE): what THIS device holds, so the Mac can
+   * tell a superseded folder nobody is reading from one somebody is. Written
+   * like a marks record -- the folder's children read once, so a second sync
+   * updates the file instead of making a second one of the same name. */
+  function writeDevice(id, rec) {
+    return (devNames ? Promise.resolve(devDir) : dir(DRIVE.DEVICES).then(function (fid) { devDir = fid; return drive.children(fid); })
+      .then(function (by) { devNames = by; return devDir; }))
+      .then(function (fid) { return writeJSON(id + ".json", rec, fid, devNames); });
+  }
   var api = { open: open, readJSON: readJSON, writeJSON: writeJSON, library: library, marks: marks, writeMarks: writeMarks,
-              get root() { return root; } };
+              dir: dir, writeDevice: writeDevice, get root() { return root; } };
   return api;
 }
 
@@ -518,6 +527,43 @@ function syncSettingsLedger(folder, store) {
   });
 }
 
+/* THE FOURTH LEDGER (G-DELETE): what the Mac deleted comes off this device,
+ * and what this device holds is written down for the Mac.
+ *
+ * `devices/<id>.json` is the one thing that lets a SUPERSEDED folder be
+ * pruned: `studio/drive.py::prunable` trashes a folder no device still lists
+ * at that hash, and with no record at all it prunes nothing. The record is
+ * this device's id and its books -- slug and hash, nothing else; a position,
+ * a mark and a setting each have their own ledger and none of them is here.
+ *
+ * `o.rows` is `library.json`'s books when the caller has just read them.
+ * Never throws. Resolves {removed, listed, why}. */
+function syncWriteDevice(folder, device, have, skip) {
+  if (!device) return Promise.resolve(0);
+  var kept = (have || []).filter(function (b) { return b && b.slug && (skip || []).indexOf(b.slug) < 0; });
+  return folder.writeDevice(String(device), {
+    version: 1, id: String(device), at: Date.now(),
+    books: kept.map(function (b) { return { slug: b.slug, hash: b.hash || null }; }),
+  }).then(function () { return kept.length; });
+}
+
+function syncShelfLedger(folder, store, o) {
+  o = o || {};
+  var out = { removed: [], listed: 0, why: null };
+  var device = o.device || (store && store.deviceId && store.deviceId());
+  return (o.rows ? Promise.resolve({ books: o.rows }) : folder.library()).then(function (lib) {
+    var rows = (lib && lib.books) || [];
+    return syncHave(o, o.host || global.TTSTVHost).then(function (have) {
+      return syncApplyRemovals(rows, have, o).then(function (r) {
+        out.removed = r.removed;
+        out.why = r.why;
+        if (o.list === false) return out;
+        return syncWriteDevice(folder, device, have, out.removed).then(function (n) { out.listed = n; return out; });
+      });
+    });
+  }).then(function () { return out; }, function (e) { out.why = out.why || whyOf(e); return out; });
+}
+
 function runDriveSync(remote, o) {
   o = o || {};
   var say = o.say || function () {};
@@ -533,7 +579,7 @@ function runDriveSync(remote, o) {
   // G-SYNCBG: with the host's pull the books are PLANNED here and handed over
   // after the ledgers; without it (every host but the phone) nothing changes
   var pull = syncHostPull({ sync: o.pull });
-  var pullRows = null;
+  var pullRows = null, libRows = [];
   var drive = driveClient(remote.token, fetchFn);
   var folder = driveFolder(drive);
   say("Connecting to Drive…");
@@ -548,7 +594,12 @@ function runDriveSync(remote, o) {
     say("Asking what Drive has…");
     return folder.library();
   }).then(function (lib) {
-    var rows = (lib.books || []).filter(function (b) { return b && typeof b.slug === "string" && typeof b.hash === "string" && !b.superseded; });
+    libRows = lib.books || [];
+    return syncShelfLedger(folder, store, { rows: libRows, bundle: bundle, href: href, device: device,
+                                            host: o.host, list: false })
+      .then(function (sh) { out.removed = sh.removed; return lib; });
+  }).then(function (lib) {
+    var rows = libRows.filter(function (b) { return b && typeof b.slug === "string" && typeof b.hash === "string" && !b.superseded && !b.removed; });
     out.books = rows.length;
     if (pull) { pullRows = rows; return null; }
     if (!rows.length) return null;
@@ -591,6 +642,12 @@ function runDriveSync(remote, o) {
     say("Handing the books to Frank…");
     return syncHandOff(pull, "drive", syncDriveAuth, pullRows || [], { bundle: bundle, href: href, trigger: "press" })
       .then(function (h) { out.handed = h.handed; out.refused = h.refused; out.status = h.status; });
+  }).then(function () {
+    // what this device holds, written LAST -- after the pull, so the record
+    // the Mac prunes against names the books that arrived in this very press
+    return syncHave({ bundle: bundle, href: href }, o.host || global.TTSTVHost)
+      .then(function (have) { return syncWriteDevice(folder, device, have, out.removed || []); })
+      .then(function (n) { out.listed = n; }, function () { out.listed = 0; });
   }).then(function () {
     out.ok = true;
     out.calls = drive.calls;
@@ -697,8 +754,9 @@ function syncJob(transport, auth, rows, have, o) {
   var got = {};
   (have || []).forEach(function (b) { if (b && b.slug) got[b.slug + "@" + b.hash] = true; });
   var order = [], bySlug = {};
+  var free = syncFreed(o);
   (rows || []).forEach(function (r) {
-    if (!r || typeof r.slug !== "string" || typeof r.hash !== "string" || r.superseded || !Array.isArray(r.files)) return;
+    if (!r || typeof r.slug !== "string" || typeof r.hash !== "string" || r.superseded || r.removed || !Array.isArray(r.files)) return;
     if (!(r.slug in bySlug)) order.push(r.slug);
     bySlug[r.slug] = r;
   });
@@ -706,6 +764,10 @@ function syncJob(transport, auth, rows, have, o) {
   order.forEach(function (slug) {
     var r = bySlug[slug];
     if (got[r.slug + "@" + r.hash]) return;
+    // G-DELETE: a book this device freed is not pulled back two seconds
+    // later. It stays on the shelf as "Not on this device" and one press
+    // (`unfreeBook`) asks for it again.
+    if (free[slug]) return;
     var b = syncJobBook(r, transport, o);
     if (b.why) refused.push(b); else books.push(b);
   });
@@ -766,6 +828,67 @@ function syncTopUpJob(transport, auth, rows, have, o) {
   });
   if (!books.length) return null;
   return { transport: transport, trigger: o.trigger || "press", kind: "topup", auth: auth || {}, books: books };
+}
+
+/* ============================================ WHAT THE MAC DELETED (G-DELETE)
+ * Osca, 14 Sep: *"Deleted on the Mac -> deleted on the phone at its next
+ * sync."* A tombstone is a row in `library.json` carrying `removed: {by, at}`
+ * with no files left; this device honours it by taking the book off its own
+ * shelf. The rule is import.js's (`TTSTVBundle.removals`) when the page has
+ * it, its own copy when it has not -- the app's ask lands on whatever page
+ * is showing, exactly as the top-up's does, and
+ * `library/tests/test_sync_delete.py` holds the two answers equal.
+ *
+ * The phone's OWN delete is the other verb and is not here: `freeBook` in
+ * import.js frees the copy, writes the slug into this device's freed list,
+ * and tells Drive nothing. The Mac is never touched. */
+function syncRemovals(rows, have, o) {
+  var B = (o && o.bundle !== undefined && o.bundle !== null) ? o.bundle : global.TTSTVBundle;
+  if (B && typeof B.removals === "function") return B.removals(rows, have);
+  var mine = {}, live = {}, seen = {}, out = [];
+  (have || []).forEach(function (b) { if (b && b.slug) mine[b.slug] = b; });
+  (rows || []).forEach(function (r) { if (r && r.slug && !r.removed && !r.superseded) live[r.slug] = true; });
+  (rows || []).forEach(function (r) {
+    if (!r || typeof r.slug !== "string" || !r.removed || live[r.slug] || seen[r.slug] || !mine[r.slug]) return;
+    seen[r.slug] = true;
+    out.push({ slug: r.slug, hash: mine[r.slug].hash || null,
+               by: r.removed.by || null, at: Number(r.removed.at) || null });
+  });
+  return out;
+}
+
+/* This device's freed list: import.js's when the page has it, `o.freed` in a
+ * test, `{}` where there is neither. */
+function syncFreed(o) {
+  o = o || {};
+  if (o.freed) return o.freed;
+  var B = o.bundle !== undefined && o.bundle !== null ? o.bundle : global.TTSTVBundle;
+  if (B && typeof B.freed === "function") { try { return B.freed() || {}; } catch (e) { return {}; } }
+  return {};
+}
+
+/* Take the tombstoned books off this device. The host's door when there is
+ * one (the app owns the folders), import.js's `removeBook` otherwise.
+ * Resolves {removed: [slug], why} and never rejects: a phone that could not
+ * delete one book must still merge its position. */
+function syncApplyRemovals(rows, have, o) {
+  o = o || {};
+  var out = { removed: [], why: null };
+  var list = syncRemovals(rows, have, o);
+  if (!list.length) return Promise.resolve(out);
+  var door = (o.host || global.TTSTVHost || {}).books;
+  var B = o.bundle !== undefined && o.bundle !== null ? o.bundle : global.TTSTVBundle;
+  var drop = door && typeof door.remove === "function" ? function (slug) { return Promise.resolve(door.remove(slug)); }
+    : (B && typeof B.removeBook === "function" ? function (slug) { return Promise.resolve(B.removeBook(slug)); } : null);
+  if (!drop) { out.why = "this page cannot remove books (library/import.js is not loaded)"; return Promise.resolve(out); }
+  var i = 0;
+  function next() {
+    if (i >= list.length) return out;
+    var slug = list[i++].slug;
+    return drop(slug).then(function () { out.removed.push(slug); return next(); },
+                           function (e) { out.why = whyOf(e); return next(); });
+  }
+  return Promise.resolve(next()).then(function () { return out; }, function () { return out; });
 }
 
 /* Hand a planned job to the app: the books, then the top-ups, which WAIT
@@ -954,7 +1077,7 @@ function syncPlan(host, o) {
  * tell. Resolves {ok, marks, why}. */
 function syncLedgers(o) {
   o = o || {};
-  var out = { ok: false, marks: 0, why: null };
+  var out = { ok: false, marks: 0, why: null };   // + removed/listed once the shelf ledger has run
   var tok = syncRead(GOOGLE_TOKEN_KEY);
   if (!(tok && tok.refresh && tok.clientId)) {
     out.why = "this device is not signed in to Drive";
@@ -976,6 +1099,10 @@ function syncLedgers(o) {
   }).then(function () {
     return syncSettingsLedger(folder, store);
   }).then(function () {
+    return syncShelfLedger(folder, store, Object.assign({ device: device }, o));
+  }).then(function (sh) {
+    out.removed = sh.removed;
+    out.listed = sh.listed;
     out.ok = true;
     return out;
   }, function (e) {
@@ -991,7 +1118,9 @@ function syncLedgers(o) {
  * while this page is still talking to Drive about a position map, instead of
  * three round-trips after it. Never throws. */
 function syncAuto(host, o) {
-  o = o || {};
+  // the host travels in `o` too: `syncLedgers` -> `syncShelfLedger` asks the
+  // app's door what is here and takes the deleted books off it (G-DELETE)
+  o = Object.assign({ host: host }, o || {});
   var pull = syncHostPull(host);
   if (!pull) return Promise.resolve(null);
   return Promise.resolve(pull.status()).then(function (st) {
@@ -1020,6 +1149,9 @@ global.TTSTVDrive = {
   syncPlanLan: syncPlanLan, syncPlanDrive: syncPlanDrive, syncPlan: syncPlan, syncAuto: syncAuto,
   // the top-up (G-TOPUP): what a row gained at the same hash, as a job of its own
   SYNC_TOPUP: SYNC_TOPUP, syncTopUps: syncTopUps, syncTopUpJob: syncTopUpJob, syncStartJob: syncStartJob,
+  // what the Mac deleted, and what this device holds (G-DELETE)
+  syncRemovals: syncRemovals, syncFreed: syncFreed, syncApplyRemovals: syncApplyRemovals,
+  syncShelfLedger: syncShelfLedger, syncWriteDevice: syncWriteDevice,
   // the three ledgers, one at a time -- and on a run nobody pressed
   SYNC_MARG_PREFIX: SYNC_MARG_PREFIX, SYNC_LIB_KEY: SYNC_LIB_KEY,
   SYNC_SETTINGS_KEY: SYNC_SETTINGS_KEY, SYNC_DEVICE_KEY: SYNC_DEVICE_KEY,

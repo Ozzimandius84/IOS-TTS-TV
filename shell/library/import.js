@@ -659,6 +659,83 @@ const TTSTVBundle = (() => {
     return out;
   }
 
+  /* ===================================== A BOOK THAT HAS GONE (G-DELETE)
+   *  Osca, 14 Sep: *"Deleted on the Mac -> deleted on the phone at its next
+   *  sync. Deleted on the phone -> the phone frees its copy and the book
+   *  stays pullable ('Not on this device'); the Mac is never touched."*
+   *  Two verbs, and the difference between them is one local file.
+   *
+   *  `removals` is the Mac's half: a row that carries `removed` is a
+   *  TOMBSTONE, and a book installed here whose row is a tombstone goes.
+   *  Pure, so the planner and the test can ask it the same question. A slug
+   *  that ALSO has a live row is a book that came back (`studio/drive.py`
+   *  drops the tombstone when it re-pushes, but a phone may read a
+   *  `library.json` written between the two): the live row wins, and
+   *  nothing is deleted on the strength of a row that has been answered.
+   *
+   *  `freeBook` is the phone's half: the copy goes and the slug is written
+   *  into the FREED list, which is this device's own and reaches nothing
+   *  else. The pull skips a freed slug -- otherwise the next sync, two
+   *  seconds later, would put the book straight back -- and `unfreeBook`
+   *  is the press that asks for it again. The Mac is never told. */
+  const FREED_KEY = "ttstv.reader.freed";          // {slug: {at, hash}} -- this device only
+
+  function freedRead() {
+    try {
+      const ls = typeof globalThis !== "undefined" && globalThis.localStorage;
+      const rec = ls && JSON.parse(ls.getItem(FREED_KEY) || "null");
+      return rec && typeof rec === "object" && !Array.isArray(rec) ? rec : {};
+    } catch (e) { return {}; }
+  }
+
+  function freedWrite(rec) {
+    try {
+      const ls = typeof globalThis !== "undefined" && globalThis.localStorage;
+      if (ls) ls.setItem(FREED_KEY, JSON.stringify(rec));
+    } catch (e) { /* a page with no storage frees the copy and remembers nothing */ }
+    return rec;
+  }
+
+  /** What this device freed, `{slug: {at, hash}}`. */
+  function freed() { return freedRead(); }
+
+  /** Free this device's copy: the files go, the book stays pullable. */
+  async function freeBook(slug, hash) {
+    const gone = await removeBook(slug);
+    const rec = freedRead();
+    rec[slug] = { at: Date.now(), hash: hash || null };
+    freedWrite(rec);
+    return gone;
+  }
+
+  /** Ask for it again: the slug leaves the freed list and the next sync
+   *  pulls it like any book this device lacks. */
+  function unfreeBook(slug) {
+    const rec = freedRead();
+    if (!(slug in rec)) return false;
+    delete rec[slug];
+    freedWrite(rec);
+    return true;
+  }
+
+  /** Pure: the books installed here that the Mac has deleted --
+   *  `[{slug, hash, by, at}]`, in the rows' order. */
+  function removals(rows, installed) {
+    const mine = new Map();
+    for (const b of installed || []) if (b && b.slug) mine.set(b.slug, b);
+    const live = new Set();
+    for (const r of rows || []) if (r && r.slug && !r.removed && !r.superseded) live.add(r.slug);
+    const out = [], seen = new Set();
+    for (const r of rows || []) {
+      if (!r || typeof r.slug !== "string" || !r.removed || live.has(r.slug) || seen.has(r.slug)) continue;
+      if (!mine.has(r.slug)) continue;
+      seen.add(r.slug);
+      out.push({ slug: r.slug, hash: mine.get(r.slug).hash || null,
+                 by: r.removed.by || null, at: Number(r.removed.at) || null });
+    }
+    return out;
+  }
+
   // ------------------------------------------------------------- the shelf
   /** What is on the device: one row per book cache, read from the little
    *  meta entry written at import rather than by re-parsing a 2 MB
@@ -694,6 +771,7 @@ const TTSTVBundle = (() => {
     isPayload, cacheName, parseCacheName, booksBase, bookUrl,
     validateBook, validateMeta, walkWordIds, bookHash, planBundle, contentType,
     importBook, importZip, importFiles, listInstalled, removeBook, estimate, fmtBytes, topUps, TOPUP,
+    FREED_KEY, freed, freeBook, unfreeBook, removals,
     CacheStore, HostStore, storeFor, useStore,
   };
 })();
