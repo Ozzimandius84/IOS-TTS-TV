@@ -75,7 +75,7 @@ The question that blocks nothing: none.
 Pathspec commits only (`git commit -F <msg in the session home> -- <paths>`), `GIT_OPTIONAL_LOCKS=0` on every git call, no `-a`, no `-A`, no `--amend`; the new test `git add --`ed first. `git show --stat HEAD` listed exactly the files meant, every time.
 - TTSTV `9a8fb74` (2: `library/drive.js`, `library/tests/test_sync_topup.py`) · this report · one line in `PROMPTS/INTENT.md`.
 - Phone `4b8f5f4` (3: `src-tauri/src/lib.rs`, `src-tauri/src/pull.rs`, `tests/test_sync_pull.py`) · `f045706` (9: `shell/` ×8 + `shell.manifest.json`) · this report.
-**Locks moved for Osca to clear** — two per commit, as this repo's STATUS.md said on 14 Sep: TTSTV `_to_delete/HEAD.lock.*`, `next-index-40.lock.*`; phone `_to_delete/HEAD.lock.*`, `next-index-8.lock.*` (twice). Every commit also left unlinkable `.git/objects/*/tmp_obj_*` — git's own, harmless, and not removable through the bridge.
+**Locks moved for Osca to clear** — **two per commit**, as this repo's STATUS.md said on 14 Sep, and a report's own commit makes two more, so the list is a glob and not a roll-call: `_to_delete/HEAD.lock.*` and `_to_delete/next-index-*.lock.*` in BOTH repos (TTSTV: next-index 40 twice and 6; phone: 8 twice and 7). Every commit also left unlinkable `.git/objects/*/tmp_obj_*` — git's own, harmless, and not removable through the bridge.
 
 ### 9. Status line
 `library · G-TOPUP code done · 14 Sep · a topup job writes one file INTO an installed book and flips its row (lib.rs's book_topup_*, pull.rs's TopUp); jpg is image/jpeg; an auto run merges marks, positions and settings; owed: clean/ when the reader lane lands, cargo test, and Osca's two presses`
