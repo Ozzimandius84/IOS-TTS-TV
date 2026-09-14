@@ -81,15 +81,29 @@ def test_the_three_commands_are_declared_granted_handled_and_injected():
 def test_the_runner_writes_only_through_the_book_doors_own_functions():
     """`pull.rs` never names a path of its own: every file goes to
     `book_write_from` (which shares `book_dest` with `book_put`), every
-    commit is `book_commit`, the resume asks `book_have`."""
+    commit is `book_commit`, the resume asks `book_have`. G-TOPUP's door
+    (14 Sep) is the same rule with four more names -- `book_topup_*`, in
+    lib.rs beside them, because the books folder is the book door's."""
     pull = PULL_RS.read_text("utf-8")
     body = pull.split("#[cfg(test)]")[0]
-    assert "use crate::{book_commit, book_have, book_hash_ok, book_installed, book_rel, book_slug_ok, book_write_from, json_field};" in body
+    imported = re.search(r"use crate::\{(.*?)\};", body, re.S)
+    assert imported, "pull.rs takes the book door's functions by name"
+    names = sorted(n.strip() for n in imported.group(1).replace("\n", " ").split(",") if n.strip())
+    assert names == ["book_commit", "book_hash_ok", "book_have", "book_installed", "book_rel",
+                     "book_slug_ok", "book_topup_commit", "book_topup_flag", "book_topup_have",
+                     "book_topup_names", "book_topup_write", "book_write_from", "json_field"], names
     for banned in ("fs::write", "File::create", "create_dir", "remove_dir", "fs::rename"):
         assert banned not in body, f"pull.rs writes on its own: {banned}"
     lib = LIB_RS.read_text("utf-8")
     assert re.search(r"fn book_write\(.*?\n    let dst = book_dest\(books, slug, hash, rel\)\?;", lib, re.S)
     assert re.search(r"fn book_write_from\(.*?\n    let dst = book_dest\(books, slug, hash, rel\)\?;", lib, re.S)
+    # the top-up writes INTO the installed folder and never opens a `.part/`
+    topup = re.search(r"fn book_topup_write\(.*?\n\}", lib, re.S).group(0)
+    assert "book_topup_dest(books, slug, hash, rel)?" in topup and "book_part" not in topup
+    assert re.search(r"fn book_topup_dest\(.*?book_live\(books, slug, hash\)\?;", lib, re.S)
+    assert 'const BOOK_TOPUP: [(&str, &str); 1] = [("cover.jpg", "has_cover")];' in lib, \
+        "import.js's TOPUP map, rel for rel"
+    assert 'Some("jpg") => "image/jpeg",' in lib, "and a cover is served as a picture"
     # the only hosts it reaches
     assert 'pub const DRIVE_FILES: &str = "https://www.googleapis.com/drive/v3/files/";' in body
     assert 'pub const GOOGLE_TOKEN: &str = "https://oauth2.googleapis.com/token";' in body

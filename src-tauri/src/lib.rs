@@ -1115,6 +1115,131 @@ fn book_commit(books: &Path, slug: &str, hash: &str, meta_json: &str) -> Result<
     Ok(replaced)
 }
 
+// ------------------------------------------------------------ the top-up
+//
+// G-TOPUP (Osca, 14 Sep). Everything above writes a version into `.part/`
+// and swaps the folder in. This writes ONE file INTO the folder that is
+// already there -- because a cover changes no word id, so it arrives at the
+// SAME (slug, hash), and a `.part/` holding only a cover would REPLACE the
+// book with a folder of one file. The pull drives it through
+// `pull::TopUp`, which is these four functions and nothing else.
+
+/// `rel -> the flag it sets on the row`: `library/import.js`'s own `TOPUP`
+/// map (`{ "cover.jpg": "has_cover" }`), rel for rel. An ALLOWLIST, and the
+/// whole of it -- this is the one verb that writes into a book already on
+/// the shelf, so what it may write is a list of names and not a rule.
+const BOOK_TOPUP: [(&str, &str); 1] = [("cover.jpg", "has_cover")];
+
+fn book_topup_flag(rel: &str) -> Option<&'static str> {
+    BOOK_TOPUP.iter().find(|(r, _)| *r == rel).map(|(_, f)| *f)
+}
+
+/// The allowlist, for a refusal's sentence.
+fn book_topup_names() -> String {
+    BOOK_TOPUP.iter().map(|(r, _)| *r).collect::<Vec<_>>().join(", ")
+}
+
+/// The installed folder, when `slug` is here AT `hash`. Two questions, and
+/// they are asked again at the commit rather than remembered: a book that
+/// moved on between the plan and the run is refused in a sentence and
+/// nothing is touched.
+fn book_live(books: &Path, slug: &str, hash: &str) -> Result<PathBuf, String> {
+    book_slug_ok(slug)?;
+    book_hash_ok(hash)?;
+    match book_installed(books, slug) {
+        Some(h) if h == hash => Ok(books.join(slug)),
+        Some(h) => Err(format!(
+            "{slug} is here at {h}, not {hash} -- a top-up adds to the version this device has"
+        )),
+        None => Err(format!("{slug} is not on this device -- a top-up adds to a book that is here")),
+    }
+}
+
+/// Where one topped-up file goes: inside the installed folder, its name on
+/// the allowlist, every rule [`book_rel`] keeps for the pulled ones.
+fn book_topup_dest(books: &Path, slug: &str, hash: &str, rel: &str) -> Result<PathBuf, String> {
+    let live = book_live(books, slug, hash)?;
+    if book_topup_flag(rel).is_none() {
+        return Err(format!("{rel:?} is not a file a top-up may add ({})", book_topup_names()));
+    }
+    Ok(live.join(book_rel(rel)?))
+}
+
+/// A name beside the destination that [`route`] 404s and [`book_rows`]
+/// skips, because every dot name under a book is Frank's own.
+fn book_topup_aside(live: &Path) -> PathBuf {
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_nanos())
+        .unwrap_or(0);
+    live.join(format!(".topup-{nanos}"))
+}
+
+/// How many bytes of `rel` the installed book already holds -- the resume's
+/// question, asked of the live folder because that is where a top-up's file
+/// goes. So a cover that arrived on an earlier run is paid for once.
+fn book_topup_have(books: &Path, slug: &str, hash: &str, rel: &str) -> Option<u64> {
+    let dst = book_topup_dest(books, slug, hash, rel).ok()?;
+    fs::metadata(dst).ok().filter(|m| m.is_file()).map(|m| m.len())
+}
+
+/// One file, streamed in and then RENAMED into place inside the book's own
+/// folder -- so a stream that breaks leaves a dot-file nothing serves, and
+/// never half a cover under the name the reader asks for.
+fn book_topup_write(books: &Path, slug: &str, hash: &str, rel: &str, src: &mut dyn std::io::Read) -> Result<u64, String> {
+    let dst = book_topup_dest(books, slug, hash, rel)?;
+    let live = dst.parent().unwrap_or(books).to_path_buf();
+    fs::create_dir_all(&live).map_err(|e| io_why("create", &live, e))?;
+    let tmp = book_topup_aside(&live);
+    let mut out = fs::File::create(&tmp).map_err(|e| io_why("write", &tmp, e))?;
+    let n = std::io::copy(src, &mut out).map_err(|e| {
+        let _ = fs::remove_file(&tmp);
+        format!("{rel}: {e}")
+    })?;
+    drop(out);
+    fs::rename(&tmp, &dst).map_err(|e| {
+        let _ = fs::remove_file(&tmp);
+        io_why("install", &dst, e)
+    })?;
+    Ok(n)
+}
+
+/// THE COMMIT, and it is one field of one file: the installed row gains
+/// `has_cover: true` for every allowlisted name the folder now really holds.
+/// The job's own row is NOT written -- the row here is THIS DEVICE'S,
+/// written when the book was pulled, and a row planned from the Mac's
+/// `library.json` could only be older. Read, one flag, back by a rename.
+/// Nothing was replaced, so the answer is empty.
+fn book_topup_commit(books: &Path, slug: &str, hash: &str) -> Result<Vec<String>, String> {
+    let live = book_live(books, slug, hash)?;
+    let meta = live.join(BOOK_META);
+    let text = fs::read_to_string(&meta).map_err(|e| io_why("read", &meta, e))?;
+    let mut row: serde_json::Value =
+        serde_json::from_str(&text).map_err(|e| format!("{slug}: the row on this device is not JSON ({e})"))?;
+    let Some(obj) = row.as_object_mut() else {
+        return Err(format!("{slug}: the row on this device is not a JSON object"));
+    };
+    let mut set = Vec::new();
+    for (rel, flag) in BOOK_TOPUP {
+        if live.join(rel).is_file() {
+            obj.insert(flag.to_string(), serde_json::Value::Bool(true));
+            set.push(flag);
+        }
+    }
+    if set.is_empty() {
+        return Err(format!("{slug}: nothing was topped up -- a row comes after its file"));
+    }
+    let out = serde_json::to_string(&row).map_err(|e| format!("{slug}: {e}"))?;
+    let tmp = book_topup_aside(&live);
+    fs::write(&tmp, out).map_err(|e| io_why("write", &tmp, e))?;
+    fs::rename(&tmp, &meta).map_err(|e| {
+        let _ = fs::remove_file(&tmp);
+        io_why("install", &meta, e)
+    })?;
+    log::info!("frank: topup {slug}@{hash} -- {set:?} on the row");
+    Ok(Vec::new())
+}
+
 /// `book_list`'s body: `(slug, row text, hash)` for every installed book,
 /// in slug order -- the row as the page wrote it, `None` when a folder has
 /// no readable one (the command then answers a `broken` row, as the Cache
@@ -1711,6 +1836,12 @@ fn content_type(path: &Path) -> &'static str {
         Some("txt") => "text/plain; charset=utf-8",
         Some("ogg") => "audio/ogg",
         Some("m4a") => "audio/mp4",
+        // G-TOPUP, 14 Sep: `cover.jpg` went out of here as
+        // `application/octet-stream`. WebKit's decoder sniffs the bytes and
+        // usually draws it anyway, but "usually" is not a thing to ship a
+        // shelf on, and an octet-stream is what a browser offers to
+        // download rather than draw. `parser/cover.py` writes one name.
+        Some("jpg") => "image/jpeg",
         _ => "application/octet-stream",
     }
 }
@@ -3392,6 +3523,9 @@ mod book_tests {
         assert_eq!(content_type(Path::new("book-data.js")), "text/javascript; charset=utf-8");
         assert_eq!(content_type(Path::new("audio/c001.opus")), "audio/ogg");
         assert_eq!(content_type(Path::new("audio/c001.m4a")), "audio/mp4");
+        // G-TOPUP, 14 Sep: a cover is a picture and says so
+        assert_eq!(content_type(Path::new("cover.jpg")), "image/jpeg");
+        assert_eq!(content_type(Path::new("cover.webp")), "application/octet-stream");
     }
 
     /// The wiring: four commands, declared (build.rs), granted (the

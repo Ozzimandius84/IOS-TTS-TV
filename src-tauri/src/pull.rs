@@ -42,6 +42,13 @@
 //! waits its turn ([`Pull::enqueue`]) and runs when the pull ends, on the
 //! same thread -- an Add pressed during the auto-sync is not refused.
 //!
+//! AND A COVER (G-TOPUP, 14 Sep): a job whose `kind` is `"topup"` is the
+//! same run through a third [`Door`] -- [`TopUp`], which writes ONE
+//! allowlisted file (`cover.jpg`) INTO the book already installed at that
+//! hash and flips its row's flag. It exists because the rule that makes the
+//! run above cheap -- a book installed at this hash is skipped -- is exactly
+//! the rule that means a cover added later never arrives.
+//!
 //! Everything above the network is plain `std` and [`Wire`] is the network,
 //! so the runner is tested with a fake one (`mod pull_tests`) -- the order,
 //! the resume, a refused `rel`, the token refresh, `sync_stop`. [`Net`] is
@@ -52,7 +59,10 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
-use crate::{book_commit, book_have, book_hash_ok, book_installed, book_rel, book_slug_ok, book_write_from, json_field};
+use crate::{
+    book_commit, book_have, book_hash_ok, book_installed, book_rel, book_slug_ok, book_topup_commit,
+    book_topup_flag, book_topup_have, book_topup_names, book_topup_write, book_write_from, json_field,
+};
 use crate::dict;
 
 /// Drive's download door, `library/drive.js::driveClient.getBytes`'s URL.
@@ -87,7 +97,9 @@ pub struct Job {
     pub books: Vec<Book>,
     /// What the job carries: `""`/`"books"` -- books, through the book door;
     /// `"language"` -- language packs (G-LANG), through `dict::Packs`, each
-    /// "book" a language code whose one file is `<code>.sqlite.gz`.
+    /// "book" a language code whose one file is `<code>.sqlite.gz`;
+    /// `"topup"` -- one file into a book already installed at that hash
+    /// (G-TOPUP), through [`TopUp`].
     pub kind: String,
     /// Set when the page could not plan at all (Drive refused, Studio not
     /// reachable): the reason is recorded as this run's outcome and nothing
@@ -149,10 +161,12 @@ pub struct File {
 #[derive(Clone, Debug, Default, PartialEq, serde::Serialize)]
 pub struct Status {
     pub running: bool,
-    /// The job's `kind`: `""` for books, `"language"` for packs -- so the
-    /// Languages row can draw its own download and the Sync row its own.
+    /// The job's `kind`: `""` for books, `"language"` for packs, `"topup"`
+    /// for a cover into a book that is here -- so the Languages row can draw
+    /// its own download and the Sync row its own.
     pub kind: String,
-    /// Language jobs waiting for this run to end ([`Pull::enqueue`]).
+    /// Jobs waiting for this run to end ([`Pull::enqueue`]): a language
+    /// pack, a top-up.
     pub queued: u32,
     pub transport: String,
     pub trigger: String,
@@ -193,7 +207,7 @@ pub struct Token {
 pub struct Pull {
     status: Mutex<Status>,
     stop: AtomicBool,
-    /// Language jobs that arrived while a pull was running, in order.
+    /// Jobs that arrived while a pull was running, in order.
     queue: Mutex<Vec<Job>>,
 }
 
@@ -230,12 +244,12 @@ impl Pull {
         Ok(s.clone())
     }
 
-    /// A language job pressed while a pull runs: kept, once per set of
-    /// languages, and taken by the running thread when it ends
+    /// A job that waits rather than being refused ([`queues`]): kept, once
+    /// per (kind, set of slugs), and taken by the running thread when it ends
     /// ([`Pull::next_queued`]). Answers the running status, with `queued`.
     pub fn enqueue(&self, job: Job) -> Status {
         if let Ok(mut q) = self.queue.lock() {
-            let codes = |j: &Job| j.books.iter().map(|b| b.slug.clone()).collect::<Vec<_>>();
+            let codes = |j: &Job| (j.kind.clone(), j.books.iter().map(|b| b.slug.clone()).collect::<Vec<_>>());
             if !q.iter().any(|j| codes(j) == codes(&job)) {
                 q.push(job);
             }
@@ -355,12 +369,72 @@ impl Door for BookDoor<'_> {
     }
 }
 
+// ------------------------------------------------------------- the top-up
+//
+// G-TOPUP (Osca, 14 Sep). A book is its word ids' hash, and a file that
+// changes no word -- the cover -- can arrive AFTER the book did: the Mac's
+// Sync press drops `cover.jpg` into the folder Drive's row already names and
+// appends it to that row's `files` (`studio/drive.py::TOPUP`). The hash does
+// not move, so the run above never sees it: a book installed at that hash is
+// skipped, by the rule that makes a resume cheap. That is why the 26 books
+// on Osca's phone are white slabs -- their covers were never sent, and no
+// pull will ever send them.
+//
+// So: one more KIND, `"topup"`, and one more [`Door`]. Like [`BookDoor`] it
+// is FOUR CALLS INTO lib.rs AND NOTHING ELSE -- `book_topup_*`, which live
+// beside `book_write_from` and `book_commit` because the books folder is the
+// book door's and this module has never named a path of its own
+// (`tests/test_sync_pull.py` holds that rule). What they do there is write
+// ONE allowlisted file INTO the installed book and flip that file's flag on
+// the installed row; what is NOT done is a `.part/`, because
+// [`crate::book_commit`] swaps a whole folder and a `.part/` holding only a
+// cover would REPLACE the book.
+
+/// The job kind. `library/drive.js::syncJob` plans one of these beside the
+/// books job and hands both over; a top-up that arrives while a pull is
+/// running waits its turn ([`Pull::enqueue`]) exactly as a language job does.
+pub const KIND_TOPUP: &str = "topup";
+
+/// The top-up's destination: the installed book itself
+/// ([`crate::book_topup_write`]).
+pub struct TopUp<'a>(pub &'a Path);
+
+impl Door for TopUp<'_> {
+    /// NEVER a hash. A top-up's hash IS the installed one -- that is the
+    /// whole point of it -- and the runner skips a book whose door reports
+    /// the job's hash, so reporting it would skip every top-up there is.
+    /// The question it would have asked is asked at the write instead
+    /// ([`crate::book_live`]), which is also the only moment it is true of.
+    fn installed(&self, _slug: &str) -> Option<String> {
+        None
+    }
+
+    /// The size the book's folder already holds under `rel` -- so a cover
+    /// that arrived on an earlier run, at the size the row lists, is not
+    /// fetched twice.
+    fn have(&self, slug: &str, hash: &str, rel: &str) -> Option<u64> {
+        book_topup_have(self.0, slug, hash, rel)
+    }
+
+    fn write_from(&self, slug: &str, hash: &str, rel: &str, src: &mut dyn Read) -> Result<u64, String> {
+        book_topup_write(self.0, slug, hash, rel, src)
+    }
+
+    /// THE COMMIT, and it is one field of one file -- the job's own `meta`
+    /// is not written ([`crate::book_topup_commit`] says why).
+    fn commit(&self, slug: &str, hash: &str, _meta_json: &str) -> Result<Vec<String>, String> {
+        book_topup_commit(self.0, slug, hash)
+    }
+}
+
 /// The door a job writes through, by its `kind`. The packs live beside the
 /// books (`<app data>/languages/`), so their root is the books folder's
-/// sibling.
+/// sibling; a top-up writes into the books folder itself ([`TopUp`]).
 pub fn door_for<'a>(books: &'a Path, job: &Job) -> Box<dyn Door + 'a> {
     if job.kind == dict::KIND {
         Box::new(dict::Packs { root: books.parent().unwrap_or(books).join(dict::LANGUAGES_DIR) })
+    } else if job.kind == KIND_TOPUP {
+        Box::new(TopUp(books))
     } else {
         Box::new(BookDoor(books))
     }
@@ -398,11 +472,12 @@ pub fn check_job(job: &Job) -> Result<(), String> {
         "lan" => false,
         other => return Err(format!("{other:?} is not a transport (drive or lan)")),
     };
-    let packs = match job.kind.as_str() {
-        "" | "books" => false,
-        k if k == dict::KIND => true,
-        other => return Err(format!("{other:?} is not a kind of job (books or language)")),
-    };
+    let kind = job.kind.as_str();
+    let packs = kind == dict::KIND;
+    let topup = kind == KIND_TOPUP;
+    if !(matches!(kind, "" | "books") || packs || topup) {
+        return Err(format!("{kind:?} is not a kind of job (books, language or topup)"));
+    }
     let a = &job.auth;
     if drive {
         let can_refresh = a.refresh.as_deref().map_or(false, |s| !s.is_empty())
@@ -433,6 +508,21 @@ pub fn check_job(job: &Job) -> Result<(), String> {
             dict::code_ok(&b.slug)?;
             if b.files.len() != 1 || b.files[0].rel != dict::pack_rel(&b.slug) {
                 return Err(format!("{}: a language's one file is {}", b.slug, dict::pack_rel(&b.slug)));
+            }
+        }
+        if topup {
+            // ONE file, and it is on the allowlist: this is the only verb
+            // that writes into a book already on the shelf.
+            if b.files.len() != 1 {
+                return Err(format!("{}: a top-up carries one file, not {}", b.slug, b.files.len()));
+            }
+            if book_topup_flag(&b.files[0].rel).is_none() {
+                return Err(format!(
+                    "{}: {:?} is not a file a top-up may add ({})",
+                    b.slug,
+                    b.files[0].rel,
+                    book_topup_names()
+                ));
             }
         }
         let mut rels = std::collections::BTreeSet::new();
@@ -634,6 +724,15 @@ fn run_books(books: &Path, job: &Job, wire: &mut dyn Wire, pull: &Pull) -> Resul
     Ok(())
 }
 
+/// A job that WAITS for a running pull instead of being refused by it: a
+/// language pack pressed during the auto-sync, and a top-up, which the page
+/// plans in the same breath as the books job it follows. A books job is
+/// never queued -- a second plan of the same books would only redo the one
+/// already running.
+fn queues(kind: &str) -> bool {
+    kind == dict::KIND || kind == KIND_TOPUP
+}
+
 /// `sync_start`'s body: claim the runner and run the job on a thread of its
 /// own, off the main thread and outside any page. Answers the status as it
 /// is after the claim -- or, when a pull is already running, THAT status,
@@ -642,7 +741,7 @@ fn run_books(books: &Path, job: &Job, wire: &mut dyn Wire, pull: &Pull) -> Resul
 pub fn start<W: Wire + Send + 'static>(pull: Arc<Pull>, books: PathBuf, job: Job, wire: W) -> Status {
     let claimed = match pull.begin(&job, wire.now()) {
         Ok(s) => s,
-        Err(_) if job.kind == dict::KIND && check_job(&job).is_ok() => return pull.enqueue(job),
+        Err(_) if queues(&job.kind) && check_job(&job).is_ok() => return pull.enqueue(job),
         Err(running) => return running,
     };
     let runner = pull.clone();
@@ -1355,5 +1454,168 @@ mod pull_tests {
         assert_eq!(book_installed(&books, "hamlet").as_deref(), Some("aaaa"), "the books first");
         assert_eq!(fs::read(app.join("languages").join("la.sqlite")).unwrap(), raw, "then the language, on the same thread");
         let _ = fs::remove_dir_all(&app);
+    }
+
+    // ----------------------------------------------------------- G-TOPUP
+    //
+    // The verb that writes INTO a book already on the shelf. Three things
+    // are held here, and they are the three the round asked for: it refuses
+    // a `rel` it may not write, it disturbs nothing else in the folder, and
+    // the row flips.
+
+    /// Every file under `live`, dot-names included, as (path, bytes), sorted
+    /// -- so "nothing else was disturbed" is a comparison and not a hope.
+    fn tree(live: &Path) -> Vec<(String, Vec<u8>)> {
+        fn walk(dir: &Path, at: &str, out: &mut Vec<(String, Vec<u8>)>) {
+            let Ok(rd) = fs::read_dir(dir) else { return };
+            for e in rd.flatten() {
+                let name = e.file_name().to_string_lossy().into_owned();
+                let rel = if at.is_empty() { name.clone() } else { format!("{at}/{name}") };
+                if e.path().is_dir() {
+                    walk(&e.path(), &rel, out);
+                } else {
+                    out.push((rel, fs::read(e.path()).unwrap_or_default()));
+                }
+            }
+        }
+        let mut out = Vec::new();
+        walk(live, "", &mut out);
+        out.sort();
+        out
+    }
+
+    /// One book installed the ordinary way, carrying the row a pull writes.
+    fn installed_book(books: &Path, meta: &str) {
+        let mut w = Fake::new().drive("i1", b"{}").drive("i2", b"arma");
+        let mut job = drive_job(vec![book(
+            "hamlet",
+            "aaaa",
+            vec![file("book.meta.json", "i1", 2), file("chapters/c001.txt", "i2", 4)],
+        )]);
+        job.books[0].meta = meta.into();
+        let (_, st) = go(books, &job, &mut w);
+        assert_eq!(st.why, None, "the book under test did not install: {st:?}");
+    }
+
+    fn topup_job(slug: &str, hash: &str, rel: &str, id: &str, bytes: usize) -> Job {
+        let mut j = drive_job(vec![book(slug, hash, vec![file(rel, id, bytes)])]);
+        j.kind = KIND_TOPUP.into();
+        j
+    }
+
+    const JPEG: &[u8] = b"\xff\xd8\xff\xe0jpeg";
+
+    #[test]
+    fn a_top_up_writes_the_cover_into_the_installed_book_and_flips_its_row() {
+        let books = scratch("topup");
+        installed_book(&books, r#"{"slug":"hamlet","hash":"aaaa","title":"Hamlet","has_cover":false,"words":17}"#);
+        let live = books.join("hamlet");
+        let before = tree(&live);
+        assert!(!live.join("cover.jpg").exists(), "the book starts without one");
+
+        let mut w = Fake::new().drive("cov", JPEG);
+        let (_, st) = go(&books, &topup_job("hamlet", "aaaa", "cover.jpg", "cov", JPEG.len()), &mut w);
+
+        assert_eq!((st.why.as_deref(), st.pulled, st.skipped, st.kind.as_str()), (None, 1, 0, "topup"), "{st:?}");
+        assert_eq!(w.gets(), vec![format!("GET {} tok-1", url("cov"))], "one file, and it is the cover");
+        assert_eq!(fs::read(live.join("cover.jpg")).unwrap(), JPEG);
+
+        // THE ROW FLIPPED, and kept every other key: it is this device's row,
+        // read and written back, not the Mac's row copied over.
+        let text = fs::read_to_string(live.join(crate::BOOK_META)).unwrap();
+        let row: serde_json::Value = serde_json::from_str(&text).unwrap();
+        assert_eq!(row["has_cover"], serde_json::Value::Bool(true));
+        assert_eq!(row["title"].as_str(), Some("Hamlet"));
+        assert_eq!(row["words"].as_u64(), Some(17));
+        assert_eq!(row["hash"].as_str(), Some("aaaa"));
+
+        // NOTHING ELSE WAS DISTURBED: the same version, the same files, the
+        // same bytes -- and no `.part/`, no `.old/`, no temporary left over.
+        assert_eq!(book_installed(&books, "hamlet").as_deref(), Some("aaaa"));
+        let after = tree(&live);
+        let keep = |v: &Vec<(String, Vec<u8>)>| {
+            v.iter().filter(|(r, _)| r != "cover.jpg" && r != crate::BOOK_META).cloned().collect::<Vec<_>>()
+        };
+        assert_eq!(keep(&after), keep(&before), "a top-up touched a file that was not its own");
+        assert_eq!(after.len(), before.len() + 1, "exactly one file arrived");
+        assert!(!after.iter().any(|(r, _)| r.starts_with(".topup-")), "a temporary was left behind");
+        assert!(!crate::book_part(&books, "hamlet", "aaaa").exists(), "a top-up never opens a .part/ for the book");
+        assert!(!books.join(crate::BOOKS_OLD).exists(), "and never puts the installed version aside");
+        let _ = fs::remove_dir_all(&books);
+    }
+
+    #[test]
+    fn a_top_up_refuses_a_rel_it_may_not_write_and_a_book_that_is_not_here_at_that_hash() {
+        let books = scratch("topup-refuse");
+        installed_book(&books, r#"{"slug":"hamlet","hash":"aaaa","title":"Hamlet","has_cover":false}"#);
+        let live = books.join("hamlet");
+        let before = tree(&live);
+
+        // refused BEFORE a byte: not on the allowlist, out of the folder, a
+        // dot-name of Frank's own, or more than the one file
+        for bad in ["book.meta.json", "chapters/c001.txt", "cover.png", "cover.jpg.exe", "a/cover.jpg", "../cover.jpg", ".meta.json"] {
+            let mut w = Fake::new().drive("cov", JPEG);
+            let (_, st) = go(&books, &topup_job("hamlet", "aaaa", bad, "cov", JPEG.len()), &mut w);
+            let why = st.why.unwrap_or_default();
+            assert!(why.starts_with("hamlet: "), "{bad:?} -> {why}");
+            assert!(w.log.is_empty(), "{bad:?}: nothing was asked of the network");
+        }
+        let mut two = topup_job("hamlet", "aaaa", "cover.jpg", "cov", JPEG.len());
+        two.books[0].files.push(file("book.meta.json", "i1", 2));
+        let mut w = Fake::new().drive("cov", JPEG);
+        let (_, st) = go(&books, &two, &mut w);
+        assert!(st.why.unwrap_or_default().contains("carries one file"), "one file, and one only");
+        assert!(w.log.is_empty());
+
+        // refused at the write: the book is not here, or not here at that hash
+        for (slug, hash, words) in [("othello", "aaaa", "not on this device"), ("hamlet", "bbbb", "is here at aaaa")] {
+            let mut w = Fake::new().drive("cov", JPEG);
+            let (_, st) = go(&books, &topup_job(slug, hash, "cover.jpg", "cov", JPEG.len()), &mut w);
+            let why = st.why.unwrap_or_default();
+            assert!(why.contains(words), "{slug}@{hash} -> {why}");
+            assert!(!books.join(slug).join("cover.jpg").exists());
+        }
+
+        assert_eq!(tree(&live), before, "a refused top-up left the book exactly as it was");
+        assert!(!crate::book_part(&books, "hamlet", "aaaa").exists() && !books.join("othello").exists());
+        let _ = fs::remove_dir_all(&books);
+    }
+
+    #[test]
+    fn a_cover_already_here_at_that_size_is_not_fetched_twice() {
+        let books = scratch("topup-again");
+        installed_book(&books, r#"{"slug":"hamlet","hash":"aaaa","title":"Hamlet","has_cover":false}"#);
+        let job = topup_job("hamlet", "aaaa", "cover.jpg", "cov", JPEG.len());
+        let mut w = Fake::new().drive("cov", JPEG);
+        go(&books, &job, &mut w);
+        assert_eq!(w.gets().len(), 1);
+
+        // the same job on the next sync: the resume's question asked of the
+        // live folder, so the phone pays for a cover once
+        let mut w2 = Fake::new().drive("cov", JPEG);
+        let (_, st) = go(&books, &job, &mut w2);
+        assert_eq!((st.why.as_deref(), st.pulled), (None, 1), "{st:?}");
+        assert!(w2.log.is_empty(), "the cover was fetched a second time");
+        let text = fs::read_to_string(books.join("hamlet").join(crate::BOOK_META)).unwrap();
+        assert!(text.contains(r#""has_cover":true"#), "{text}");
+        assert_eq!(fs::read(books.join("hamlet").join("cover.jpg")).unwrap(), JPEG);
+        let _ = fs::remove_dir_all(&books);
+    }
+
+    #[test]
+    fn the_top_ups_small_pieces() {
+        assert_eq!(book_topup_flag("cover.jpg"), Some("has_cover"));
+        assert_eq!(book_topup_flag("cover.png"), None);
+        assert_eq!(book_topup_flag("book.json"), None);
+        assert_eq!(book_topup_names(), "cover.jpg");
+        // a top-up WAITS for a running pull, as a language pack does; a
+        // books job is still refused by one
+        assert!(queues(KIND_TOPUP) && queues(dict::KIND));
+        assert!(!queues("") && !queues("books"));
+        // and a good one passes the gate
+        assert_eq!(check_job(&topup_job("hamlet", "aaaa", "cover.jpg", "cov", 8)), Ok(()));
+        let mut j = topup_job("hamlet", "aaaa", "cover.jpg", "cov", 8);
+        j.kind = "covers".into();
+        assert!(check_job(&j).unwrap_err().contains("books, language or topup"));
     }
 }
