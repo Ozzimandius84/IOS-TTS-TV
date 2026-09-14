@@ -247,6 +247,65 @@ p.para + p.para{ text-indent:var(--indent, 1.2em);
 /* VERSE NEVER INDENTS, and says so rather than inheriting it -- a line's
    left edge IS the verse. */
 p.line:not(.para){ text-indent:0; }
+
+/* =================== AND PROSE IS A BOX, NOT A COLUMN ====================
+   Osca, 14 September: *"margins more like a book -- like a box; fixed margins
+   rather than a soft right margin."*
+
+   G-TYPO made the LEFT margin one number end to end and centred the block on
+   the viewport's axis. The RIGHT edge was still the rag: every paragraph was
+   `text-align:start`, so the box had three fixed sides and a fourth that moved
+   with whichever word happened to fit. A printed book of prose has four. So
+   prose justifies, and the margin is a box.
+
+   VERSE DOES NOT, AND THAT IS THE WHOLE OF THE EXCEPTION. A line of verse is
+   a LINE: the poet set its right edge, and stretching it out to a measure the
+   poet never chose is the reader deciding it knows better -- the same LCD
+   G-TYPO took out of the classifier. Cues, directions, captions and headings
+   are not paragraphs of the book either. Each says so below rather than
+   inheriting it, which is this file's rule since G-TYPO and not brevity.
+
+   JUSTIFY ALONE IS A RIVER MACHINE, so it never ships alone. What actually
+   holds the word gap down, in the order of how much it is worth:
+
+     `hyphens:auto`  -- the ONLY lever that takes width out of the gaps rather
+        than sharing it between them. It needs a LANGUAGE to choose a
+        dictionary, and until this change nothing in this product wrote one:
+        there is no `lang` on <html> in shell.html or reader.html, and none on
+        any element the reader draws. `page.js::render` now writes the book's
+        on every `<section class="chapter">` and the paragraph's own on the
+        paragraph when it has one (it does not yet -- G-LANGMIX). With no lang
+        at all, `hyphens:auto` is silently inert, which is why the attribute is
+        part of this rule and not a separate nicety.
+
+     `hyphenate-limit-chars: 6 3 3` -- no word under six letters is broken and
+        no fragment is shorter than three, so the page does not fill with `a-`
+        and `-ly`. One custom property, so bench-typo.html can move it without
+        this file being edited.
+
+   AND THERE IS NO THIRD. **CSS has no `max-word-spacing`** -- `word-spacing`
+   sets a value, it cannot cap what justification adds on top of it, and
+   setting one here would widen every gap on every line to buy nothing. So the
+   river is a MEASURED NUMBER and not a declaration: bench-typo.html counts the
+   lines whose widest word gap exceeds 1.5x / 2x / 3x the same book's own
+   unjustified space, at 393 and at 1440, and that count is the gate. The two
+   things that move it are `--hy-chars` and `--measure`.
+
+   THE LAST LINE IS NOT JUSTIFIED. `text-align-last:start` says so rather than
+   trusting an initial value, because `justify-all` is one word away and a
+   stretched last line is the tell of a page nobody set. */
+p.line.para{
+  text-align:justify;
+  text-align-last:start;
+  -webkit-hyphens:auto; hyphens:auto;
+  hyphenate-limit-chars:var(--hy-chars, 6 3 3);
+}
+/* RAGGED, AND SAYING SO. Verse, the cue and the direction each declare their
+   own right edge for the same reason they each declare `text-indent:0` above:
+   a rule added over them can never reach them by inheritance. */
+p.line:not(.para), .sp, .dir{
+  text-align:start; text-align-last:auto; -webkit-hyphens:manual; hyphens:manual;
+}
 .sp{ margin-top:1.6em; margin-bottom:.55em; color:var(--dim); font-size:.58rem;
      letter-spacing:.17em; text-transform:uppercase; }
 p:first-child, .sp:first-child{ margin-top:0; }

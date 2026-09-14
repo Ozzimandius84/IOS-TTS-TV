@@ -323,6 +323,16 @@
      goes to the module and not to a handle: this bar is built before a book is
      open. With no host there is no panel, so the button never appears at all
      -- a control that cannot do anything is worse than no control. */
+  /* ★ WHERE THE READER IS STANDING, for the float's paused tick (14 Sep).
+     `book-nav.js` announces every cursor move on `ttstv:cursor` and it
+     bubbles, so this is the same fact `cursor.js` already writes down, read
+     rather than re-derived. Nothing is computed here and nothing is stored:
+     with no float open it is one property write per stepped word. */
+  var lastCursor = null;
+  addEventListener("ttstv:cursor", function (e) {
+    var d = e && e.detail;
+    if (d && d.word != null) lastCursor = { chapter: d.chapter, word: d.word };
+  });
   var floatDoor = null;
   function floatReady() {
     if (floatDoor) return floatDoor;
@@ -334,12 +344,27 @@
          rather than held: the system voice is registered further down this
          file, after this bar is built. */
       sysvoice: function () { return window.Transport ? Transport.system : null; },
+      cursor: function () { return lastCursor; },
       doors: {
         voiceui: function () { return window.VoiceUI && VoiceUI.instance; },
         transport: function () { return window.Transport; },
         define: function () { window.dispatchEvent(new CustomEvent("ttstv:float-define")); },
         translate: function () { window.dispatchEvent(new CustomEvent("ttstv:float-translate")); },
-        close: function () { if (floatDoor) floatDoor.stop(); },
+        /* ★ AND CLOSE REALLY CLOSES (14 Sep). `floatDoor.stop()` stops the
+           FEED; it does not take the window down, and nothing else did
+           either -- `host.js::floatClose` is `float_cmd "close"`, which is
+           the very message that arrives here, and Rust's own `close()` is
+           not a command. So the card's X stopped the word and left the card
+           on the screen. `host_float` is a toggle and the panel is open
+           whenever this arrives, so one call closes it. The paint and
+           book-nav are told by `setFloat`, as every road is. */
+        close: function () {
+          if (floatDoor) floatDoor.stop();
+          if (!floatIsOpen) { setFloat(false); return; }
+          var H = window.TTSTVHost;
+          if (H && typeof H.float === "function") H.float().then(setFloat, function () { setFloat(false); });
+          else setFloat(false);
+        },
         said: function () {
           var V = window.VoiceUI && VoiceUI.instance;
           return V && typeof V.said === "function" ? V.said() : "";
@@ -349,6 +374,38 @@
     floatDoor = d && d.ok ? d : null;
     return floatDoor;
   }
+  /* ★ ONE STATE, AND EVERY ROAD SAYS SO (14 Sep, G-FLOATAXIS). There are
+     three ways in and out of the float now -- the button, the card's own X,
+     and the scroll past the end of the one-word view -- and `book-nav.js`
+     needs to know which, because a gesture may not open a window that is
+     open (`TTSTVHost.float` is a toggle: it would DISMISS it). So the panel's
+     state is written in exactly one place and announced on one event, which
+     the axis listens for beside `nav` further down this file. The button's
+     own paint is the same subscription and not a second copy. */
+  var floatIsOpen = false;
+  function setFloat(open) {
+    floatIsOpen = open !== false;
+    if (floatEl) {
+      floatEl.setAttribute("data-float", floatIsOpen ? "on" : "off");
+      floatEl.setAttribute("aria-pressed", floatIsOpen ? "true" : "false");
+    }
+    try {
+      window.dispatchEvent(new CustomEvent("ttstv:float-state", { detail: { open: floatIsOpen } }));
+    } catch (e) {}
+    return floatIsOpen;
+  }
+  /* ★ THE AXIS'S DOOR. `book-nav.js` calls this when a scroll past the view's
+     end has committed, and it OPENS -- never toggles. It resolves to what the
+     panel IS, which is what the axis records and what the button paints. */
+  window.ReaderFloat = {
+    open: function () {
+      if (floatIsOpen) return Promise.resolve(true);
+      var d = floatReady();
+      if (!d) return Promise.resolve(false);
+      return d.toggle().then(setFloat, function () { return setFloat(false); });
+    },
+    isOpen: function () { return floatIsOpen; },
+  };
   if (floatEl) {
     if (!window.TTSTVHost || typeof window.TTSTVHost.float !== "function") {
       floatEl.hidden = true;                  /* no panel to open: no button */
@@ -356,10 +413,7 @@
       floatEl.addEventListener("click", function () {
         var d = floatReady();
         if (!d) return;
-        d.toggle().then(function (open) {
-          floatEl.setAttribute("data-float", open ? "on" : "off");
-          floatEl.setAttribute("aria-pressed", open ? "true" : "false");
-        });
+        d.toggle().then(setFloat);
       });
     }
   }
@@ -862,6 +916,13 @@ const nav = BookNav.mount({
   /* scrolling left past the last pane leaves the book -- and that now means
      leaving the page, so the library is read fresh every time you come out */
   onLibrary: () => { location.href = LIBRARY_PAGE; },
+  /* ★ THE RUNG PAST THE ONE-WORD VIEW (14 Sep). Osca: *"a further scroll
+     right, after one-word view -- it does a one-word floater."* The axis
+     decides WHEN (on release, past its own threshold); this says WHAT, and it
+     is the same door the Float button on the capsule opens -- one panel, one
+     state, two ways in. It resolves to what the panel is, so a host with no
+     panel to give leaves the axis exactly where it was. */
+  onFloat: () => (window.ReaderFloat ? window.ReaderFloat.open() : Promise.resolve(false)),
   bookEl: $("book"),
   contentsBox: $("contentsbox"),
   contentsColEl: $("contentscol"),
@@ -890,6 +951,15 @@ const BENCH = /(?:^|[?&])bench(?:[=&]|$)/.test(location.search);
    this page from outside (a browser extension's isolated world cannot see a
    top-level `const`). Nothing in the design reads this. */
 if (BENCH) window.nav = nav;
+/* ★ AND THE ANSWER COMES BACK THE SAME WAY. The card can be closed by its own
+   X or by the scroll back on the card itself, neither of which passes through
+   the axis -- so the axis is TOLD, on the one event the bar announces its
+   state on. Without this the zone would stay shut after a float was dismissed
+   by anything but the button, and the gesture would be a gesture that worked
+   once. */
+addEventListener("ttstv:float-state", function (e) {
+  try { nav.floatIs(!!(e && e.detail && e.detail.open)); } catch (_) {}
+});
 /* ================= LISTENING, LOOKING UP, AND THE MARGIN =================
    Job 15 step 3(a) and job 15b steps 1-2. Three things the picture does not
    show and the product is not the product without, mounted on the one door

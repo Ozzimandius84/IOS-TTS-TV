@@ -207,6 +207,37 @@
       strip.hidden = true; xEl.removeAttribute("data-shown"); holdT = null;
     }, holdMs());
   }
+  /* ------------------------------------------- the scroll back is the way home
+     Osca, 14 Sep: *"a further scroll right, after one-word view -- it does a
+     one-word floater ... Scrolling back brings it home."* The way IN is a
+     scroll RIGHT past the end of the one-word view (`book-nav.js`'s float
+     zone); the way back is the same gesture on the card, the other way, and
+     it is the card's own because the card is what is under the pointer.
+
+     IT SENDS `close` AND DECIDES NOTHING. The reader is still standing on the
+     one-word view -- the axis was put back on it the moment the float opened
+     (`commitFloat`: the card comes over the view and the view does not move)
+     -- so coming home is the window going, and the word is the word because
+     nothing ever moved it. Same name the X sends, same one door.
+
+     BACK is px of wheel and `book-nav.js`'s PHYS table holds the same number
+     as `floatBack`, keyed by platform; `reader/tests/test_float_axis.py` pins
+     the two literals together, the way the two event names are pinned across
+     this file, `floatdoor.js` and `floatwin.rs`. A gesture is ONE direction
+     and one push: the run resets when the wheel turns round, and when it
+     stops for GAP ms, so a long idle drift cannot add up to a dismissal. */
+  var BACK = 120, GAP = 400;
+  var backRun = 0, backAt = 0;
+  card.addEventListener("wheel", function (e) {
+    var dxw = +e.deltaX || 0;
+    if (!dxw) return;
+    var t = now();
+    if (t - backAt > GAP || (backRun < 0) !== (dxw < 0)) backRun = 0;
+    backAt = t;
+    backRun += dxw;
+    if (backRun <= -BACK) { backRun = 0; send("close"); }
+  }, { passive: true });
+
   wordEl.addEventListener("click", hold);
   card.addEventListener("click", function (e) {
     var b = e.target.closest ? e.target.closest("[data-cmd]") : null;
@@ -223,5 +254,7 @@
     label: function () { return LABEL; },
     caption: caption,
     words: function () { return words.slice(); },
+    back: function () { return BACK; },
+    backRun: function () { return backRun; },
   };
 })();

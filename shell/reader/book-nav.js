@@ -328,6 +328,51 @@ let LEAVE_STEP=0.12;
    screen and a bit; it is PHYS's now and it is the phone's alone -- nothing
    on the Mac reads it. */
 let LEAVE_GAIN=1.15;
+/* ============ THE FLOAT IS THE RUNG PAST THE VIEW (14 Sep) ===============
+   Osca, 14 Sep: *"I want it to be a further scroll right, after one-word view
+   -- it does a one-word floater."* So the axis grows one rung at its far end,
+   and it is the MIRROR of the one it has always had at the near end: past the
+   deepest pane is the leaving zone and the library; past the one-word view is
+   the FLOAT zone and the card. Read as one line, either way:
+
+       shelf <- contents <- book <- word -> float
+
+   The grammar is the same sentence at both ends, which is why there is no new
+   grammar here -- only the same four rules the other way round:
+
+     * YOU HAVE TO ARRIVE BEFORE YOU CAN LEAVE. `floatArmed` is `exitArmed`'s
+       twin: the zone opens only once the axis has come to REST on the view, so
+       one hard flick out of the page cannot run the zoom and open a window on
+       the end of it.
+     * THE ZONE HAS RESISTANCE. One event may carry you FLOAT_STEP of it,
+       however big it is, so a trackpad's momentum tail cannot spend the zone
+       (and `stepDx`'s `dx>=1` line already kills the coast at the view, which
+       is the same rule in the same place as the leaving zone's).
+     * THE COMMITMENT IS TAKEN ON RELEASE, at FLOAT_COMMIT, never while a hand
+       is still moving. "Do NOT push me" is Osca's sentence about the other end
+       of this axis and it is the same sentence here.
+     * AND NOTHING IS STORED. The commit puts the axis BACK on the view and
+       lets the card come over it, so coming home from the float is the reader
+       already standing on the word it was standing on -- POSITION IS SACRED by
+       not moving. See `commitFloat`.
+
+   THE FIVE NUMBERS ARE PHYS's, keyed by `html[data-phone]`, written out beside
+   the leaving four they mirror. `FLOAT_BACK` is the only one this file does
+   not read: it is the PANEL's own back-scroll threshold, in px of wheel, and
+   `reader/float.js` holds the same literal (`reader/tests/test_float_axis.py`
+   pins the two together, the way the two event names are pinned across
+   `floatdoor.js`, `float.js` and `floatwin.rs`). */
+let FLOAT_COMMIT=0.5, FLOAT_STEP=0.12, FLOAT_GAIN=1.15, FLOAT_SNAP=3, FLOAT_BACK=120;
+/* THE PHONE'S FLOAT IS A PiP AND IT IS NOT OURS TO OPEN YET (FLOAT.md §1, §2).
+   The gesture is built on both platforms and measured on both; on the phone
+   the commit is behind this flag, which is OFF until probe-c reports (F0). It
+   is a flag rather than a deletion so that the day F0 answers, the phone's
+   road is one `nav.tune("floatPhone", 1)` and a call, not a gesture to write
+   again. What it will do with the flag on: exactly what the Mac does -- put
+   the axis back on the view and ask the host for a float -- and on iOS that
+   host call is the PiP, whose buttons are Apple's and whose tap returns to
+   Frank on the same word, because the reader never moved. */
+let FLOAT_PHONE=false;
 /* HOW FAR INTO A RUNG A PUSH MUST GET FOR THE RELEASE TO COMMIT TO IT.
    0.5 is the old rule (ease to whichever rung is nearest). Lower is stickier:
    at 0.2, a fifth of a pane's worth of scroll takes you to the next pane. */
@@ -439,6 +484,11 @@ const PHYS = {
     decay:null, coast:null, vmax:null, couple:null, snap:null, grace:null,
     wordSnap:2, paneSnap:7, leaveSnap:3,
     stick:0.5, leaveCommit:0.5, leaveStep:0.12, leaveGain:1.15,
+    /* the float rung, the leaving four mirrored (14 Sep). floatGain is the
+       phone's alone, exactly as leaveGain is; it is written out here so the
+       Mac row is still a row you can read rather than trust. floatBack is the
+       PANEL's, in px of wheel, and nothing in this file reads it. */
+    floatCommit:0.5, floatStep:0.12, floatGain:1.15, floatSnap:3, floatBack:120,
   },
   phone: {
     /* null = the preset's own, i.e. the Mac's: a finger writes no momentum,
@@ -459,6 +509,15 @@ const PHYS = {
        is 60-80 px, so on the phone the cap was throttling the HAND. */
     leaveStep:0.22,
     leaveGain:1.6,
+    /* THE FLOAT RUNG ON A THUMB. The zone is one rung of a 393 px glass and a
+       thumb pays for it in the same coin the way out is paid in, so these are
+       the leaving four again and for the same reason: 0.28 of the zone at
+       floatGain 1.6 is 69 px of thumb where the Mac's 0.5 at 1.15 is 171 px,
+       the cap on ONE event is the hand's and not a trackpad's, and the
+       ease-back is a touch quicker than the Mac's. The commit itself is behind
+       FLOAT_PHONE and opens nothing until F0 reports. floatBack is 0 because
+       the phone's float is Apple's window: there is no wheel of ours in it. */
+    floatCommit:0.28, floatStep:0.22, floatGain:1.6, floatSnap:4, floatBack:0,
   },
 };
 function phoneFlag(){ try{ return !!(document.documentElement
@@ -472,6 +531,8 @@ function applyPhys(){
   WORD_SNAP = P.wordSnap; PANE_SNAP = P.paneSnap; LEAVE_SNAP = P.leaveSnap;
   STICK = P.stick; LEAVE_COMMIT = P.leaveCommit; LEAVE_STEP = P.leaveStep;
   LEAVE_GAIN = P.leaveGain;
+  FLOAT_COMMIT = P.floatCommit; FLOAT_STEP = P.floatStep;
+  FLOAT_GAIN = P.floatGain; FLOAT_SNAP = P.floatSnap; FLOAT_BACK = P.floatBack;
   /* the one number that was already remembered per machine stays remembered:
      a dialled leaveSnap outranks the table, as it always has. */
   try{ const v = localStorage.getItem("leavesnap");
@@ -3294,9 +3355,53 @@ function mount(o){
     const open = leavingBook || exitArmed || inLeavingZone();
     return -(m + (open ? 1 : 0));
   }
+  /* ================= THE FLOAT ZONE, AND ITS CEILING =======================
+     The far end of the axis, and every line of it is `dxFloor`/`inLeavingZone`
+     read the other way round. The ceiling is DX_MAX at rest -- so nothing that
+     has not ARRIVED on the view can ever stand past it -- and DX_MAX + 1 while
+     the axis is armed or already in the zone, which is exactly when a hand is
+     on it. The float's own state is `floatOpen`: while the card is up the zone
+     is shut, because a scroll cannot open a window that is open. */
+  let floatArmed = false, floatOpen = false, lastFloat = null;
+  function inFloatZone(){ return dx > DX_MAX + DX_REST; }
+  function dxCeil(){
+    return DX_MAX + ((floatArmed || inFloatZone()) ? 1 : 0);
+  }
+  /* the fraction of the zone the axis is standing in, 0 at the view and 1 at
+     the far side of it -- the harness's number, and `commitFloat`'s. */
+  function floatOver(){ return clamp(dx - DX_MAX, 0, 1); }
   function setDx(v){
-    dx = clamp(v, dxFloor(), DX_MAX);
+    dx = clamp(v, dxFloor(), dxCeil());
     if(dx > -currentMaxLeft() + DX_REST) exitArmed = false;   // moved back in
+    if(dx < DX_MAX - DX_REST) floatArmed = false;             // ...and the mirror
+  }
+  /* THE COMMIT. The card comes over the view and THE VIEW DOES NOT MOVE: the
+     axis is put back on the rung it came from, so the reader is already
+     standing on the word the float is painting and closing the float is
+     nothing but the window going. Osca, 13 Sep: *the float is another view of
+     the SAME record, no second store* -- and this is that sentence written as
+     a movement. Nothing here writes a cursor, a position or a key.
+
+     One OPEN, never a toggle: `TTSTVHost.float()` is a toggle and a gesture
+     that ran it while the card was up would DISMISS the card, which is the
+     opposite of what the hand asked for. `floatOpen` is the guard, and it is
+     told the truth by the page (`floatIs`) whichever road opened or closed the
+     panel -- the button, the card's own X, or the scroll back. */
+  function commitFloat(){
+    floatArmed = false;
+    dxVel = 0; dxInput = 0; dxIdle = 0; snapCancel(); paneEnd(); wordEnd();
+    wordGoal = DX_MAX; setDx(DX_MAX); markPaint();
+    lastFloat = { over: 1, opened: false, phone: PHONE };
+    if(PHONE && !FLOAT_PHONE) return;      /* the PiP road, behind the flag */
+    if(typeof o.onFloat !== "function") return;
+    floatOpen = true; lastFloat.opened = true;
+    let r = null;
+    try{ r = o.onFloat(); }
+    catch(_){ floatOpen = false; lastFloat.opened = false; return; }
+    if(r && typeof r.then === "function"){
+      r.then(function(v){ floatOpen = v !== false; },
+             function(){ floatOpen = false; });
+    }
   }
   function levelOf(v){ return v<=-0.5?"contents":(v>=0.5?"word":"reader"); }
   function dxTargets(){ return positions(); }
@@ -3493,6 +3598,22 @@ function mount(o){
        the hand asked for, `wordRung` rounds it, and the travel runs there a leg
        at a time. Coming DOWN out of the word is the same call, so the way home
        is the way out and neither is a special case. */
+    /* PAST THE VIEW THE AXIS FOLLOWS YOUR HAND, and it is the leaving zone's
+       own shape at the other end (14 Sep). Arrive first -- `floatArmed` is set
+       only by the axis coming to REST on the view, so the tail of one hard
+       swipe out of the page cannot run the zoom and open a window on the end
+       of it -- then one step of the zone per event, and the decision is taken
+       on RELEASE in stepDx. While the card is up there is nothing to open, so
+       the push falls through to the word branch, which has nowhere left to go
+       and does nothing. */
+    if(dx >= DX_MAX - DX_REST && d > 0 && !floatOpen){
+      if(wz.hold){ dxIdle = 0; return "hold"; }
+      if(!floatArmed){ dxIdle = 0; return "gate"; }
+      wordEnd();
+      dxInput += Math.min(d, FLOAT_STEP);   // a step of the zone, not all of it
+      dxIdle = 0;
+      return "floating";
+    }
     if(dx >= -DX_REST && (d > 0 || dx > DX_REST)){
       if(wz.hold){ dxIdle = 0; return "hold"; }
       if(wordReach === null){ wordReach = Math.max(0, dx); wordFrom = Math.round(wordReach); }
@@ -4317,9 +4438,11 @@ function mount(o){
       if(was > 0 && dx < 0){ setDx(0); dxVel = 0; dxInput = 0; dxIdle = 0; detent = true; }
       if(was <= 0 && dx > 0){ setDx(0); dxVel = 0; dxInput = 0; dxIdle = 0; }
       dxVel *= Math.pow(T.decay, dt);
-      /* MOMENTUM STOPS AT THE LAST PANE. Only a hand may enter the leaving
-         zone -- a flick's tail must not spend it. */
-      if(dx<=-currentMaxLeft() || dx>=1) dxVel=0;
+      /* MOMENTUM STOPS AT THE LAST PANE -- AND AT THE VIEW. Only a hand may
+         enter either zone: a flick's tail must not spend the way out of the
+         book, and (14 Sep) it must not spend the way into the float either.
+         One line, both ends; `dx>=1` is DX_MAX and was already here. */
+      if(dx<=-currentMaxLeft() || dx>=DX_MAX) dxVel=0;
       dxIdle=0;
     } else {
       dxVel *= Math.pow(T.decay, dt);
@@ -4397,6 +4520,17 @@ function mount(o){
          got to. Past LEAVE_COMMIT of the way out it goes; short of it, it comes
          back to the last pane and no book was closed. Nothing fires while a
          hand is still moving. */
+      /* ...AND THE SAME PAIR AT THE FAR END (14 Sep): arm on the view, decide
+         in the zone. `floatArmed` cannot be spent twice -- `setDx` disarms it
+         the moment the axis comes back off the view -- and the ease-back when
+         a release falls short is the zone's own travel, not the zoom's: the
+         word does not move in this stretch and nothing about it is the zoom. */
+      if(!floatOpen && Math.abs(dx - DX_MAX) <= DX_REST) floatArmed = true;
+      if(inFloatZone()){
+        if(floatArmed && floatOver() >= FLOAT_COMMIT){ commitFloat(); return; }
+        if(snapTo == null) snapStart(DX_MAX, FLOAT_SNAP);
+        snapStep(dt); return;
+      }
       /* arming: the axis is idle and standing on the deepest pane */
       /* ...AND NOTHING ARMS WHILE A GESTURE IS STILL RUNNING. `paneReach` is
          non-null for exactly as long as the ladder has a hand on it, so this
@@ -4905,7 +5039,8 @@ function mount(o){
     if(!PHONE) return false;
     if(screen !== "open" || !book || leavingBook) return false;
     swipe = { x0:x, y0:y, x:x, y:y, live:false, took:false, axis:null,
-              p0:0, goal:0, leave:0, leaving:false, samples:[{t:tnow(t), x:x}] };
+              p0:0, goal:0, leave:0, leaving:false,
+              rise:0, floating:false, samples:[{t:tnow(t), x:x}] };
     return true;
   }
   /* the position a gesture starts from: where the axis stands, or -- if a
@@ -5086,6 +5221,36 @@ function mount(o){
       return true;
     }
     if(s.leaving){ s.leaving = false; s.leave = 0; }
+    /* ============ PAST THE VIEW: THE FLOAT ZONE, BY HAND (14 Sep) ==========
+       The way out's own branch, mirrored. A finger travelling LEFT from the
+       one-word view (dist < 0, so dir > 0) is asking for the rung past the
+       deepest one on this side, exactly as a finger travelling RIGHT from the
+       deepest pane asks for the rung past that one.
+
+       THE HAND IS THE ARM HERE TOO. `floatArmed` is set in stepDx's rest
+       branch, which costs the zoom's travel (WORD_SNAP, ~708 ms) and T.grace
+       of idle on top; a thumb is back on the glass long before that, and a
+       gesture refused by the gate LATCHES for its whole life (`s.floating`),
+       so the sweep would do nothing and show nothing -- which is precisely the
+       fault G-PHONESCROLL measured at the other end. A finger writes no
+       momentum (`touchGo` zeroes dxVel and dxInput), so the tail the arm
+       exists to refuse cannot exist under a thumb: a finger on the glass, at
+       rest on the view, asking to go further IS the second gesture. */
+    if(s.p0 === DX_MAX && dir > 0 && !floatOpen){
+      s.floating = true;
+      if(PHONE && !floatArmed && Math.abs(dx - DX_MAX) <= DX_REST){
+        wordEnd(); floatArmed = true;
+      }
+      if(floatArmed && dx >= DX_MAX - DX_REST){
+        const d = -(px / Math.max(1, window.innerWidth || 1)) * FLOAT_GAIN;
+        const was = s.rise;
+        s.rise = clamp(s.rise + d, 0, 1);
+        if(s.rise !== was) axisPush(s.rise - was);
+      }
+      markPaint();
+      return true;
+    }
+    if(s.floating){ s.floating = false; s.rise = 0; }
     const next = touchLegal(s.p0 + dir);
     let g;
     if(a >= TOUCH.commit) g = next;
@@ -5114,6 +5279,22 @@ function mount(o){
       paneEnd();
       if(!leavingBook && s.leave < -DX_REST && outDist >= TOUCH.flickMin
          && outV >= TOUCH.flickV) closeToLibrary();
+      return;
+    }
+    if(s.floating){
+      /* A FLICK FLOATS, for the same reason a flick leaves: every other
+         position on this axis is committed by a lift at `flickV` from
+         `flickMin` however short the drag, and the two zones are the only
+         stretches that would otherwise read distance alone. Short of a flick,
+         FLOAT_COMMIT still decides in stepDx exactly as on the Mac, and a
+         finger thrown back undoes it there by falling short. */
+      const inDist = s.x0 - s.x;                       // leftward is positive
+      const inV = cancelled ? 0 : -touchV(s, tnow(t));
+      s.lift = { dist: -inDist, v: -inV, goal: "float", p0: s.p0 };
+      lastTouch = s.lift;
+      wordEnd();
+      if(!floatOpen && s.rise > DX_REST && inDist >= TOUCH.flickMin
+         && inV >= TOUCH.flickV) commitFloat();
       return;
     }
     const dist = s.x - s.x0, a = Math.abs(dist), dir = dist > 0 ? -1 : 1;
@@ -5316,6 +5497,13 @@ function mount(o){
       if(k === "leaveCommit"){ LEAVE_COMMIT = +v; return LEAVE_COMMIT; }
       if(k === "leaveStep"){ LEAVE_STEP = +v; return LEAVE_STEP; }
       if(k === "leaveGain"){ LEAVE_GAIN = +v; return LEAVE_GAIN; }
+      if(k === "floatCommit"){ FLOAT_COMMIT = +v; return FLOAT_COMMIT; }
+      if(k === "floatStep"){ FLOAT_STEP = +v; return FLOAT_STEP; }
+      if(k === "floatGain"){ FLOAT_GAIN = +v; return FLOAT_GAIN; }
+      if(k === "floatSnap"){ FLOAT_SNAP = +v; return FLOAT_SNAP; }
+      if(k === "floatBack"){ FLOAT_BACK = +v; return FLOAT_BACK; }
+      /* the phone's PiP road, off until probe-c reports (F0) */
+      if(k === "floatPhone"){ FLOAT_PHONE = !!(+v); return FLOAT_PHONE; }
       if(k === "stick"){ STICK = clamp(+v || 0, 0, 0.99); return STICK; }
       if(k in T){ T[k] = +v; return T[k]; }
       return null;
@@ -5323,6 +5511,20 @@ function mount(o){
     /* the last finger's decision, for the harness: where it started, how far
        and how fast it lifted, and the position it chose (G-STOPS) */
     get touchLast(){ return lastTouch ? Object.assign({}, lastTouch) : null; },
+    /* ================= THE FLOAT, FROM THE PAGE'S SIDE ====================
+       `floatIs` is the page telling this file what the PANEL is, whichever
+       road changed it -- the button on the capsule, the card's own X, the
+       scroll back on the card, or Rust answering that there is no panel. It
+       is told rather than kept because a second copy of a window's state is
+       wrong the moment the window is closed by something else (reader.html
+       says the same thing about the button's own paint).
+       `floatZone` is the fraction of the rung the axis is standing in and
+       `floatLast` the last commit, both for the harness. */
+    floatIs(open){ floatOpen = !!open; if(floatOpen) floatArmed = false; return floatOpen; },
+    get floatOpen(){ return floatOpen; },
+    get floatArmed(){ return floatArmed; },
+    get floatZone(){ return floatOver(); },
+    get floatLast(){ return lastFloat ? Object.assign({}, lastFloat) : null; },
     get tuneNow(){
       return { gain:T.gain, vmax:T.vmax, coast:T.coast, decay:T.decay,
                couple:T.couple, snap:T.snap, grace:T.grace,
@@ -5331,6 +5533,9 @@ function mount(o){
                flickV:TOUCH.flickV, flickMin:TOUCH.flickMin,
                phys:physName, leaveCommit:LEAVE_COMMIT, leaveStep:LEAVE_STEP,
                leaveGain:LEAVE_GAIN, wordSnap:WORD_SNAP,
+               floatCommit:FLOAT_COMMIT, floatStep:FLOAT_STEP,
+               floatGain:FLOAT_GAIN, floatSnap:FLOAT_SNAP,
+               floatBack:FLOAT_BACK, floatPhone:FLOAT_PHONE,
                outSnap:OUT_SNAP_, leaveSnap:LEAVE_SNAP,
                stick:STICK, open:OPEN, opens:OPENS, pastAt:PAST_AT,
                paneSnap:PANE_SNAP };

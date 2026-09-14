@@ -185,6 +185,16 @@ function mount(o){
   let BOX=[];           // placeAxis's answer per chapter; null = never asked
   let UNITS=[];         // the chapter's own size, in units, from its blocks
   let PIN=-1;           // one chapter that may not be unmounted (the word view's)
+  /* THE BOOK'S LANGUAGE, and it is not decoration. `hyphens:auto` in page.css
+     picks its dictionary off the nearest `lang`, and this product had NO lang
+     anywhere: not on <html> in shell.html or reader.html, not on anything the
+     reader draws. Unset, justified prose hyphenates nothing and the word gaps
+     carry the whole of the stretch. `book.lang` is already in every
+     `book-data.js` (core/bookdata.py::data_for) and `lookup.js` already reads
+     it off `window.__LIB_BOOK`; render() writes it on the section, where the
+     paragraphs inherit it and nothing per-paragraph is spent on a book in one
+     language. A chapter that carries its own wins over the book's. */
+  let LANG="";
   let calPx=0, calUnits=0;   // the calibration: measured px against those units
   /* the window's own tally, for a bench or a check to read (windowNow) */
   const TALLY = {passes:0, moves:0, mounts:0, unmounts:0, fixes:0, fixPx:0};
@@ -269,8 +279,21 @@ function mount(o){
          wrong. So `para` is ADDED, never substituted -- the index sees
          exactly what it saw yesterday, and only page.css reads the new
          class. */
+      /* ...AND A PROSE PARAGRAPH TAKES ITS OWN LANGUAGE WHEN IT HAS ONE.
+         `lg` is the per-paragraph language: written here against G-LANGMIX
+         ("a mixed-language book lists BOTH languages, PER PARAGRAPH", Osca
+         12 Sep), which is the lane that will put it in `book-data.js`. No
+         block on the shelf carries one today -- measured, 0 of 269,225 -- so
+         this costs exactly nothing per paragraph until one does, and the
+         attribute is written ONLY where it differs from the section's, which
+         is what keeps a Shakespeare-sized page from growing a quarter of a
+         million identical attributes. Verse is not given one: verse is
+         ragged, never hyphenated, and `lang` on it would buy nothing. */
       const verse = b.st !== undefined && b.st !== null;
-      if(!verse){ h+='<p class="line para">'+esc(b.t)+'</p>'; lastStanza=null; return; }
+      if(!verse){
+        const lg = b.lg && b.lg !== LANG ? ' lang="'+esc(b.lg)+'"' : '';
+        h+='<p class="line para"'+lg+'>'+esc(b.t)+'</p>'; lastStanza=null; return;
+      }
       const brk = lastStanza!==null && b.st!==lastStanza;
       h+='<p class="line'+(brk?' stanza':'')+'">'+esc(b.t)+'</p>';
       lastStanza = b.st;
@@ -426,7 +449,7 @@ function mount(o){
 
   function render(book){
     const BASE = baseFor(book);
-    CUR=book; col.innerHTML="";
+    CUR=book; col.innerHTML=""; LANG=(book.lang||"").trim();
     SECS=[]; MOUNTED.clear(); HEIGHT=[]; BOX=[]; UNITS=[]; PIN=-1;
     calPx=0; calUnits=0;
 
@@ -436,6 +459,7 @@ function mount(o){
     if(book.title){
       const tp=document.createElement("section");
       tp.className="chapter titlepage";
+      if(LANG) tp.setAttribute("lang", LANG);
       tp.innerHTML='<div class="opener"><snap></snap><h1 class="booktitle">'
         +esc(book.title)+'</h1>'
         +(book.author?'<p class="byline">'+esc(book.author)+'</p>':'')+'</div>';
@@ -451,6 +475,11 @@ function mount(o){
     for(let ci=0; ci<chs.length; ci++){
       const sec=document.createElement("section");
       sec.className="chapter stub"; sec.dataset.ch=ci;
+      /* the chapter's own language if the projection ever carries one, else
+         the book's; nothing at all when the book declares none, because an
+         empty `lang=""` is not "unknown" to a browser -- it is a claim. */
+      const clg = (chs[ci] && chs[ci].lang || LANG || "").trim();
+      if(clg) sec.setAttribute("lang", clg);
       col.appendChild(sec);
       SECS.push(sec); HEIGHT.push(null); BOX.push(null); UNITS.push(unitsOf(chs[ci]));
     }

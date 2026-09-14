@@ -136,7 +136,7 @@
   function chapterPayload(o) {
     o = o || {};
     var timings = o.timings, map = o.map;
-    var words = [], starts = [], sentEnds = [], dropped = 0;
+    var words = [], starts = [], sentEnds = [], ids = [], dropped = 0;
     var sents = (timings && timings.sentences) || [];
     for (var i = 0; i < sents.length; i++) {
       var ws = sents[i].words || [];
@@ -149,6 +149,15 @@
         if (text == null || text === "") { dropped++; continue; }
         words.push(text);
         starts.push(+ws[j].start || 0);
+        /* ★ AND THE WORD'S OWN ID, ALONGSIDE AND NEVER IN THE PAYLOAD (14 Sep).
+           The panel paints an INDEX; the reader's cursor is an ID. Mapping one
+           to the other is this walk's by-product -- it is the only place the
+           two orders are both in hand -- so the id list is returned to the
+           READER and is not sent. Two reasons it stays here. A payload that
+           carried the ids would be a second word index in the panel, which is
+           the one thing this whole file exists to prevent; and it would double
+           the only message on this seam that is measured in kilobytes. */
+        ids.push(ws[j].id);
       }
       /* one per sentence that put a word on the page; a sentence the map
          refused entirely leaves no mark, because a caption cannot be drawn
@@ -159,6 +168,7 @@
     }
     return {
       dropped: dropped,
+      ids: ids,
       payload: {
         label: o.label || "float",
         kind: "chapter",
@@ -243,12 +253,20 @@
     var pick = function (v) { return typeof v === "function" ? v() : v; };
     var controlIn = o.control || function () { return window.ReaderControl; };
     var sysIn = o.sysvoice || null;           /* the system voice's engine */
+    /* ★ WHERE THE READER IS STANDING WHEN NOTHING IS PLAYING (14 Sep). Asked
+       for, never held, like every other door here: a function answering the
+       reader's cursor as `{chapter, word}` where `word` is the index into the
+       chapter's own DOM word index (`book-nav.js`'s `ttstv:cursor`). */
+    var cursorIn = o.cursor || null;
     var slug = o.slug || "";
     var doors = o.doors || {};
     var setT = o.setIntervalFn || setInterval;
     var clearT = o.clearIntervalFn || clearInterval;
 
     var open = false, timer = null, sentChapter = null, lastWord = null;
+    /* the last chapter payload's id list, and the id -> index map built off
+       it. Rebuilt with the chapter and never guessed at. */
+    var sentIds = null, byId = null;
 
     function feed(payload) {
       return H.floatFeed(payload).then(function (ok) {
@@ -275,8 +293,33 @@
       if (!built) return false;
       if (!force && built.payload.chapter === sentChapter) return false;
       sentChapter = built.payload.chapter;
+      sentIds = built.ids;
+      byId = null;
       feed(built.payload);
       return true;
+    }
+
+    /* ★ THE CURSOR'S WORD, AS THE PANEL'S INDEX -- through the ONE map and
+       never a second cut. The reader's cursor is a flat index into the
+       chapter's DOM word index; `listen.js`'s map turns that into the word's
+       id (`byFlat`), and the chapter payload's own walk turned that id into
+       the panel's index (`ids`). Three lists, all of them the map's, and the
+       only arithmetic is two lookups. A word the map refused has no index and
+       answers null, which is the same answer the payload gave about it. */
+    function cursorIndex() {
+      var at = pick(cursorIn);
+      if (!at || !sentIds || at.word == null) return null;
+      var control = pick(controlIn);
+      var map = control && control.map;
+      if (!map || !map.byFlat) return null;
+      var id = map.byFlat.get(at.word);
+      if (id == null) return null;
+      if (!byId) {
+        byId = new Map();
+        for (var i = 0; i < sentIds.length; i++) if (!byId.has(sentIds[i])) byId.set(sentIds[i], i);
+      }
+      var i2 = byId.get(id);
+      return i2 == null ? null : i2;
     }
 
     function tick() {
@@ -295,6 +338,22 @@
       }
       var control = pick(controlIn);
       if (!control || !control.clock) return;
+      /* ★ PAUSED, THE READING IS WHERE THE READER IS (14 Sep, G-FLOATAXIS).
+         The float is opened from the one-word view now -- a scroll past the
+         view's end -- and in that view a stopped voice does not fix the word:
+         `bumpWord` walks the cursor without touching the clock, so a paused
+         `indexAt(currentTime)` is where the audio was left, not where the
+         reader is standing. The float opens ON THE CURRENT WORD or it is not
+         another view of the same record. A clock that is RUNNING still wins:
+         it is the same cursor, arriving faster. */
+      if (control.clock.paused) {
+        var w = cursorIndex();
+        if (w != null) {
+          if (w !== lastWord) { lastWord = w; feed(tickPayload({ word: w, playing: false })); }
+          return;
+        }
+      }
+      lastWord = null;
       feed(tickPayload({ t: control.clock.currentTime, playing: !control.clock.paused }));
     }
 
@@ -305,7 +364,7 @@
     function stop() {
       open = false;
       if (timer) { clearT(timer); timer = null; }
-      sentChapter = null; lastWord = null;
+      sentChapter = null; lastWord = null; sentIds = null; byId = null;
     }
 
     /* THE PANEL ANSWERS ON ITS OWN EVENT, and it is routed to this webview
