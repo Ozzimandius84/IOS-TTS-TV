@@ -7,10 +7,12 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		0ED21F132C3A17E656C649D8 /* FrankShare.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = B6354FFC43961C1CF57D4AB0 /* FrankShare.appex */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		2367557F4A68E1F052A2C2F4 /* WebKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 50A67DF6A7CB7AD195755F40 /* WebKit.framework */; };
 		31EF958AEDD05BE187301002 /* QuartzCore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 9281B675111FEE571C1E3E02 /* QuartzCore.framework */; };
 		375DF7E6E3429A74DE31BBF1 /* assets in Resources */ = {isa = PBXBuildFile; fileRef = 50479E9876539E1B7B2881C9 /* assets */; };
 		42A6F02218CB17305B4819C3 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = C031E208F61D570AC3B0E44C /* Assets.xcassets */; };
+		50E3FC9C9C806A7BF7359D95 /* ShareViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4EC927EEA926C399283F23F /* ShareViewController.swift */; };
 		529798039211BEEE221B3A75 /* SafariServices.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 3BB52128005B7EA0917BDDDE /* SafariServices.framework */; };
 		56E1D89A141A34749AB5490E /* Security.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = F83C0421DFA94CE5FB4842FC /* Security.framework */; };
 		87432A6A965794EC3D8B32A3 /* Metal.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 61C3E47422911C9EF21790ED /* Metal.framework */; };
@@ -24,6 +26,30 @@
 		E287D3A2D3A6CC71CC86BF09 /* CoreGraphics.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 0212ABFDBC4D11D109B8410D /* CoreGraphics.framework */; };
 /* End PBXBuildFile section */
 
+/* Begin PBXContainerItemProxy section */
+		625A8E67EA7C8E1735A43BF4 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = EAAEAAF5D39C859470E55922 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 36425BF5F07F42BCD2AA8F2C;
+			remoteInfo = FrankShare;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		EF93617C988102F71869E6B5 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				0ED21F132C3A17E656C649D8 /* FrankShare.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
 /* Begin PBXFileReference section */
 		0212ABFDBC4D11D109B8410D /* CoreGraphics.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreGraphics.framework; path = System/Library/Frameworks/CoreGraphics.framework; sourceTree = SDKROOT; };
 		07CE73800D5C729538042AFD /* frank_iOS.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = frank_iOS.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -31,9 +57,12 @@
 		2D4A2FA21DC3D5D04E31883A /* libapp.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; path = libapp.a; sourceTree = "<group>"; };
 		3A816F28391F2E91EAC6BD30 /* main.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = main.mm; sourceTree = "<group>"; };
 		3BB52128005B7EA0917BDDDE /* SafariServices.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SafariServices.framework; path = System/Library/Frameworks/SafariServices.framework; sourceTree = SDKROOT; };
+		46F092703811EFD5D190EDC8 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		4842EC4A4EA72D9517EB090E /* lib.rs */ = {isa = PBXFileReference; path = lib.rs; sourceTree = "<group>"; };
+		4FB7A4676CD913BA4DE13EE4 /* inbox.rs */ = {isa = PBXFileReference; path = inbox.rs; sourceTree = "<group>"; };
 		50479E9876539E1B7B2881C9 /* assets */ = {isa = PBXFileReference; lastKnownFileType = folder; path = assets; sourceTree = SOURCE_ROOT; };
 		50A67DF6A7CB7AD195755F40 /* WebKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WebKit.framework; path = System/Library/Frameworks/WebKit.framework; sourceTree = SDKROOT; };
+		524B987D81F7C0CA3765D530 /* FrankShare.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = FrankShare.entitlements; sourceTree = "<group>"; };
 		5E1EB6040519FC8B48691D35 /* dict.rs */ = {isa = PBXFileReference; path = dict.rs; sourceTree = "<group>"; };
 		602F1C9DABE3D9581BF783ED /* main.rs */ = {isa = PBXFileReference; path = main.rs; sourceTree = "<group>"; };
 		61C3E47422911C9EF21790ED /* Metal.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Metal.framework; path = System/Library/Frameworks/Metal.framework; sourceTree = SDKROOT; };
@@ -41,10 +70,12 @@
 		7833E0CA4351903EC745FCAC /* MetalKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = MetalKit.framework; path = System/Library/Frameworks/MetalKit.framework; sourceTree = SDKROOT; };
 		9281B675111FEE571C1E3E02 /* QuartzCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = QuartzCore.framework; path = System/Library/Frameworks/QuartzCore.framework; sourceTree = SDKROOT; };
 		A8C961B0955C8946FD2B303C /* frank_iOS.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = frank_iOS.entitlements; sourceTree = "<group>"; };
+		B6354FFC43961C1CF57D4AB0 /* FrankShare.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = FrankShare.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		B726A07390F5EC666C41D654 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		C031E208F61D570AC3B0E44C /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		CC6735C7B69E5BF23B54241A /* bindings.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = bindings.h; sourceTree = "<group>"; };
 		D47BB6E32D6AA02A4CF4FCB0 /* LaunchScreen.storyboard */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; path = LaunchScreen.storyboard; sourceTree = "<group>"; };
+		D4EC927EEA926C399283F23F /* ShareViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareViewController.swift; sourceTree = "<group>"; };
 		EA0AE8D3473D9C74F2047CE3 /* search.rs */ = {isa = PBXFileReference; path = search.rs; sourceTree = "<group>"; };
 		F83C0421DFA94CE5FB4842FC /* Security.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Security.framework; path = System/Library/Frameworks/Security.framework; sourceTree = SDKROOT; };
 		FA75CA6244BF961E70D733CB /* pull.rs */ = {isa = PBXFileReference; path = pull.rs; sourceTree = "<group>"; };
@@ -93,6 +124,7 @@
 			isa = PBXGroup;
 			children = (
 				07CE73800D5C729538042AFD /* frank_iOS.app */,
+				B6354FFC43961C1CF57D4AB0 /* FrankShare.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -101,6 +133,7 @@
 			isa = PBXGroup;
 			children = (
 				5E1EB6040519FC8B48691D35 /* dict.rs */,
+				4FB7A4676CD913BA4DE13EE4 /* inbox.rs */,
 				4842EC4A4EA72D9517EB090E /* lib.rs */,
 				602F1C9DABE3D9581BF783ED /* main.rs */,
 				FA75CA6244BF961E70D733CB /* pull.rs */,
@@ -126,6 +159,16 @@
 			path = debug;
 			sourceTree = "<group>";
 		};
+		766D2CCC7C88043E4901D113 /* FrankShare */ = {
+			isa = PBXGroup;
+			children = (
+				524B987D81F7C0CA3765D530 /* FrankShare.entitlements */,
+				46F092703811EFD5D190EDC8 /* Info.plist */,
+				D4EC927EEA926C399283F23F /* ShareViewController.swift */,
+			);
+			path = FrankShare;
+			sourceTree = "<group>";
+		};
 		830B0E1968D8F40C55AFC670 = {
 			isa = PBXGroup;
 			children = (
@@ -134,6 +177,7 @@
 				D47BB6E32D6AA02A4CF4FCB0 /* LaunchScreen.storyboard */,
 				A93904C9FDAA1637B05060A7 /* Externals */,
 				22265B3C3D3A0CC7CAB49F00 /* frank_iOS */,
+				766D2CCC7C88043E4901D113 /* FrankShare */,
 				4DA882112910BB24A371A402 /* Sources */,
 				4ABA65BEDB8E8AD347EC4F3D /* src */,
 				A74D33C3D73233C24D75D4AF /* Frameworks */,
@@ -183,7 +227,7 @@
 			path = bindings;
 			sourceTree = "<group>";
 		};
-		"TEMP_3733926D-0905-4505-AF43-750AA719BE3E" /* x86_64 */ = {
+		"TEMP_917A4753-6F9F-4127-BAFC-330A108C1F8B" /* x86_64 */ = {
 			isa = PBXGroup;
 			children = (
 			);
@@ -193,6 +237,23 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		36425BF5F07F42BCD2AA8F2C /* FrankShare */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = D470B3C9F1373AC76F125DE8 /* Build configuration list for PBXNativeTarget "FrankShare" */;
+			buildPhases = (
+				883C5683E2167C3E525B3DD1 /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = FrankShare;
+			packageProductDependencies = (
+			);
+			productName = FrankShare;
+			productReference = B6354FFC43961C1CF57D4AB0 /* FrankShare.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 		E887BB49B0A831422746216E /* frank_iOS */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = A3B1F57165832F331A199F31 /* Build configuration list for PBXNativeTarget "frank_iOS" */;
@@ -201,10 +262,12 @@
 				E85386A5AA31F8E0DC0D861B /* Sources */,
 				EF5065737F5089881613D2B5 /* Resources */,
 				60B8B1FDAC537C13FCC35397 /* Frameworks */,
+				EF93617C988102F71869E6B5 /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				38F320C157A501AEABC0A044 /* PBXTargetDependency */,
 			);
 			name = frank_iOS;
 			packageProductDependencies = (
@@ -222,6 +285,10 @@
 				BuildIndependentTargetsInParallel = YES;
 				LastUpgradeCheck = 1430;
 				TargetAttributes = {
+					36425BF5F07F42BCD2AA8F2C = {
+						DevelopmentTeam = DC5G53NN4R;
+						ProvisioningStyle = Automatic;
+					};
 					E887BB49B0A831422746216E = {
 						DevelopmentTeam = DC5G53NN4R;
 						ProvisioningStyle = Automatic;
@@ -243,6 +310,7 @@
 			projectRoot = "";
 			targets = (
 				E887BB49B0A831422746216E /* frank_iOS */,
+				36425BF5F07F42BCD2AA8F2C /* FrankShare */,
 			);
 		};
 /* End PBXProject section */
@@ -286,6 +354,14 @@
 /* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		883C5683E2167C3E525B3DD1 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				50E3FC9C9C806A7BF7359D95 /* ShareViewController.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		E85386A5AA31F8E0DC0D861B /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -295,6 +371,14 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		38F320C157A501AEABC0A044 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 36425BF5F07F42BCD2AA8F2C /* FrankShare */;
+			targetProxy = 625A8E67EA7C8E1735A43BF4 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		35227733AC2057530278FDAC /* release */ = {
@@ -426,6 +510,33 @@
 			};
 			name = debug;
 		};
+		DBDFCBAF97AD668C9DFA2B07 /* debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = NO;
+				ARCHS = (
+					arm64,
+				);
+				CODE_SIGN_ENTITLEMENTS = FrankShare/FrankShare.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = DC5G53NN4R;
+				ENABLE_BITCODE = NO;
+				"EXCLUDED_ARCHS[sdk=iphoneos*]" = x86_64;
+				INFOPLIST_FILE = FrankShare/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.ttstv.frank.share;
+				PRODUCT_NAME = FrankShare;
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = debug;
+		};
 		E3822603AF4D908A0B444FB8 /* release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -482,6 +593,33 @@
 			};
 			name = release;
 		};
+		FCE592B64991173211F06138 /* release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = NO;
+				ARCHS = (
+					arm64,
+				);
+				CODE_SIGN_ENTITLEMENTS = FrankShare/FrankShare.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = DC5G53NN4R;
+				ENABLE_BITCODE = NO;
+				"EXCLUDED_ARCHS[sdk=iphoneos*]" = x86_64;
+				INFOPLIST_FILE = FrankShare/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.ttstv.frank.share;
+				PRODUCT_NAME = FrankShare;
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -499,6 +637,15 @@
 			buildConfigurations = (
 				8A7BE2F348530E2F1D2F5005 /* debug */,
 				E3822603AF4D908A0B444FB8 /* release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = debug;
+		};
+		D470B3C9F1373AC76F125DE8 /* Build configuration list for PBXNativeTarget "FrankShare" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				DBDFCBAF97AD668C9DFA2B07 /* debug */,
+				FCE592B64991173211F06138 /* release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = debug;
