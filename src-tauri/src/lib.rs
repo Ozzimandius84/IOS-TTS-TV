@@ -1857,6 +1857,15 @@ pub const SYNC_JS: &str = r#"(function () {
 // roads a share lands on, the send to the paired Studio, and the take-away.
 // Here is the door the page comes through and the row a person actually sees.
 //
+// THE ROW'S PICTURE AND ITS CONTRACT: `design/phone/inbox.html` in TTSTV
+// (14 Sep). The CSS array and the two sentences below are that page's contract
+// block, byte for byte, and `design/phone/test-inbox.mjs` is the check that
+// says so -- run it in TTSTV, not here. The page cannot be READ at run time
+// (the app never loads anything from design/, and that repo is not on the
+// phone); it is the picture, the same way every other phone surface has one.
+// Until it existed this row was the one phone surface invisible to
+// design/phone, to `--pages`, to `clean/` and to `shell.manifest.json`.
+//
 // WHY THE ROW IS IN THIS STRING AND NOT IN `library.html`. `shell/` is
 // imported from TTSTV byte for byte (`tools/import_shell.py`; README: "NEVER
 // EDITED BY HAND"), so a row typed into the Library page here would be gone at
