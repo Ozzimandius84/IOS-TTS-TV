@@ -1,11 +1,29 @@
-/* THE LIST UNDER THE BAR (reader/askbar.js).
+/* THE LIST UNDER THE BAR (bar/askbar.js).
+ *
+ * ITS MASTER IS `design/reader/search-bar-editor.html`, AND EVERY NUMBER BELOW
+ * IS A SLIDER ON IT (14 Sep). Until today that page dialled the panel's BOX and
+ * nothing inside it: of the 116 measures in this file, 10 are the phone block's
+ * and 106 are the editor's, and it owned 2 of those 106. So a note about a row
+ * being too tight was a code change and not a slider, which is the opposite of
+ * the rule the editor exists to keep. It prints all 106 now, in `askOut()`,
+ * under a banner naming this file -- it named `reader/askbar.css` until the
+ * 14th, a path dead since the 5 Sep move, so every paste before this one went
+ * where nothing reads it.
+ *
+ * THE PASTE THAT ADDED THE SECTION MOVED NOTHING: the editor's defaults were
+ * read off this file at 3759646 and printed back identical, declaration for
+ * declaration. Dial it, paste it, and only what you dialled changes.
+ *
+ * The `@media (max-width: 600px)` block at the foot is NOT the editor's -- it
+ * is `design/phone/phone.html`'s Copy CSS, as its own comment says.
  *
  * The field is in the title-bar strip and this hangs beneath it, in the page's
  * own webview -- the strip is 28px tall and would clip it, and a list the page
  * draws is the same list the browser and the phone get, where there is no
  * strip at all. (It said 46 until 5 Sep; the strip has been 28 since 504e36f.)
  *
- * BIGGER AND CALMER (Osca, 5 Sep, through tools/search/bar.html's editor).
+ * BIGGER AND CALMER (Osca, 5 Sep, through that editor -- then at
+ * tools/search/bar.html, moved into design/reader/ by f21ce22).
  * 14px, not 13. Rows at 9/11, not 6/9. Radius 12, not 10. It is read now
  * rather than scanned, and the width is the field's -- see askbar.js::place.
  *

@@ -2832,6 +2832,10 @@
    * "This device only" is what the line reads until one of them exists.  */
   var SYNC = {
     GET: "/sync", HELLO: "/sync/hello", PAIR: "/sync/pair", MANIFEST: "/sync/manifest",
+    // G-PAIRMAIL (14 Sep): the Mac's own press, the one consent screen road 1
+    // needs, and the square. Loopback only -- `studio/serve.py::
+    // sync_path_allowed` answers no path it has not named.
+    PAIR_START: "/sync/pair/start", PAIR_SCOPE: "/sync/pair/scope", PAIR_QR: "/sync/pair/qr",
     MARGINALIA: "/sync/marginalia", POSITIONS: "/sync/positions",
     // studio's own settings file, the same POST the Cloud GPU tab's WHERE
     // uses (`KAGGLE.SETTINGS`): one file, one endpoint, and each row sends
@@ -3078,9 +3082,17 @@
   }
 
   /* Pure: the code as the row prints it, "483 912". */
+  /* TEN digits since 14 September (Osca: *"It's just got to be a 10-digit
+   * number or a QR code"*), grouped the way a phone number is, because that
+   * is the grouping a person reads across a room without losing their place.
+   * `studio/sync.py::CODE_DIGITS` is the same number and the only source of
+   * it; anything of another length is printed as it came, which is what a
+   * Studio older than today looks like. */
+  var SYNC_CODE_DIGITS = 10;
   function syncCodeText(code) {
     var s = String(code || "").replace(/\D/g, "");
-    return s.length === 6 ? s.slice(0, 3) + " " + s.slice(3) : s;
+    if (s.length !== SYNC_CODE_DIGITS) return s;
+    return s.slice(0, 3) + " " + s.slice(3, 6) + " " + s.slice(6);
   }
 
   /* Pure: which remote a press talks to. Studio's own page -> its origin,
@@ -3258,12 +3270,90 @@
 
   /* The phone's half of pairing: find Studios (through the host, Bonjour),
    * or take an address, then the code. Resolves to the pairing record or
-   * {why}. `hello` and `pair` are the two open routes. */
+   * {why}. `hello` and `pair` are the two open routes.
+   *
+   * ================= TWO STATES, AND WHY THERE WERE NOT TWO BEFORE (14 Sep)
+   *
+   * The browse used to answer a bare array, so an empty one carried two
+   * different facts under one word: there is no Mac on this Wi-Fi (ordinary;
+   * the typed address is the answer), and this build is not ALLOWED to look
+   * (`com.apple.developer.networking.multicast`, or the local-network prompt
+   * declined). The card drew "No Studio found on this network" for both,
+   * which in the second case sends a person hunting a router fault they do
+   * not have.
+   *
+   * `lib.rs::Discovery` answers `{studios, allowed, why}` now, and this is
+   * the one place the shape is normalised, because THE SHELL SHIPS TO PHONE
+   * BUILDS OLDER THAN ITSELF: `import_shell.py` carries these pages into an
+   * app that was built whenever it was built, so a bare array is still a
+   * legal answer here and means "an older Frank, which could only look".
+   *
+   * A host without the method at all is not a phone -- a browser, or the Mac
+   * -- and `allowed` is false with no sentence: there is nothing to explain
+   * and nothing went wrong. */
+  function syncDiscoverShape(r) {
+    if (Array.isArray(r)) return { studios: r, allowed: true, why: null };     // an older Frank
+    if (r && Array.isArray(r.studios)) {
+      return { studios: r.studios, allowed: r.allowed !== false, why: r.why || null };
+    }
+    return { studios: [], allowed: true, why: null };
+  }
+  /* The one line above the card, and the only place the three states are
+   * turned into words. Pure, so the test reads it without a page. */
+  function syncFoundLine(d, offer) {
+    d = syncDiscoverShape(d);
+    var n = d.studios.length;
+    /* THE FOURTH SHAPE (G-PAIRMAIL, 14 Sep) -- and it is FIRST because it is
+     * the only one where nothing has to be typed. An offer is a secret this
+     * phone was handed out of band: out of the Drive folder both devices sign
+     * in to (`library/drive.js::syncPairingOffer`) or out of a mail, through
+     * the link (`lib.rs::parse_studio_link`). Discovery is then beside the
+     * point -- the offer carries its own address. */
+    if (offer && offer.secret) {
+      return (offer.name || "A Studio") + " wants to pair \u00b7 via " +
+        (offer.via === "mail" ? "your email" : "this Drive");
+    }
+    /* ONE TAP IS GONE (Osca, same day). It stood on the advert carrying `fp`,
+     * which the phone walked back to the six digits in 74 ms -- so the advert
+     * WAS the code. The Mac broadcasts a name and a version now, and a found
+     * Studio is a found Studio: it still has to be unlocked. */
+    if (n) return n + (n === 1 ? " Studio found" : " Studios found") + " \u00b7 type the code Studio's row shows";
+    // NOT FOUND, and the two reasons are not the same reason. A REFUSAL has
+    // a sentence and prints it. A browse that looked and saw nothing -- and a
+    // page with no host at all, which is the Mac and every browser -- has
+    // none, and gets the line this card has always drawn: nothing went wrong,
+    // so nothing is explained.
+    if (!d.allowed && d.why) return d.why;
+    return "No Studio found on this network \u00b7 type the address and code Studio's row shows";
+  }
+
+  /* Which road paired, in the words the card says it in. Pure, so the test
+   * reads it without a page -- and one function, so the three roads cannot
+   * drift into three vocabularies. `road` is what `POST /sync/pair` answers
+   * (`studio/sync.py::Pairing.road`): "offer" for a secret, "code" for the
+   * ten digits. `via` is how the offer reached this phone. */
+  /* The Mac's half of the same vocabulary: which road the live offer went
+   * out by. Pure, and one place, for `syncPairedLine`'s reason. */
+  function syncOfferSent(road) {
+    if (road === "drive") return "Offer left in your Drive";
+    if (road === "mail") return "Pairing link sent to your email";
+    return "Pairing open · scan the square or type the code";
+  }
+
+  function syncPairedLine(name, road, via) {
+    var who = name || "Studio";
+    if (road !== "offer") return "Paired with " + who + " \u00b7 by the code you typed";
+    if (via === "mail") return "Paired with " + who + " \u00b7 from the mail, nothing typed";
+    if (via === "drive") return "Paired with " + who + " \u00b7 through the Drive you share";
+    return "Paired with " + who + " \u00b7 nothing typed";
+  }
+
   function syncDiscover(host) {
-    if (!host || typeof host.syncDiscover !== "function") return Promise.resolve([]);
-    var timer = new Promise(function (res) { global.setTimeout(function () { res([]); }, SYNC_DISCOVER_MS + 1500); });
+    var none = { studios: [], allowed: false, why: null };
+    if (!host || typeof host.syncDiscover !== "function") return Promise.resolve(none);
+    var timer = new Promise(function (res) { global.setTimeout(function () { res(none); }, SYNC_DISCOVER_MS + 1500); });
     return Promise.race([Promise.resolve().then(function () { return host.syncDiscover(SYNC_DISCOVER_MS); }), timer])
-      .then(function (list) { return Array.isArray(list) ? list : []; }, function () { return []; });
+      .then(syncDiscoverShape, function () { return none; });
   }
   function syncBaseOf(hostOrAddress, port) {
     var s = String(hostOrAddress || "").trim().replace(/^https?:\/\//, "").replace(/\/+$/, "");
@@ -3271,15 +3361,42 @@
     if (port && s.indexOf(":") < 0) s += ":" + port;
     return "http://" + s;
   }
-  function syncPair(base, code, device, name) {
+  /* ONE DOOR, TWO KEYS (G-PAIRMAIL, 14 Sep). `key` is either the ten digits
+   * Studio's row shows or the 32-byte secret an offer carried; the digits are
+   * stripped of anything that is not one, a secret is sent as it came. There
+   * is no second route and no second token shape -- `studio/sync.py::
+   * Pairing.pair` takes both and answers which one was used, so the card can
+   * say the true sentence without inferring it from what it sent. */
+  function syncPair(base, key, device, name) {
+    var k = String(key || "");
+    var digits = k.replace(/\D/g, "");
+    var send = digits.length === k.length ? digits : k;
     return syncFetchJSON(base + SYNC.HELLO).then(function (h) {
       if (!h.ok) return { why: h.why };
-      return syncFetchJSON(base + SYNC.PAIR, { code: String(code || "").replace(/\D/g, ""), device: device, name: name || "" })
+      return syncFetchJSON(base + SYNC.PAIR, { code: send, device: device, name: name || "" })
         .then(function (r) {
           if (!r.ok) return { why: r.why };
-          return { base: base, token: r.body.token, name: r.body.name || h.body.name || base, paired: Date.now() };
+          return { base: base, token: r.body.token, name: r.body.name || h.body.name || base,
+                   road: r.body.road || null, paired: Date.now() };
         });
     });
+  }
+
+  /* THE OFFER THIS PHONE HAS BEEN HANDED, from either out-of-band road.
+   * `ttstv.sync.offer` is written by the crate when a `frank-pair://studio`
+   * link is opened (the mail's button, or the QR through the system camera --
+   * `lib.rs::STUDIO_OFFER_KEY`) and by this page when a Drive sync brings one
+   * back. One key, two writers, exactly like `transfer.pairing`.
+   *
+   * An expired offer is not an offer: it is dropped on read rather than drawn
+   * and refused, because "this expired ten minutes ago" is a sentence about a
+   * thing the person never saw. */
+  var SYNC_OFFER_KEY = "ttstv.sync.offer";
+  function syncOfferRead(now) {
+    var o = syncRead(SYNC_OFFER_KEY);
+    if (!o || typeof o.secret !== "string" || !o.secret) return null;
+    if (o.expires && Number(o.expires) <= (now || Date.now())) { syncWrite(SYNC_OFFER_KEY, null); return null; }
+    return o;
   }
 
   /* ================================ THE ACCOUNT, AND GOOGLE DRIVE (26b)
@@ -3711,19 +3828,49 @@
     var codeEl = kEl(doc, "span", "kag-line kag-dim set-val tr-code", "");
     var lanPick = pick("Use", "lan", false);
     var studioSel = null, addrIn = null, codeIn = null;
+    /* START PAIRING, and the square (G-PAIRMAIL, 14 Sep). The Mac's half of
+     * the three roads: one press mails the link to the account this Mac is
+     * signed in to, or leaves it in the Drive both devices share, or -- with
+     * no account anywhere -- simply mints the offer and draws it. The square
+     * and the ten digits are ALWAYS available once an offer is live, because
+     * road 2 is the one road that needs nothing but eyes.
+     *
+     * The QR is an `<svg>` (`studio/qr.py`), fetched as text and set as
+     * markup: **no PNG enters this repo** (CLAUDE.md, Osca 5 Sep), and a
+     * `<path>` in `currentColor` is right in light and dark with no second
+     * drawing. */
+    var startBtn = null, driveBtn = null, qrBox = null;
     if (isStudio) {
+      startBtn = doc.createElement("button");
+      startBtn.type = "button";
+      startBtn.className = "kag-btn tr-startpair kag-primary";
+      startBtn.textContent = "Start pairing";
+      driveBtn = doc.createElement("button");
+      driveBtn.type = "button";
+      driveBtn.className = "kag-btn tr-drivepair";
+      driveBtn.textContent = "Leave in Drive";
+      qrBox = kEl(doc, "div", "tr-qr");
+      qrBox.hidden = true;
       lanRow.c.appendChild(codeEl);
+      lanRow.c.appendChild(startBtn);
+      lanRow.c.appendChild(driveBtn);
       lanRow.c.appendChild(lanPick);
+      lanRow.row.appendChild(qrBox);
       lanPick.disabled = true;
     } else {
       studioSel = doc.createElement("select");
-      studioSel.className = "set-menu"; studioSel.setAttribute("aria-label", "Studio"); studioSel.hidden = true;
+      // `tr-studio` so a test can ask whether the picker is drawn (14 Sep);
+      // `set-menu` is the look and is unchanged.
+      studioSel.className = "set-menu tr-studio"; studioSel.setAttribute("aria-label", "Studio"); studioSel.hidden = true;
       addrIn = doc.createElement("input");
       addrIn.type = "text"; addrIn.className = "kag-in tr-addr"; addrIn.placeholder = "192.168.1.5:41499";
       addrIn.setAttribute("aria-label", "Studio address"); addrIn.autocomplete = "off"; addrIn.hidden = true;
       codeIn = doc.createElement("input");
       codeIn.type = "text"; codeIn.className = "kag-in tr-codein"; codeIn.inputMode = "numeric";
-      codeIn.maxLength = 7; codeIn.placeholder = "code"; codeIn.setAttribute("aria-label", "Pairing code");
+      // ten digits and room for the two spaces the Mac prints them with, so a
+      // code read off the row and typed back in as "278 949 1234" fits
+      codeIn.maxLength = SYNC_CODE_DIGITS + 2;
+      codeIn.placeholder = "code"; codeIn.setAttribute("aria-label", "Pairing code");
       codeIn.autocomplete = "off"; codeIn.hidden = true;
       lanRow.c.appendChild(studioSel); lanRow.c.appendChild(addrIn); lanRow.c.appendChild(codeIn);
       lanRow.c.appendChild(lanPick);
@@ -3879,7 +4026,12 @@
         }, function () { watching = false; });
       })();
     }
-    var found = [];
+    var found = [], picking = false;
+    /* The offer this phone has been handed, if any -- from the crate (a
+     * `frank-pair://studio` link opened out of the mail or off the square) or
+     * from the Drive press. `via` is which, and it is only ever a word for the
+     * sentence: both end at the same `/sync/pair` with the same secret. */
+    var offer = isStudio ? null : syncOfferRead();
     /* Google is built (26b): on the Mac the press is Studio's loopback
      * flow, on the phone the host's browser + this page's PKCE. A page with
      * neither (the PWA on the web, a file:// open) says so and stays inert. */
@@ -3942,7 +4094,21 @@
         if (s.paired) parts.push(s.paired + (s.paired === 1 ? " phone paired" : " phones paired"));
         if (s.port && !s.bonjour && s.bonjour_why) parts.push(s.bonjour_why);
         if (s.depot === false) parts.push("depot not found -- nothing can be merged");
+        // the offer in flight, in minutes, because "expires at 1789390461667"
+        // is not a thing to print at a person
+        if (s.offer && s.offer.expires) {
+          var mins = Math.max(0, Math.round((s.offer.expires - Date.now()) / 60000));
+          parts.push(syncOfferSent(s.offer.road) + " · " + mins + (mins === 1 ? " minute left" : " minutes left"));
+        }
         lanRow.why.textContent = parts.join(" · ");
+        var liveOffer = !!(s.offer && s.offer.expires > Date.now());
+        startBtn.textContent = liveOffer ? "Start again" : "Start pairing";
+        startBtn.disabled = !on;
+        // road 1b is the shared folder, so it needs the account -- and only
+        // the account: no mail scope, nothing to consent to
+        driveBtn.hidden = !signed;
+        driveBtn.disabled = !on;
+        qrBox.hidden = !liveOffer;
         var lanUsed = on && !useDrive;
         lanPick.textContent = lanUsed ? "In use" : "Use";
         lanPick.classList.toggle("kag-primary", lanUsed);
@@ -3955,18 +4121,50 @@
       } else {
         var paired = !!(pair && pair.token);
         lanRow.name.classList.toggle("kag-on", paired);
-        lanRow.why.textContent = paired ? "Paired with " + pair.name + " · " + pair.base.replace(/^http:\/\//, "")
-          : "No Studio paired yet · press Sync to find one";
-        lanPick.textContent = paired ? "Forget" : "Use";
-        lanPick.classList.toggle("kag-primary", false);
+        lanRow.why.textContent = paired
+          ? syncPairedLine(pair.name, pair.road, pair.via) + " · " + pair.base.replace(/^http:\/\//, "")
+          : (offer ? syncFoundLine({ studios: [], allowed: true, why: null }, offer)
+                   : "No Studio paired yet · press Sync to find one");
+        lanPick.textContent = paired ? "Forget" : (offer ? "Pair" : "Use");
+        lanPick.classList.toggle("kag-primary", !paired && !!offer);
         lanPick.setAttribute("aria-pressed", paired ? "true" : "false");
-        lanPick.disabled = !paired && studioSel.hidden;
+        lanPick.disabled = !paired && !offer && !picking && studioSel.hidden;
       }
     }
 
     /* the phone's picker, shown inside the row until the code lands */
-    function showPicker(list) {
-      found = list || [];
+    /* ================================ THE TWO STATES (G-DISCOVER, 14 Sep)
+     *
+     * Osca: *"present -> 'Found <Mac name> -- Pair'; absent -> the typed
+     * card, unchanged"*, and **typed stays as the fallback forever**. So this
+     * draws exactly three shapes and never a fourth:
+     *
+     *   FOUND              a Studio answered. The picker, and the TEN digits
+     *                      its row is showing.
+     *   NOT FOUND          the address field and the code. UNCHANGED, and the
+     *                      only difference is the sentence above it, which now
+     *                      says whether we looked and saw nothing or were not
+     *                      allowed to look at all (`syncDiscover`).
+     *
+     * THE ONE-TAP SHAPE IS GONE (Osca, 14 Sep, later the same day). It existed
+     * because the Mac's advert carried `fp` and this phone walked it back to
+     * the six digits in 74 ms -- which is to say the advert was the code. The
+     * roads that need nothing typed are the two that do not go over the Wi-Fi
+     * at all: the mail and the shared Drive, both of which arrive as an
+     * `offer` and are drawn on the row itself, not in this picker.
+     *
+     * `d` is `syncDiscover`'s shape. A bare array is still accepted there for
+     * an older Frank, so this function never sees one. */
+    function showPicker(d) {
+      d = syncDiscoverShape(d);
+      found = d.studios;
+      // THE PICKER IS OPEN, said out loud. It used to be inferred from the
+      // code field being visible (`!codeIn.hidden`), which was true for as
+      // long as the only way to pair was to type six digits. The one tap
+      // hides that field -- there is nothing to type -- so the inference
+      // became "the picker is shut" and the press fell through to Forget and
+      // did nothing at all. A state a button depends on is a variable.
+      picking = true;
       while (studioSel.firstChild) studioSel.removeChild(studioSel.firstChild);
       found.forEach(function (s, i) {
         var opt = doc.createElement("option");
@@ -3979,36 +4177,104 @@
       codeIn.hidden = false;
       lanPick.textContent = "Use";
       lanPick.disabled = false;
-      lanRow.why.textContent = found.length
-        ? found.length + (found.length === 1 ? " Studio found" : " Studios found") + " · type the code Studio's row shows"
-        : "No Studio found on this network · type the address and code Studio's row shows";
+      lanRow.why.textContent = syncFoundLine(d, offer);
       try { (found.length ? codeIn : addrIn).focus(); } catch (e) {}
     }
     function hidePicker() {
+      picking = false;
       studioSel.hidden = true; addrIn.hidden = true; codeIn.hidden = true;
     }
 
     function pairFromPicker() {
-      var base;
-      if (!studioSel.hidden && found.length) {
-        var s = found[Number(studioSel.value) || 0];
-        base = syncBaseOf(s.host, s.port);
+      var base, code, via = null;
+      /* THE OFFER, AND IT COMES FIRST. A secret handed to this phone out of
+       * band -- out of the mail, off the square through the system camera, or
+       * out of the Drive folder both devices sign in to. Nothing was typed and
+       * nothing crossed the Wi-Fi, and it still goes to the same
+       * `/sync/pair`, still refused in words if it is stale: a shortcut
+       * through the one door and never a second one. */
+      if (offer && offer.secret) {
+        base = syncBaseOf(offer.host, offer.port);
+        code = offer.secret;
+        via = offer.via || "mail";
+      } else if (!studioSel.hidden && found.length) {
+        base = syncBaseOf(found[Number(studioSel.value) || 0].host, found[Number(studioSel.value) || 0].port);
       } else {
         base = syncBaseOf(addrIn.value);
       }
       if (!base) { say.textContent = "Which Studio? Type its address."; return Promise.resolve(null); }
-      var code = String(codeIn.value || "").replace(/\D/g, "");
-      if (code.length !== 6) { say.textContent = "The code is six digits."; return Promise.resolve(null); }
+      if (!code) {
+        code = String(codeIn.value || "").replace(/\D/g, "");
+        if (code.length !== SYNC_CODE_DIGITS) {
+          say.textContent = "The code is ten digits.";
+          return Promise.resolve(null);
+        }
+      }
       say.textContent = "Pairing…";
       return syncPair(base, code, syncDeviceId(), (host && host.deviceName) || "").then(function (p) {
         if (!p || p.why) { say.textContent = (p && p.why) || "could not pair"; return null; }
+        p.via = via;
         pair = p;
         syncWrite(SYNC_PAIR_KEY, pair);
+        // AN OFFER IS SPENT. The Mac drops the secret the moment it is used;
+        // this drops its copy, so a key is not left lying in `localStorage`
+        // or in a shared folder. A trash that fails is not a failed pairing.
+        if (offer) {
+          syncWrite(SYNC_OFFER_KEY, null);
+          if (offer.via === "drive" && global.TTSTVDrive) syncClearDriveOffer();
+          offer = null;
+        }
+        // THE REVERSE (14 Sep): now that this phone is paired, say so on the
+        // LAN so a Mac can push to it without going round by Drive
+        // (`studio/sync.py::find_phones`). Only the name and the code's PUBLIC
+        // half travel -- never the token. Best effort: a phone that cannot
+        // advertise is still perfectly paired.
+        if (host && typeof host.syncAdvertise === "function") {
+          try {
+            // NO `fp` (14 Sep). It was the fingerprint of the code this phone
+            // paired with, which is the Mac's own mistake in miniature: a
+            // phone broadcasting it is broadcasting the code. The device id
+            // is a NAME -- it opens nothing, and it is what the Mac matches
+            // (`studio/sync.py::find_phones`).
+            host.syncAdvertise({ name: host.deviceName || "", device: syncDeviceId() });
+          } catch (e) {}
+        }
         hidePicker();
-        say.textContent = "Paired with " + p.name;
+        say.textContent = syncPairedLine(p.name, p.road, via);
         paint();
         return p;
       });
+    }
+
+    /* Road 1b's last step: the offer file out of the shared folder, once it
+     * has been spent. Best effort and silent -- the secret is already dead on
+     * the Mac, so a file left behind is litter and not a key. */
+    function syncClearDriveOffer() {
+      try {
+        var D = global.TTSTVDrive;
+        if (!D || typeof D.driveClient !== "function") return;
+        var drive = D.driveClient(googleAccessToken, global.fetch);
+        var folder = D.driveFolder(drive);
+        folder.open().then(function () { return D.syncClearPairingOffer(folder); }).catch(function () {});
+      } catch (e) { /* a page without the adapter simply leaves it */ }
+    }
+
+    /* ROAD 1b ARRIVING, and it is its own function because it is the seam:
+     * the Drive press reads `Frank/pairing.json` on the sync that was going to
+     * run anyway (`library/drive.js::syncPairingOffer`), so an offer the Mac
+     * left costs this phone no extra round trip and no extra press. Nothing is
+     * paired here -- the card draws the fourth shape and the person presses
+     * Pair; an offer is an offer until somebody takes it. Returned on the
+     * panel's handle beside `press`, which is what
+     * `settings/tests/test_pairing_roads.py` presses. */
+    function takeOffer(res) {
+      if (isStudio || !res || !res.offer || !res.offer.secret) return null;
+      if (pair && pair.token) return null;
+      offer = { secret: res.offer.secret, host: res.offer.host, port: res.offer.port,
+                name: res.offer.name, expires: res.offer.expires, via: "drive" };
+      syncWrite(SYNC_OFFER_KEY, offer);
+      paint();
+      return offer;
     }
 
     function finish(res) {
@@ -4026,6 +4292,12 @@
         failed = String(res.why || "") || "Sync failed";
         say.textContent = "";
       }
+      /* ROAD 1b ARRIVING. The Drive press reads `Frank/pairing.json` on the
+       * sync that was going to run anyway (`library/drive.js::
+       * syncPairingOffer`), so an offer the Mac left costs this phone no
+       * extra round trip and no extra press. Nothing is paired here: the card
+       * draws the fourth shape and the person presses Pair. */
+      takeOffer(res);
       if (res.ok && res.handed != null) {
         // the books are the app's now: the row follows its pull
         var refused = res.refused || [];
@@ -4086,8 +4358,8 @@
       if (!remote) {
         // the first press on a phone: find a Studio, right here in the row
         say.textContent = "Looking for Studio on this network…";
-        return syncDiscover(host).then(function (list) {
-          showPicker(list);
+        return syncDiscover(host).then(function (d) {
+          showPicker(d);
           say.textContent = "";
         });
       }
@@ -4201,7 +4473,10 @@
         through = "lan"; syncWrite(SYNC_THROUGH_KEY, through); paint();
         return;
       }
-      if (!codeIn.hidden) { pairFromPicker().then(function (p) { if (p) press(); }); return; }
+      // AN OFFER IS A PRESS OF ITS OWN (G-PAIRMAIL): the row is not in the
+      // picker -- there is nothing to pick and nothing to type -- so the
+      // button is "Pair" and it takes the secret straight to the one door.
+      if (offer || picking) { pairFromPicker().then(function (p) { if (p) press(); }); return; }
       if (pair && pair.token) {
         var a2 = acctNow();
         if (a2 && a2.kind === "google" && a2.who && syncThrough(a2, through) === "gdrive") {
@@ -4216,6 +4491,100 @@
     });
     if (codeIn) codeIn.addEventListener("keydown", function (e) { if (e.key === "Enter") lanPick.click(); });
 
+    /* ================================ START PAIRING (G-PAIRMAIL, 14 Sep)
+     * The Mac's press. One button, and the road it takes is the best one
+     * available rather than a choice the person has to understand:
+     *
+     *   signed in, mail allowed   -> road 1: one message to that address
+     *   signed in, not allowed    -> one consent screen, then road 1
+     *   not signed in             -> road 2: the offer, the square, the digits
+     *
+     * "Leave in Drive" is road 1b beside it, shown only when signed in,
+     * because it is the road for a phone whose mail is not on it.
+     *
+     * THE OFFER IS MINTED WHATEVER HAPPENS on the two roads that mint one, so
+     * a mail that could not be sent still leaves a square on the screen. That
+     * is the point of having three. */
+    function pairStart(road) {
+      if (!isStudio || !startBtn) return Promise.resolve(null);
+      startBtn.disabled = true;
+      say.textContent = road === "drive" ? "Leaving the offer in Drive…" : "Starting…";
+      return ctx.postJSON(SYNC.PAIR_START, { road: road }).then(function (r) {
+        var d = (r && r.body) || {};
+        if (r && r.ok === false && !d.road) { say.textContent = r.why || "could not start pairing"; return null; }
+        if (d.needs === "mail-scope") {
+          say.textContent = d.why || "";
+          return d.can_signin ? pairScope() : signIn();
+        }
+        say.textContent = d.ok ? syncOfferSent(d.road) : (d.why || "");
+        // a mail Google refused: the offer is live all the same, and Mail.app
+        // is the road that needs no scope at all -- opened, not sent
+        if (!d.ok && d.mailto && global.open) { try { global.open(d.mailto); } catch (e) {} }
+        return ask().then(paint).then(paintQR);
+      }, function (e) {
+        say.textContent = String((e && e.message) || e);
+        return null;
+      }).then(function (v) { startBtn.disabled = false; return v; });
+    }
+
+    /* The one consent screen road 1 needs -- `drive.file` again plus
+     * `gmail.send`, with `include_granted_scopes` so Drive survives it. Polled
+     * exactly like the ordinary sign-in, because it IS the ordinary sign-in
+     * with one more box on it. */
+    function pairScope() {
+      say.textContent = "Opening Google in your browser…";
+      return ctx.postJSON(SYNC.PAIR_SCOPE, {}).then(function (r) {
+        if (!r.ok) { say.textContent = r.why || "could not ask Google"; return null; }
+        return new Promise(function (resolve) {
+          function poll() {
+            ctx.getJSON(ACCOUNT.GET).then(function (d) {
+              if (!d) { resolve(null); return; }
+              studioAcct = d;
+              var si = d.signin || {};
+              if (si.live) { global.setTimeout(poll, ACCOUNT_POLL_MS); return; }
+              paint();
+              resolve(si.phase === "done" ? pairStart("mail") : null);
+              if (si.phase !== "done") say.textContent = si.error || "";
+            });
+          }
+          poll();
+        });
+      });
+    }
+
+    /* The square, fetched as TEXT and set as markup. It is an `<svg>` -- one
+     * `<path>` in `currentColor` -- and it is built by `studio/qr.py`, which
+     * exists because **no PNG enters this repo** and because a picture nobody
+     * can read back is not proof of anything. 404 is the ordinary answer when
+     * no offer is live, and it empties the box rather than saying anything. */
+    function paintQR() {
+      if (!isStudio || !qrBox) return null;
+      if (qrBox.hidden) { qrBox.innerHTML = ""; return null; }
+      return ctx.getText(SYNC.PAIR_QR).then(function (svg) {
+        qrBox.innerHTML = svg && svg.indexOf("<svg") === 0 ? svg : "";
+      }, function () { qrBox.innerHTML = ""; });
+    }
+
+    if (startBtn) startBtn.addEventListener("click", function () { pairStart("mail"); });
+    if (driveBtn) driveBtn.addEventListener("click", function () { pairStart("drive"); });
+
+    /* THE MAIL'S BUTTON, ARRIVING (road 1). The crate writes the offer into
+     * `ttstv.sync.offer` and fires this when a `frank-pair://studio` link is
+     * opened -- out of the mail, or off the square through the phone's own
+     * Camera. `PAIR_JS`'s `ttstv:pairing` is the shape this copies.
+     *
+     * **The press IS the pairing**: the person pressed a button in their own
+     * mail, on their own phone, and there is nothing further to ask them. */
+    if (!isStudio && typeof global.addEventListener === "function") {
+      global.addEventListener("ttstv:studiooffer", function () {
+        offer = syncOfferRead();
+        if (!offer) return;
+        offer.via = "mail";
+        paint();
+        pairFromPicker().then(function (p) { if (p) press(); });
+      });
+    }
+
     paint();
     ask().then(paint);
     if (pullHost) {
@@ -4226,6 +4595,7 @@
     }
 
     return { ask: ask, paint: paint, press: press, signIn: signIn, signOut: signOut,
+             takeOffer: takeOffer,
              get pull() { return pullSt; },
              get pair() { return pair; }, get last() { return last; }, get account() { return acctNow(); },
              get through() { return syncThrough(acctNow(), through); }, get driveLast() { return driveLast; } };
@@ -4846,6 +5216,17 @@
         }).catch(function (e) {
           return { ok: false, status: 0, why: String((e && e.message) || e) };
         });
+      },
+      /* One route answers something that is not JSON: `GET /sync/pair/qr`,
+       * an `<svg>` (G-PAIRMAIL, 14 Sep). `""` for anything that is not a 200,
+       * so a 404 -- the ordinary answer when no offer is live -- empties the
+       * box instead of drawing a sentence nobody asked for. */
+      getText: function (path) {
+        var url = askUrl(path);
+        if (!url || !global.fetch) return Promise.resolve("");
+        return global.fetch(url, { cache: "no-store" })
+          .then(function (r) { return r.ok ? r.text() : ""; })
+          .catch(function () { return ""; });
       },
       after: function (ms) {
         return new Promise(function (res) { global.setTimeout(res, ms); });
@@ -5619,6 +6000,11 @@
     syncLocalMarginalia: syncLocalMarginalia, syncLocalPositions: syncLocalPositions,
     syncWriteMarginalia: syncWriteMarginalia, syncWritePositions: syncWritePositions,
     syncCountMarks: syncCountMarks, runSync: runSync, syncPair: syncPair, syncDiscover: syncDiscover,
+    syncDiscoverShape: syncDiscoverShape, syncFoundLine: syncFoundLine,
+    // G-PAIRMAIL (14 Sep): the three roads' own vocabulary, pure, so the test
+    // reads the sentences without a page
+    syncPairedLine: syncPairedLine, syncOfferSent: syncOfferSent,
+    syncOfferRead: syncOfferRead, SYNC_CODE_DIGITS: SYNC_CODE_DIGITS,
     // first run (6 Sep): the rule, the card, the write and the gate
     firstRunChosen: firstRunChosen, buildFirstRunCard: buildFirstRunCard,
     firstRunChoose: firstRunChoose, firstRunWritten: firstRunWritten, firstRunNote: firstRunNote,

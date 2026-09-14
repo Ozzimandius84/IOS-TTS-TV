@@ -21,3 +21,92 @@
 ::highlight(marg-yellow) { background-color: color-mix(in oklab, #d8b431 32%, transparent); }
 ::highlight(marg-red)    { background-color: color-mix(in oklab, #c0453a 24%, transparent); }
 ::highlight(marg-pink)   { background-color: color-mix(in oklab, #c9558f 24%, transparent); }
+
+/* ============ THE HAND (G-MARKS, 14 Sep): what a thumb sees ==============
+   Three things this lane draws and nothing else: the run being dragged, a run
+   that carries a note, and the bar that names the four colours. The four
+   colours themselves are untouched above -- a mark made by thumb and a mark
+   made by Shift are the same entry and wear the same ink.
+
+   THE VOCABULARY OF ::highlight IS FOUR PROPERTIES (colour, background-colour,
+   text-decoration, text-shadow), which is why a note is an underline and not a
+   border: the browser paints it over live text and there is no box to style. */
+
+/* the run under the thumb, while it is being dragged: the page's own ink at a
+   quarter, so it reads as "these words" and never as a fifth colour */
+::highlight(marg-sel)  { background-color: color-mix(in oklab, currentColor 18%, transparent); }
+/* a noted run, whatever colour it is or is not */
+::highlight(marg-note) { text-decoration: underline dotted var(--rule-dotted); text-decoration-skip-ink: none; }
+
+/* ---- THE FALLBACK, BELOW WebKit 17.2 -----------------------------------
+   CSS.highlights arrives in Safari 17.2 (December 2023). Below it the same
+   ranges are painted as a LAYER of rects in the viewport's own coordinates --
+   never a span around a word, which would break page.js's one-text-node-per-
+   line shape that pane.js, wheel.js and book-nav.js all measure against.
+   `mix-blend-mode: multiply` puts the ink UNDER the glyphs the way a real
+   highlighter does, so the text stays the text. */
+.margrects{ position:fixed; inset:0; pointer-events:none; z-index:2; }
+.margrects i{ position:fixed; display:block; mix-blend-mode:multiply; }
+html[data-theme="dark"] .margrects i{ mix-blend-mode:screen; }
+.margrects i.marg-green { background-color: color-mix(in oklab, #4a8f3c 26%, transparent); }
+.margrects i.marg-yellow{ background-color: color-mix(in oklab, #d8b431 32%, transparent); }
+.margrects i.marg-red   { background-color: color-mix(in oklab, #c0453a 24%, transparent); }
+.margrects i.marg-pink  { background-color: color-mix(in oklab, #c9558f 24%, transparent); }
+.margrects i.marg-sel   { background-color: color-mix(in oklab, currentColor 18%, transparent); }
+.margrects i.marg-note  { background:none; border-bottom:var(--rule-dotted) dotted currentColor; }
+
+/* ---- THE BAR ------------------------------------------------------------
+   It is the page's own paper and ink (tokens.css), it sits above the safe
+   area, and every target is 44px -- design/phone's own floor. It is the only
+   element this lane adds to the page, and it exists only while a run is
+   chosen: `hidden` is the whole of its state. */
+.marghand{
+  position:fixed; left:0; right:0; bottom:0; z-index:60;
+  padding:var(--gap) var(--pad) calc(var(--gap) + env(safe-area-inset-bottom)) var(--pad);
+  background:var(--ground); color:var(--ink);
+  border-top:var(--hair) solid color-mix(in oklab, currentColor 14%, transparent);
+  box-shadow:0 -8px 24px color-mix(in oklab, currentColor 10%, transparent);
+  font:inherit; -webkit-user-select:none; user-select:none;
+  -webkit-touch-callout:none; touch-action:manipulation;
+}
+.marghand[hidden]{ display:none !important; }
+/* the words the run holds, or the sentence a conflict earns: ONE line, because
+   the page under it is what the person is looking at */
+.marghand-say{
+  font-size:var(--ui-fine); line-height:1.35; opacity:.72;
+  margin:0 var(--gap-hair) var(--gap) var(--gap-hair);
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+}
+.marghand-row{ display:flex; align-items:center; gap:var(--gap); }
+.margdot{
+  width:var(--tap); height:var(--tap); min-width:var(--tap); border-radius:50%;
+  border:var(--hair) solid color-mix(in oklab, currentColor 22%, transparent);
+  padding:0; background:transparent;
+}
+.margdot.marg-green { background-color: color-mix(in oklab, #4a8f3c 52%, transparent); }
+.margdot.marg-yellow{ background-color: color-mix(in oklab, #d8b431 64%, transparent); }
+.margdot.marg-red   { background-color: color-mix(in oklab, #c0453a 48%, transparent); }
+.margdot.marg-pink  { background-color: color-mix(in oklab, #c9558f 48%, transparent); }
+.margact{
+  min-height:var(--tap); padding:0 14px; border-radius:var(--r-ui);
+  border:var(--hair) solid color-mix(in oklab, currentColor 22%, transparent);
+  background:transparent; color:inherit; font:inherit; font-size:var(--ui-act);
+}
+.margact[hidden]{ display:none !important; }
+.margx{ margin-left:auto; min-width:var(--tap); padding:0 var(--pad); }
+/* ---- THE NOTE, AT PHONE WIDTH ------------------------------------------
+   The editor is INSIDE the bar, so the keyboard lifts one element and the
+   caption line above stays with it (marginalia.js reads `visualViewport`:
+   iOS does not resize the layout viewport for the keyboard, so a bar pinned
+   to the bottom would sit under it). */
+.margedit{ margin-top:var(--gap); }
+.margedit[hidden]{ display:none !important; }
+.margarea{
+  display:block; width:100%; box-sizing:border-box; resize:none;
+  font:inherit; font-size:var(--ui-field);  /* --ui-field is 16px or iOS zooms */
+  line-height:1.4; padding:var(--gap) 10px; border-radius:var(--r-ui);
+  color:inherit; background:color-mix(in oklab, currentColor 6%, transparent);
+  border:var(--hair) solid color-mix(in oklab, currentColor 22%, transparent);
+  -webkit-user-select:text; user-select:text;
+}
+.margedit-foot{ display:flex; gap:var(--gap); justify-content:flex-end; margin-top:var(--gap); }

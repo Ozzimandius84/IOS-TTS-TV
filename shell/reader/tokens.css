@@ -26,12 +26,44 @@
   --ui: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   --optical: 1.06;         /* the reference is exactly 1.0; 1.06 was chosen */
 
+  /* --- the paragraph ---------------------------------------------------- */
+  /* DECLARED, at last (14 Sep, fix lane 96). These two were the whole of the
+     typeset rhythm and they were written down NOWHERE: page.css spent them as
+     `var(--indent, 1.2em)` and `var(--para-gap, 0)`, so the shipped number was
+     the literal inside the fallback and bench-typo.html -- which reads them OFF
+     the page with getPropertyValue and writes them back -- read an empty string
+     and could never agree with what ships (bench-typo.html:20-22 says it holds
+     no constant of its own; it now has one to hold). The values are exactly the
+     fallbacks, so nothing moves: a printed book indents and does not gap, so
+     the gap is here at 0 for a bench to open, not because anything should.   */
+  --indent: 1.2em;         /* p.para + p.para text-indent                    */
+  --para-gap: 0;           /* and NO gap as well: a gap AND an indent is a web page */
+
   /* --- the measure, and the three standard boxes ------------------------ */
   /* 865 @1440 · 1145 @2000. 50vw, NOT 0.5vw -- vw is one PERCENT.          */
   --measure: calc(145px + 50vw);
   --box-lyric: 22rem;      /* ~47ch  short lyric verse                      */
   --box-verse: 28rem;      /* ~60ch  pentameter, hexameter, a speech line   */
                            /* the third box is --measure itself, ~73ch      */
+
+  /* --- the UI furniture, and it is spent by every surface ---------------- */
+  /* 14 Sep, fix lane 96. 92's LIST 2: 53 distinct px/ms literals across 13
+     reader stylesheets against 16 tokens, and marginalia.css the worst ratio
+     in the module at 33 literals to 2 var(). These are the numbers that file
+     was spending by hand; each is declared ONCE here, at exactly the value it
+     already had, so nothing moves. The ladder is LIST 2's own recommendation
+     and the next stylesheet to be folded in takes its names from here rather
+     than adding more.                                                       */
+  --tap: 44px;             /* the touch floor -- design/phone's own          */
+  --hair: 1px;             /* a hairline border                             */
+  --rule-dotted: 1.5px;    /* a note is an underline, never a border        */
+  --gap: 8px;              /* the spacing unit a row and a stack are built on */
+  --gap-hair: 2px;         /* a caption's own optical inset                  */
+  --pad: 12px;             /* a bar's side padding                          */
+  --r-ui: 10px;            /* the soft corner a field and a button share     */
+  --ui-fine: 13px;         /* a caption, secondary to what it names          */
+  --ui-act: 15px;          /* a button's label                              */
+  --ui-field: 16px;        /* a text field -- 16 or iOS zooms the page       */
 
   /* --- the wheel ------------------------------------------------------- */
   --pitch: 168px;          /* Letters' landing is 120; scaled with R        */
@@ -43,6 +75,14 @@
      already wrong"). It lives in wheel.js's Wheel.DEFAULTS now, once.
      Setting --radius on :root still overrides it live, which is how the
      tuner and bench-wheel.html's slider work; nothing sets it at rest.          */
+  --persp: 900px;          /* the barrel's foreshortening. shell.css spent this
+                              as a var() fallback and nothing declared it;
+                              reader.html's SET block still writes 6000px inline
+                              on <html> at start-up and an inline style beats
+                              this, so the app is unmoved -- this is the value
+                              every page that does NOT run that block (the
+                              benches, float.html, probe.html) was already
+                              getting out of the fallback.                    */
   --axis: 46vh;            /* the barrel's centre line                      */
   --start: 38vh;           /* the reading line: a piece's first line        */
 }

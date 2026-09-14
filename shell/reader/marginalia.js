@@ -526,6 +526,584 @@ function margWitness(map) {
   }).catch(function () { return null; });
 }
 
+/* THE PHONE, read once. `html[data-phone]` is the app's own attribute and
+   book-nav.js, pbar.js and scrub.js all read the same one. */
+var PHONE = (function () {
+  try { return !!(document.documentElement
+    && document.documentElement.hasAttribute("data-phone")); } catch (e) { return false; }
+})();
+
+/* ====================== THE HAND, ON THE PHONE (G-MARKS, 14 Sep) ==========
+   Osca, 14 September: *"highlighting / note-taking on the phone, as there is
+   on the Mac, and they should be synced."*
+
+   THE RECORD ABOVE ALREADY TRAVELS. A mark is a run of word ids, it merges by
+   id newest-wins, a delete is a tombstone, and `marks/<slug>.json` goes both
+   ways through Drive (`library/drive.js::syncMarksLedger`) and through the LAN
+   (`studio/drive.py`, `studio/sync.py`). All of that is in the shell, so the
+   phone has had the record since the 6th. What the phone lacked was a HAND.
+
+   EVERY GESTURE ON THIS PAGE WAS ALREADY TAKEN, and that list is the whole
+   reason this one is a HOLD:
+
+     one finger, sideways   THE AXIS -- three positions (G-STOPS), the leaving
+                            zone (G-PHONESCROLL) and the float zone
+                            (G-FLOATAXIS). book-nav.js, window listeners.
+     one finger, up/down    the page's own scroll.
+     one finger, a tap      places the reading cursor (book-nav.js's `click`).
+     two taps               the cursor again, and the one-word view.
+     two fingers            a pinch: taken and dropped in all three engines.
+     two fingers, a flick   the quiet ring, four directions (voiceui/app.js).
+     a hold on the gear     light/dark (pbar.js, 540 ms opens, 700 ms flips).
+     a press in the view    the dictionary card (lookup.js, G-LOOKUP3).
+     A HOLD ON A WORD       iOS's own callout -- Look Up, Translate, Copy,
+                            Speech. THE ONLY GESTURE LEFT, and this lane takes
+                            it: on the phone only (`html[data-phone]`), inside
+                            the reading column only, and in the one-word view.
+
+   WHAT THAT COSTS, SAID PLAINLY. On a phone the reading column loses the OS
+   callout (page.css's `html[data-phone]` rule turns `-webkit-touch-callout`
+   and `-webkit-user-select` off there, and nowhere else). Look Up is not lost
+   -- G-LOOKUP3 draws our own card in the one-word view and offers Apple's
+   panel at its foot -- and the app reads aloud, which is Speech. Copy and
+   Translate go. The Mac's column is untouched, to the declaration.
+
+   ONE GESTURE, BOTH SURFACES. A hold marks in the reading page and a hold
+   marks in the one-word view, so there is one thing to learn. In the view the
+   press was already spent on the dictionary card, so a mark there could never
+   have been a press; and the hold collides with nothing, which is provable
+   rather than assertable: lookup.js listens on `click`, the quiet ring wants
+   two fingers, and the axis wants travel this machine cancels on.
+
+   THE ARITHMETIC IS PURE AND THE GESTURE IS A MACHINE, both below, both
+   extracted and run under node by reader/tests/test_marginalia_hand.py. The
+   DOM half is thirty lines of listener that resolve a point to a word and
+   hand indices to the machine. Nothing here wraps a span, adds a class to a
+   word, or touches page.js's one-text-node-per-line shape: a selection paints
+   as a fifth CSS Custom Highlight exactly as a mark paints as one of four. */
+
+// ---- THE HAND'S ARITHMETIC: PURE ----
+// No DOM, no storage, no network, no clock of its own: every state this hand
+// can be in is drivable from node, including the ones a thumb cannot easily
+// be put into (a 400 ms hold that drifts 11 px on the 399th millisecond).
+
+// A run has two ends and no order: the thumb may drag either way.
+function handOrder(a, b) {
+  a = Number(a) || 0; b = Number(b) || 0;
+  return a <= b ? { a: a, b: b } : { a: b, b: a };
+}
+
+// The ids a run covers, INCLUSIVE, clamped to the chapter. `ids` is
+// `Listen.mapOf(ch).ids` -- the chapter's word ids in reading order.
+function handIds(ids, a, b) {
+  if (!Array.isArray(ids) || !ids.length) return [];
+  var o = handOrder(a, b);
+  var lo = Math.max(0, Math.min(o.a, ids.length - 1));
+  var hi = Math.max(0, Math.min(o.b, ids.length - 1));
+  return ids.slice(lo, hi + 1);
+}
+
+/* WHICH WORD A CARET IS IN. `caretRangeFromPoint` answers with a text node
+   and an offset inside it; `entries` is that node's words as listen.js's map
+   already files them ({s, e, id}, sorted). A caret ON a word is that word; a
+   caret in the space or the punctuation after one is the word BEFORE it; a
+   caret before the first word is the first. Never null for a node that holds
+   a word, because a thumb lands between letters as often as on them. */
+function handWordAt(entries, offset) {
+  if (!Array.isArray(entries) || !entries.length) return null;
+  var off = Number(offset) || 0;
+  var best = null;
+  for (var i = 0; i < entries.length; i++) {
+    var e = entries[i];
+    if (off >= e.s && off < e.e) return e;
+    if (e.s <= off) best = e;
+    else if (best === null) return e;
+  }
+  return best;
+}
+
+/* The live entries of one kind that share a word with a run. The record's own
+   `margSpanIds` decides what an entry covers, so this can never disagree with
+   what is painted. */
+function handCovering(list, ids, a, b) {
+  var run = handIds(ids, a, b);
+  if (!run.length) return [];
+  var want = {};
+  for (var i = 0; i < run.length; i++) want[run[i]] = 1;
+  var out = [];
+  for (var j = 0; j < list.length; j++) {
+    var e = list[j];
+    if (e.deleted) continue;
+    var span = margSpanIds(e.from, e.to, ids);
+    for (var k = 0; k < span.length; k++) {
+      if (want[span[k]]) { out.push(e); break; }
+    }
+  }
+  return out;
+}
+
+/* THE CONFLICT, IN WORDS. Two devices mark the same run in two colours: the
+   record already resolves it -- `margColourAt` gives a word the NEWEST
+   highlight that covers it -- and this is the sentence that says so, because
+   a rule the reader cannot see is a rule they will call a bug. Null when
+   there is nothing to say (no overlap, or an overlap in the same colour). */
+function handConflict(entry, others) {
+  if (!entry) return null;
+  var clash = null;
+  for (var i = 0; i < others.length; i++) {
+    var o = others[i];
+    if (!o || o.id === entry.id || o.deleted) continue;
+    if (margColour(o.colour) === margColour(entry.colour)) continue;
+    if (!clash || (o.at || 0) > (clash.at || 0)) clash = o;
+  }
+  if (!clash) return null;
+  var mine = (entry.at || 0) >= (clash.at || 0);
+  var newer = mine ? entry : clash;
+  var older = mine ? clash : entry;
+  return "Two marks cover these words, " + margColour(older.colour) + " and "
+    + margColour(newer.colour) + ". The newer one wins, so they read "
+    + margColour(newer.colour) + ".";
+}
+
+// The newest live note covering a word, or null. A hold on a noted word opens
+// that note rather than starting a second one on top of it.
+function handNoteAt(notes, wordId, ids) {
+  var best = null;
+  for (var i = 0; i < notes.length; i++) {
+    var n = notes[i];
+    if (n.deleted) continue;
+    if (margSpanIds(n.from, n.to, ids).indexOf(wordId) < 0) continue;
+    if (!best || (n.at || 0) >= (best.at || 0)) best = n;
+  }
+  return best;
+}
+
+/* THE GESTURE, AS A MACHINE. One finger, four inputs, and the clock is handed
+   in rather than read -- so a hold that drifts, a hold that never lands and a
+   hold followed by a drag across three paragraphs are all states a test can
+   put it in.
+
+     down(x, y, t)     a finger arrives. ARMED.
+     tick(t)           the clock says t. ARMED -> HELD at holdMs.
+     move(x, y, t)     ARMED and past slop -> CANCELLED (it was the axis, or
+                       the page's scroll, and neither is ours to eat).
+                       HELD -> EXTENDING, and the caller is asked for the word
+                       under the new point.
+     up()              HELD or EXTENDING -> DONE, with the run. ARMED -> a tap,
+                       which is not ours either.
+
+   `at(idx)` is how the caller feeds the machine the word it resolved: the
+   machine holds indices into the chapter's `ids` and knows nothing about
+   pixels beyond the slop it cancels on. SLOP IS 10 px, not book-nav's 4: that
+   4 is a trackpad's hand-shake and this is a thumb on glass, measured against
+   the 44 px tap target design/phone works to. HOLD IS 400 ms, the quiet
+   ring's own RING_HOLD_MS, so the two holds on this device agree. */
+function handMachine(o) {
+  o = o || {};
+  var HOLD = Number(o.holdMs) || 400;
+  var SLOP = Number(o.slop) || 10;
+  var st = null;
+  function state() { return st ? st.phase : "idle"; }
+  return {
+    get holdMs() { return HOLD; },
+    get slop() { return SLOP; },
+    state: state,
+    get run() { return st && st.from != null ? handOrder(st.from, st.to) : null; },
+    get chapter() { return st ? st.ch : null; },
+    down: function (x, y, t, ch) {
+      st = { phase: "armed", x0: x, y0: y, t0: Number(t) || 0, ch: ch == null ? null : ch,
+             from: null, to: null };
+      return st.phase;
+    },
+    tick: function (t) {
+      if (!st || st.phase !== "armed") return state();
+      if ((Number(t) || 0) - st.t0 >= HOLD) st.phase = "held";
+      return st.phase;
+    },
+    /* THE TIMER IS THE ONLY THING THAT PROMOTES, and that is deliberate: a
+       move that promoted as well would leave a window -- moved past 400 ms,
+       promoted by the move, and the setTimeout that was going to open the
+       selection arriving to find the phase already "extending" -- in which a
+       hold lands and nothing opens. `tick` stays for the tests, which have no
+       setTimeout and need a clock they can name. */
+    move: function (x, y, t) {
+      if (!st) return "idle";
+      if (st.phase === "armed") {
+        if (Math.abs(x - st.x0) > SLOP || Math.abs(y - st.y0) > SLOP) { st = null; return "cancelled"; }
+        return "armed";
+      }
+      if (st.phase === "held") st.phase = "extending";
+      return st.phase;
+    },
+    // what the setTimeout says: the hold has landed. Held or already
+    // extending, the answer is the same -- this gesture is a mark.
+    hold: function () {
+      if (st && (st.phase === "armed" || st.phase === "held")) st.phase = "held";
+      return st ? st.phase : "idle";
+    },
+    // the caller resolved a point to a word: the anchor if there is none yet,
+    // the far end otherwise. A resolve that fails leaves the run as it was.
+    at: function (idx) {
+      if (!st || idx == null || idx < 0) return state();
+      if (st.from == null) { st.from = idx; st.to = idx; }
+      else st.to = idx;
+      return st.phase;
+    },
+    up: function () {
+      if (!st) return { phase: "idle", run: null, ch: null };
+      var was = st.phase, run = st.from == null ? null : handOrder(st.from, st.to), ch = st.ch;
+      st = null;
+      return { phase: (was === "held" || was === "extending") && run ? "done" : "tap",
+               run: run, ch: ch };
+    },
+    cancel: function () { st = null; return "idle"; },
+  };
+}
+// ---- END THE HAND'S ARITHMETIC ----
+
+/* =================== THE PHONE'S HAND: THE DOM HALF ======================
+   Thirty lines of listener and a bar. It resolves a point to a word through
+   `listen.js`'s map -- the same map the paint uses, so the word a thumb lands
+   on and the word a mark covers are the same word by construction -- and
+   hands INDICES to the machine above.
+
+   IT STOPS THE AXIS BY THE BOOK'S OWN MEANS. book-nav.js takes the swipe on
+   window listeners in the BUBBLE phase; this takes touchmove and touchend on
+   window in the CAPTURE phase and stops the dispatch there while a selection
+   is live, which is the same instrument book-nav.js already uses on
+   `pointerup` to keep a sweep from opening a chapter ("a capture listener on
+   the window runs before the pane's own"). A selection cannot begin until the
+   hold has landed, and the hold cannot land if the finger has travelled, so
+   the axis and this hand can never both be live. */
+function handDom(ctx) {
+  var col = ctx.col, doc = document;
+  var machine = handMachine({ holdMs: ctx.holdMs, slop: ctx.slop });
+  var timer = null, live = false, swallowClick = 0, wordView = null;
+  var sel = null;                // {cid, ids, from, to} while a run is live
+  var nodeIdx = new Map();       // map -> (text node -> [{s,e,id}] sorted)
+  var idIdx = new Map();         // map -> (word id -> index into map.ids)
+
+  function indexOf(map) {
+    if (!idIdx.has(map)) {
+      var m = new Map();
+      for (var i = 0; i < map.ids.length; i++) m.set(map.ids[i], i);
+      idIdx.set(map, m);
+    }
+    return idIdx.get(map);
+  }
+  function nodesOf(map) {
+    if (!nodeIdx.has(map)) {
+      var by = new Map();
+      map.byWordId.forEach(function (hit, id) {
+        var list = by.get(hit.node);
+        if (!list) { list = []; by.set(hit.node, list); }
+        list.push({ s: hit.s, e: hit.e, id: id });
+      });
+      by.forEach(function (list) { list.sort(function (a, b) { return a.s - b.s; }); });
+      nodeIdx.set(map, by);
+    }
+    return nodeIdx.get(map);
+  }
+  function caretAt(x, y) {
+    if (doc.caretRangeFromPoint) {
+      var r = doc.caretRangeFromPoint(x, y);
+      return r ? { node: r.startContainer, offset: r.startOffset } : null;
+    }
+    if (doc.caretPositionFromPoint) {
+      var c = doc.caretPositionFromPoint(x, y);
+      return c ? { node: c.offsetNode, offset: c.offset } : null;
+    }
+    return null;
+  }
+  /* A POINT -> {cid, idx}. The chapter comes off the section the point is in,
+     never off a word id's spelling: `chapterHint` is a hint for FETCHING and
+     this is the page saying which chapter is under the thumb. */
+  function chapterAt(node) {
+    var el = node && node.nodeType === 3 ? node.parentNode : node;
+    var sec = el && el.closest && el.closest(".chapter");
+    if (!sec || sec.classList.contains("titlepage")) return -1;
+    var ch = +sec.getAttribute("data-ch");
+    return ch >= 0 ? ch : -1;
+  }
+  function pointWord(x, y) {
+    var c = caretAt(x, y);
+    if (!c) return null;
+    var chIdx = chapterAt(c.node);
+    if (chIdx < 0) return null;
+    var cid = ctx.chapterIdOf(chIdx);
+    var map = cid ? ctx.mapNow(cid) : null;
+    if (!map) { if (cid) ctx.want(cid); return null; }
+    var entries = nodesOf(map).get(c.node);
+    if (!entries) return null;
+    var hit = handWordAt(entries, c.offset);
+    if (!hit) return null;
+    var idx = indexOf(map).get(hit.id);
+    return idx == null ? null : { cid: cid, map: map, idx: idx, id: hit.id };
+  }
+
+  /* ------------------------------------------------------------ the paint
+     of the RUN being dragged. A fifth Custom Highlight, `marg-sel`, built
+     from the same ranges the four colours are built from. */
+  function paintSel() {
+    if (!sel) { ctx.paintSel(null); return; }
+    ctx.paintSel({ map: sel.map, ids: handIds(sel.map.ids, sel.from, sel.to) });
+  }
+
+  function begin(hit) {
+    sel = { cid: hit.cid, map: hit.map, from: hit.idx, to: hit.idx };
+    machine.at(hit.idx);
+    live = true;
+    paintSel();
+    if (ctx.haptic) ctx.haptic();
+  }
+  function extend(hit) {
+    if (!sel || hit.cid !== sel.cid) return;
+    sel.to = hit.idx;
+    machine.at(hit.idx);
+    paintSel();
+  }
+  function finish() {
+    var r = machine.up();
+    if (timer) { clearTimeout(timer); timer = null; }
+    if (!live || !sel) { live = false; sel = null; paintSel(); return; }
+    live = false;
+    swallowClick = Date.now() + 700;
+    var run = sel;
+    openBar(run);
+  }
+
+  function startTimer(x, y, cid) {
+    if (timer) clearTimeout(timer);
+    timer = setTimeout(function () {
+      timer = null;
+      var st = machine.hold();
+      if (st !== "held" && st !== "extending") return;
+      var hit = pointWord(x, y);
+      if (!hit) { machine.cancel(); return; }
+      begin(hit);
+    }, machine.holdMs);
+  }
+
+  /* ---------------------------------------------------------- the listeners
+     On the COLUMN for the start (so a touch on the bar, the rail or the scrub
+     is never a mark) and on the WINDOW in capture for the rest (so the axis
+     never sees a selection's travel). */
+  col.addEventListener("touchstart", function (e) {
+    if (barOpen()) return;
+    var t = e.touches || [];
+    if (t.length !== 1) { machine.cancel(); if (timer) { clearTimeout(timer); timer = null; } return; }
+    machine.down(t[0].clientX, t[0].clientY, e.timeStamp);
+    startTimer(t[0].clientX, t[0].clientY);
+  }, { passive: true });
+
+  addEventListener("touchmove", function (e) {
+    var t = e.touches || [];
+    if (t.length !== 1) { if (live) { live = false; sel = null; paintSel(); } machine.cancel(); return; }
+    var x = t[0].clientX, y = t[0].clientY;
+    var st = machine.move(x, y, e.timeStamp);
+    if (st === "cancelled") { if (timer) { clearTimeout(timer); timer = null; } return; }
+    if (!live) return;
+    /* LIVE: this touch is ours. Stopped here, in capture, so book-nav.js's
+       window listener never runs and the axis is not pushed by a selection. */
+    e.stopPropagation();
+    if (e.cancelable && e.preventDefault) e.preventDefault();
+    var hit = pointWord(x, y);
+    if (hit) extend(hit);
+  }, { capture: true, passive: false });
+
+  addEventListener("touchend", function (e) {
+    if (timer) { clearTimeout(timer); timer = null; }
+    if (live) { e.stopPropagation(); if (e.cancelable && e.preventDefault) e.preventDefault(); }
+    finish();
+  }, { capture: true, passive: false });
+  addEventListener("touchcancel", function () {
+    if (timer) { clearTimeout(timer); timer = null; }
+    machine.cancel();
+    live = false; sel = null; paintSel();
+  }, { capture: true });
+
+  /* THE CLICK THE HOLD LEAVES BEHIND. A hold that ends with the finger where
+     it started still raises a `click`, and two things downstream want it: the
+     reading cursor (book-nav.js) and the dictionary card (lookup.js). One
+     capture listener swallows exactly the one click that follows a mark. */
+  doc.addEventListener("click", function (e) {
+    if (!swallowClick || Date.now() > swallowClick) return;
+    swallowClick = 0;
+    e.stopPropagation();
+    if (e.preventDefault) e.preventDefault();
+  }, true);
+
+  /* ----------------------------------------- THE ONE-WORD VIEW: SAME HOLD
+     One word is on the screen and there is nothing to drag, so the run is
+     that word and the machine is used for its clock alone. The word is the
+     CURSOR's -- `nav.cursor` -> `map.byFlat` -> an id -- which is the same
+     door floatdoor.js opens, and never the string on the screen. */
+  function viewEl() {
+    if (!wordView || !wordView.isConnected) wordView = doc.querySelector(".wordview");
+    return wordView;
+  }
+  var vTimer = null;
+  function viewStart(e) {
+    var t = e.touches || [];
+    if (t.length !== 1) return;
+    if (vTimer) clearTimeout(vTimer);
+    vTimer = setTimeout(function () {
+      vTimer = null;
+      var c = ctx.cursor();
+      if (!c) return;
+      var cid = ctx.chapterIdOf(c.chapter);
+      if (!cid) return;
+      ctx.want(cid).then(function (map) {
+        if (!map || !map.byFlat) return;
+        var id = map.byFlat.get(c.word);
+        if (!id) return;
+        var idx = indexOf(map).get(id);
+        if (idx == null) return;
+        swallowClick = Date.now() + 700;
+        openBar({ cid: cid, map: map, from: idx, to: idx });
+        if (ctx.haptic) ctx.haptic();
+      });
+    }, machine.holdMs);
+  }
+  function viewStop() { if (vTimer) { clearTimeout(vTimer); vTimer = null; } }
+  doc.addEventListener("touchstart", function (e) {
+    var el = viewEl();
+    if (!el || !el.classList.contains("on")) return;
+    if (e.target && el.contains(e.target)) viewStart(e);
+  }, { passive: true });
+  doc.addEventListener("touchmove", viewStop, { passive: true });
+  doc.addEventListener("touchend", viewStop, { passive: true });
+
+  /* ============================== THE BAR ================================
+     Four colours, Note, Remove, and a line that says something when there is
+     something to say. 44 px targets, the phone's own safe area, and it is the
+     only new element this lane draws on the page. */
+  var bar = null, edit = null, area = null, say = null, del = null, cur = null;
+  function barOpen() { return !!(bar && !bar.hidden); }
+  function build() {
+    if (bar) return bar;
+    bar = doc.createElement("div");
+    bar.className = "marghand"; bar.hidden = true;
+    say = doc.createElement("div"); say.className = "marghand-say";
+    var row = doc.createElement("div"); row.className = "marghand-row";
+    for (var i = 0; i < MARG_COLOURS.length; i++) {
+      var b = doc.createElement("button");
+      b.className = "margdot marg-" + MARG_COLOURS[i];
+      b.setAttribute("data-colour", MARG_COLOURS[i]);
+      b.setAttribute("aria-label", MARG_COLOURS[i]);
+      row.appendChild(b);
+    }
+    var note = doc.createElement("button"); note.className = "margact margnote"; note.textContent = "Note";
+    del = doc.createElement("button"); del.className = "margact margdel"; del.textContent = "Remove"; del.hidden = true;
+    var x = doc.createElement("button"); x.className = "margact margx"; x.textContent = "✕";
+    row.appendChild(note); row.appendChild(del); row.appendChild(x);
+    edit = doc.createElement("div"); edit.className = "margedit"; edit.hidden = true;
+    area = doc.createElement("textarea");
+    area.className = "margarea"; area.setAttribute("rows", "3");
+    area.setAttribute("placeholder", "A note on these words");
+    var foot = doc.createElement("div"); foot.className = "margedit-foot";
+    var save = doc.createElement("button"); save.className = "margact margsave"; save.textContent = "Save";
+    var cancel = doc.createElement("button"); cancel.className = "margact margcancel"; cancel.textContent = "Cancel";
+    foot.appendChild(cancel); foot.appendChild(save);
+    edit.appendChild(area); edit.appendChild(foot);
+    bar.appendChild(say); bar.appendChild(row); bar.appendChild(edit);
+    doc.body.appendChild(bar);
+
+    row.addEventListener("click", function (e) {
+      var t = e.target && e.target.closest ? e.target.closest("button") : null;
+      if (!t) return;
+      e.stopPropagation();
+      if (t.classList.contains("margdot")) return colour(t.getAttribute("data-colour"));
+      if (t.classList.contains("margnote")) return openEdit();
+      if (t.classList.contains("margdel")) return remove();
+      close();
+    });
+    save.addEventListener("click", function (e) { e.stopPropagation(); saveNote(); });
+    cancel.addEventListener("click", function (e) { e.stopPropagation(); close(); });
+    /* THE KEYBOARD. `visualViewport` is the only honest measure of how much
+       screen is left: iOS does not resize the layout viewport for the
+       keyboard, so a bar pinned to the bottom sits UNDER it. */
+    if (window.visualViewport) {
+      var lift = function () {
+        if (!barOpen()) return;
+        var vv = window.visualViewport;
+        var gap = Math.max(0, (window.innerHeight || 0) - vv.height - vv.offsetTop);
+        bar.style.transform = gap > 0 ? "translateY(" + (-gap) + "px)" : "";
+      };
+      window.visualViewport.addEventListener("resize", lift);
+      window.visualViewport.addEventListener("scroll", lift);
+    }
+    return bar;
+  }
+
+  function words(run) {
+    var ids = handIds(run.map.ids, run.from, run.to);
+    var out = [];
+    for (var i = 0; i < ids.length && out.length < 12; i++) {
+      var hit = run.map.byWordId.get(ids[i]);
+      if (hit && hit.node) out.push(hit.node.nodeValue.slice(hit.s, hit.e));
+    }
+    return out.join(" ") + (ids.length > 12 ? "…" : "");
+  }
+
+  function openBar(run) {
+    build();
+    cur = run;
+    var ids = run.map.ids;
+    var anchor = ids[Math.min(run.from, run.to)];
+    var note = handNoteAt(ctx.live("notes"), anchor, ids);
+    var covering = handCovering(ctx.live("highlights"), ids, run.from, run.to);
+    cur.note = note || null;
+    cur.covering = covering;
+    del.hidden = !(note || covering.length);
+    say.textContent = words(run);
+    edit.hidden = true;
+    area.value = note ? String(note.text || "") : "";
+    bar.hidden = false;
+    bar.style.transform = "";
+    ctx.paintSel({ map: run.map, ids: handIds(ids, run.from, run.to) });
+  }
+  function close() {
+    if (bar) { bar.hidden = true; bar.style.transform = ""; }
+    if (area) area.blur();
+    cur = null;
+    ctx.paintSel(null);
+  }
+  function colour(c) {
+    if (!cur) return;
+    var run = cur, ids = run.map.ids;
+    margSetLastColour(c);
+    ctx.markWords(run.cid, ids[Math.min(run.from, run.to)], ids[Math.max(run.from, run.to)], c)
+      .then(function (entry) {
+        var line = entry ? handConflict(entry, run.covering || []) : null;
+        if (line) { build(); say.textContent = line; setTimeout(close, 2600); }
+        else close();
+      });
+  }
+  function openEdit() {
+    if (!cur) return;
+    edit.hidden = false;
+    area.focus();
+  }
+  function saveNote() {
+    if (!cur) return;
+    var run = cur, ids = run.map.ids, text = String(area.value || "");
+    ctx.noteWords(run.cid, ids[Math.min(run.from, run.to)], ids[Math.max(run.from, run.to)],
+                  text, run.note ? run.note.id : null).then(close);
+  }
+  function remove() {
+    if (!cur) return;
+    var run = cur;
+    if (run.note) ctx.drop("notes", run.note.id);
+    var cov = run.covering || [];
+    for (var i = 0; i < cov.length; i++) ctx.drop("highlights", cov[i].id);
+    close();
+  }
+
+  return { machine: machine, close: close, get open() { return barOpen(); },
+           pointWord: pointWord, bar: function () { return bar; } };
+}
+
 function mount(o) {
   o = o || {};
   var nav = o.nav, col = o.col;
@@ -535,13 +1113,26 @@ function mount(o) {
   var rec = margReadRec(slug);
   var maps = new Map();            // chapter index -> map, once resolved
   var hiOK = !!(window.CSS && CSS.highlights && window.Highlight);
+  var selRun = null;               // the run a thumb is dragging, painted as marg-sel
   var run = null;                  // {ch, from, to} while Shift is held
 
   /* ------------------------------------------------------------- the paint
-     One CSS Custom Highlight per colour, holding one Range per covered word.
-     A chapter whose map has not been asked for yet is asked for HERE and
-     repaints when it lands, so opening a book paints its marks without any
-     page having to know which chapters carry them. */
+     One CSS Custom Highlight per colour, holding one Range per covered word,
+     plus `marg-note` for a noted run and `marg-sel` for the run a thumb is
+     dragging right now. A chapter whose map has not been asked for yet is
+     asked for HERE and repaints when it lands, so opening a book paints its
+     marks without any page having to know which chapters carry them.
+
+     AND BELOW WebKit 17.2 THERE ARE NO CUSTOM HIGHLIGHTS (Safari 17.2,
+     December 2023, is where `CSS.highlights` arrives; every iOS before that
+     has none). The fallback is not a span -- page.js emits one text node per
+     `p.line` and pane.js, wheel.js and `book-nav.js::buildWordDomIndex` all
+     measure against that shape, so wrapping a word would break three files to
+     colour one. It is a LAYER: one absolutely-positioned div per client rect,
+     in the viewport's own coordinates, under the text and over the paper
+     (marginalia.css, `.margrects`). The ranges are the same ranges; only the
+     brush changes. It repaints on scroll and on resize behind one rAF, and
+     only while this book has a mark. */
   /* WHICH CHAPTER A MARK IS IN, AND WHY IT IS A HINT AND NOT AN ANSWER.
      `c003.p0001.s01.w001` does begin with its chapter today, and the old
      page refused to depend on that: it scanned `book.json` for the id
@@ -561,7 +1152,10 @@ function mount(o) {
 
   function chaptersWithMarks() {
     var out = new Set();
-    var live = margLive(rec, "highlights");
+    /* NOTES AS WELL AS HIGHLIGHTS (G-MARKS): a note paints as a dotted
+       underline of its own, so a chapter that carries only notes still has to
+       have its map asked for or the note is invisible on a page that holds it. */
+    var live = margLive(rec, "highlights").concat(margLive(rec, "notes"));
     for (var i = 0; i < live.length; i++) {
       var cid = chapterHint(live[i].from);
       if (cid) out.add(cid);
@@ -585,38 +1179,105 @@ function mount(o) {
     } catch (e) { return null; }
   }
 
-  function paint() {
-    if (!hiOK) return;
-    var byColour = {};
-    for (var c = 0; c < MARG_COLOURS.length; c++) byColour[MARG_COLOURS[c]] = [];
+  function chapterOf(h) {
+    var cid = chapterHint(h.from);
+    var idx = control && control.chapterIndexOf ? control.chapterIndexOf(cid) : -1;
+    return idx >= 0 ? maps.get(idx) : null;
+  }
+  function pushWords(out, map, words, guard) {
+    for (var w = 0; w < words.length; w++) {
+      if (guard && !guard(words[w])) continue;
+      var hit = map.byWordId.get(words[w]);
+      var r = hit && rangeOf(hit);
+      if (r) out.push(r);
+    }
+  }
+  function ranges() {
+    var by = {};
+    for (var c = 0; c < MARG_COLOURS.length; c++) by["marg-" + MARG_COLOURS[c]] = [];
+    by["marg-note"] = [];
+    by["marg-sel"] = [];
     var live = margLive(rec, "highlights");
     for (var i = 0; i < live.length; i++) {
       var h = live[i];
-      var cid = chapterHint(h.from);
-      var idx = control && control.chapterIndexOf ? control.chapterIndexOf(cid) : -1;
-      var map = idx >= 0 ? maps.get(idx) : null;
+      var map = chapterOf(h);
       if (!map) continue;
       /* THE HINT IS VERIFIED HERE, and this line is the whole guarantee: a
          mark whose id the chapter does not actually hold is not painted. */
       if (!map.byWordId.has(h.from) && !map.byWordId.has(h.to)) continue;
-      var words = margSpanIds(h.from, h.to, map.ids);
-      for (var w = 0; w < words.length; w++) {
+      (function (h, map) {
+        var words = margSpanIds(h.from, h.to, map.ids);
         /* the newest highlight wins a word it shares -- margColourAt is the
            record's own rule and this is its one caller on the page */
-        if (margColourAt(words[w], live, map.ids) !== h.colour) continue;
-        var hit = map.byWordId.get(words[w]);
-        var r = hit && rangeOf(hit);
-        if (r) byColour[h.colour].push(r);
+        pushWords(by["marg-" + h.colour], map, words, function (id) {
+          return margColourAt(id, live, map.ids) === h.colour;
+        });
+      })(h, map);
+    }
+    var notes = margLive(rec, "notes");
+    for (var n = 0; n < notes.length; n++) {
+      var nt = notes[n];
+      var nmap = chapterOf(nt);
+      if (!nmap) continue;
+      if (!nmap.byWordId.has(nt.from) && !nmap.byWordId.has(nt.to)) continue;
+      pushWords(by["marg-note"], nmap, margSpanIds(nt.from, nt.to, nmap.ids), null);
+    }
+    if (selRun && selRun.map) pushWords(by["marg-sel"], selRun.map, selRun.ids, null);
+    return by;
+  }
+
+  var rectsEl = null, rectsRaf = 0, rectsOn = false;
+  function rectsLayer() {
+    if (rectsEl && rectsEl.isConnected) return rectsEl;
+    rectsEl = document.createElement("div");
+    rectsEl.className = "margrects";
+    rectsEl.setAttribute("aria-hidden", "true");
+    document.body.appendChild(rectsEl);
+    return rectsEl;
+  }
+  function paintRects(by) {
+    var host = rectsLayer();
+    var html = [], any = false;
+    for (var name in by) {
+      var list = by[name];
+      for (var i = 0; i < list.length; i++) {
+        var rs = list[i].getClientRects ? list[i].getClientRects() : [];
+        for (var k = 0; k < rs.length; k++) {
+          var r = rs[k];
+          if (!r || r.width <= 0 || r.height <= 0) continue;
+          any = true;
+          html.push('<i class="' + name + '" style="left:' + r.left.toFixed(1)
+            + 'px;top:' + r.top.toFixed(1) + 'px;width:' + r.width.toFixed(1)
+            + 'px;height:' + r.height.toFixed(1) + 'px"></i>');
+        }
       }
     }
-    for (var k = 0; k < MARG_COLOURS.length; k++) {
-      var name = "marg-" + MARG_COLOURS[k];
-      var list = byColour[MARG_COLOURS[k]];
-      try {
-        if (list.length) CSS.highlights.set(name, new Highlight(...list));
-        else CSS.highlights.delete(name);
-      } catch (e) { hiOK = false; return; }
+    host.innerHTML = html.join("");
+    host.hidden = !any;
+    if (any && !rectsOn) {
+      rectsOn = true;
+      var again = function () {
+        if (rectsRaf) return;
+        rectsRaf = requestAnimationFrame(function () { rectsRaf = 0; paint(); });
+      };
+      addEventListener("scroll", again, { passive: true, capture: true });
+      addEventListener("resize", again, { passive: true });
     }
+  }
+
+  function paint() {
+    var by = ranges();
+    if (hiOK) {
+      try {
+        for (var name in by) {
+          if (by[name].length) CSS.highlights.set(name, new Highlight(...by[name]));
+          else CSS.highlights.delete(name);
+        }
+        if (rectsEl) { rectsEl.innerHTML = ""; rectsEl.hidden = true; }
+        return;
+      } catch (e) { hiOK = false; }
+    }
+    paintRects(by);
   }
 
   function repaint() {
@@ -700,6 +1361,119 @@ function mount(o) {
     markRun(r.ch, r.from, r.to, margLastColour());
   });
 
+
+  /* ------------------------------------------------- A MARK BY WORD ID
+     `markRun` above takes FLAT indices, because the Mac's cursor is a flat
+     index into the chapter's lines. The thumb resolves a point to a word id
+     through the map directly, so these two take ids and nothing else, and the
+     witness, the device and the merge path are the same ones. */
+  function stamp(map, extra) {
+    return margWitness(map).then(function (witness) {
+      var now = Date.now();
+      return Object.assign({ at: now, device: libDeviceId(), witness: witness,
+                             witnessKind: witness ? "chapter-ids" : "none" }, extra);
+    });
+  }
+  function markWords(cid, fromId, toId, colour) {
+    return want(cid).then(function (map) {
+      if (!map || !map.byWordId.has(fromId)) return null;
+      return stamp(map, { id: margId("h", Date.now()), from: fromId, to: toId,
+                          colour: margColour(colour || margLastColour()) })
+        .then(function (entry) {
+          patch(function (r) { r.highlights.push(entry); });
+          return entry;
+        });
+    });
+  }
+  /* A NOTE IS A NOTE, not a highlight with words attached. It paints as a
+     dotted underline (`::highlight(marg-note)`) so a run that is noted looks
+     noted whatever colour it is or is not, and editing one keeps its id --
+     which is what makes an edit merge as an edit instead of arriving on the
+     other device as a second note. An empty note is a tombstone: a person who
+     clears the text has deleted it, and saying so here means they never have
+     to press Remove to finish the sentence they just emptied. */
+  function noteWords(cid, fromId, toId, text, id) {
+    return want(cid).then(function (map) {
+      if (!map || !map.byWordId.has(fromId)) return null;
+      if (id && !String(text || "").trim()) { dropEntry("notes", id); return null; }
+      return stamp(map, { id: id || margId("n", Date.now()), from: fromId, to: toId,
+                          text: String(text == null ? "" : text) })
+        .then(function (entry) {
+          patch(function (r) { r.notes.push(entry); });
+          return entry;
+        });
+    });
+  }
+  function dropEntry(kind, id) {
+    if (kind !== "notes" && kind !== "highlights" && kind !== "bookmarks") return;
+    patch(function (r) { r[kind].push({ id: id, deleted: Date.now() }); });
+  }
+
+  /* --------------------------------------------- THE OTHER HALF OF THE SYNC
+     A mark made on the phone reaches `TTS_DATA/reader/marginalia/<slug>.json`
+     -- the ledger merges each way through Drive (`library/drive.js`) and
+     through the LAN (`studio/sync.py`), and `studio/drive.py` writes what it
+     merges into that file. And until today NOTHING ON THE MAC EVER READ IT
+     BACK: this file POSTed and never GOT, so the reader's own localStorage --
+     the only thing `paint()` draws from -- never learnt of a phone's mark. The
+     route has answered `GET /marginalia/<slug>` since the 6th
+     (`reader/routes.py::serve_marginalia`); it had no caller.
+
+     So: read it at mount and on every return to the foreground, merge by the
+     record's own rule (`margMerge`, newest-wins by id, tombstones included),
+     and POST BACK only when this side holds something the file does not --
+     which is the same read-modify-write `patch` does, and cannot loop, because
+     a merge of two equal records is equal to both. 404 is not an error: it is
+     a book nobody has marked yet. */
+  var pulling = false;
+  function pull() {
+    if (!slug || pulling || !/^https?:$/.test(location.protocol)) return Promise.resolve(false);
+    pulling = true;
+    return fetch(MARG_ROUTE + encodeURIComponent(slug), { method: "GET" })
+      .then(function (res) { return res.ok ? res.json() : null; })
+      .catch(function () { return null; })
+      .then(function (body) {
+        pulling = false;
+        if (!body || typeof body !== "object") return false;
+        var theirs = margNormalise(body, slug);
+        var mine = margMerge(margReadRec(slug), rec);
+        var merged = margMerge(mine, theirs);
+        var changedHere = JSON.stringify(margNormalise(mine, slug)) !== JSON.stringify(merged);
+        var changedThere = JSON.stringify(theirs) !== JSON.stringify(merged);
+        if (changedHere) { rec = merged; margWriteRec(slug, merged); repaint(); }
+        else rec = merged;
+        if (changedThere) margMirror(slug, merged);
+        return changedHere;
+      });
+  }
+  pull();
+  addEventListener("visibilitychange", function () {
+    if (!document.hidden) pull();
+  });
+
+  /* ------------------------------------------------------------- THE HAND
+     PHONE ONLY, read once at mount exactly as book-nav.js reads it. The Mac
+     keeps Shift-and-a-word above, and keeps its OS callout on the column. */
+  var hand = null;
+  if (PHONE && col) {
+    try {
+      hand = handDom({
+        col: col,
+        chapterIdOf: function (i) { return control && control.chapterIdOf ? control.chapterIdOf(i) : null; },
+        mapNow: function (cid) {
+          var idx = control && control.chapterIndexOf ? control.chapterIndexOf(cid) : -1;
+          return idx >= 0 ? (maps.get(idx) || null) : null;
+        },
+        want: want,
+        cursor: function () { return nav && nav.cursor ? nav.cursor : null; },
+        live: function (kind) { return margLive(rec, kind); },
+        markWords: markWords, noteWords: noteWords, drop: dropEntry,
+        paintSel: function (s) { selRun = s; paint(); },
+        haptic: function () { try { if (navigator.vibrate) navigator.vibrate(8); } catch (e) {} },
+      });
+    } catch (e) { console.warn("[marginalia] no hand:", e); }
+  }
+
   /* a book just opened: its marks are drawn as soon as their chapters'
      maps land, and a second tab's write repaints this one */
   repaint();
@@ -724,6 +1498,11 @@ window.Marginalia = {
   spanIds: margSpanIds, colourAt: margColourAt, colours: MARG_COLOURS,
   route: MARG_ROUTE,
   id: margId, stale: margStale, order: margOrder, witness: margWitness,
+  /* the hand's arithmetic, exported for the bench and for the node tests --
+     pure, and the only new vocabulary this lane adds to the record's own */
+  hand: { order: handOrder, ids: handIds, wordAt: handWordAt, covering: handCovering,
+          conflict: handConflict, noteAt: handNoteAt, machine: handMachine },
+  phone: PHONE,
   /* the library record's shared block, exported because reader/cursor.js is
      the record's other writer and there is one copy of these five, here */
   libStore: { wordIds: libWordIds, hash: libHash, mergeSlug: libMergeSlug,

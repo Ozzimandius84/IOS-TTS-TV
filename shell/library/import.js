@@ -376,8 +376,8 @@ const TTSTVBundle = (() => {
     for (const k of ["id", "title", "author", "lang", "source", "chapters"]) {
       if (!(k in obj)) errors.push(`book.json has no "${k}" (core/schema.py Book.from_dict requires it)`);
     }
-    if (typeof obj.id === "string" && !/^[a-z0-9][a-z0-9-]*$/.test(obj.id)) {
-      errors.push(`"${obj.id}" is not a usable slug (lower-case letters, digits and hyphens)`);
+    if (typeof obj.id === "string" && !bookSlugOk(obj.id)) {
+      errors.push(`"${obj.id}" is not a usable slug (lower-case letters of any script, digits, hyphens, and the \`+\` a merged book carries)`);
     }
     const v = obj.schema_version === undefined ? 1 : obj.schema_version;
     if (typeof v !== "number" || !Number.isInteger(v) || v < 1) errors.push(`schema_version ${JSON.stringify(obj.schema_version)} is not a version number`);
@@ -413,8 +413,8 @@ const TTSTVBundle = (() => {
     for (const k of ["id", "title", "author", "lang", "source", "chapters"]) {
       if (!(k in obj)) errors.push(`book.meta.json has no "${k}" (studio/sync.py meta_of writes it)`);
     }
-    if (typeof obj.id === "string" && !/^[a-z0-9][a-z0-9-]*$/.test(obj.id)) {
-      errors.push(`"${obj.id}" is not a usable slug (lower-case letters, digits and hyphens)`);
+    if (typeof obj.id === "string" && !bookSlugOk(obj.id)) {
+      errors.push(`"${obj.id}" is not a usable slug (lower-case letters of any script, digits, hyphens, and the \`+\` a merged book carries)`);
     }
     const v = obj.schema_version === undefined ? 1 : obj.schema_version;
     if (typeof v !== "number" || !Number.isInteger(v) || v < 1) errors.push(`schema_version ${JSON.stringify(obj.schema_version)} is not a version number`);
@@ -765,10 +765,36 @@ const TTSTVBundle = (() => {
     return (n / (1024 * 1024 * 1024)).toFixed(1) + " GB";
   }
 
+  /** THE SLUG ALPHABET -- `studio/slug.py`'s rule, in the page (G-SLUGSIX,
+   *  14 Sep). Lower-case letters OF ANY SCRIPT, ASCII digits, hyphens, and
+   *  the `+` a stitched book carries; a letter or a digit first; NFC; 64
+   *  characters. `\p{Ll}\p{Lo}\p{Lm}` is exactly "a letter that is not
+   *  upper- or title-case", which is what the Python spells as
+   *  `c.isalpha() and c === c.toLowerCase()`.
+   *
+   *  Six books on Osca's shelf were outside the old ASCII-only rule and had
+   *  therefore never reached a phone -- `ιλιάδα`, four accented French
+   *  books, `eclogues-la+eclogues-en`. What the rule still refuses is
+   *  everything a traversal needs: `/`, `\`, `.`, `..`, `%`, `:`, an empty
+   *  segment, a control character. The slug crosses to the phone
+   *  percent-encoded (`studio/sync.py::book_files`, the one encode seam), so
+   *  none of this is about what survives a URL.
+   *
+   *  `library/drive.js::syncSlugOk` is the same rule for a page that has not
+   *  loaded this file; `studio/tests/test_slug.py` holds the four
+   *  implementations equal. */
+  const SLUG_RE = /^[\p{Ll}\p{Lo}\p{Lm}0-9][\p{Ll}\p{Lo}\p{Lm}0-9+-]*$/u;
+  const SLUG_MAX = 64;
+  function bookSlugOk(slug) {
+    const s = String(slug == null ? "" : slug);
+    return s.length > 0 && s.length <= SLUG_MAX && SLUG_RE.test(s) && s.normalize("NFC") === s;
+  }
+
   return {
     CACHE_PREFIX, SCHEMA_MAX, META_FILE, PAYLOAD, AUDIO_EXTS,
     META_MAX, BOOK_FILE, META_BOOK_FILE, bookFileOf,
     isPayload, cacheName, parseCacheName, booksBase, bookUrl,
+    bookSlugOk, SLUG_MAX,
     validateBook, validateMeta, walkWordIds, bookHash, planBundle, contentType,
     importBook, importZip, importFiles, listInstalled, removeBook, estimate, fmtBytes, topUps, TOPUP,
     FREED_KEY, freed, freeBook, unfreeBook, removals,

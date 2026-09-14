@@ -696,3 +696,41 @@ html[data-theme="dark"], html[data-dark]{
 .sf-fields .v{ color:var(--sf-ink); min-width:0; overflow-wrap:anywhere; }
 .sf-url{ display:block; padding:7px 0 0; font:10px/1.4 ui-monospace, SFMono-Regular,
   Menlo, monospace; color:var(--sf-dim); overflow-wrap:anywhere; }
+
+
+/* ==========================================================================
+   14 SEPTEMBER, SURFACE STAGE 1 — EVERY RENDER, ALL BOOKS
+   `studio.html::panelQueue` was a modal over the host's own front page. It is
+   a band at the top of THE WORKS now: the machine, above the book, shut until
+   it is asked for. Its head borrows `.sf-workhead`'s layout for the reason
+   the two are the same kind of thing — a list title with the controls that
+   belong to the LIST rather than to any row in it.
+   ========================================================================== */
+.sf-all{ display:block; border-bottom:1px solid var(--sf-rule); padding-bottom:6px; }
+.sf-h.sf-allhead{ display:flex; align-items:baseline; gap:8px; }
+.sf-h.sf-allhead .wl{ flex:1 1 auto; }
+.sf-h.sf-allhead .sf-verb{ flex:0 0 auto; }
+/* A GROUP IS NOT A BOOK ON A SHELF, and the row says so by weight rather
+   than by a badge — the spine rule this surface keeps (told apart by the
+   spine, never by a badge and never by being in two different lanes). */
+.sf-row.r-all .t{ font-weight:500; }
+.sf-row.r-all .s{ font-variant-numeric:tabular-nums; }
+/* the three states a person scans for: out now, finished, and gone wrong */
+.sf-row.r-all.rfailed .spine, .sf-row.r-all.rstopped .spine{ opacity:.55; }
+.sf-row.r-all.rvoiced .spine, .sf-row.r-all.rpulled .spine{ opacity:.75; }
+.sf-row.r-all.rheld .spine{ opacity:.45; }
+/* A CHAPTER WITH AUDIO AND NO WORD TIMINGS. It is a fact, not a failure, so
+   it is said in the row's own voice rather than in the red one -- and the
+   ribbon's align cell says the same, or the row would give two answers. */
+.sf-gr .sf-notime{ flex:0 0 auto; color:#a8532a; font-style:normal; }
+
+/* ==========================================================================
+   14 SEPTEMBER — ON THE DRIVE, THE THIRD STATE A ROW CAN BE IN
+   `studio.html::panelSources` was a modal list of buttons. A file in
+   TTS_DATA/sources/ is neither yours (no book) nor out there (nothing to
+   fetch): it is here, and one press parses it in place. It is told apart the
+   way every other row is — by the spine, never by a badge.
+   ========================================================================== */
+.sf-row.r-drive .spine{ opacity:.6; }
+.sf-row.r-drive .t{ font-weight:500; }
+.sf-row.r-drive .sf-prov{ font:10px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; }

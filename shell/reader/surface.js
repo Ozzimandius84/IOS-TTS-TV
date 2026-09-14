@@ -502,8 +502,10 @@
       local:  { id: "local", label: "Here, on this Mac", pill: "This Mac", ok: false,
                 short: "Install a model in Settings to render here.",
                 why: "qwen3 is not installed here: voice/.venv/ does not exist." },
+      /* `destinations()` puts the free GPU's own numbers here and the bench
+         has them too, or the Where row's second line cannot be looked at */
       kaggle: { id: "kaggle", label: "On Kaggle", pill: "Kaggle", ok: true,
-                short: null, why: null, running: [] },
+                short: null, why: null, running: [], hours_left: 27.4, slots: 2 },
       modal:  { id: "modal", label: "Fast, on Modal", pill: "Fast", ok: false,
                 short: "Modal is not connected on this Mac.",
                 why: "no Modal credentials at ~/.modal.toml" }
@@ -567,6 +569,40 @@
                           name: "Les Pensées", step: "parse", phase: "running" }];
   /* what a log looks like -- the ingest bar's own line shape
      (studio/serve.py::_INGEST_LINE_RE), so the pane is judgeable */
+  /* THE BENCH'S OWN GROUPS, in `push.groups_all`'s exact shape -- one that
+     finished and made a master, one that failed with a sentence and has no
+     rows left (which is the case the whole list exists for), and one out on
+     Kaggle with a queue name, so the seventh log shape has something to draw
+     a button for on a page with no server. */
+  /* THE DRIVE'S OWN FILES, in `bookinfo.sources`' exact five fields: one
+     epub nobody has parsed, one pdf, and one that IS already a book on the
+     shelf -- which is the twin the list must not draw twice. */
+  var MOCK_DRIVE = [
+    { name: "moby-dick.epub", kind: "epub", mb: 1.4, parsed_as: null,
+      source: "epubs/moby-dick.epub" },
+    { name: "blood-meridian.pdf", kind: "pdf", mb: 22.8, parsed_as: null,
+      source: "pdfs/blood-meridian.pdf" },
+    { name: "ethics.epub", kind: "epub", mb: 0.9, parsed_as: "ethics-spinoza",
+      source: "epubs/ethics.epub" }
+  ];
+  var MOCK_GROUPS = [
+    { group: "23", slugs: ["eclogues-virgil"], where: "kaggle", engine: "qwen3",
+      state: "running", queue: "ttstv-q23", kernel_url: "https://www.kaggle.com/code/x/ttstv-q23",
+      started: (Date.now() / 1000) - 240, ended: null, error: null,
+      units: [{ slug: "eclogues-virgil", unit: "c002", state: "running" }],
+      rows_binned: false, produced: [] },
+    { group: "22", slugs: ["ethics-spinoza"], where: "local", engine: "qwen3",
+      state: "voiced", queue: null, started: (Date.now() / 1000) - 5400,
+      ended: (Date.now() / 1000) - 5100, error: null,
+      units: [{ slug: "ethics-spinoza", unit: "c001", state: "voiced" }],
+      rows_binned: false, produced: [{ slug: "ethics-spinoza", unit: "c001",
+                                        master: "c001.wav", bytes: 8123456 }] },
+    { group: "21", slugs: ["a-dolls-house-a-play"], where: "modal", engine: "qwen3",
+      state: "failed", queue: null, started: (Date.now() / 1000) - 86400,
+      ended: (Date.now() / 1000) - 86100,
+      error: "modal.exception.ResourceExhaustedError: workspace billing cycle spend limit reached",
+      units: [], rows_binned: true, produced: [] }
+  ];
   var MOCK_LOG = [
     "[ 1/26] parse c001",
     "[ 2/26] parse c002",
@@ -666,7 +702,7 @@
     settings: null,     /* /state.settings -- render.where, chosen, modal      */
     ssd: null,          /* /state.ssd -- {mounted, root}                       */
     sample: null,       /* {phase, slug, chapter, numbers|err}                 */
-    voiceErr: "", whereErr: "", engineErr: "", sampleErr: "",
+    voiceErr: "", whereErr: "", engineErr: "", sampleErr: "", langErr: "",
     /* the addendum's two: a multi-file candidate waiting on a person, and the
        clone this surface has just asked the importer for */
     choose: null, cloning: null,
@@ -680,6 +716,18 @@
     pairs: {},
     /* ITEM 7: the audition, and only ever one of them */
     peek: null,
+    /* EVERY RENDER, ALL BOOKS -- `GET /queue-all` (`studio/push.py::
+       groups_all`). Its own route for `GET /kaggle`'s reason: `/state` is
+       polled every four seconds by every open tab and this walks every group
+       and stats a master per member, so it is asked when the band is opened
+       and on its own Refresh, never on the poll. null = never asked. */
+    /* EVERY FILE ALREADY IN `TTS_DATA/sources/` -- `/state`'s own `sources`
+       (`studio/bookinfo.py::sources`), which this surface has been polling
+       past for a week. NOT `S.sources`, which is the SEARCH adapters' report
+       and a name this file already had: these are files on a disk. */
+    drive: [],
+    all: null,          /* {groups,pending,hold,job,ssd} as the route sends it */
+    allOpen: false, allAsking: false, allErr: "",
     paired: ""           /* the Studio this device paired with, when it did  */
   };
   /* what the bench dials, and nothing else does */
@@ -758,6 +806,7 @@
     if (S.bench) {
       S.voices = MOCK_VOICES;
       S.settings = MOCK_SETTINGS;
+      S.drive = MOCK_DRIVE;
       S.voice = MOCK_VOICES[0].name;
       S.ssd = { mounted: true, root: "(the bench)" };
       /* ITEM 9: THE BENCH GETS THE WHOLE QUEUE, not one job. A single running
@@ -932,6 +981,7 @@
       .then(function (r) { return r.ok ? r.json() : null; })
       .then(function (d) {
         S.shelf = ((d && d.books) || []).map(shelfOf);
+        S.drive = (d && d.sources) || [];
         S.stateErr = "";
         shelfAt = Date.now();
       })
@@ -1420,6 +1470,30 @@
       out.push({ kind: "out", key: k, cand: c,
                  s: match(c.title, c.author, q) + (SRCW[c.source] || 0) });
     });
+    /* ON THE DRIVE, AND NOT PARSED -- `studio.html::panelSources`, which was
+       a modal list of buttons that until studio-simplify had no handler at
+       all. It is the THIRD state a row can be in, and it belongs in the one
+       list for the same reason the other two do: *"your library AND out
+       there, in ONE list. Told apart by the spine, never by a badge and
+       never by being in two different lanes."* A file in TTS_DATA/sources/
+       is neither yours (no book) nor out there (nothing to fetch): it is
+       here, and one press parses it in place -- no upload, no copy.
+
+       A SOURCE ALREADY PARSED IS NOT DRAWN. `sources()` cross-references
+       every file against every book's own `source.path` and answers
+       `parsed_as`, and the book is already a row above -- so drawing it
+       again is the library-adapter twin this surface exists not to draw
+       (`onShelf`'s own rule, one lane over). The count is kept and said in
+       the head instead, because "12 files, 9 of them already books" is the
+       useful sentence and twelve duplicate rows are not. */
+    (S.drive || []).forEach(function (f) {
+      if (f.parsed_as) return;
+      var k = "d:" + f.source;
+      if (S.work[k]) return;                  /* it is being parsed now */
+      var sc = match(f.name, f.kind, q);
+      if (q && !sc) return;
+      out.push({ kind: "drive", key: k, file: f, s: sc });
+    });
     out.sort(function (a, b) { return b.s - a.s; });
     return out;
   }
@@ -1626,18 +1700,24 @@
     if (CFG.mixed) {
       if (rows.length || strip) listEl.appendChild(head(S.q ? "Results" : "Your library"));
       if (strip) listEl.appendChild(strip);
-      rows.forEach(function (r) {
-        listEl.appendChild(r.kind === "shelf" ? shelfRow(r.book) : outRow(r));
-      });
+      rows.forEach(function (r) { listEl.appendChild(rowFor(r)); });
     } else {
       if (strip) listEl.appendChild(strip);
       var mine = rows.filter(function (r) { return r.kind === "shelf"; });
+      var here = rows.filter(function (r) { return r.kind === "drive"; });
       var them = rows.filter(function (r) { return r.kind === "out"; });
       if (mine.length) { listEl.appendChild(head("Your library"));
         mine.forEach(function (r) { listEl.appendChild(shelfRow(r.book)); }); }
+      if (here.length) { listEl.appendChild(head(driveHead()));
+        here.forEach(function (r) { listEl.appendChild(driveRow(r.file, r)); }); }
       if (them.length) { listEl.appendChild(head("Out there"));
         them.forEach(function (r) { listEl.appendChild(outRow(r)); }); }
     }
+    /* THE FILES ALREADY PARSED ARE NOT ROWS, AND THEY ARE NOT NOTHING. The
+       twin rule drops them from the list (the book is a row above); the
+       count is the sentence that makes the drop legible. */
+    if (!S.q && driveParsed() && rows.some(function (r) { return r.kind === "drive"; }))
+      listEl.appendChild(note(driveHead()));
 
     if (S.q && !searching && S.outErr) listEl.appendChild(note(S.outErr));
     else if (S.q && !searching && !rows.length && !working.length && !S.media.length)
@@ -1834,6 +1914,183 @@
   }
   function head(t) { var h = el("span", "sf-h"); h.textContent = t; return h; }
 
+  /* ================================================ EVERY RENDER, ALL BOOKS
+     `studio.html::panelQueue`, which was a modal over the host's own front
+     page, as a STATE of this surface -- opened from the WORKING header,
+     closed from the same button, and nowhere you navigate to.
+
+     WHY IT BELONGS HERE AND NOT IN A PANEL. `GET /queue-all` is the only
+     view of a render that FAILED for a book nobody has open, or whose rows
+     have been binned: *"Group 21 of 3 Sep (`a-dolls-house-a-play`, Modal,
+     qwen3) carried `modal.exception.ResourceExhaustedError: workspace
+     billing cycle spend limit reached` with no rows left at all, so the only
+     place that sentence existed was a file nobody reads"* (`push.py::
+     groups_all`). The WORKING band is where this surface says what the
+     machine is doing; the whole queue is the same subject with the clock
+     wound back, so it is the same band with one more control on its header
+     -- not a second surface, and not a page of studio.html.
+
+     ASKED ON OPEN AND ON REFRESH, NEVER ON THE POLL. That is the route's own
+     instruction and the reason it is not on `/state`.
+
+     THE ROW IS NOT THE RENDER. A group outlives its rows, so `rows_binned`
+     is drawn as itself rather than as "no chapters", and a group with a
+     `queue` gets the one log its whole push wrote. */
+  function askAll() {
+    S.allAsking = true; S.allErr = ""; draw();
+    var url = api("/queue-all");
+    if (!url) {
+      /* the bench has no server, so it has the shape and says so */
+      S.all = { groups: MOCK_GROUPS, pending: [], hold: null, mock: true };
+      S.allAsking = false; draw(); return;
+    }
+    /* A STUDIO OLDER THAN THE ROUTE is the one failure with a CURE, and it
+       is the likely one: `/queue-all` is newer than the rest of this door,
+       and a running Frank that predates it answers 404 with a body. So the
+       STATUS decides the sentence, not the exception -- a 404 read through
+       `.json()` resolves perfectly well, which is how this said "no such
+       route" (a phrase nobody can act on) in its first draft. Anything else
+       says what studio said, and "couldn't reach it" is reserved for the
+       case where studio did not answer at all, or the whole surface would
+       send somebody to their Wi-Fi over a version mismatch. */
+    var gone = false;
+    ask_(url, 20000, { cache: "no-store" })
+      .then(function (r) { gone = (r.status === 404 || r.status === 501); return r.json(); })
+      .then(function (j) {
+        S.allAsking = false;
+        if (gone) {
+          S.all = null;
+          S.allErr = "This studio has no /queue-all — it may be older than the route. "
+                   + "Quit Frank and open it again.";
+        } else {
+          S.all = j || { groups: [] };
+          S.allErr = j && j.error ? "/queue-all — " + String(j.error) : "";
+        }
+        draw();
+      })
+      .catch(function (e) {
+        S.allAsking = false; S.all = null;
+        S.allErr = why("/queue-all", e);
+        draw();
+      });
+  }
+  /* WHERE IT RAN, in the words Settings uses for the same three. */
+  function whereWord(w) {
+    return w === "modal" ? "Modal" : w === "kaggle" ? "Kaggle" : "this Mac";
+  }
+  /* ONE GROUP, ONE ROW. Book(s) · lane · model · when, then its chapters,
+     then ONE state word AND ITS REASON IN THE SAME BREATH -- a failed group
+     with no sentence is the bug this list was built for, so where the group
+     has none the row says that too. */
+  function allRow(g) {
+    var r = rowShell("r-all r-" + String(g.state || "").replace(/[^a-z]/g, ""), "g:" + g.group);
+    var h = hueFor((g.slugs && g.slugs[0]) || ("g:" + g.group));
+    r.style.setProperty("--hue", h);
+    r.querySelector(".spine").style.background = h;
+    var books = (g.slugs || []).map(function (sl) { return bookTitle(sl) || sl; });
+    var when = g.ended ? mmss((Date.now() / 1000) - g.ended) + " ago"
+             : g.started ? mmss((Date.now() / 1000) - g.started) + " in" : "";
+    r.querySelector(".t").textContent =
+      [books.join(" · ") || "unknown book", whereWord(g.where),
+       g.engine || "no model named", when].filter(Boolean).join(" · ");
+    var units = (g.units || []).map(function (u) { return u.unit; });
+    r.querySelector(".s").textContent = units.length ? units.join(", ")
+      : g.rows_binned ? "rows binned — the render is still what it was"
+      : "no chapters";
+    var why_ = (g.state === "failed" || g.state === "stopped")
+      ? " — " + (g.error || "no cause was recorded")
+      : (g.state === "held" && S.hold && S.hold.why) ? " — " + S.hold.why : "";
+    var st = el("span", "sf-prov" + (why_ ? " err" : ""));
+    st.textContent = String(g.state || "") + why_;
+    r.querySelector(".body").appendChild(st);
+    /* WHAT IT PRODUCED, off the disk (`groups_all` stats every master). A
+       finished group that produced nothing says so rather than implying
+       audio -- an unplugged drive answers nothing and this is where that
+       shows. */
+    if (g.produced && g.produced.length) {
+      var pr = el("span", "sf-prov");
+      pr.textContent = g.produced.length + " master" + (g.produced.length === 1 ? "" : "s")
+        + " on the drive · " + g.produced.map(function (x) { return x.master; }).join(" · ");
+      r.querySelector(".body").appendChild(pr);
+    } else if (g.state === "voiced" || g.state === "pulled") {
+      r.querySelector(".body").appendChild(note("nothing on the drive for it"));
+    }
+    var end = r.querySelector(".end");
+    /* THE SEVENTH LOG SHAPE, and this row is the only place it can be asked
+       for: the queue name is the group's own field. */
+    var q = logQuery(g);
+    if (q) {
+      var key = "g:" + g.group, open_ = !!(S.logs[key] && S.logs[key].open);
+      end.appendChild(rowBtn(open_ ? "hide log" : "log", "this push's own courier log",
+        function () {
+          if (S.logs[key] && S.logs[key].open) { S.logs[key].open = false; draw(); return; }
+          openLog(key, q, books.join(" · ") || ("push " + g.group));
+        }));
+    }
+    if (g.kernel_url)
+      end.appendChild(rowBtn("kernel", "open the kernel this push ran on",
+        function () { openOut(g.kernel_url); }));
+    return r;
+  }
+  /* THE BAND, under the working list. Five states and each says which it is:
+     asking, refused, empty, the rows, and the pending count above them. */
+  /* WHERE IT SITS, AND WHY NOT ON THE WORKING HEADER. `Hold all` is on that
+     header because it is about the MACHINE, and this is too -- but the
+     header is only drawn when the band has rows ("an empty band draws no
+     header", Round 2 item 1, and there is a test on it). A control you can
+     only reach while something is running is the wrong control for a list
+     whose whole purpose is the render that failed for a book nobody has
+     open, which is most likely when NOTHING is running. So it lives at the
+     top of THE WORKS, above the book-level rows, in the same order the
+     column already reads: the machine first, then the book. One home. */
+  function allBand() {
+    var box = el("div", "sf-all");
+    var h = el("div", "sf-h sf-allhead");
+    var n = el("span", "wl");
+    n.textContent = "Every render, all books";
+    h.appendChild(n);
+    var tb = el("button", "sf-verb ghost");
+    tb.type = "button";
+    tb.textContent = S.allOpen ? "Hide" : "Show";
+    tb.title = "every render, every book — including the ones whose rows are gone";
+    tb.addEventListener("click", function (e) {
+      e.stopPropagation();
+      S.allOpen = !S.allOpen;
+      /* asked once, on the open that needs it; Refresh is the other ask */
+      if (S.allOpen && !S.all && !S.allAsking) askAll(); else draw();
+    });
+    h.appendChild(tb);
+    if (S.allOpen) {
+      var rb = el("button", "sf-verb ghost");
+      rb.type = "button"; rb.textContent = "Refresh";
+      rb.addEventListener("click", function (e) { e.stopPropagation(); askAll(); });
+      h.appendChild(rb);
+    }
+    box.appendChild(h);
+    if (!S.allOpen) return box;
+    if (S.allAsking) { box.appendChild(note("Asking the server for every group…")); return box; }
+    if (S.allErr) { box.appendChild(note(S.allErr)); return box; }
+    var d = S.all;
+    if (!d) { box.appendChild(note("Nothing asked yet.")); return box; }
+    if (d.mock) box.appendChild(note("mock groups — nothing was asked."));
+    var waiting = (d.pending || []).reduce(function (a, b) { return a + (b.n || 0); }, 0);
+    if (waiting)
+      box.appendChild(note(waiting + " chapter" + (waiting === 1 ? "" : "s")
+        + " queued and not yet pushed"
+        + (S.hold ? " — and nothing leaves that list while renders are held" : "")));
+    box.appendChild(note("One row per push — every book, every lane, newest first. "
+      + "A render outlives its rows: binning a row does not bin the render, and this is "
+      + "where the ones with no rows left are still readable."));
+    var gs = d.groups || [];
+    if (!gs.length) { box.appendChild(note("Nothing has been pushed yet.")); return box; }
+    gs.forEach(function (g) {
+      box.appendChild(allRow(g));
+      var lg = S.logs["g:" + g.group];
+      if (lg && lg.open) box.appendChild(logPane(lg));
+    });
+    return box;
+  }
+
   /* THE BAND'S OWN HEADER, and `Hold all` lives on it (item 1: *"'Hold all'
      belongs on the WORKING header, not the right panel"*). It is the one
      control here that is about the MACHINE rather than about a row -- it
@@ -1879,6 +2136,78 @@
     r.appendChild(b);
     r.appendChild(el("span", "end"));
     return r;
+  }
+
+  /* one row, whichever of the three states it is in */
+  function rowFor(r) {
+    return r.kind === "shelf" ? shelfRow(r.book)
+         : r.kind === "drive" ? driveRow(r.file, r)
+         : outRow(r);
+  }
+  function driveParsed() {
+    return (S.drive || []).filter(function (f) { return !!f.parsed_as; }).length;
+  }
+  function driveHead() {
+    var n = (S.drive || []).length, p = driveParsed();
+    return n + " file" + (n === 1 ? "" : "s") + " on the drive"
+         + (p ? ", " + p + " of them already " + (p === 1 ? "a book" : "books") : "");
+  }
+
+  /* --- ON THE DRIVE: the row is a parse ----------------------------------- */
+  function driveRow(f, r0) {
+    var r = rowShell("r-drive", r0.key);
+    var h = hueFor(r0.key);
+    r.style.setProperty("--hue", h);
+    r.querySelector(".spine").style.background = h;
+    r.querySelector(".t").textContent = f.name;
+    r.querySelector(".s").textContent =
+      [f.kind, f.mb != null ? f.mb + " MB" : null, "on the drive, not parsed"]
+        .filter(Boolean).join(" · ");
+    /* WHERE IT ACTUALLY IS, in the words `POST /ingest` takes back -- the
+       same key `sources()` answers with, so the row names the thing it will
+       send rather than a label for it. */
+    var pv = el("span", "sf-prov");
+    pv.textContent = "TTS_DATA/sources/" + f.source;
+    r.querySelector(".body").appendChild(pv);
+    var verb = el("button", "sf-verb");
+    verb.type = "button"; verb.textContent = "Parse";
+    /* NOT "ADD": nothing is being fetched and nothing is being copied. The
+       file is here; the press is the parse. `POST /ingest {source}` and no
+       staging -- `stage_for_ingest` exists to bring a candidate DOWN to the
+       depot, and this is already in it (studio.html's own single call). */
+    verb.title = "parse it in place — POST /ingest {source} — no upload, no copy";
+    verb.addEventListener("click", function (e) { e.stopPropagation(); parseHere(r0, verb); });
+    r.querySelector(".end").appendChild(verb);
+    r.addEventListener("click", function () { selectCandidate(r, r0); });
+    return r;
+  }
+  /* ONE PRESS, ONE ROUTE. The row becomes THE WORKING ROW in place, exactly
+     as an Add does -- same `beginWork`, same `holdAs` on the source (which is
+     the name `/state`'s `importing` will use for it), same poll. The only
+     difference from `add` is the half that is missing: there is nothing to
+     stage. */
+  function parseHere(r0, verb) {
+    if (verb && verb.disabled) return;
+    var f = r0.file;
+    var w = S.work[r0.key] || beginWork(r0.key, { title: f.name, author: "" });
+    w.source = f.source;
+    w.origin = { source: "drive", id: null, url: null };
+    w.failed = false; w.err = "";
+    w.word = "Parsing"; w.cells.parse = "running"; w.p = 0.06;
+    holdAs(w.key, f.source);
+    draw();
+    if (S.bench) return simulate(w);
+    postJSON("/ingest", { source: f.source })
+      .then(function (ing) {
+        if (ing && ing.error) throw new Error(ing.error);
+        pollWorks();
+      })
+      .catch(function (e) {
+        w.word = "Couldn't parse it";
+        w.err = String(e && e.message || e);
+        w.failed = true;
+        draw();
+      });
   }
 
   /* --- ON THE SHELF: the row is the door ---------------------------------- */
@@ -2053,6 +2382,39 @@
      both is ONE row: `taken()` is `pollWorks`'s own twin rule applied a level
      up, so an import this surface started never appears again as a queue
      entry. */
+  /* WHAT LANE A `/state` JOB IS IN, and what to call it. Pure, and the only
+     place this surface turns a job's `mode` into words -- so the row, the log
+     title and any test read one table rather than three guesses.
+
+     Three modes are not about one book: a `voice` clone is about a VOICE, a
+     `pair` is about TWO books at once, and a `realign` is about a book's
+     audio rather than its text. The other seven (single, queue, sample,
+     install, language, reparse, ingest) are either a render of one book or
+     are already carried by their own list, and they keep the lane they had.
+     An unknown mode is a render: a mode studio adds tomorrow must not make a
+     running job vanish from the works, which is what a whitelist would do. */
+  function jobLane(job) {
+    if (!job) return "render";
+    if (job.mode === "voice") return "voice";
+    if (job.mode === "pair") return "pair";
+    if (job.mode === "realign") return "re-align";
+    if (job.mode === "reparse") return "re-parse";
+    if (job.mode === "ingest") return "import";
+    return "render";
+  }
+  /* ...and its name, for the modes that have one of their own. Null means
+     "no name but the book's", and the caller then falls back to the book
+     title exactly as it always did. */
+  function jobName(job) {
+    if (!job) return null;
+    if (job.mode === "voice" && job.name)
+      return (job.again ? "Re-importing " : "Importing ") + job.name;
+    if (job.mode === "pair" && job.left && job.right)
+      return job.left + " \u2194 " + job.right;
+    if (job.mode === "realign" && job.slug)
+      return "Re-aligning " + (bookTitle(job.slug) || job.slug);
+    return null;
+  }
   function workingRows() {
     var out = [], seen = {};
     function mark(w) {
@@ -2093,14 +2455,25 @@
     if (S.job && !taken({ slug: S.job.slug, source: S.job.source,
                           name: S.job.name || S.job.chapter })) {
       var jk = "job:" + (S.job.slug || "") + ":" + (S.job.chapter || S.job.current_chapter || "");
+      /* NOT EVERY JOB IS A RENDER, and this row said every one was. `/state`'s
+         job carries a `mode` (`studio/serve.py`: single · queue · voice ·
+         sample · install · language · reparse · realign · pair · ingest) and
+         this branch read none of it -- so a voice clone, a pairing and a
+         re-align each drew the row "a render", in the render lane, with no
+         name of their own, because `bookTitle(null)` is null and the literal
+         under it is the last `||`. The three that are NOT about one book get
+         their own name and lane here; everything else is a render and keeps
+         the line it always had. `jobLane` is the whole of the difference and
+         it is pure, so the bench and a test can read it without a page. */
+      var jn = jobName(S.job);
       out.push({ kind: "run", key: jk, slug: S.job.slug,
-                 title: bookTitle(S.job.slug) || S.job.slug || "a render",
-                 hue: hueFor(S.job.slug || jk), cells: {}, p: 0,
+                 title: jn || bookTitle(S.job.slug) || S.job.slug || "a render",
+                 hue: hueFor(S.job.slug || S.job.name || jk), cells: {}, p: 0,
                  word: S.job.queue_word || "running",
                  step: S.job.step || S.job.current_step,
                  unit: S.job.chapter || S.job.current_chapter,
                  where: S.job.where, elapsed: S.job.elapsed, job: S.job,
-                 lane: "render" });
+                 lane: jobLane(S.job) });
     }
     (S.ingests || []).forEach(function (it) {
       if (taken(it)) return;
@@ -2425,11 +2798,18 @@
 
   /* THE RIBBON. Eight cells in STEPS order, or the coarse three, which are a
      FOLD of the same eight and never a second list. */
-  function ribbon(cells) {
+  /* `ch` is optional and is the chapter the cells came from, when there is
+     one: a ribbon that drew `align` as OK beside a row whose button said
+     "align" would be two answers to one question, so `needsAlign` is asked
+     here too and that one cell falls back to unfinished. */
+  function ribbon(cells, ch) {
     var box = el("span", "sf-steps");
     var groups = CFG.coarse ? COARSE : STEPS.map(function (s) { return [s]; });
+    var noTime = needsAlign(ch);
     groups.forEach(function (g) {
-      var marks = g.map(function (s) { return cells[s] || "-"; });
+      var marks = g.map(function (s) {
+        return (noTime && s === "align") ? "-" : (cells[s] || "-");
+      });
       var v = marks.indexOf("failed") >= 0 ? "bad"
             : marks.indexOf("running") >= 0 ? "run"
             : marks.every(function (m) { return m === "ok"; }) ? "ok" : "";
@@ -2780,6 +3160,12 @@
         ? "Choose a book — " + working.length + " in the WORKING list, and its controls are on its own row."
         : "Choose a book to set its voice, where it renders, and its model."));
 
+    /* EVERY RENDER, ALL BOOKS -- the machine, above the book, and the one
+       thing in this column that is not about what was clicked. `studio.html`
+       had it as a modal panel (`panelQueue`); it is a state of this surface
+       now, shut by default and asked for only when it is opened. */
+    if (S.live) worksEl.appendChild(allBand());
+
     /* THE QUEUE MOVED LEFT (Round 2 item 1). Everything that stood here --
        the three halves of studio's queue, their bins, and the click that
        selected a book -- is `workingRows()` now, drawn as rows of the WORKING
@@ -2864,15 +3250,53 @@
      book. Nothing it did is missing; all of it is per-row now. */
 
 
-  /* WHICH LOG. `GET /log` refuses a request that names none of its four
-     shapes with its own sentence, so this returns null rather than sending
-     one it knows will 400. */
+  /* WHICH LOG. `GET /log` serves SEVEN shapes -- `?remote=`, `?voice=`,
+     `?ingest=`, `?pair=left--right`, `?reparse=`, `?realign=` and
+     `?slug=&chapter=&step=` (`studio/serve.py::_serve_log`, and its own 400
+     names all seven) -- and this file asked for THREE. The comment above
+     this function said "its own four shapes" and was wrong twice over: the
+     route had seven and the surface knew three of them.
+
+     What that cost, and it is not a log button: `/state`'s job object has
+     ten modes, and `voice`, `pair` and `realign` are three of them. A voice
+     import running RIGHT NOW came through `workingRows`'s `S.job` branch,
+     drew a row, and the row had no log -- because `logQueryFor` asks this
+     function, this function answered null, and a row that cannot name a log
+     draws no button for one (item 2's own rule: a control that cannot act is
+     worse than no control). So the one place in the app where you watch a
+     clone being made was the one place with nothing to read when it went red.
+
+     `remote` is the seventh and it arrived with the queue: a GROUP carries
+     its Kaggle queue name directly (`push.groups_all` -> `queue`), which is
+     a shorter road than studio.html's (`jobQueue` looks the group up through
+     `/state`'s push rows to reach `row.remote.queue`). It is asked FIRST
+     here for studio.html's own reason -- *"the card decides which by whether
+     this job has a kernel"* -- so one push's courier log beats the per-unit
+     render log whenever there is one, and a group object and a job object go
+     through the SAME function. Seven shapes, one place. */
   function logQuery(job) {
     if (!job) return null;
+    /* A KAGGLE PUSH'S COURIER LOG: one file per push, not per unit, because
+       one kernel serves them all (`studio/remote.py::log_path`). */
+    if (job.remote || job.queue)
+      return "?remote=" + encodeURIComponent(job.remote || job.queue);
     if (job.mode === "ingest" && (job.source || job.name))
       return "?ingest=" + encodeURIComponent(job.source || job.name);
     if (job.mode === "reparse" && job.slug)
       return "?reparse=" + encodeURIComponent(job.slug);
+    /* A CLONE IN PROGRESS. `studio/serve.py:463` -- {mode:"voice", name, again} */
+    if (job.mode === "voice" && job.name)
+      return "?voice=" + encodeURIComponent(job.name);
+    /* TWO BOOKS BEING PAIRED. `serve.py:813` -- {mode:"pair", left, right};
+       the route splits on the first `--`, so both halves go in whole. */
+    if (job.mode === "pair" && job.left && job.right)
+      return "?pair=" + encodeURIComponent(job.left + "--" + job.right);
+    /* A BOOK BEING RE-ALIGNED. `serve.py:769` -- {mode:"realign", slug}.
+       Checked BEFORE the slug/chapter/step shape below, which a realign job
+       would otherwise fall through to and fail: it carries a slug and no
+       chapter, so that branch answers null and this one answers the truth. */
+    if (job.mode === "realign" && job.slug)
+      return "?realign=" + encodeURIComponent(job.slug);
     var ch = job.chapter || job.current_chapter, sp = job.step || job.current_step;
     if (job.slug && ch && sp)
       return "?slug=" + encodeURIComponent(job.slug)
@@ -3009,15 +3433,24 @@
       var row = el("div", "sf-gr");
       row.appendChild(el("span", "gid", ch.id || ""));
       row.appendChild(el("span", "gt", ch.title || ""));
-      row.appendChild(ribbon(ch.state || {}));
+      row.appendChild(ribbon(ch.state || {}, ch));
       row.style.setProperty("--hue", tint);
+      /* SAID ON THE ROW, not only in the button: "align" as a step name
+         means nothing to a person; "no word timings" is the fact. */
+      if (needsAlign(ch)) {
+        var nt = el("span", "gt sf-notime");
+        nt.textContent = "no word timings";
+        nt.title = "this chapter has audio and no timings/" + (ch.id || "") + ".json — "
+                 + "run align to build the word map";
+        row.appendChild(nt);
+      }
       /* ONE CHAPTER, ONE STEP. The row runs the FIRST step that is not `ok`,
          read off the cells studio itself sent -- so the button does the next
          thing rather than a step somebody guessed. Nothing here invents a
          step: `STEPS` is `studio/state.py`'s own list and the cells are its
          own marks. */
       if (subject.slug && ch.id) {
-        var next = nextStep(ch.state || {});
+        var next = nextStepFor(ch);
         var b = el("button", "sf-verb");
         b.type = "button";
         b.textContent = next ? next : "done";
@@ -3046,6 +3479,31 @@
       if (m !== "ok") return STEPS[i];
     }
     return null;
+  }
+  /* A CHAPTER WITH AUDIO AND NO WORD TIMINGS, and it is the one cell in this
+     grid the product is actually about. `GET /book` sends `timed` per
+     chapter -- `state._exists(book_dir/"timings"/<cid>.json)`,
+     `studio/bookinfo.py:585` -- beside the eight `state` marks, and this
+     file read the marks and threw `timed` away. A book rendered before
+     `align` ever ran shows `align: "ok"` and has no timings file, so
+     `nextStep` walked straight past it and the row offered a LATER step:
+     word-level highlighting, which is the whole of TTS TV, silently never
+     built. studio.html has had the cell for this for days ("no word timings
+     · run align", `needsAlign`); this surface had neither the field nor the
+     question.
+
+     `timed === false` and not `!timed`: `studio/add.py` sends `null` for a
+     chapter it skipped, and null is "nobody looked", which is not the same
+     answer and must not draw a warning. */
+  function needsAlign(ch) {
+    return !!ch && (ch.state || {}).speak === "ok" && ch.timed === false;
+  }
+  /* ...and what the ROW should therefore run. `nextStep` stays pure on the
+     cells -- they are studio's own marks and nothing else -- and this is the
+     one question that needs the chapter beside them. */
+  function nextStepFor(ch) {
+    if (needsAlign(ch)) return "align";
+    return nextStep((ch && ch.state) || {});
   }
   /* THE BENCH ONLY, and it is named for what it is. With no server there is
      no `/book` to ask, so the bench draws the shape a shelf row implies: a
@@ -3177,6 +3635,14 @@
   /* Where a render fired right now would go, as this column has drawn it --
      the server's `default` (which already answers "is there a choice", "did
      anybody choose" and "can it run"), never recomputed here. */
+  /* HOURS AND MINUTES, and `studio.html::hoursLeftText`'s exact arithmetic
+     so the two surfaces cannot give two accounts of one number. Pure: null
+     in, null out -- an unasked quota is not a quota of zero. */
+  function kaggleHours(hours) {
+    if (hours == null) return null;
+    var h = Math.floor(hours), m = Math.round((hours - h) * 60);
+    return (h ? h + " h " : "") + m + " min";
+  }
   function whereNow() {
     var d = (S.live ? KAG.value : MOCK_KAGGLE) && (S.live ? KAG.value : MOCK_KAGGLE).destinations;
     if (d && d.default) return d.default;
@@ -3224,6 +3690,69 @@
      {slug, voice}`), the reference played off `/voice-clip?name=` -- which is
      a route studio already serves because TTS_DATA sits outside the published
      root and there is no relative URL to the clip. */
+  /* THE LANGUAGE IT WAS READ AS -- `studio.html::langRow`, and the one verb
+     in that whole panel that the LAN door already answers: `POST /lang` is
+     in `_SYNC_STUDIO`'s twenty-two (G-DOOR4) and this surface has never
+     called it. It decides the route a book's text takes (Latin and Greek go
+     down the dub path on an engine with no phonemes; MOSS reads the IPA
+     natively), and it was set once at parse time with no way to correct it
+     from here.
+
+     THE LIST IS MEASURED, NEVER TYPED. studio.html hardcodes seven codes;
+     G-LANGADD replaced the typed list everywhere else with one read out of
+     the dumps' own `lang_code` -- 4,566 of them -- so a typed seven is the
+     thing that was just deleted. And this surface must NOT ask
+     `GET /languages` for the real one: that route WRITES
+     `languages/catalogue.json` (CLAUDE.md, learned three times), and a
+     surface that is opened on every ⌘K would rewrite it on every open. So
+     the options are the codes THE SHELF ITSELF USES -- every `lang` on
+     `/state`'s own books -- plus this book's, which is always offered even
+     if it is the only book in that language. It is a correction, not a
+     catalogue: the language you want is almost always one you already have.
+
+     `POST /lang` REWRITES Book.lang AND NOTHING ELSE ("re-parse to apply",
+     its own docstring), so saying so is half the control. */
+  function bookLangs(b) {
+    var seen = {}, out = [];
+    function add(c) { if (c && !seen[c]) { seen[c] = 1; out.push(c); } }
+    add(b && b.lang);
+    (S.shelf || []).forEach(function (x) { add(x.lang); });
+    return out;
+  }
+  function langBlock(b) {
+    var box = pills();
+    var line = el("div", "sf-vsub");
+    var on = (b && b.lang) || "";
+    bookLangs(b).forEach(function (code) {
+      var p = onPill(code, code === on, false);
+      p.title = code === on ? "the language this book was parsed as"
+                            : "re-read it as " + code + " — POST /lang, then Re-parse";
+      p.addEventListener("click", function () { pickLang(b, code, p); });
+      box.appendChild(p);
+    });
+    line.appendChild(sub("set at parse time; changing it rewrites the book's language and "
+      + "nothing else — Re-parse is what applies it"));
+    /* RE-PARSE IS NAMED AND NOT DRAWN. `POST /reparse` is NOT one of the
+       twenty-two, so on a paired phone this button would 404 -- and a
+       control that cannot act is worse than no control (item 2's rule). It
+       is a Request to 91, who has serve.py open; until the door takes it,
+       the sentence says where the press is. */
+    if (S.langErr) line.appendChild(note(S.langErr));
+    return prow("Language", box, line);
+  }
+  function pickLang(b, code, p) {
+    if (!b || !b.slug || code === b.lang) return;
+    S.langErr = "";
+    act("/lang", { slug: b.slug, lang: code }, p, "…").then(function (j) {
+      if (!j) return;
+      if (j.error) { S.langErr = j.error; draw(); return; }
+      /* THE SHELF IS STALE THE MOMENT THIS LANDS, and the answer is studio's
+         own row -- so the pill follows the book rather than the press. */
+      b.lang = (j && j.lang) || code;
+      S.shelf.forEach(function (x) { if (x.slug === b.slug) x.lang = b.lang; });
+      draw();
+    });
+  }
   function voiceBlock(b) {
     var box = pills();
     var list = S.voices || [];
@@ -3467,6 +3996,25 @@
     var k = (S.live ? KAG.value : MOCK_KAGGLE) || askKaggle(false);
     var box = pills();
     var line = el("div", "sf-vsub");
+    /* A CHOICE THAT WILL NOT SURVIVE A RESTART SAYS SO, AND SAYS IT FIRST.
+       `/state`.settings carries `persisted` and `save_error` (`studio/
+       bookinfo.py`) and this block ignored both -- so a studio that could
+       not write its settings file took the press, lit the pill, and lost it
+       on the next launch with nothing on the screen ever having said so.
+       studio.html's Settings panel drew this warning; it is the one thing in
+       that panel that is about a FAILURE.
+
+       It goes on `line` before the three early returns below, deliberately.
+       It is a fact about `POST /settings`, not about `GET /kaggle`, and the
+       first draft put it at the bottom -- where a Kaggle that would not
+       answer returned above it and swallowed it, which is precisely the
+       moment somebody is choosing a different lane. There is a test with
+       `/kaggle` dead that would go red if it moved back down. */
+    var sp = S.settings;
+    if (sp && sp.persisted === false)
+      line.appendChild(note("This choice will not survive a restart — "
+        + (sp.save_error || "studio could not write its settings file")
+        + (sp.path ? " (" + sp.path + ")" : "")));
     if (S.live && KAG.err) { box.appendChild(offPill("no answer", KAG.err));
                              line.appendChild(note(KAG.err));
                              return prow("Where", box, line); }
@@ -3493,6 +4041,29 @@
       box.appendChild(p);
     });
     if (d.default_reason) line.appendChild(sub(esc(d.default_reason)));
+    /* WHAT THE FREE GPU HAS LEFT, AND WHAT IS ON IT -- rows 5 and 6 of the
+       twelve (`PROMPTS/reasoning/phone-studio.md` §4: *"This week (GPU
+       hours) ... courier"*, *"Sessions ... courier"*), and both were already
+       on this wire. `studio/remote.py::destinations` puts `hours_left`,
+       `slots` and `running` on the kaggle destination, and this block read
+       `pill`, `ok`, `short` and `why` and threw the rest away -- so the one
+       number that decides whether to press Kaggle at all lived only in
+       studio.html's Settings panel, on a Mac.
+
+       It is DRAWN FROM THE SAME PAYLOAD, so it costs no second route and it
+       works on a phone the moment `/kaggle` does (it is one of the
+       twenty-two, G-DOOR4). `hours_left` null is not zero: it means nobody
+       has asked yet, or this Mac is not signed in, and the line says
+       nothing rather than "0 h left", which would read as a refusal. */
+    var kg = d.kaggle || {};
+    var bits = [];
+    var hl = kaggleHours(kg.hours_left);
+    if (hl) bits.push(hl + " of free GPU left this week");
+    if (kg.running && kg.running.length)
+      bits.push(kg.running.length + " session" + (kg.running.length === 1 ? "" : "s") + " running"
+                + (kg.slots ? " of " + kg.slots : ""));
+    else if (kg.slots) bits.push("no session running · " + kg.slots + " free");
+    if (bits.length) line.appendChild(sub(esc(bits.join(" \u00b7 "))));
     /* CREDENTIALS AS A FACT, NEVER A VALUE. `credentials_present` is a
        Path.exists() on ~/.kaggle/kaggle.json; nothing on this wire is the
        file's contents, nothing is masked and nothing is logged. Modal is the
@@ -3764,6 +4335,7 @@
     if (!b) return null;
     var box = el("div", "sf-studio");
     box.appendChild(voiceBlock(b));
+    box.appendChild(langBlock(b));
     box.appendChild(whereBlock());
     box.appendChild(engineBlock(b));
     box.appendChild(sampleBlock(b));
@@ -3795,6 +4367,11 @@
            the sample is the one job, folded, so a finished sample survives the
            poll that follows it rather than vanishing. */
         S.voices = d.voices || [];
+        /* ...and the FILES ALREADY ON THE DRIVE, which have ridden on this
+           same payload since 30 Aug and which this surface has polled past
+           ever since (`studio/bookinfo.py::sources`, cached with the books
+           and the voices -- it costs nothing here). */
+        S.drive = d.sources || [];
         /* THE CLONE'S OWN LINE GOES WHEN THE VOICE ARRIVES -- or when the job
            it is waiting on says something, whichever comes first. A "cloning…"
            that outlived its job would be the silent blank in the other
@@ -4170,8 +4747,12 @@
      slug in its own url (`?book=books/<slug>`) and the host names it too. */
   function openBookHere() {
     try {
-      var m = /[?&]book=books(?:%2F|\/)([a-z0-9][a-z0-9-]*)/i.exec(location.search || "");
-      if (m) return m[1];
+      // G-SLUGSIX, 14 Sep: `location.search` is ENCODED, and a slug outside
+      // ASCII is `%CE%B9...` here (`%2B` for the `+` a stitched book
+      // carries), so the segment is matched as written and decoded after.
+      // Six books on the shelf answered `null` to this before today.
+      var m = /[?&]book=books(?:%2F|\/)((?:[a-z0-9+-]|%[0-9A-Fa-f]{2})+)/i.exec(location.search || "");
+      if (m) { try { return decodeURIComponent(m[1]); } catch (e) { return m[1]; } }
       var h = window.TTSTVHost;
       if (h && typeof h.currentSlug === "function") return h.currentSlug() || null;
     } catch (e) {}
@@ -4399,6 +4980,7 @@
                            videoQueryUrl: videoQueryUrl, webHits: webHits,
                            sourceState: sourceState, sourceTally: sourceTally,
                            nextStep: nextStep, logQuery: logQuery, run: run,
+                           needsAlign: needsAlign, nextStepFor: nextStepFor,
                            /* §4, 8 Sep -- the studio's own verbs, so the
                               driver presses the THING rather than a pixel */
                            studioSubject: studioSubject, whereNow: whereNow,
@@ -4421,6 +5003,15 @@
                            previewOf: previewOf, canPeek: canPeek,
                            hueFor: hueFor, holdAs: holdAs, held: HELD,
                            peek: peek, logQueryFor: logQueryFor,
+                           jobLane: jobLane, jobName: jobName,
+                           /* Stage 1 step 1: studio.html's panelQueue, as a
+                              state of this surface -- pressable by name */
+                           askAll: askAll, whereWord: whereWord,
+                           kaggleHours: kaggleHours,
+                           /* panelSources, as the list's third row state */
+                           driveHead: driveHead, driveParsed: driveParsed,
+                           bookLangs: bookLangs, pickLang: pickLang,
+                           parseHere: parseHere,
                            /* §5.9 -- THE BENCH'S ONE HANDLE ON THE MOCK. The
                               bench is a page, not a second implementation, so
                               it drives the states it wants to look at by
@@ -4429,7 +5020,8 @@
                               every one of them is dead. */
                            mocks: { voices: MOCK_VOICES, engines: MOCK_ENGINES,
                                     kaggle: MOCK_KAGGLE, settings: MOCK_SETTINGS,
-                                    job: MOCK_JOB, pending: MOCK_PENDING },
+                                    job: MOCK_JOB, pending: MOCK_PENDING,
+                                    groups: MOCK_GROUPS },
                            voiceNameFromTitle: voiceNameFromTitle,
                            elsewhere: elsewhere, api: api, base: BASE,
                            /* the field itself, so a test (and the bench) can

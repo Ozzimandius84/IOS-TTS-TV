@@ -347,8 +347,18 @@ function driveClient(token, fetchFn) {
     return call(id ? "PATCH" : "POST", url, { "Content-Type": "multipart/related; boundary=" + boundary }, body)
       .then(function (d) { return d.id || id; });
   }
+  /* `studio/drive.py::Drive.trash` -- a PATCH, never a DELETE: a file this
+   * app made goes to the person's own Bin and stays there for Drive's thirty
+   * days, so a pairing offer the phone removes is recoverable and a mistake
+   * is not final. `drive.file` scope can trash what it created; that is all
+   * the phone ever needs to remove. */
+  function trash(id) {
+    return call("PATCH", DRIVE.API + "/files/" + encodeURIComponent(id) + "?fields=id",
+                { "Content-Type": "application/json" }, JSON.stringify({ trashed: true }))
+      .then(function () { return true; }, function () { return false; });
+  }
   return { list: list, children: children, folder: folder, getBytes: getBytes, getJSON: getJSON, put: put,
-           get calls() { return calls; } };
+           trash: trash, get calls() { return calls; } };
 }
 
 /* `studio/drive.py::Folder`, in JS: `Frank/` found or made, its root
@@ -411,7 +421,11 @@ function driveFolder(drive) {
       .then(function (fid) { return writeJSON(id + ".json", rec, fid, devNames); });
   }
   var api = { open: open, readJSON: readJSON, writeJSON: writeJSON, library: library, marks: marks, writeMarks: writeMarks,
-              dir: dir, writeDevice: writeDevice, get root() { return root; } };
+              dir: dir, writeDevice: writeDevice, get root() { return root; },
+              // road 1b needs the root listing by name (the offer file) and a
+              // way to remove it once taken; both are the client's, unwrapped
+              get names() { return names; },
+              trash: function (id) { return drive.trash(id); } };
   return api;
 }
 
@@ -430,7 +444,21 @@ function syncMergeMarks(a, b) {
 function syncPositionOk(p) {
   return !!p && typeof p === "object" && typeof p.chapter === "string" && (p.wordId == null || typeof p.wordId === "string");
 }
-function syncSlugOk(slug) { return /^[a-z0-9][a-z0-9-]*$/.test(String(slug)) && String(slug).length <= 64; }
+/* import.js's rule when this page has it, its own copy when it has not --
+ * the pattern this file already uses for `topUps` and `removals`, because
+ * `drive.js` is loaded by settings.html and the reader has no import.js.
+ * G-SLUGSIX, 14 Sep: lower-case letters OF ANY SCRIPT, ASCII digits,
+ * hyphens, the `+` a stitched book carries; a letter or digit first; NFC;
+ * 64. `library/tests/test_sync_slug.py` holds the two equal, and
+ * `studio/tests/test_slug.py` holds all four. */
+var SYNC_SLUG_RE = /^[\p{Ll}\p{Lo}\p{Lm}0-9][\p{Ll}\p{Lo}\p{Lm}0-9+-]*$/u;
+var SYNC_SLUG_MAX = 64;
+function syncSlugOk(slug, o) {
+  var B = (o && o.bundle !== undefined && o.bundle !== null) ? o.bundle : global.TTSTVBundle;
+  if (B && typeof B.bookSlugOk === "function") return B.bookSlugOk(slug);
+  var s = String(slug == null ? "" : slug);
+  return s.length > 0 && s.length <= SYNC_SLUG_MAX && SYNC_SLUG_RE.test(s) && s.normalize("NFC") === s;
+}
 function syncMergePositions(mine, theirs) {
   var out = {};
   Object.keys(mine || {}).forEach(function (k) { if (syncPositionOk(mine[k])) out[k] = mine[k]; });
@@ -615,11 +643,13 @@ function runDriveSync(remote, o) {
         if (i >= wanted.length) return Promise.resolve();
         var b = wanted[i++];
         say("Pulling " + i + " of " + wanted.length + " · " + (b.title || b.slug));
-        var byRel = {};
-        b.files.forEach(function (f) { byRel[f.rel] = f.id; });
+        var byRel = {}, gzRel = {};
+        b.files.forEach(function (f) { byRel[f.rel] = f.id; if (f && f.gz) gzRel[f.rel] = true; });
         var fetchRel = function (rel) {
           if (!byRel[rel]) return Promise.reject(new Error(rel + ": not in library.json"));
-          return drive.getBytes(byRel[rel]);
+          return drive.getBytes(byRel[rel]).then(function (bytes) {
+            return gzRel[rel] ? syncInflate(rel, bytes) : bytes;
+          });
         };
         return bundle.importFiles(b.slug, b.files.map(function (f) { return f.rel; }), fetchRel, {
           href: href,
@@ -637,6 +667,19 @@ function runDriveSync(remote, o) {
   }).then(function () {
     say("Settings…");
     return syncSettingsLedger(folder, store);
+  }).then(function () {
+    /* ROAD 1b (G-PAIRMAIL, 14 Sep). The Mac and this phone are signed in to
+     * the same Google account, so the folder they already sync through is a
+     * channel between them -- and a pairing offer is one small file in it.
+     * `Frank/pairing.json`: the Mac writes it on Start pairing, this press
+     * picks it up on the sync that was going to run anyway (auto, on
+     * foreground), and the Sync card draws the fourth shape.
+     *
+     * NOTHING IS PAIRED HERE. The offer is handed up and the person presses
+     * Pair; the secret then goes to the same `/sync/pair` every other road
+     * ends at. An expired one is not shown and not reported -- it is just
+     * absent, which is the truthful thing for a card to say about it. */
+    return syncPairingOffer(folder).then(function (o) { if (o) out.offer = o; });
   }).then(function () {
     if (!pull) return null;
     say("Handing the books to Frank…");
@@ -676,9 +719,64 @@ function runDriveSync(remote, o) {
  * import.js's own sentence, and the rest go. The app commits each book's
  * row LAST, as `book_meta` does, so a half-pulled book is never on the
  * shelf and the next start resumes it by byte count. */
+/* `Frank/pairing.json` -- road 1b's offer, written by `studio/pairing.py::
+ * write_drive_offer` and read by `syncPairingOffer` below. One file at the
+ * root of the folder, so it arrives in the listing `folder.open()` already
+ * makes and costs this press no extra round trip. */
+var DRIVE_OFFER = "pairing.json";
+
+/* The offer, or null -- live, well-formed, and never a throw: a folder with
+ * a junk `pairing.json` in it must still sync. `expires` is checked HERE as
+ * well as on the Mac, so an offer nobody cleared is simply not drawn; the
+ * Mac refuses it regardless, which is where the real check lives. */
+function syncPairingOffer(folder, now) {
+  var t = now || Date.now();
+  return Promise.resolve().then(function () { return folder.readJSON(DRIVE_OFFER); })
+    .then(function (o) {
+      if (!o || typeof o.secret !== "string" || !o.secret) return null;
+      if (!(Number(o.expires) > t)) return null;
+      return { secret: o.secret, name: String(o.name || ""), host: o.host || null,
+               port: o.port || null, expires: Number(o.expires) };
+    }, function () { return null; });
+}
+
+/* The offer is taken once. The phone deletes the file the moment it pairs --
+ * the Mac has no way to know it landed, and an offer left in a shared folder
+ * is a key left in a shared folder. A trash that fails is not a failed
+ * pairing: the secret is already spent on the Mac. */
+function syncClearPairingOffer(folder) {
+  return Promise.resolve().then(function () {
+    var f = folder.names && folder.names[DRIVE_OFFER];
+    return f ? folder.trash(f.id) : false;
+  }).then(function (ok) { return !!ok; }, function () { return false; });
+}
+
 var SYNC_PAIR_KEY = "ttstv.sync.pair";   // settings.js's pairing {base, token, name} -- READ here, for the app's own ask
 var SYNC_SCHEMA_MAX = 7;                  // import.js's SCHEMA_MAX, for a page that has not loaded import.js
 var SYNC_LAN_MS = 4000;                   // how long the app's ask waits for the paired Studio before trying Drive
+
+/* G-GZPULL (14 Sep): one file Drive stores gzipped, inflated HERE -- and
+ * "here" is the fallback pull only, the one this page runs for a browser
+ * with no Frank host behind it (the Mac, a desktop browser, an app too old
+ * to have `TTSTVHost.sync`). The app's own pull never reaches this function:
+ * it inflates in Rust (`pull.rs::take_body`), because `ureq` hands it a
+ * blocking stream and `DecompressionStream` is a web API that thread cannot
+ * reach. Two inflaters, and each is the only one its side can run.
+ *
+ * WebKit has had `DecompressionStream` since 16.4 and every browser that
+ * can run this page has it; a browser that does not is TOLD so, rather than
+ * handed a book made of gzip. */
+function syncInflate(rel, bytes) {
+  var DS = global.DecompressionStream;
+  if (typeof DS !== "function" || typeof global.Response !== "function") {
+    return Promise.reject(new Error(rel + ": this browser cannot inflate gzip \u2014 pull from Studio over the network instead"));
+  }
+  return Promise.resolve().then(function () {
+    var body = new global.Response(bytes).body.pipeThrough(new DS("gzip"));
+    return new global.Response(body).arrayBuffer();
+  }).then(function (buf) { return new Uint8Array(buf); },
+          function () { throw new Error(rel + ": not a whole gzip"); });
+}
 
 /* The host's pull, or null. Duck-typed on the two calls the press needs. */
 function syncHostPull(host) {
@@ -740,7 +838,23 @@ function syncJobBook(row, transport, o) {
     meta: syncBookMeta(row, rels, o.now),
     files: files.map(function (f) {
       var out = { rel: f.rel, bytes: typeof f.bytes === "number" ? f.bytes : null };
-      if (transport === "drive") out.id = f.id; else out.url = f.url;
+      if (transport === "drive") {
+        out.id = f.id;
+        // G-GZPULL, 14 Sep: Drive STORES the text gzipped (`<base>.gz`) and
+        // hands `?alt=media` back verbatim, so the app inflates. `bytes`
+        // stays the file's own -- it is what lands on the phone's disk and
+        // what `syncBookMeta` sums -- and `wire_bytes` is what crosses, so
+        // the app's "n bytes arrived, m were listed" has the right m for
+        // each of the two questions. A row with no `gz` is a book pushed
+        // before today: plain files, and nothing here changes for it.
+        if (f.gz) { out.gz = true; out.wire_bytes = typeof f.wire_bytes === "number" ? f.wire_bytes : null; }
+      } else {
+        // NEVER on the LAN. Studio's server gzips the ANSWER when the client
+        // asks (G-DIET), the file on disk is plain, and `ureq`'s own `gzip`
+        // feature has already inflated it by the time the app sees a byte;
+        // a `gz` flag here would inflate a second time.
+        out.url = f.url;
+      }
       return out;
     }),
   };
@@ -763,6 +877,18 @@ function syncJob(transport, auth, rows, have, o) {
   var books = [], refused = [];
   order.forEach(function (slug) {
     var r = bySlug[slug];
+    // G-SLUGSIX, 14 Sep. THE SHARP EDGE BEHIND THE WALL (`stitch/STATUS.md`
+    // 13 Sep §2): this planner had no slug check at all. `pull.rs::check_job`
+    // refuses a slug the app cannot make a folder of -- and it refuses the
+    // WHOLE JOB, not that one book -- so until today the only thing standing
+    // between one bad row and every other book's sync failing was that the
+    // Mac's manifest filtered first. Measured live: a `+` row put straight
+    // into the job, `refused: []`. Now it is refused here, in the shape the
+    // page already renders.
+    if (!syncSlugOk(r.slug, o)) {
+      refused.push({ slug: r.slug, why: "\"" + r.slug + "\" is not a slug this device can make a folder of" });
+      return;
+    }
     if (got[r.slug + "@" + r.hash]) return;
     // G-DELETE: a book this device freed is not pulled back two seconds
     // later. It stays on the shelf as "Not on this device" and one press
@@ -1143,8 +1269,12 @@ global.TTSTVDrive = {
   googleSignInPhone: googleSignInPhone, googleSignOutPhone: googleSignOutPhone, googleAwaitRedirect: googleAwaitRedirect,
   driveClient: driveClient, driveFolder: driveFolder, runDriveSync: runDriveSync,
   syncMergeMarks: syncMergeMarks, syncMergePositions: syncMergePositions, syncMergeSettings: syncMergeSettings,
+  // road 1b (G-PAIRMAIL): the offer in the shared folder, read and taken
+  syncPairingOffer: syncPairingOffer, syncClearPairingOffer: syncClearPairingOffer, DRIVE_OFFER: DRIVE_OFFER,
+  syncSlugOk: syncSlugOk,
   // the pull's plan (G-SYNCBG): the job the app runs
   SYNC_PAIR_KEY: SYNC_PAIR_KEY, syncHostPull: syncHostPull, syncBookMeta: syncBookMeta, syncJobBook: syncJobBook,
+  syncInflate: syncInflate,
   syncJob: syncJob, syncDriveAuth: syncDriveAuth, syncHave: syncHave, syncHandOff: syncHandOff,
   syncPlanLan: syncPlanLan, syncPlanDrive: syncPlanDrive, syncPlan: syncPlan, syncAuto: syncAuto,
   // the top-up (G-TOPUP): what a row gained at the same hash, as a job of its own

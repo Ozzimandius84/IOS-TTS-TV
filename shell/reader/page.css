@@ -100,6 +100,34 @@ html[data-hardsnap] .pane{ scroll-snap-type:y mandatory; }
   -webkit-touch-callout:default;
 }
 
+/* ...AND ON THE PHONE THE HOLD IS THE APP'S (G-MARKS, 14 Sep).
+   Osca, 14 September: *"highlighting / note-taking on the phone, as there is
+   on the Mac."* Every other gesture on this page was already spent -- one
+   finger sideways is the axis, one finger down is the scroll, a tap is the
+   cursor, two taps is the one-word view, two fingers is the pinch (refused)
+   and the quiet ring, and a hold on the gear is light/dark. The one gesture
+   left on a word was iOS's own callout, and this is where it is taken:
+   `-webkit-touch-callout:none` is what stops the OS menu, and
+   `-webkit-user-select:none` is what stops iOS starting its own selection
+   under the app's, which would leave two selections on one run.
+
+   THE SCOPE IS THE PHONE'S READING COLUMN AND NOTHING ELSE. The Mac's column
+   is the rule above, to the declaration: `html[data-phone]` is set by the app
+   and by nothing else, so a Mac, a browser and the design bench all keep Look
+   Up, Translate, Copy and Speech exactly as they were. What a phone loses is
+   Copy and Translate; Look Up it keeps (G-LOOKUP3's card in the one-word view,
+   Apple's panel at its foot) and Speech is what the app does for a living. */
+html[data-phone] .column,
+html[data-phone] .column .chapter,
+html[data-phone] .column p,
+html[data-phone] .column .opener,
+html[data-phone] .column h1,
+html[data-phone] .column h2{
+  -webkit-touch-callout:none;
+  user-select:none;
+  -webkit-user-select:none;
+}
+
 /* THE AXIS NEVER MOVES; THE WIDTH DOES, PER CHAPTER.
    At 1440 the reference puts 1085 of its 1085 paragraphs in ONE box --
    L288 W865, text-align:start, text-indent:0 -- and its only two break-out

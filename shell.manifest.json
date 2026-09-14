@@ -2,12 +2,12 @@
   "added_here": [
     "index.html"
   ],
-  "bytes": 2455876,
+  "bytes": 2567322,
   "count": 68,
   "files": {
     "bar/askbar.css": {
-      "bytes": 11175,
-      "sha256": "9aad3d62a13ba38e9b390f6074a72ed15e81b6f24b5893d0e1ec6e3d40ae0f3a"
+      "bytes": 12271,
+      "sha256": "b1baa73b9b0271876cb1027acccd25d732a5c138b96b939afea2e0e146d864d2"
     },
     "bar/askbar.js": {
       "bytes": 38497,
@@ -26,12 +26,12 @@
       "sha256": "899c3ffa9eadbbd0746f7cd112027982db421c2a63102e86b9abe01e91aeede0"
     },
     "library/drive.js": {
-      "bytes": 60001,
-      "sha256": "ee76298fc0cf22f299d7b3215182ba3775b30cc735cf84e4cec8b59c05df4ace"
+      "bytes": 67620,
+      "sha256": "8930e49a7947da45de1339dc476c2ee0f4e7c1dd45f146d2b40585f1303fbef4"
     },
     "library/import.js": {
-      "bytes": 42670,
-      "sha256": "6a81e6d4b62cccd73728e369b56bdd10af5d35d214e95ca88f1af140f013716b"
+      "bytes": 44125,
+      "sha256": "446ce34f6a660576873c5194a3dea9697b020475cfd1d6e612368274b4710302"
     },
     "library/library.css": {
       "bytes": 93125,
@@ -122,16 +122,16 @@
       "sha256": "2fee43499f9a4ddee167e63cc07a85b3d7265c16a48a909904e40a63e05c1cab"
     },
     "reader/marginalia.css": {
-      "bytes": 1429,
-      "sha256": "ce26e4aae1fa98af3042a5a1ebe2470fb7d12b688d784a8140d2ad3539f237c2"
+      "bytes": 6897,
+      "sha256": "696ca87e9b7529da7a1a6bca9d478d05ae13a9d09a76232e49991b812123a2da"
     },
     "reader/marginalia.js": {
-      "bytes": 34281,
-      "sha256": "054ca550167ce5f23985ae2d0b53da7b48ba3927f4290edd726151e0ae096f62"
+      "bytes": 69099,
+      "sha256": "dfffad578b10bc7a9266c933796293ed978b8ebf825a7a47936fc82ed53ae9ad"
     },
     "reader/page.css": {
-      "bytes": 29912,
-      "sha256": "d877d758de053a81f74439d0c0f39cfa6879748366ec28cf69c18abc769b6509"
+      "bytes": 31370,
+      "sha256": "38f2469c41b656f10817f4ee7f34bbf1dfdbd078c356843542ff5d50cb33857e"
     },
     "reader/page.js": {
       "bytes": 37193,
@@ -178,12 +178,12 @@
       "sha256": "178b6b6d342baf8d926910ede61bba35d828ec16159422991d9fb794220ff8ff"
     },
     "reader/surface.css": {
-      "bytes": 36057,
-      "sha256": "74ccb0b71e0ad73455a18c155fc5660b62f5b5003cd06c7e5beab8c2e243016c"
+      "bytes": 38439,
+      "sha256": "f4024b385cd2a8edf3ab5671935806580112267c02520d96c643bb44f27ff13d"
     },
     "reader/surface.js": {
-      "bytes": 228871,
-      "sha256": "a102af4bfa2d83ebd09db417496673f3e1311f0f5eb7f295e25952f46265ec36"
+      "bytes": 261756,
+      "sha256": "6d7629718a1f6a80d0d999129b441952764195286461b15df5c3d98b0371023c"
     },
     "reader/sw.js": {
       "bytes": 24834,
@@ -194,8 +194,8 @@
       "sha256": "36386feeaba0d3356308550b25ed808eae6c256012375492415fa66aa3acee90"
     },
     "reader/tokens.css": {
-      "bytes": 5848,
-      "sha256": "2132267fdb5bd8e7af744bba23be070f7d9ee8ef3e154e8ab14ccd3f2354ab59"
+      "bytes": 8863,
+      "sha256": "d8d6c23d695bb3f6f43285bc90d425ab3cf5b4d66a889c1d145b738818150026"
     },
     "reader/transport.js": {
       "bytes": 32191,
@@ -238,8 +238,8 @@
       "sha256": "b0b9b57ba224db841dcaecc01cf0c81ab6d223eff3205e8d25670732e52b1c49"
     },
     "settings/settings.js": {
-      "bytes": 294443,
-      "sha256": "c657ba75292a4c60579049140ecb1e1173f2f47185255a5ddd8529680c6be466"
+      "bytes": 315693,
+      "sha256": "9e6ca72ae99d5d72cb317c3f07baf3be1ef69c3e85f83273b33a1086c2783582"
     },
     "voiceui/answers.js": {
       "bytes": 4253,
@@ -280,8 +280,8 @@
   },
   "home_page": "library/library.html",
   "source": {
-    "commit": "6e4f51f",
-    "repo": "/sessions/rcw-012ajqbc7sujwzbci2vc6r3g/shadow_ttstv",
+    "commit": "3f90e30",
+    "repo": "/sessions/rcw-01vksbpyczasmwuqlqykgs3c/mnt/TTSTV",
     "shell_cache": "ttstv-shell-v55"
   }
 }
