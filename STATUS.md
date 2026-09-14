@@ -1,3 +1,96 @@
+# 85 Stage 2 — THE COURIER: the phone's Studio runs on the person's own Kaggle · 14 Sep (Cowork: bridge VM + container) · phone `8076717` · TTSTV `b7caaab` · **no GPU, no Kaggle, no Modal, 0 GPU-minutes, 0 quota spent**
+
+**Status line:** `phone · 85 Stage 2 · 14 Sep · the five Kaggle verbs in Rust (15 tests) + the ttstv-studio CPU kernel and its flat packer (9 tests); F7 ★ PROVED OFFLINE — kernel hash == Mac hash, cfda3087a17772f6, 304 words, twice; the live round trip, the cold start and K-C are UNMEASURED and Osca's press`
+
+### 1. Built
+
+**Phone repo (`main`, `8076717`)**
+- **`src-tauri/src/kaggle.rs`** (new, 981 lines) — the courier. `Creds` (own `Debug`, so a stray `{:?}` cannot print the key), `b64`, `parse_pasted` (a line-for-line port of `studio/kaggle.py::parse_pasted_credentials`, same sentences), `Refusal` + `refusal_for` + `push_refusal` + `is_slot_busy`, `Courier::{put_job, wait_ready, push_kernel, status, output, fetch}` — the five verbs — `Output`/`OutFile`, `status_word`, `is_final`, `flat_names_only`, and `Stage`/`Watch` (what the works pane may honestly say).
+- **`src-tauri/src/pull.rs`** — `Wire` gains **three methods, all with defaults**: `get_auth` (a RAW `Authorization:` value; Kaggle is Basic, not Bearer), `post_json`, `put_bytes`. `Net` implements all three on the same `ureq` agent. `pull_tests::Fake` is untouched, by design.
+- **`src-tauri/src/lib.rs`** — `mod kaggle;` and its six comment lines. **Nothing else**: no command, no capability, no route.
+
+**TTSTV (`FRANK`, `b7caaab`)**
+- **`voice/remote/studio_pack.py`** (new) — what goes up. `flat_name`, `wanted`, `code_files`, `pack`, `flat_listing`. Flat because `-r skip` skips FOLDERS silently.
+- **`voice/remote/kaggle_studio.py`** (new) — the `ttstv-studio` CPU kernel. `find_job`, `rebuild`, `Budget`, `pip_install`, `do_parse`, `write_done`, `main`.
+- **`voice/tests/test_studio_kernel.py`** (new) — 9 tests, F7 ★ among them.
+
+**Also taken, at the `> go`'s word: chat 88's request** — `GET/POST /sync/<kind>` in `studio/serve.py` over `transport.sync(kind)` / `transport.status(kind)`, loopback-only, plus 4 tests. **NOT COMMITTED** — see §8b; `serve.py` is dirty with another lane's work.
+
+### 2. Verified — and how
+
+| claim | how |
+|---|---|
+| **F7 ★ — the kernel's parse and the Mac's parse are the same 16 hex** | **unit, and it is the gate's half that can be proved without Kaggle.** The same epub through `kaggle_studio.do_parse` on the rebuilt flat tree, and through `parser.cli` as `studio/add.py` runs it: **`cfda3087a17772f6` both sides, 304 words both sides, 2 chapters**. The kernel computes it with `studio/sync.py`'s OWN `word_ids`/`hash_of`, carried in the job — not a similar function. Job: **75 files, 1,589,881 bytes.** |
+| the five verbs | **unit** — 15 tests, `cargo test` on a shadow crate in the container (`kaggle.rs` copied VERBATIM; `pull::{Reply, Wire}` transcribed), **15 passed, 0 failed, 0 warnings** |
+| the three new `Net` methods compile | **unit** — the `impl Wire for Net` block lifted verbatim and built against **ureq 2.12.1**, clean |
+| the kernel, the packer, the budgets | **unit** — 9 tests, `studio/tests`-style, in the container |
+| `/sync/<kind>` | **unit** — 4 new tests; `studio/tests/test_serve.py` + `test_transports.py` = **347 passed, 2 failed**, and BOTH failures reproduced at HEAD on a shadow tree (`open -R` vs a Linux container, and a `_post` tuple compared to 200) — pre-existing, not mine |
+| nothing was silently rewritten | `md5sum languages/catalogue.json` = **`304915f7c7f6ec6e6f3a38553d442e7c` at the gate and at the last commit**. No server was started and no route pressed. |
+| **the live round trip** | **NOT VERIFIED, and it cannot be from here.** `curl https://www.kaggle.com/api/v1/...` from the bridge VM: no answer; from the container: `connect_rejected` at the egress proxy. Same for `gutenberg.org`. Both rooms, measured today. |
+
+**The four Kaggle numbers:** no card, no rtf, **0 GPU-minutes**, quota untouched — nothing was pushed. That is the honest row, not an omission.
+
+### 3. Judgment calls
+
+- **The map said the upload is multipart and `Wire` needs `put_multipart` → it is not, and `Wire` grew three small methods instead.** Read off the CLI's own generated client (`kaggle_api.py` 1.6.17): `POST /blobs/upload` with a JSON *description* → `{token, createUrl}`, `PUT createUrl` with the raw bytes, token into the version's `files`. The `createUrl` is signed and **the CLI sends no credential to it** — so the phone does not either. A better fact than the one the map assumed.
+- **Three `Wire` methods with DEFAULTS, not required → `pull_tests::Fake` untouched.** A required method would make the sync runner's fake grow three methods it can never mean. The default is a refusal in words, never a silent success or a dropped credential.
+- **The regex for `/sync/<kind>` is built from `transport.DESTINATIONS`, not a word shape.** `[a-z][a-z0-9]*` also matches `/sync/manifest`, `/sync/hello`, `/sync/drive`, `/sync/positions` and `/sync/marginalia` — five live routes, two of them `reader/routes.py`'s. Caught by the test, not by eye.
+- **`find_job(root=INPUT_ROOT)` → `root=None`, resolved at call time.** A default binds when `def` runs, so the signature pinned `/kaggle/input` into the function and no test could point it anywhere. That is one of the two ways a kernel becomes a thing only Kaggle can run.
+- **`TTSTV_DATA_HOME` in the kernel's env, not `--books` on `attrib.cli`.** `attrib.cli` takes a slug and reads `paths.BOOKS` itself; and with no env set, `paths` falls back to `RUNNER` and an unguarded run writes `books/`, `cache/`, `out/`, `scratch/` into the code tree.
+- **Where the Kaggle key is STORED is left undecided → §6.** The map says Keychain; the Keychain wants a crate and a build, and this app's own precedent (the Google refresh token) keeps a secret in the PAGE, which is worse. Not something a lane should settle by adding a dependency Osca then has to build.
+- **`serve.py` written but not committed → §8b.** The pathspec rule guards other files; it cannot split one co-edited file.
+
+### 4. Boundary check
+
+Touched: `src-tauri/src/kaggle.rs` (new), `src-tauri/src/pull.rs`, `src-tauri/src/lib.rs` (phone); `voice/remote/kaggle_studio.py`, `voice/remote/studio_pack.py`, `voice/tests/test_studio_kernel.py` (new); `studio/serve.py`, `studio/tests/test_serve.py` (written, **uncommitted**).
+
+**`core/` untouched.** Two TTSTV modules were touched and it is **not** the move/re-wire exception: `voice/` is mine by this `> go`, and `studio/serve.py` is an explicit grant in it (*"`POST /sync/<kind>` (88's request) is four lines in `serve.py` — take them"*). `lib.rs` and `pull.rs` are the phone's shared files and carry one line and one trait block.
+
+**Found dirty and LEFT ALONE** (whose they are is unknowable): `design/reader/settings.html`, `desktop/src-tauri/src/server.rs`, `library/library.css`, `library/library.html`, `library/tests/test_library_phone_shelf.py`, `parser/readers.py`, `parser/scanepub.py`, `parser/form.py`, `parser/hierarchy.py`, `settings/settings.css`, `settings/settings.js`, `settings/tests/test_pairing_roads.py`, `settings/tests/test_sync_row.py`, `studio/progress.py`, `voiceui/app.js`, `voiceui/tts.js`, `voiceui/tests/quiet.test.js`, and untracked `design/reader/lookup.js`, `design/reader/popover.js`, `parser/columns.py`, `studio/assistant.py`, `tools/search/transcript.py` (+ its test and fixture), `voiceui/commands.js`, `voiceui/context.js`, `voiceui/gloss.py`, `voiceui/glosstexts.js`, `voiceui/records.js`, `voiceui/sayline.py`. In the phone repo: `src-tauri/gen/apple/frank.xcodeproj/project.pbxproj`.
+
+**`studio/serve.py` is co-edited right now** — another lane holds ~250 uncommitted lines in it (`JobManager`, `Handler`, `_SYNC_STUDIO`, and an untracked `studio/assistant.py` it imports).
+
+### 5. Footprint
+
+Nothing on the Mac's disk but source. In the **container** (thrown away with the session): a control tree of the repo's `.py`/`.json` (4.0 MB), pytest + ebooklib/bs4/lxml, two tiny cargo shadow crates and their `target/` (~200 MB). **On the Mac, under `_to_delete/`, left because this shell cannot delete** (`Operation not permitted`): `pytree.tgz` (4.0 MB), `pytree2.tgz` (4.0 MB), `mine.tgz` (166 KB), `rs.tgz` (104 KB), `head/serve.py` + `head/test_serve.py` (578 KB), `msg2.txt`, `report.md`, and the swept git locks named in §8b. No SSD, no depot, nothing under `~/Desktop`.
+
+### 6. Requests to core / other modules
+
+1. **WHERE THE KAGGLE KEY LIVES ON THE PHONE — Osca's word, and it blocks Stage 3's rows 1, 3 and 4.** The map says Keychain. The Keychain needs a crate (`security-framework` or `keyring`) added to `Cargo.toml` and a build only Osca presses; and this app's existing precedent is worse than either — `library/drive.js` keeps the **Google refresh token in the page's own `localStorage`**. Three roads: **(a)** the Keychain, one new dependency, one build; **(b)** a file in `app_data_dir()` at mode 0600, written and read only by Rust, no dependency, strictly better than the Google precedent and shippable today; **(c)** the page, matching Google, and worst. **Recommendation: (b) now, (a) when a build is going anyway.**
+2. **`studio/serve.py`'s four lines need an owner.** They are written and tested in the working tree. Either the lane holding `serve.py` commits them with theirs, or it lands its own work and I commit mine after — `git commit -- studio/serve.py` would take the whole file and sweep ~250 of their uncommitted lines under my message, which is `12d2068`'s mistake exactly.
+3. **`voice/remote/kaggle.py` (the Mac's CLI courier) and `kaggle.rs` now hold the same five behaviours in two languages.** Nothing holds them in step. A `voice/tests` assertion that the Rust file still names `Kernel push error:`, the 403 rule and the ready poll would cost ten lines — the arrangement `test_progress.py` already has for `PROGRESS_PREFIX`.
+
+### 7. Known gaps
+
+- **The gate is NOT met and this lane does not claim it.** "A phone with no Mac searches, adds a Gutenberg book, parses it on Kaggle, and it appears on the shelf" needs a real push. Neither Cowork room reaches kaggle.com or gutenberg.org. What IS proved is every decision between the pack and the output, plus F7 offline.
+- **K-B is still unmeasured** — Gutenberg/archive.org from the phone with `BROWSER_UA`. Same egress wall. The map already flagged it; it is still true.
+- **K-C is unanswered** — whether a CPU kernel's hours count against the 30 GPU-hours. One look at Osca's own Kaggle account settles it, and Settings row 5's wording depends on it.
+- **The cold start is still "4–8 minutes", still a guess.** Upload + `ready` + queue + pip (~102 MB) + parse; only the parse is measured.
+- **No works pane yet.** `Stage`/`Watch` are the vocabulary and the not-believed-until-it-moves rule, unit-tested; nothing draws them. Stage 3 / 90's surface.
+- **The credential is parsed but not stored** (§6.1), so nothing is persisted and no row can be built on it yet.
+- **`align` and `stitch` are refused by name in the kernel**, not silently treated as a parse. The map lists them as this kernel's next two items.
+- The kernel's `pip install` is **not** exercised by any test — the container already has the pins, and what is proved is the parse, not the installer.
+
+### 8. Next
+
+**Stage 3 — the settings rows — is 90's, not this lane's** (the `> go` says so). What this lane owes next, in order, is §7.1 of the map's list: the credential STORE once §6.1 is answered, then the works pane off `Stage`/`Watch`.
+
+**The single question that blocks it: §6.1 — where does the Kaggle key live on the phone?** Everything else waits on a press, not an answer.
+
+### 8b. Commit check
+
+- Two commits, both pathspec, both `git show --stat HEAD`-checked and both listing exactly what was meant: **TTSTV `b7caaab`** (3 files, 740 insertions) and **phone `8076717`** (3 files, 1,061 insertions). No `-a`, no `-A`, no `--amend`. `GIT_OPTIONAL_LOCKS=0` throughout.
+- **`studio/serve.py` and `studio/tests/test_serve.py` are LEFT UNCOMMITTED on purpose** — §6.2.
+- **HEAD moved under me in TTSTV, repeatedly**: `c6d4955` 23:24 → `f3f23e8` → `fe4b333` → `5152152` → `e77093b` → `29c64e9` → `5202f02` 23:34, **six commits by other lanes** before mine. Every control in §2 was taken **after** the last of them, on a container shadow built from the working tree, so no number above straddles a move. The phone repo's HEAD did not move.
+- **Git locks the bridge could not unlink, moved to `_to_delete/` for Osca to clear**: TTSTV `HEAD.lock`, `next-index-10.lock`; phone `index.lock` ×2, `next-index-28.lock`, `next-index-6.lock`, `HEAD.lock`. Each was ≥3 s untouched before it was moved; none was held by a live write. Also `.git/objects/*/tmp_obj_*` in both repos, which git itself could not unlink.
+- **THE BRIDGE VM'S DISK IS AT 100 %** (9.3G of 9.8G, 3.7M free) and it bit: `cat > $HOME/msg2.txt` wrote **zero bytes**, git aborted on the empty message, and the retry loop then fought its own leftover `index.lock`. The message was written to the Mac's own disk (`_to_delete/msg2.txt`) instead and the commit went through. **Only Osca can reset that VM.**
+
+### 9. Status line
+
+`phone · 85 Stage 2 · 14 Sep · the five Kaggle verbs in Rust on pull.rs's Wire (15 tests, ureq 2.12 clean) + the ttstv-studio CPU kernel, its flat packer and all three budgets (9 tests); F7 ★ proved offline — cfda3087a17772f6 from the kernel and from parser.cli, 304 words, 75-file job; the map's "multipart" corrected to a signed-URL handshake that never sees the key; the live push, the cold start and K-C UNMEASURED because neither Cowork room reaches kaggle.com; serve.py's four lines written, tested and deliberately uncommitted under another lane`
+
+---
+
 ## Status — 14 Sep (Cowork, bridge VM), `G-GZPULL`: **the Drive pull inflates — `<base>.gz` on Drive, plain bytes on disk, both lengths checked** (no build, no phone, no simulator)
 
 **Status line:** `pull.rs · G-GZPULL · 14 Sep · take_body inflates a gz Drive file on the stream; Eclogues 2,063,777 -> 267,037 bytes on the wire, 26/26 md5 identical; cargo NOT run`
