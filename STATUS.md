@@ -1,3 +1,259 @@
+# G-SYSVOICE-NATIVE (D1(b)) — the free tier's phone half, 13 Sep
+
+*One engine, two synthesisers. `AVSpeechSynthesizer` behind the door
+`reader/sysvoice.js` already opens for `speechSynthesis`, and the one
+structural difference between them is that the phone is handed the rest of the
+chapter at once — because iOS suspends a backgrounded WKWebView's JavaScript,
+and a sentence-at-a-time reader stops at the lock button.*
+
+## 1. Built
+
+**The phone (TTSTV_IOS).**
+
+| file | what it is |
+|---|---|
+| `src-tauri/ios/FrankSpeech.m` (369) | `frank_speech_init/_speak/_cancel/_pause/_resume/_speaking/_voices`. One synthesiser for the life of the app, one C function pointer out carrying four ints — kind, uid, location, length. SSML through `speechUtteranceWithSSMLRepresentation:` (iOS 16), which returns **nil** for a document it will not parse and is reported as code 7 rather than falling back to plain text. Its own `cc` archive (`frankspeech`); **no new `sdk:` line** — AVFoundation has been in `project.yml` since `FrankAudio.m`. |
+| `src-tauri/src/speech.rs` (742) | seven commands — `speech_available`, `speech_voices`, `speech_speak`, `speech_stop`, `speech_pause`, `speech_resume`, `speech_speaking` — plus `av_rate`, `SPEECH_JS` (`window.TTSTVHost.speech`), and 11 tests. Boundaries go back to the page by `webview.eval`, the door `pair_write_js` and `google_write_js` already use; no second event bus. |
+| `src-tauri/build.rs`, `capabilities/default.json`, `src/lib.rs` | the seven declarations, the seven grants, `mod speech`, the seven handler lines, `.initialization_script(speech::SPEECH_JS)`, and `speech::open(app.handle())` in `setup` beside the audio session's category. |
+| `scratch-speech/` (490 + 61) | the Q-D4/Q-D5 probe and its `RUN.md`. Throwaway, imports nothing of Frank's. |
+
+**The reader (TTSTV).**
+
+| file | what it is |
+|---|---|
+| `design/reader/sysvoice.js` → `reader/sysvoice.js` (+373) | `createNativeSynth(host)` — the door in `speechSynthesis`'s shape; `pickSynth(win)`; `ENGINE` (the `system` card); `synth.queues`, the batch path (`build(j,k,mine)` split out of `utter`); `qualityOf` reads an explicit `quality` FIELD before the name substring; `stats()` gains `native` and `capped`. |
+| `reader/reader.html` (+~20 of a 119-line diff — see §8b) | the mount asks `SysVoice.pickSynth(window)` instead of reaching for `window.speechSynthesis`, and passes `picked.Utterance`. |
+| `design/reader/test-sysvoice.mjs` (+175) | §6, thirteen assertions over a fake phone. |
+
+**No new engine.** `create()` is unchanged in every respect that decides a word
+id; the native synthesiser is an object of the interface it was already
+written against, so §2's proof covers both paths.
+
+## 2. Verified — and how
+
+| claim | how | number |
+|---|---|---|
+| boundary → flat word id, web path | **unit**, `node design/reader/test-sysvoice.mjs` | 25,551/25,551 ids, Walden c001 |
+| …**through the native door** | **unit**, §6.6 | 25,551/25,551 ids, no drift |
+| …over the shelf | **unit**, `--sweep` | **3,979/3,979 chapters, 40 books, 6,159,980 words**, every boundary on the right id |
+| the whole chapter crosses in ONE invoke | **unit**, §6.3 | 1 call, 1,015 lines, 1,015 sentences |
+| a cancel is not an end; a late boundary moves nothing | **unit**, §6.8, §6.9 | 1 stop, word held at 1 |
+| ★ position is sacred on the native path | **unit**, §6.10, §6.11 | rate change → 1 extra stop, 1 extra batch, new batch starts `"two three."` |
+| quality by field, not by name | **unit**, §6.12 | premium 3 / enhanced 2 / default 1 |
+| the whole reader suite | **unit** | **38 passed, 0 failed** (was 25) |
+| `speech.rs`'s cross-file assertions | **unit, by extraction** — `cargo` cannot run here (`static.crates.io` is 403 through the bridge, project memory `one_press_is_ours_two_is_apples`); the same strings, the same files, in python | **51 checks, 0 failed** |
+| `SPEECH_JS` is valid JavaScript | **unit** | extracted, `node --check` clean, 7 `invoke(` |
+| `capabilities/default.json` | **unit** | parses |
+| `project.yml` round trip | **unit** | parses; AVFoundation already named; no `.m` in the Xcode target's `sources` (the duplicate-symbol trap) |
+| the phone build's own gate | **unit**, `python3 tools/prebuild.py` | **exit 0 — 62 files, 2,143,756 bytes** |
+| nothing silently broken, reader | **unit**, `pytest reader/tests` | 235 passed, **3 failed — all `test_sidebar.py`, red at HEAD, another lane's file** |
+| nothing silently broken, phone | **unit**, `pytest tests` | 106 passed, 1 skipped, **4 failed — `test_pair_link` (the google lane's URL types), `test_phone_loop` ×2 (the PATH line `project.yml` itself documents), `test_phone_shell` (`scratch26b/`) — none mine** |
+
+**NOT VERIFIED, and it is the half that matters most.** Q-D4 (does a shipped
+voice honour `<phoneme>` and `<lang>`), Q-D5 (do boundaries fire under SSML),
+the rate curve, and the lock screen. **No phone result is claimed here.**
+`scratch-speech` asks all four and Osca presses it — `scratch-speech/RUN.md`.
+`cargo check` was not run and cannot be: see the row above.
+
+## 3. Judgment calls
+
+- **`speech_speak(sentences)` plural, not one sentence → the batch.** The
+  prompt's own signature said `sentences`; the reason turned out to be
+  load-bearing. A JS-driven sentence loop dies with the webview at the lock
+  screen, which is the exact thing D1(b) exists to fix. So the engine grew
+  `synth.queues` and hands the rest of the chapter over in one call.
+- **The native synth is an ADAPTER, not a second engine.** `create()` already
+  took `opts.synth`; presenting AVFoundation in that shape means the sentence
+  cut, the rebase, the watchdog and the boundary map are provably the same
+  code on both paths, and §2's 6.1 M words cover the phone.
+- **`quality` as a field.** The Mac spells quality inside the voice's NAME
+  ("Daniel (Enhanced)"); AVFoundation does not. Reading the field first is the
+  accurate half, not a fallback — and judging the system voice on a default
+  voice is judging the wrong thing (Q-D1).
+- **Rate: a straight line through Apple's one published point, declared as a
+  reference.** `AVSpeechUtteranceRate` is 0..1 with 0.5 = normal and an
+  unpublished curve; the web's is a multiple. `av_rate` is `0.5 × m`, exact at
+  m=1 by definition and a guess elsewhere — the same standing `BASE_WPM` has,
+  correctable by one number, and press 5 of the probe is that number. **The
+  line hits Apple's maximum at m=2, so the phone caps at twice normal;
+  `capped` is reported rather than silently disobeying the Settings row.**
+- **`speech_pause`/`speech_resume` shipped with no caller.** The engine's own
+  pause is cancel-and-remember (★ A2c.32) and must stay so. Native pause is
+  the only exact one and the lock screen will need it — see §6. It costs
+  nothing per word and cannot be called in a loop, which is the test
+  `lookup.rs` set for a door.
+- **The `system` engine is NOT on `voice/port.py`'s list.** That list is the
+  RENDER port; this engine writes no file, no cache and no `timings/`.
+  `SysVoice.ENGINE` is its card instead, and §6 carries the Request.
+- **`clean/` was NOT rebuilt.** CLAUDE.md: push to `clean/` only when every
+  other lane's shell files are committed. Twelve are not. See §7.
+
+## 4. Boundary check
+
+Touched, and committed:
+
+- TTSTV: `design/reader/sysvoice.js`, `design/reader/test-sysvoice.mjs`,
+  `reader/sysvoice.js`, `reader/STATUS.md`, `PROMPTS/INTENT.md` (one line
+  under `## Inbox`).
+- TTSTV_IOS: `src-tauri/ios/FrankSpeech.m`, `src-tauri/src/speech.rs`,
+  `src-tauri/src/lib.rs`, `src-tauri/build.rs`,
+  `src-tauri/capabilities/default.json`, `scratch-speech/**`, `STATUS.md`.
+
+`core/` untouched. No other module's Python, no `voice/`, no `studio/`, no
+`transport.js`, no `listen.js`, no Mac-side change. This is not a MOVE or a
+RE-WIRE and claims no second folder.
+
+**Touched and deliberately left UNSTAGED** — four files that are another
+session's, named here so Osca can tell a leak from a coincidence:
+
+- `TTSTV reader/reader.html` — **co-edited.** It was clean at my gate and the
+  float lane's uncommitted work (the Float button, `FloatDoor.mount`,
+  `ICON.float`) is in it now: 119 insertions, ~20 of them mine. A pathspec
+  commit takes the whole working-tree file and would carry their float under
+  my message — the `design/ship.py` trap, going the other way. **My three
+  hunks stay in the tree** so the build and the phone shell have them; whoever
+  commits `reader.html` next carries them.
+- `TTSTV_IOS shell/reader/sysvoice.js`, `shell/reader/reader.html`,
+  `shell.manifest.json` — the publish lane's uncommitted snapshot. My two
+  files were **carried** into it (`sysvoice.js` replaced whole; `reader.html`
+  patched by the three hunks, never overwritten — `clean/` transforms that
+  file, 80,292 bytes there against 97,840 here) and the manifest's **two**
+  entries rewritten so `tools/prebuild.py` passes. Nothing else in those files
+  was touched. `shell/reader/sysvoice.js` is still **untracked** — the trap
+  that dropped `follow.js` from `b45b7e7`.
+
+Left alone entirely: `reader/float.*`, `reader/wordclock.js`,
+`reader/floatdoor.js`, `reader/sw.js`, `reader/shell.css`, `library/*`,
+`settings/*`, `studio/*`, `parser/*`, `desktop/*`, `extension/`,
+`scratch-lookup/*`, `src-tauri/gen/apple/*`.
+
+## 5. Footprint
+
+Nothing on the SSD, no model, no download, no venv. `pytest` 9.1.1 was
+installed into the bridge VM's user site (`~/.local`, ~2 MB, outside every
+mounted folder) because the VM ships none and both suites had to be run; it is
+not in the repo and not in a venv. `scratch-speech/` is 26 KB of source in the
+phone repo. The depot was never touched and the drive was never mounted.
+
+## 6. Requests to core / other modules
+
+1. **`voice/port.py` + `studio/engines.py` — a `live` axis.** The system voice
+   is a real engine and the Library's Model row cannot show it, because
+   `engines.py` forwards `port.report()` and every row there is a RENDER
+   engine. Proposal: `port` grows a small set of live engines (`system`
+   today), each with `{id, title, live: true, renders: false, cost: 0,
+   offline: true, where: "device"}`, and `engines.catalogue()` forwards them
+   under their own key so no consumer of `engines[]` becomes wrong about what
+   a render is. `SysVoice.ENGINE` is that card already written down. Two
+   modules on the Mac; this lane owns neither.
+2. **`reader/listen.js` or whoever owns the lock screen — the pause.**
+   `NOW_PLAYING_JS` writes the sentence to `navigator.mediaSession`, and the
+   lock screen's ⏸ and a headphone press reach the APP, not the page. The
+   exact pause for that is `TTSTVHost.speech.pause()` / `.resume()`, live and
+   granted today with no caller. `listen.js` is explicitly not this lane's.
+3. **A publish run.** The phone shell reaches a device through `clean/` and
+   `publish_shell`, and neither can run while twelve shell files of four other
+   lanes are uncommitted (§7). The carry in §4 makes today's build correct;
+   the next publish is what makes it durable.
+
+## 7. Known gaps
+
+- **The loop is not whole, and the reason is not mine.**
+  `design/export.py --shell --verify` reports **14 DRIFT**: two are mine and
+  expected (`reader/reader.html`, `reader/sysvoice.js` — `clean/` has not been
+  rebuilt), **twelve are four other lanes'** (`lookup.js`, `wordclock.js`,
+  `floatdoor.js`, `float.html/.css/.js`, `library/import.js`,
+  `library/drive.js`, `settings/settings.html/.css/.js`, `reader/sw.js`, plus
+  `routes`, 7 paths). CLAUDE.md forbids `--shell` in that state, so `clean/`
+  was not rebuilt, `publish_shell` was not run, and nothing under `clean/` was
+  committed. §4's carry is the substitute and it is named as one.
+- **Q-D4 and Q-D5 are unanswered.** Built, not pressed. Everything after them
+  in D6 — the IPA engines, the mid-article `<lang>`, the cached SSML script —
+  waits on press 2 and press 3 of `scratch-speech`.
+- **No SSML in the reader yet.** `speech_speak` takes `ssml: true` and
+  `sysvoice.js` never sends it. That is correct until Q-D4 answers, and it is
+  the entire D6 build when it does.
+- **The rate cap is untested on hardware.** m=2 is Apple's maximum by the
+  line, not by measurement.
+- **Watchdog on the native path.** When the queue is in the phone, `speaking`
+  is `outstanding > 0`, corrected at most once a second by asking
+  `speech.speaking()` — and the correction only ever CLEARS. A phone that
+  loses an `end` event while suspended is caught by that; a phone that loses
+  it while awake ends the chapter one sentence early rather than wedging.
+  Chosen deliberately; not measured.
+- **`speech_voices` caps at 256 KiB** and returns an error rather than a
+  truncated list. A phone with every language installed has not been measured
+  against it.
+
+## 8. Next
+
+Osca presses, in this order:
+
+1. `open "scratch-speech/SpeechProbe.xcodeproj"` → your iPhone → ▶.
+   **Download two voices first** (Settings ▸ Accessibility ▸ Spoken Content ▸
+   Voices). Press 1, then 4, then 5; then 2 and 3 with your ears. That is
+   Q-D4, Q-D5, the rate curve and Q-D1's phone half, with the voice named.
+2. Build Frank, open a chapter, press play, **lock the phone**. It should keep
+   reading. `window.__sysvoice_kind` says `"native"` in the console if the
+   door was taken.
+
+**The one question that blocks what comes after:** *press 3(c) — did "fagus"
+come out as a banana?* If yes, D6 is real on this platform and the next lane
+is the SSML script. If no, `<phoneme>` is decoration and D6's IPA half needs a
+different road.
+
+## 8b. Commit check
+
+Two repos, pathspec commits only, `-F` from the session home, `GIT_OPTIONAL_LOCKS=0`
+on every call. No `-a`, no `-A`, no `--amend`. Hashes and `git show --stat HEAD`
+below.
+
+**TTSTV_IOS `0d22c6d`** — 9 files, 1,971 insertions:
+
+```
+ scratch-speech/RUN.md                                     |  61 +
+ scratch-speech/Sources/main.m                             | 490 +++++++++
+ scratch-speech/SpeechProbe.xcodeproj/project.pbxproj      | 237 +++++
+ .../project.xcworkspace/contents.xcworkspacedata          |   7 +
+ src-tauri/build.rs                                        |  27 +
+ src-tauri/capabilities/default.json                       |  11 +-
+ src-tauri/ios/FrankSpeech.m                               | 369 ++++++
+ src-tauri/src/lib.rs                                      |  30 +-
+ src-tauri/src/speech.rs                                   | 742 ++++++++++++
+```
+
+**TTSTV `bc63a8f`** — 3 files, 901 insertions:
+
+```
+ design/reader/sysvoice.js       | 373 +++++++++++++++++++++++++++++++++--
+ design/reader/test-sysvoice.mjs | 175 ++++++++++++++
+ reader/sysvoice.js              | 373 +++++++++++++++++++++++++++++++++--
+```
+
+Both listed exactly what was meant. **`0d22c6d` is missing its
+`Co-Authored-By`/`Claude-Session` trailers** — noticed after the commit, and
+`--amend` is forbidden on a shared tree, so it is named here rather than
+papered over; `bc63a8f` and the two below carry them.
+
+**HEAD moved under me during the session, once in each repo** — TTSTV
+`061ae54 → a03c317`, TTSTV_IOS `5ced2da → e8fc640`. Every number in §2 was
+taken AFTER both moves; the baseline 25/25 for `test-sysvoice.mjs` was taken
+before the TTSTV move and re-taken after it, unchanged.
+
+The bridge cannot unlink `.git/*.lock` or `.git/objects/*/tmp_obj_*`: every git
+call above printed `Operation not permitted` warnings and **succeeded anyway**
+(the lock-retry loop was armed and never fired). No lock was moved to
+`_to_delete/`; the `tmp_obj_*` residue is git's own and is named here because
+CLAUDE.md asks for it.
+
+Left unstaged, and why: the four files in §4.
+
+## 9. Status line
+
+`reader · D1(b) done, unpressed · 13 Sep · the native voice queues a chapter; Q-D4/Q-D5 wait on the probe`
+
+---
+
 # IOS-TTS-TV — STATUS
 
 Newest first. `REPORT_PROTOCOL.md` (TTSTV), nine headings. `README.md` says what the repo IS.
