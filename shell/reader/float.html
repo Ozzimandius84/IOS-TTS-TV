@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Float</title>
+<!-- THE FLOAT — design/reader/FLOAT.md §3, the Mac panel.
+     It is a page of the same server the reader is, so it shares the reader's
+     origin and its theme store; the window around it is
+     desktop/src-tauri/src/floatwin.rs. Four of the five stylesheets below are
+     the reader's own and are UNCHANGED: the word is wordview.css's, the
+     caption is wordpane.css's .wordsub, the palette and the boxes are
+     tokens.css. One element, every surface. -->
+<link rel="stylesheet" href="tokens.css">
+<link rel="stylesheet" href="wordview.css">
+<link rel="stylesheet" href="wordpane.css">
+<link rel="stylesheet" href="float.css">
+<!-- the theme, before first paint, from the one store every surface reads -->
+<script src="../prefs/prefs.js"></script>
+</head>
+<body>
+<div class="floatcard" id="card" data-tauri-drag-region>
+  <div class="wordview on" id="view"><div class="wordview-word" id="word"></div></div>
+  <div class="wordsub" id="sub"></div>
+  <button class="floatx" id="x" type="button" data-cmd="close" aria-label="Dismiss" title="Dismiss">&times;</button>
+  <!-- THE STRIP. Four questions and three transport presses; QUIET.md's ring
+       drawn instead of flicked, and the transport under it because on a float
+       there is no transport to be a copy of. Real elements, not a canvas, so
+       -webkit-app-region:no-drag can take them back off the card's drag. -->
+  <div class="floatstrip" id="strip" hidden>
+    <div class="floatrow">
+      <button class="floatb" type="button" data-cmd="define">Define</button>
+      <button class="floatb" type="button" data-cmd="ask">Ask</button>
+      <button class="floatb" type="button" data-cmd="explain">Explain</button>
+      <button class="floatb" type="button" data-cmd="translate">Translate</button>
+    </div>
+    <div class="floatrow transport">
+      <button class="floatb" type="button" data-cmd="back" aria-label="The sentence before" title="The sentence before">&#9664;&#9664;</button>
+      <button class="floatb" type="button" data-cmd="play" aria-label="Play or pause" title="Play or pause">&#9654;/&#10073;&#10073;</button>
+      <button class="floatb" type="button" data-cmd="fwd" aria-label="The sentence after" title="The sentence after">&#9654;&#9654;</button>
+    </div>
+  </div>
+</div>
+<script src="wordclock.js"></script>
+<script src="float.js"></script>
+</body>
+</html>

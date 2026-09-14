@@ -294,3 +294,58 @@
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
   }
 }
+
+/* ==================================================================
+   A ROW WITH FIELDS ON IT IS TWO LINES ON A PHONE (G-SETTINGS2, 13 Sep).
+   Osca, T-SIM 20:35: *"the 'Your door' card renders one word per line"* --
+   and it did, measured at 393 px in the container's Chromium:
+
+     .set-l  { flex: 1 1 auto; min-width: 0 }   the label, shrinkable
+     .set-c  { flex: 0 0 auto }                 the controls, NOT shrinkable
+
+   so a right-hand side of two 150 px fields and a button took its
+   max-content 443.3 px inside a 363 px row, squeezed the label column to
+   26 px (hence one word per line, a 264.8 px tall row) and hung 106 px
+   past the card, clipped invisibly by `.set-card { overflow: hidden }`.
+   **The Use button sat at x 433 on a card ending at 378: the release press
+   Osca is asked to make was not on the screen at all.**
+
+   The fix is the stack, and only where there is something to stack: a row
+   that has a VISIBLE field in it (`.kag-in` -- the door's address and pass,
+   the LAN pairing's address and code) puts its label on one line and its
+   controls on the next, where `.kag-in`'s own `flex: 1 1 150px` shares the
+   363 px out. A row whose right side is a button, a segment or a slider is
+   untouched, at 44 px, exactly as the phone block above leaves it -- and
+   `:has()` means a row goes back to one line the moment its fields hide
+   again. The Mac never matches: `html[data-phone]` inside the query.
+   ================================================================== */
+@media (max-width: 600px), (max-height: 500px) {
+  html[data-phone] body .ttstv-settings .set-row:has(.kag-in:not([hidden])) { flex-wrap: wrap; }
+  html[data-phone] body .ttstv-settings .set-row:has(.kag-in:not([hidden])) > .set-l { flex: 1 1 100%; }
+  html[data-phone] body .ttstv-settings .set-row:has(.kag-in:not([hidden])) > .set-c { flex: 1 1 100%; }
+  html[data-phone] body .ttstv-settings .set-row:has(.kag-in:not([hidden])) > .set-c { min-width: 0; }
+  /* and the one control in a STACKED row that is not a field: a `<select>`'s
+     intrinsic width is the widest Studio name Bonjour found, which is not a
+     number this sheet can know. Scoped to the same `:has()` and not to
+     `.set-menu` at large -- measured: a bare
+     `html[data-phone] .set-c > .set-menu { max-width: 100% }` is a 100% of a
+     shrink-to-fit column, and it took the Interface font row from 92.2 px to
+     262.3 px on the phone. */
+  html[data-phone] body .ttstv-settings .set-row:has(.kag-in:not([hidden])) > .set-c > .set-menu { max-width: 100%; }
+  /* AND THE SAME DISEASE ON ONE MORE ROW, measured on the way past: Light /
+     dark is three options with two grey sub-lines, a 370.9 px segment inside
+     a 363 px row, and it hung 32.9 px past the card -- so "System", the
+     third option, was partly off the screen and the crossing was invisible
+     for the same reason. Every `.opts.set-seg` row is stacked rather than
+     that one field by name: the next three-option segment breaks the same
+     way, and a phone that puts wide controls under their label is what the
+     rows above already look like. The cost, measured: Light / dark 92.2 ->
+     135.4 px, View 70 -> 101.1, Touch off 110 -> 153.2, and 0 elements
+     crossing anywhere in Settings. (The other shape -- letting the segment
+     wrap inside a shrunken column -- was measured too and is worse: 158 px,
+     114 px, and a 0.8 px crossing left over.) */
+  html[data-phone] body .ttstv-settings .set-row:has(.opts.set-seg) { flex-wrap: wrap; }
+  html[data-phone] body .ttstv-settings .set-row:has(.opts.set-seg) > .set-l { flex: 1 1 100%; }
+  html[data-phone] body .ttstv-settings .set-row:has(.opts.set-seg) > .set-c { flex: 1 1 100%; }
+  html[data-phone] body .ttstv-settings .set-row:has(.opts.set-seg) > .set-c { min-width: 0; }
+}

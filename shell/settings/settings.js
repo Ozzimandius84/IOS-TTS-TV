@@ -489,7 +489,8 @@
    * window whose right-hand side is a fact rather than a control. */
   var VOICE_ROWS = {
     mic: { field: "micDevice", label: "Microphone", control: "mic",
-           sub: "What the hands-free layer listens through." },
+           sub: "Hands-free listens through this device's default input. "
+              + "Test opens it once." },
     airpods: { field: "trigger", label: "Trigger", control: "fixed",
                text: "AirPods: double-tap",
                sub: "A double-tap opens the listening window. There is no key "
@@ -532,15 +533,38 @@
     return [
       by.general,
       by.reading,
+      /* CLOUD GPU IS NOT FOLDED IN ANY MORE, AND VOICES IS NOT A TAB
+       * (G-SETTINGS2, 13 Sep; Osca's `go`: *"the ten Mac-only rows are
+       * HIDDEN on a phone, never drawn as apology"*). The wiring audit
+       * (`2a0240a`) measured what the fold actually drew on a 393 px phone:
+       * two cards and a tab that ask `/kaggle`, `/modal`, `/models` and
+       * `/engines`, get null, and print a sentence apologising -- 64 px of
+       * it on Voices, 298 px of it under Sync.
+       *
+       * AND IT IS NOT THE ORIGIN BUG. `doorUrl` (above) now gives every ask
+       * in this file the paired Studio's base, and those four routes are
+       * STILL 404 on a paired phone: the LAN listener answers `/sync/*`, a
+       * book's payload and `_SYNC_STUDIO`'s seven, and nothing else
+       * whatever the token (`studio/serve.py::sync_path_allowed`). So there
+       * is no pairing that makes these cards work, and a card that cannot
+       * work is not drawn -- the treatment `Where a render runs` has had
+       * since 6 Sep (`if (!phone)`), applied to the rest of its own card.
+       *
+       * THE TEN ROWS, named, in the order the audit measured them: Kaggle's
+       * account row, its Connect door (two links), its paste box, its
+       * typed-key row (username · key · Connect), This week, Sessions;
+       * Modal's account row, its key row (id · secret · Connect), its
+       * *Set up my phone* row; and the Voices tab's engine list. What is
+       * NOT here: `Where a render runs`, already hidden, and the Languages
+       * tab, which has the phone's OWN panel and asks the door, not
+       * `/languages`.
+       *
+       * The Mac is untouched: `TABS` still carries `cloud` and `models`,
+       * and this function is only what a phone mounts. */
       Object.assign({}, by.transfer, {
-        label: "Sync", sub: "your devices, and where renders run", needsStudio: false,
-        build: function (panel, ctx, o) {
-          var h = buildTransferPanel(panel, ctx, o);
-          buildCloudPanel(panel, ctx, o);
-          return h;
-        },
+        label: "Sync", sub: "your devices", needsStudio: false,
+        build: function (panel, ctx, o) { return buildTransferPanel(panel, ctx, o); },
       }),
-      Object.assign({}, by.models, { label: "Voices", sub: "the voices", needsStudio: false }),
       Object.assign({}, by.languages, { needsStudio: false, build: buildPhoneLanguagesPanel }),
     ];
   }
@@ -576,15 +600,26 @@
             sub: "The app's own text — sidebars, menus, this window. Never the book." },
           { field: "warmth", label: "Warmth", control: "slider" },
         ], note: "Ground and ink together, so paper and ink never drift apart." },
-        /* THE MOCK'S OTHER TWO ROWS (reader-sweep §4). Reported absent twice
-         * because each needed a new stored field; both fields now exist, and
-         * both default to what the reader already did. */
-        { head: "Opening a book", rows: [
-          { field: "resume", label: "Open books where you left them", control: "seg",
-            sub: "The chapter and the word you stopped at, per book." },
-          { field: "sidebar", label: "Sidebar", control: "seg",
-            sub: "How the chapter list starts. Hiding it in a reader still sticks on that device." },
-        ] },
+        /* "OPENING A BOOK" IS GONE, AND IT WAS TWO ROWS THAT WROTE TO
+         * NOBODY (G-SETTINGS2, 13 Sep). Added in the reader-sweep as the
+         * mock's last two rows; the wiring audit (`2a0240a`) then grepped
+         * `reader/ library/ voiceui/ bar/ prefs/ desktop/src studio/` for
+         * both field names and found, outside `prefs.js`'s own
+         * `normalise`/`isDefault`/`DEFAULTS` and this file, ZERO consumers:
+         *
+         *   `resume`  -- "Open books where you left them". The reader does
+         *                what it does; this switch never reached it, so the
+         *                row was a promise nothing kept.
+         *   `sidebar` -- "Sidebar". `reader/README.md`: *"the sidebar is
+         *                retired from the reader"* -- the contents panes ARE
+         *                the chapter list. The row named a thing that is not
+         *                there, and on a phone never was.
+         *
+         * WIRED OR REMOVED, and removed is the honest half: wiring either
+         * one is a `reader/` diff, not a `settings/` one. The FIELDS stay in
+         * `prefs/prefs.js` (`DEFAULTS`, `normalise`, `isDefault`) untouched,
+         * so a device that stored a value keeps it and nothing migrates; the
+         * day `reader/` reads one, the row comes back in one line. */
       ],
       icon: '<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">'
         + '<circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="1.6"/>'
@@ -733,7 +768,10 @@
    * `?force=1` skips studio's 30 s cache. The card asks for it after a
    * Connect and after a Disconnect and at no other time -- those are the two
    * moments the cached answer is known to be a second old and wrong. */
-  var MODAL = { GET: "/modal", CREDS: "/modal-credentials", REVOKE: "/modal-revoke" };
+  var MODAL = { GET: "/modal", CREDS: "/modal-credentials", REVOKE: "/modal-revoke",
+                // the one button (13 Sep). Named here beside its three
+                // siblings so the tab has one place its URLs live.
+                DEPLOY: "/modal-deploy" };
 
   /* THE TWO LANES, one line each, beside the card that connects them. This is
    * the whole of what the tab is for: a person who has neither is choosing,
@@ -760,6 +798,28 @@
    * drawn and none would work. */
   var NO_MODAL_ROUTE = "This studio does not answer for Modal, so there is "
     + "nothing to connect from here.";
+
+  /* ---- THE ONE BUTTON, and the words round it (Osca, 11-12 Sep).
+   *
+   * *"Frank Studio carries the one button that puts `cloud/endpoint.py` into
+   * the user's own workspace, mints a random pass, and syncs the address and
+   * the pass to their phone. The user never sees a terminal or the word
+   * deploy."* So the button says what it is FOR, and the word the CLI calls it
+   * appears on no page -- the same rule the other credential already lives
+   * under, applied to a verb instead of a noun.
+   *
+   * On a PHONE the button is not drawn and the card says so honestly, because
+   * it is true: putting a door up needs the Modal client, and the client needs
+   * a Mac. Saying "not available" would leave a person waiting for a version
+   * that does it; saying this tells them what to go and do, once, ever. */
+  var MODAL_DOOR_BUTTON = "Set up my phone";
+  var MODAL_DOOR_LINE = "Puts your own cloud door up, in your own Modal account, "
+    + "and gives you an address and a pass to type into Frank on your phone. "
+    + "Nothing of ours touches it afterwards.";
+  var MODAL_DOOR_PHONE = "Setting this up needs a Mac, once. Do it in Frank Studio "
+    + "and this phone gets the address and the pass to type in.";
+  var MODAL_DOOR_WORKING = "Putting your door up — this takes a few minutes the "
+    + "first time, and you can leave this page open.";
 
   function kEl(doc, tag, cls, text) {
     var e = doc.createElement(tag);
@@ -797,10 +857,30 @@
          + (q.hours_total == null ? "" : " of " + round1(q.hours_total)) + " left");
     var slotsShort = (sl.free == null) ? "unknown"
       : (sl.free + " of " + (sl.limit == null ? "?" : sl.limit) + " free");
+    /* THE LINK FLOW'S OWN WORDS, and every one of them is studio's (`GET
+     * /kaggle`'s `door`, studio/kaggle.py::door). Connecting is a LINK, never
+     * "go and find your kaggle.json" (Osca, 11-12 Sep): one press opens the
+     * SYSTEM browser at the page this person needs -- Settings > API for
+     * someone who has an account, sign-up for someone who does not -- and the
+     * row says which, because a single button that guesses is wrong for one of
+     * the two and the free tier exists for the second one.
+     *
+     * `free` is the invitation, and it is the second half of the decision:
+     * every user brings their own account, so the allowance is THEIRS. It is
+     * said where there is no live number to say instead -- a connected account
+     * has `quota` above, which is the same fact measured rather than quoted. */
+    var door = d.door || null;
     return { who: who, quota: quota, slots: slots,
              quotaShort: quotaShort, slotsShort: slotsShort,
              where: (d.settings && d.settings.render && d.settings.render.where) || "here",
-             canType: !!d.accepts_credentials };
+             canType: !!d.accepts_credentials,
+             door: door,
+             settingsUrl: door && door.settings_url ? door.settings_url : null,
+             signupUrl: door && door.signup_url ? door.signup_url : null,
+             free: door && door.free_tier ? door.free_tier : "",
+             doorSay: door && door.lines ? (door.lines.settings || "") : "",
+             signupSay: door && door.lines ? (door.lines.signup || "") : "",
+             pasteSay: door && door.lines ? (door.lines.paste || "") : "" };
   }
   function round1(n) {
     var x = Number(n);
@@ -848,6 +928,15 @@
        * field that would 404 -- and only where there is a client to run, so
        * the no-client state is a sentence and not a dead form. */
       canType: installed && !!d.accepts_credentials,
+      /* Whether THIS studio can put a door up (`GET /modal`'s `can_deploy`),
+       * read exactly as `canType` reads `accepts_credentials` and for the same
+       * reason: a button is drawn only where the route behind it answers. The
+       * second half is a fact about the machine -- there is nothing to put a
+       * door up WITH until Modal is signed in here, and nothing to put one up
+       * FROM without the client. */
+      canDeploy: installed && connected && !!d.can_deploy,
+      doorLine: MODAL_DOOR_LINE,
+      phoneLine: MODAL_DOOR_PHONE,
     };
   }
 
@@ -1516,14 +1605,32 @@
       if (!code || have[code] || offered[code] || seen[code]) return;
       seen[code] = true;
       var x = row(code, "unavailable", null);
-      x.why = o.reached === false && !cat.length ? "the Mac's list not read -- pair or sign in"
-            : "no dictionary for it on the Mac";
+      /* THE TRUTH, AND THE GATE IS `cat`, NOT `reached` (Osca, 13 Sep).
+         "no dictionary for it on the Mac" claims the Mac's list was READ and
+         did not hold this language. It is only that when the list actually
+         came back (`reached === true`). An EMPTY catalogue means the list is
+         unknown -- never asked (`reached === null`, the first paint, and a
+         phone that is neither paired nor signed in, which is where Osca saw
+         this) or asked and refused (`false`). Both say the same true thing. */
+      x.why = cat.length || o.reached === true
+            ? "no dictionary for it on the Mac"
+            : "the Mac's list not read -- pair or sign in";
       rows.push(x);
     });
+    /* The same fact as the rows above, said once under the card -- and said
+       as an INSTRUCTION, because a phone that has never reached the Mac can
+       do something about it (Osca, 13 Sep: "make the note under the card say
+       what to do in one sentence"). */
+    var unread = !cat.length && o.reached !== true;
     var note = !packHost(o.host)
       ? "Languages are added in the Frank app: this page has no door to keep one."
-      : (o.why ? o.why : (cat.length || inst.length ? "A language is added once and every book in it uses it."
-                                                   : "No languages yet: pair with Studio or sign in, then open this tab."));
+      : (unread
+          ? "This phone hasn't read the Mac's list of dictionaries"
+            + (o.why ? " (" + String(o.why).replace(/\.\s*$/, "") + ")" : "")
+            + " -- pair with Studio under Transfer, or sign in to Drive, then open this tab again."
+          : (o.why ? o.why : (cat.length || inst.length
+                ? "A language is added once and every book in it uses it."
+                : "No languages yet: pair with Studio or sign in, then open this tab.")));
     return { rows: rows, note: note };
   }
 
@@ -1556,16 +1663,19 @@
     o = o || {};
     var f = o.fetch || global.fetch;
     var D = o.drive || global.TTSTVDrive;
-    var pair = syncRead(SYNC_PAIR_KEY);
     function save(from, packs) {
       var doc = { at: Date.now(), from: from, packs: Array.isArray(packs) ? packs : [] };
       syncWrite(LANG_CATALOGUE_KEY, doc);
       return doc;
     }
     function lan() {
-      if (!(pair && pair.base && pair.token) || typeof f !== "function") return Promise.reject(new Error("not paired"));
+      /* THE THIRD COPY OF ONE STRING, and now there is one (G-SETTINGS2,
+       * 13 Sep): `doorUrl` is this line, `netCtx`'s fall-through and
+       * `reader/surface.js::api()` all at once. */
+      var url = doorUrl(SYNC.MANIFEST);
+      if (!url || typeof f !== "function") return Promise.reject(new Error("not paired"));
       return Promise.race([
-        f(pair.base + "/sync/manifest?t=" + encodeURIComponent(pair.token), { cache: "no-store" }),
+        f(url, { cache: "no-store" }),
         new Promise(function (_, no) { global.setTimeout(function () { no(new Error("Studio did not answer")); }, o.lanMs || 5000); }),
       ]).then(function (res) {
         if (!res.ok) throw new Error("Studio: HTTP " + res.status);
@@ -1719,7 +1829,14 @@
     var t = packTileText(b.lang);
     var esc = function (s) { return String(s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); };
     var inner = t ? esc(t.text) + (t.add ? " · <b>Add</b>" : "") : "";
-    return '<span class="railrow-by tile-lang" data-lang="' + esc(b.lang) + '"' + (t ? "" : " hidden") + ">" + inner + "</span>";
+    /* ITS OWN ROW, NOT THE BYLINE'S (Osca, 13 Sep, the screenshot). This span
+       carried `railrow-by` as well as `tile-lang`, and at the 1 ¶ rung
+       `library.css` places EVERY `.railrow-by` at `grid-row: 3` -- so the
+       byline ("ARVID PAULSON") and this line ("...DICTIONARY NOT ON THIS
+       PHONE") were placed in the same cell and drawn on top of each other.
+       The class is `railrow-lang` now; library.css gives it the byline's
+       type and a row of its own. */
+    return '<span class="railrow-lang tile-lang" data-lang="' + esc(b.lang) + '"' + (t ? "" : " hidden") + ">" + inner + "</span>";
   }
 
   /* ---- THE TAB, on the phone. */
@@ -1928,6 +2045,16 @@
     var whoL = kEl(doc, "div", "set-l");
     var head = kEl(doc, "div", "kag-line kag-who st", "Asking studio…");
     whoL.appendChild(head);
+    /* THE ALLOWANCE, AND WHOSE IT IS (Osca, 11-12 Sep). Every user brings
+     * their own account, so the free tier is theirs and not a share of
+     * anyone's -- which is the whole reason the app asks for an account at
+     * all. studio's sentence, beside the name, wherever there is not a LIVE
+     * number to say instead: a connected account has its measured hours two
+     * rows down, and quoting the published allowance under them would be the
+     * same fact twice, once measured and once from a brochure. */
+    var free = kEl(doc, "small", "kag-why-here kag-free", "");
+    free.hidden = true;
+    whoL.appendChild(free);
     whoL.appendChild(kEl(doc, "small", "kag-why-here",
       phone ? "Renders run on Kaggle." : "Renders run on Kaggle unless you install a model on this Mac."));
     // ...and what this lane IS, beside the card that connects it (2 Sep)
@@ -2023,11 +2150,66 @@
     var credsOpen = false;
     var creds = kEl(doc, "div", "kag-creds");
     creds.hidden = true;
-    creds.appendChild(kEl(doc, "div", "set-head", "Your Kaggle key"));
+    creds.appendChild(kEl(doc, "div", "set-head", "Connect Kaggle"));
+
+    /* ---- THE DOOR. Two links and a sentence each, and both URLs are
+     *      studio's: no address of Kaggle's is spelled in this file at all, so
+     *      the day one of them moves it moves in `studio/kaggle.py` and this
+     *      page follows. `settings/tests/test_byok.py` asserts that.
+     *
+     *      `<a>` and not `<button class="kag-btn">`, deliberately: a person
+     *      may want to copy the address, open it in another profile, or send
+     *      it to the laptop the account is on, and a link does all three for
+     *      free. (It also keeps `.kag-creds .kag-btn` meaning the one button
+     *      it has always meant.) `target`/`rel` because Frank's shell is a web
+     *      view, and a door that replaced the settings page with Kaggle's own
+     *      would lose the box the person is about to paste into. */
+    var doorBlock = kEl(doc, "div", "kag-door");
+    doorBlock.hidden = true;
+    var doorSay = kEl(doc, "div", "kag-dim kag-doorsay", "");
+    var doorLinks = kEl(doc, "div", "kag-row kag-doorlinks");
+    function doorLink(cls) {
+      var a = doc.createElement("a");
+      a.className = "kag-link " + cls;
+      a.target = "_blank"; a.rel = "noopener noreferrer";
+      return a;
+    }
+    var settingsLink = doorLink("kag-door-settings");
+    var signupLink = doorLink("kag-door-signup");
+    doorLinks.appendChild(settingsLink); doorLinks.appendChild(signupLink);
+    doorBlock.appendChild(doorSay); doorBlock.appendChild(doorLinks);
+    creds.appendChild(doorBlock);
+
+    /* ---- THE RETURN LEG: one paste of the WHOLE file, or the same file
+     *      chosen from Files. There is no OAuth for a Kaggle API key, so this
+     *      is what a link flow's other half has to be -- and what Kaggle hands
+     *      a person is a downloaded `kaggle.json`, not two fields. Asking them
+     *      to open it and pick the two out is asking them to do the app's job;
+     *      studio's `parse_pasted_credentials` does it instead.
+     *
+     *      ONE ROUTE, TWO WAYS IN. The picker reads the file in the page and
+     *      puts its text in the same box, so what is POSTed is identical and
+     *      `POST /kaggle-credentials` has one writer behind it, not two. */
+    var pasteBlock = kEl(doc, "div", "kag-pastebox");
+    var pasteSay = kEl(doc, "div", "kag-dim kag-pastesay", "");
+    var pasteIn = doc.createElement("textarea");
+    pasteIn.className = "kag-in kag-paste";
+    pasteIn.rows = 3;
+    pasteIn.setAttribute("aria-label", "Your kaggle.json");
+    pasteIn.placeholder = '{"username": …}';
+    pasteIn.autocomplete = "off"; pasteIn.spellcheck = false;
+    var fileIn = doc.createElement("input");
+    fileIn.type = "file"; fileIn.className = "kag-file";
+    fileIn.accept = ".json,application/json";
+    fileIn.setAttribute("aria-label", "Choose kaggle.json from Files");
+    pasteBlock.appendChild(pasteSay);
+    pasteBlock.appendChild(pasteIn);
+    pasteBlock.appendChild(fileIn);
+    creds.appendChild(pasteBlock);
     var credCard = kEl(doc, "div", "set-card");
     var credRow = kEl(doc, "div", "set-row kag-credrow");
     credRow.appendChild(kEl(doc, "div", "kag-dim kag-credsay",
-      "Rendering runs on Kaggle. Paste the key from kaggle.com → Settings → API."));
+      "Or type the two lines out of that file by hand."));
     var userIn = doc.createElement("input");
     userIn.type = "text"; userIn.className = "kag-in"; userIn.placeholder = "username";
     userIn.setAttribute("aria-label", "Kaggle username");
@@ -2053,6 +2235,12 @@
     var say = kEl(doc, "div", "set-note kag-line kag-say");
     say.setAttribute("role", "status");
     panel.appendChild(say);
+
+    /* What the last answer said about whether studio takes a credential at
+     * all. The Connect button reads it rather than re-deriving it: a studio
+     * that says `accepts_credentials: false` has no route behind this card,
+     * and revealing a box over one would be a form that 404s. */
+    var lastCanType = false;
 
     function paint(d) {
       var L = kaggleLines(d);
@@ -2085,6 +2273,24 @@
        * point of the tab -- or *Reconnect…* has been pressed. A connected
        * account that has not asked for it never sees it. */
       var connected = !!(d && d.connected);
+      /* THE DOOR IS DRAWN FROM STUDIO'S ANSWER OR NOT AT ALL. A studio old
+       * enough to send no `door` gets the card it always had -- two typed
+       * fields -- rather than two links with nothing behind them. */
+      doorBlock.hidden = !L.settingsUrl;
+      doorSay.textContent = L.doorSay;
+      settingsLink.setAttribute("href", L.settingsUrl || "#");
+      settingsLink.textContent = connected ? "Open Kaggle again" : "Open Kaggle";
+      signupLink.setAttribute("href", L.signupUrl || "#");
+      signupLink.hidden = !L.signupUrl;
+      signupLink.textContent = L.signupSay || "";
+      pasteSay.textContent = L.pasteSay;
+      pasteBlock.hidden = !L.settingsUrl;
+      /* The allowance is the INVITATION, so it is said where there is nothing
+       * connected and nothing measured. `L.free` is studio's line; an empty
+       * one hides the row rather than leaving a blank under the name. */
+      free.textContent = L.free;
+      free.hidden = connected || !L.free;
+      lastCanType = L.canType;
       creds.hidden = !L.canType || (connected && !credsOpen);
       // and the two rows that are only facts about a connection
       quotaRow.hidden = !connected;
@@ -2126,9 +2332,32 @@
      * nothing below it can. */
     function take(input) { var v = input.value; input.value = ""; return v; }
 
+    /* The paste is read and cleared by the same `take`, for the same reason:
+     * a whole `kaggle.json` is a credential with a username wrapped round it,
+     * and it exists as the argument of one POST and nowhere else -- not in the
+     * box it was pasted into, not in a closure that outlives the click. */
     saveBtn.addEventListener("click", function () {
+      var pasted = take(pasteIn);
+      if (pasted && pasted.trim()) {
+        say.textContent = "Reading that file…";
+        ctx.postJSON(KAGGLE.CREDS, { paste: pasted }).then(function (r) {
+          pasted = null;
+          var b = (r && r.body) || {};
+          say.textContent = r.ok
+            ? ("Connected" + (b.username ? " as " + b.username : "")
+               + ". The file is written to ~/.kaggle/kaggle.json and is never shown again.")
+            : (r.status === 404
+                ? "This studio does not take a pasted file yet — type the two fields instead."
+                : ("Not connected: " + r.why + "."));
+          return ask(!r.ok);
+        });
+        return;
+      }
       var user = take(userIn), key = take(keyIn);
-      if (!user || !key) { say.textContent = "A username and a key, both."; return; }
+      if (!user || !key) {
+        say.textContent = "Paste the whole kaggle.json — or fill in both fields below it.";
+        return;
+      }
       say.textContent = "Saving…";
       ctx.postJSON(KAGGLE.CREDS, { username: user, key: key }).then(function (r) {
         user = null; key = null;
@@ -2140,6 +2369,31 @@
         // a saved key closes the form; a refused one leaves it open to fix
         return ask(!r.ok);
       });
+    });
+
+    /* THE FILES PICKER IS THE PASTE BOX, filled in by the browser instead of
+     * by a person. The file's text goes into the same box and the same button
+     * sends it, so there is one route, one writer and one thing to get right.
+     * Nothing is uploaded by the picker itself: `accept` is a hint, the read
+     * is local, and a browser without `File.text()` falls back to the reader
+     * every browser has had for a decade. */
+    fileIn.addEventListener("change", function () {
+      var f = fileIn.files && fileIn.files[0];
+      if (!f) return;
+      fileIn.value = "";                       // the same read-and-clear rule
+      function landed(text) {
+        pasteIn.value = text || "";
+        say.textContent = text
+          ? "Read. Press Connect."
+          : "That file was empty.";
+      }
+      try {
+        if (f.text) { f.text().then(landed, function () { landed(""); }); return; }
+        var fr = new (doc.defaultView || window).FileReader();
+        fr.onload = function () { landed(String(fr.result || "")); };
+        fr.onerror = function () { landed(""); };
+        fr.readAsText(f);
+      } catch (e) { landed(""); }
     });
 
     connectBtn.addEventListener("click", function () {
@@ -2154,12 +2408,48 @@
         if (userIn.focus) userIn.focus();
         return;
       }
-      say.textContent = "Signing in — studio is running the kaggle tool…";
-      ctx.postJSON(KAGGLE.CONNECT, {}).then(function (r) {
-        if (!r.ok) { say.textContent = "Could not start: " + r.why + "."; return null; }
-        return pollConnect(0);
-      });
+      /* NOT CONNECTED: *Connect…* is the LINK (Osca, 11-12 Sep). It opens
+       * the system browser at the page studio named and reveals the box the
+       * downloaded file comes back into. It does NOT run `kaggle auth login`
+       * any more, and the reason is not taste: that flow needs the CLI on
+       * this Mac, which is exactly what a fresh machine does not have, and it
+       * writes a different file (`credentials_path`'s own note). A door that
+       * only works once the tool is installed is no door for the person the
+       * free tier is for.
+       *
+       * `pollConnect` and the CONNECT route are still here and still work --
+       * a Mac that has signed in that way stays signed in, and nothing about
+       * this press un-signs it. What changed is which door the button is. */
+      if (!lastCanType) {
+        say.textContent = "This studio cannot take a Kaggle sign-in yet.";
+        return;
+      }
+      credsOpen = true;
+      creds.hidden = false;
+      openDoor(settingsLink);
+      say.textContent = "Kaggle is open in your browser. Make a new one under API, "
+        + "then paste the file it downloads into the box.";
     });
+
+    /* Open the door, and never fail loudly if the shell will not. A web view
+     * can refuse `window.open`; the link is in the page either way, and a
+     * person can press it themselves -- which is the fallback, rather than an
+     * error about a popup. */
+    function openDoor(link) {
+      /* `getAttribute` and not `.href`: the property is the RESOLVED address
+       * in a browser and is not there at all in a document that was never
+       * given a base, and what we want either way is the string studio sent. */
+      var href = link && link.getAttribute ? link.getAttribute("href") : null;
+      if (!href || href === "#") return false;
+      try {
+        /* `defaultView` in a browser; the global in a shell that has a window
+         * and no view on the document (the page harness, and any document
+         * built rather than loaded). Whichever answers first. */
+        var w = doc.defaultView || (typeof window !== "undefined" ? window : null);
+        if (w && w.open) { w.open(href, "_blank", "noopener"); return true; }
+      } catch (e) { /* the link is still there */ }
+      return false;
+    }
     function pollConnect(n) {
       if (n > 60) { say.textContent = "Still signing in — leave this open, or try again."; return null; }
       return ctx.getJSON(KAGGLE.CONNECT).then(function (d) {
@@ -2182,7 +2472,13 @@
              els: { head: head, quota: quota, slots: slots, creds: creds,
                     quotaRow: quotaRow, slotRow: slotRow,
                     user: userIn, key: keyIn, say: say, connect: connectBtn,
-                    revoke: revokeBtn, where: whereOpts } };
+                    revoke: revokeBtn, where: whereOpts,
+                    // the link flow (13 Sep): the two doors, the one box the
+                    // downloaded file comes back into, the picker that fills
+                    // it in, and the allowance said beside the name
+                    door: doorBlock, doorSay: doorSay, settingsLink: settingsLink,
+                    signupLink: signupLink, paste: pasteIn, pasteSay: pasteSay,
+                    pasteBox: pasteBlock, file: fileIn, free: free } };
   }
 
   /* ================================= THE CLOUD GPU TAB, CARD TWO: MODAL
@@ -2215,7 +2511,10 @@
    * line, exactly as card one's does; the value exists as the argument of one
    * POST and nowhere else -- not in a status line, a title, a dataset
    * attribute, a closure that outlives the click, or this file's own state.  */
-  function buildModalCard(panel, ctx) {
+  function buildModalCard(panel, ctx, opts) {
+    // a phone can hold a pairing and cannot make one: the client that puts a
+    // door up is a Mac's (see MODAL_DOOR_PHONE)
+    var phone = !!(opts && opts.phone);
     var doc = panel.ownerDocument;
     panel.appendChild(kEl(doc, "div", "set-head", "Modal"));
     var card = kEl(doc, "div", "set-card");
@@ -2277,9 +2576,67 @@
     note.hidden = true;
     panel.appendChild(note);
 
+    /* ---- THE ONE BUTTON, and what comes back from it.
+     *
+     * Its own card under the sign-in, because they are two different
+     * questions: *is this Mac signed in to Modal* and *is there a door up for
+     * my phone*. A person can be the first without the second, which is the
+     * normal state before this button has ever been pressed.
+     *
+     * WHAT COMES BACK IS SHOWN ONCE AND IS NOT KEPT. The pass was minted a
+     * second ago by studio, nothing on this page stores it, and a re-render
+     * clears it: the person copies it into Frank on their phone (Settings >
+     * Transfer takes an address and a pass) or presses the button again and
+     * gets a new one. This page has no second home for it, which is the rule
+     * both cards above are built on -- and it is why the address and the pass
+     * are TEXT a person can select, and not a field with a value the DOM keeps
+     * across a paint. */
+    var doorCard = kEl(doc, "div", "kag-creds mod-door");
+    doorCard.hidden = true;
+    doorCard.appendChild(kEl(doc, "div", "set-head", "Your phone"));
+    var doorBox = kEl(doc, "div", "set-card");
+    var doorRow = kEl(doc, "div", "set-row mod-doorrow");
+    var doorL = kEl(doc, "div", "set-l");
+    var doorSayEl = kEl(doc, "div", "kag-dim mod-doorsay", MODAL_DOOR_LINE);
+    doorL.appendChild(doorSayEl);
+    var doorBtn = doc.createElement("button");
+    doorBtn.type = "button"; doorBtn.className = "kag-btn kag-primary mod-doorbtn";
+    doorBtn.textContent = MODAL_DOOR_BUTTON;
+    var doorActs = kEl(doc, "div", "set-c kag-row");
+    doorActs.appendChild(doorBtn);
+    doorRow.appendChild(doorL); doorRow.appendChild(doorActs);
+    doorBox.appendChild(doorRow);
+    // what the phone is told: an address, a pass, and the eight characters
+    // that say the two belong together (`fingerprint`, computed at both ends)
+    var pairRow = kEl(doc, "div", "set-row mod-pairrow");
+    pairRow.hidden = true;
+    var pairOut = kEl(doc, "div", "mod-pair st", "");
+    pairRow.appendChild(pairOut);
+    doorBox.appendChild(pairRow);
+    doorCard.appendChild(doorBox);
+    panel.appendChild(doorCard);
+
     var say = kEl(doc, "div", "set-note kag-line kag-say mod-say");
     say.setAttribute("role", "status");
     panel.appendChild(say);
+
+    /* One line per fact, in the order a person reads them out to a phone.
+     * Built by hand rather than by innerHTML: every one of these is a string
+     * studio made, and two of them are about a credential. */
+    function drawPairing(b) {
+      while (pairOut.firstChild) pairOut.removeChild(pairOut.firstChild);
+      [["Address", b.url], ["Pass", b.pass], ["Check", b.fp]].forEach(function (o) {
+        if (!o[1]) return;
+        var line = kEl(doc, "div", "mod-pairline");
+        line.appendChild(kEl(doc, "span", "mod-pairname", o[0]));
+        line.appendChild(kEl(doc, "span", "mod-pairval", o[1]));
+        pairOut.appendChild(line);
+      });
+      pairOut.appendChild(kEl(doc, "small", "kag-dim mod-pairsay",
+        "Type these into Frank on your phone, under Settings ▸ Transfer. The pass "
+        + "is shown once and is not kept here; press again for a new one."));
+      pairRow.hidden = !pairOut.firstChild;
+    }
 
     function paint(d) {
       var L = modalLines(d);
@@ -2292,6 +2649,14 @@
       // THE THREE STATES, in one line: a form only where there is something
       // behind it (`canType`) and something left to do (not connected).
       creds.hidden = !L.canType || L.connected;
+      /* THE DOOR CARD. On a phone it is a sentence and never a button; on a
+       * Mac it appears once Modal is signed in here, because there is nothing
+       * to put a door up with before that. A studio that does not answer
+       * `can_deploy` draws nothing at all -- the older-studio rule the two
+       * cards above already follow. */
+      doorCard.hidden = phone ? !L.connected : !L.canDeploy;
+      doorBtn.hidden = phone;
+      doorSayEl.textContent = phone ? L.phoneLine : L.doorLine;
       revokeBtn.disabled = !L.connected;
       revokeBtn.title = revokeBtn.disabled ? "Nothing is connected" : "";
       note.hidden = !L.file;
@@ -2346,6 +2711,33 @@
       });
     });
 
+    /* THE PRESS. One POST with an EMPTY BODY: there is nothing a page may
+     * send to this route, because a route that accepted a pass could be asked
+     * to put a chosen one on a door. It can only be asked to make a new one.
+     *
+     * The button is disabled while it runs -- a deploy takes minutes the first
+     * time, and a second press would mint a second pass and leave the person
+     * holding the one the door no longer has. */
+    doorBtn.addEventListener("click", function () {
+      doorBtn.disabled = true;
+      pairRow.hidden = true;
+      say.textContent = MODAL_DOOR_WORKING;
+      ctx.postJSON(MODAL.DEPLOY, {}).then(function (r) {
+        doorBtn.disabled = false;
+        var b = (r && r.body) || {};
+        if (!r.ok) {
+          say.textContent = r.status === 404
+            ? "This studio cannot put a door up yet."
+            : ("Not set up: " + (b.error || r.why) + ".");
+          return ask(true);
+        }
+        drawPairing(b);
+        say.textContent = "Your door is up"
+          + (b.workspace ? " in " + b.workspace : "") + ".";
+        return ask(true);
+      });
+    });
+
     revokeBtn.addEventListener("click", function () {
       say.textContent = "Disconnecting…";
       ctx.postJSON(MODAL.REVOKE, {}).then(function (r) {
@@ -2365,7 +2757,10 @@
     return { paint: paint, ask: ask, lines: modalLines,
              els: { head: head, id: idIn, secret: secretIn, creds: creds,
                     missRow: missRow, missing: missSay, note: note, say: say,
-                    where: whereLine, connect: saveBtn, revoke: revokeBtn } };
+                    where: whereLine, connect: saveBtn, revoke: revokeBtn,
+                    // the one button (13 Sep) and what it hands the phone
+                    doorCard: doorCard, doorBtn: doorBtn, doorSay: doorSayEl,
+                    pairRow: pairRow, pair: pairOut } };
   }
 
   /* ============================================ AND THE TAB IS THE TWO OF THEM
@@ -2446,6 +2841,50 @@
   var SYNC_LIB_KEY = "ttstv.reader.library";
   var SYNC_DEVICE_KEY = "ttstv.reader.deviceId";
   var SYNC_DISCOVER_MS = 2500;
+
+  /* ============== THE PHONE'S ORIGIN IS NOT AN ORIGIN (G-SETTINGS2, 13 Sep)
+   *
+   * `prefs.js::origin()` answers null unless the protocol is http(s), and
+   * Frank's phone webview is `frank://localhost`
+   * (`TTSTV_IOS/src-tauri/src/lib.rs`). So every studio ask this file made
+   * resolved to null on a phone that had a Studio on the Wi-Fi -- the same
+   * bug `reader/surface.js` carried until G-STUDIOPHONE gave its base the
+   * PAIRING as the fall-through (the wiring audit, `2a0240a` §6b, asked for
+   * this by name). This is that fall-through, in this file, ONCE:
+   * `ttstv.sync.pair`'s {base, token} -- the record the Transfer tab itself
+   * writes -- with the pass as `?t=`, which is what
+   * `studio/serve.py::SyncHandler` reads. Never a header: a simple request
+   * is one round trip rather than a preflight, and that is `surface.js`'s
+   * own reason as well as `syncUrl`'s.
+   *
+   * ON THE MAC `askUrl` RETURNS `origin() + path`, character for character,
+   * and the pairing is never read -- Studio's own page is http(s), so the
+   * first line answers. That is not a hope, it is the order of two returns.
+   *
+   * AND IT IS NOT A KEY TO THE WHOLE SERVER, which is the half of this that
+   * decides what the phone draws. The LAN listener answers `/sync/*`, a
+   * book's payload files and `_SYNC_STUDIO`'s seven routes, and 404s
+   * everything else WHATEVER THE TOKEN
+   * (`studio/serve.py::sync_path_allowed`). So this makes `/sync/manifest`
+   * answer on a paired phone and does NOT make `/models`, `/engines`,
+   * `/kaggle`, `/modal`, `/settings` or `/account` answer. That is why the
+   * cards which ask those are not built on a phone at all (`phoneTabs`)
+   * rather than built and apologising: the apology was never about the
+   * origin. */
+  function doorUrl(path) {
+    var rec = syncRead(SYNC_PAIR_KEY);
+    var base = (rec && typeof rec.base === "string") ? rec.base.replace(/\/+$/, "") : "";
+    var tok = (rec && typeof rec.token === "string") ? rec.token : "";
+    if (!/^https?:\/\//i.test(base) || !tok) return null;
+    return base + path + (path.indexOf("?") >= 0 ? "&" : "?")
+         + "t=" + encodeURIComponent(tok);
+  }
+  /* The one address a studio ask in this file goes to: this origin where
+   * there is one, else the door this device is paired with, else nowhere.  */
+  function askUrl(path) {
+    var o = origin();
+    return o ? o + path : doorUrl(path);
+  }
 
   /* ============================ THE DOOR'S PAIRING (23d; Osca, 6 Sep)
    * Not the sync pairing above (`ttstv.sync.pair`, a six-digit code, Studio's
@@ -3265,7 +3704,24 @@
     pairBtn.type = "button"; pairBtn.className = "kag-btn kag-primary tr-pair-go"; pairBtn.textContent = "Pair";
     var pairForgetBtn = doc.createElement("button");
     pairForgetBtn.type = "button"; pairForgetBtn.className = "kag-btn danger tr-pair-forget"; pairForgetBtn.textContent = "Forget";
-    doorC.appendChild(pairUrlIn); doorC.appendChild(pairPassIn); doorC.appendChild(pairBtn); doorC.appendChild(pairForgetBtn);
+    /* CHECK -- and it is here because `transfer.pairing` had no reader on
+     * any page that loads (the wiring audit's fourth row that writes to
+     * nobody). `library/transfer.js` is the door's ONE client and was in
+     * nobody's `<script src>`; `settings/settings.html` loads it now, and
+     * this button is what reads what this card writes: `TTSTVTransfer.reach()`
+     * -- `GET /` on the door, the one route that needs no bearer -- and it
+     * prints the door's own `app`. WIRED, not removed: the card is where
+     * G-BYOK's *Set up my phone* hands its address and pass, so deleting it
+     * would delete the customer's half of the Modal door.
+     *
+     * AND IT PROVES NOTHING ABOUT THE PASS, which is `transfer.js`'s own
+     * rule 1 said out loud on the page rather than only in its source: a
+     * reachable door is not a paired one, and the first real route is the
+     * only answer about the pass there is. */
+    var pairCheckBtn = doc.createElement("button");
+    pairCheckBtn.type = "button"; pairCheckBtn.className = "kag-btn tr-pair-check";
+    pairCheckBtn.textContent = "Check";
+    doorC.appendChild(pairUrlIn); doorC.appendChild(pairPassIn); doorC.appendChild(pairBtn); doorC.appendChild(pairForgetBtn); doorC.appendChild(pairCheckBtn);
     doorRow.appendChild(doorL); doorRow.appendChild(doorC);
     doorCard.appendChild(doorRow);
 
@@ -3280,6 +3736,7 @@
       doorWhy.textContent = pairLine(rec);
       pairUrlIn.hidden = on; pairPassIn.hidden = on; pairBtn.hidden = on;
       pairForgetBtn.hidden = !on;
+      pairCheckBtn.hidden = !on;
       return rec;
     }
     /* READ AND CLEAR IN ONE STATEMENT -- the Cloud GPU cards' `take`: the
@@ -3297,6 +3754,28 @@
         pass = null;
         say.textContent = "Not paired: " + String((e && e.message) || e) + ".";
         paintPair();
+      });
+    });
+    pairCheckBtn.addEventListener("click", function () {
+      var T = global.TTSTVTransfer;
+      if (!T || typeof T.reach !== "function") {
+        say.textContent = "The door's client is not on this page.";
+        return;
+      }
+      var rec = T.describe();
+      if (!rec) { say.textContent = "Nothing paired to check."; return; }
+      say.textContent = "Asking " + rec.url + "\u2026";
+      pairCheckBtn.disabled = true;
+      T.reach().then(function (d) {
+        pairCheckBtn.disabled = false;
+        var n = (d && d.routes && d.routes.length) || 0;
+        say.textContent = (d && d.app)
+          ? "Your door answers: " + d.app + " \u00b7 " + n + (n === 1 ? " route" : " routes")
+            + ". The pass is not proved until a book goes through it."
+          : "Something answered at " + rec.url + " but did not name itself \u2014 check the address.";
+      }, function (e) {
+        pairCheckBtn.disabled = false;
+        say.textContent = "No answer from " + rec.url + ": " + String((e && e.message) || e) + ".";
       });
     });
     pairForgetBtn.addEventListener("click", function () {
@@ -4272,16 +4751,16 @@
      * missing route is a fact to print, exactly as `save()` treats it. */
     var netCtx = opts.net || {
       getJSON: function (path) {
-        var url = origin();
+        var url = askUrl(path);
         if (!url || !global.fetch) return Promise.resolve(null);
-        return global.fetch(url + path, { cache: "no-store" })
+        return global.fetch(url, { cache: "no-store" })
           .then(function (r) { return r.ok ? r.json() : null; })
           .catch(function () { return null; });
       },
       postJSON: function (path, body) {
-        var url = origin();
+        var url = askUrl(path);
         if (!url || !global.fetch) return Promise.resolve({ ok: false, status: 0, why: "no studio behind this page" });
-        return global.fetch(url + path, {
+        return global.fetch(url, {
           method: "POST", headers: { "Content-Type": "application/json" },
           body: JSON.stringify(body)
         }).then(function (res) {
@@ -4484,7 +4963,21 @@
         var mark = kEl(doc, "span", "vc-mark", "");
         mark.title = "Microphone: not asked for yet";
         right.appendChild(mark);
-        right.appendChild(fillMenu(menuEl(field, spec.label), field));
+        /* THE DEVICE MENU IS GONE (G-SETTINGS2, 13 Sep), and with it the
+         * only writer of `micDevice` -- the third of the four rows the
+         * wiring audit found writing to nobody. Web Speech has no device
+         * selection at all: `voiceui/asr.js` is a `SpeechRecognition`
+         * wrapper, there is no `getUserMedia` anywhere in `voiceui/`, and no
+         * code path has ever passed a `deviceId` to anything. So the menu
+         * offered a choice that only its own Test button honoured, and a
+         * choice nothing downstream obeys is worse than no choice.
+         *
+         * WHAT STAYS IS THE HALF THAT WORKS: the dot (the permission, in a
+         * `title`) and Test, which opens the microphone once, prints what it
+         * heard, and is the only door to the permission hands-free needs.
+         * `micDevice` stays in `prefs.js` untouched, and `buildVoice`'s
+         * `sel` is simply null -- `refreshDevices()` already returned early
+         * on that, from the day it was written. */
         var testBtn = doc.createElement("button");
         testBtn.type = "button";
         testBtn.className = "vc-btn";
@@ -4791,10 +5284,14 @@
         testing = true;
         if (testBtn) testBtn.disabled = true;
         say("Listening\u2026");
-        var want = current.micDevice
-          ? { audio: { deviceId: { exact: current.micDevice } } }
-          : { audio: true };
-        return media.getUserMedia(want).then(function (stream) {
+        /* THE DEFAULT INPUT, and there is no other ask (G-SETTINGS2,
+         * 13 Sep). With the menu gone `current.micDevice` is whatever an
+         * older build of this page stored, and asking for a `deviceId`
+         * `exact`ly matching a device this machine may not have is an
+         * `OverconstrainedError` where `{audio:true}` would have opened the
+         * microphone. Test proves the permission the recogniser needs; the
+         * recogniser opens its own stream and never took a device. */
+        return media.getUserMedia({ audio: true }).then(function (stream) {
           // the stream is dropped at once -- the point of taking it is the
           // permission and the labels that come with it, not the audio; the
           // recogniser opens its own
@@ -5040,6 +5537,10 @@
     SYNC: SYNC, SYNC_PAIR_KEY: SYNC_PAIR_KEY, SYNC_LAST_KEY: SYNC_LAST_KEY, SYNC_ACCOUNT_KEY: SYNC_ACCOUNT_KEY,
     syncStateLine: syncStateLine, syncPullLine: syncPullLine, syncHostPull: syncHostPull, syncWhoLine: syncWhoLine, syncCodeText: syncCodeText,
     syncRemote: syncRemote, syncUrl: syncUrl, syncBaseOf: syncBaseOf, syncDeviceId: syncDeviceId,
+    // where a studio ask GOES (G-SETTINGS2, 13 Sep): this origin, else the
+    // paired door with the pass on it. Exported because it is pure and
+    // because a test should be able to read the URL rather than a fetch.
+    doorUrl: doorUrl, askUrl: askUrl,
     syncLocalMarginalia: syncLocalMarginalia, syncLocalPositions: syncLocalPositions,
     syncWriteMarginalia: syncWriteMarginalia, syncWritePositions: syncWritePositions,
     syncCountMarks: syncCountMarks, runSync: runSync, syncPair: syncPair, syncDiscover: syncDiscover,

@@ -5541,8 +5541,16 @@ shelfEl.addEventListener("touchmove", (e) => {
 function phonePinchEnd(e) { if (!e.touches || e.touches.length < 2) phonePinch = null; }
 shelfEl.addEventListener("touchend", phonePinchEnd);
 shelfEl.addEventListener("touchcancel", phonePinchEnd);
-for (const g of ["gesturestart", "gesturechange"]) {
-  shelfEl.addEventListener(g, (e) => { if (phoneFlag() && e.preventDefault) e.preventDefault(); }, { passive: false });
+/* THE REFUSAL IS ON THE WINDOW, NOT ON THE SHELF (13 Sep). WebKit's
+   `gesturestart`/`gesturechange` are dispatched on the DOCUMENT's path -- the
+   reader refuses them exactly this way and has always worked on Osca's phone
+   (`reader/book-nav.js::refusePinch`, bound with a bare `addEventListener`).
+   Bound to `shelfEl` the listener never fired, the web view kept its own
+   pinch-to-zoom, and the moment it claimed the gesture the page was sent a
+   `touchcancel` -- which is `phonePinchEnd`, which nulls `phonePinch`. So the
+   ladder walked in Chromium and stood still on the phone. */
+for (const g of ["gesturestart", "gesturechange", "gestureend"]) {
+  addEventListener(g, (e) => { if (phoneFlag() && e.preventDefault) e.preventDefault(); }, { passive: false });
 }
 
 // ---- import: the button, the file input, and a bundle shared into the app

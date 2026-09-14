@@ -30,7 +30,7 @@
 // that is not the current SHELL_CACHE, so changing this string IS the eviction
 // -- and changing it changes sw.js's own bytes, which is the only thing that
 // makes a browser run `install` and `activate` at all.
-const SHELL_CACHE = "ttstv-shell-v54";   // 7 Sep: transport.js joins the shell -- a NEW name in
+const SHELL_CACHE = "ttstv-shell-v55";   // 13 Sep: sysvoice.js joins the shell -- a NEW name in
                                          // SHELL_FILES is only fetched by an install, so the
                                          // string has to move or an installed app never caches
                                          // it (v37: the shell moved to clean/)
@@ -123,9 +123,39 @@ const SHELL_FILES = [
                              // guarded, so neither bar guesses at listen.js.
                              // reader.html loads it, so an installed app
                              // without it has two bars that do nothing offline.
+  "./sysvoice.js",           // THE SYSTEM VOICE (13 Sep, D1(a)): the chapter
+                             // with no rendered master, read aloud by
+                             // speechSynthesis, its onboundary moving the one
+                             // cursor. It is the FREE TIER and the offline
+                             // story, so an installed app that had not cached
+                             // it would be an app with no voice at all on a
+                             // train -- which is the one place it matters most.
+  "./follow.js",             // FOLLOW (13 Sep): the page follows the voice, one
+                             // decision per sentence, and the play bar's button
+                             // that turns it off. Both voices go through it, so
+                             // an installed app without it would listen to a
+                             // chapter with the page standing still.
   "./lookup.js",             // the word under the finger, and voiceui's getDictionaryEntry
   "./marginalia.js",         // the record, re-anchored on listen.js's map
   "./cursor.js",             // one position, written once a sentence (job 15b step 3)
+  "./wordclock.js",          // WHICH WORD IS UNDER THE CLOCK (13 Sep, F1):
+                             // time in seconds -> word index, no rAF, no timer,
+                             // no DOM. Byte-identical to the file the two iOS
+                             // float probes run, so the three roads cannot
+                             // disagree about which word it is. float.html
+                             // loads it; the reader does not.
+  "./floatdoor.js",          // THE FLOAT'S DOOR, the reader's half: the
+                             // chapter once, a drift correction at 4 Hz, and
+                             // the panel's seven presses routed back to the
+                             // quiet ring and the transport. reader.html loads
+                             // it, and it is inert with no host -- which is
+                             // every platform but Frank Studio on the Mac, and
+                             // exactly why an installed app without it would
+                             // 404 in its head rather than simply not float.
+  "./float.html",            // ...and THE PANEL: one word, the caption, the
+  "./float.css",             // strip. Its word is wordview.css's and its
+                             // caption is wordpane.css's `.wordsub`, both
+  "./float.js",              // already here -- these three are what is new.
   "./surface.js",            // ...and the surface itself: the query, the one
                              // list, and the works. Both pages load it and the
                              // phone bar's search door calls into it, so an

@@ -162,7 +162,10 @@
      bar's ground around it, the way an app badge does. Not a control: it takes
      no pointer, and the ⚙ is still exactly one 44 target. It fades rather than
      blinks, and nothing about it moves the bar. */
-  html[data-phone] .pbar-set{ position:relative; }
+  /* a long press on the ⚙ is light/dark (pbar.js), so iOS must not answer it
+     with its own callout or a selection */
+  html[data-phone] .pbar-set{ position:relative;
+    -webkit-touch-callout:none; -webkit-user-select:none; user-select:none; }
   html[data-phone] .pbar-dot{
     position:absolute; top:9px; right:9px; width:6px; height:6px;
     box-sizing:border-box; border-radius:50%; pointer-events:none;

@@ -521,12 +521,18 @@ function mount(o) {
 
     const sHit = cur.map && cur.map.bySentId.get(sent.id);
     setHighlight("listen-sentence", rangeOf(sHit));
-    /* the page follows the voice, one paragraph at a time -- not one word,
-       which would scroll on every syllable */
-    if (sHit && sHit.el && sHit.el !== lastPara) {
-      lastPara = sHit.el;
-      try { sHit.el.scrollIntoView({ block: "nearest", behavior: "smooth" }); } catch (e) {}
-    }
+    /* THE PAGE IS FOLLOW'S NOW (13 Sep, FOLLOW). This used to end with
+       `sHit.el.scrollIntoView({block:"nearest", behavior:"smooth"})` on every
+       change of PARAGRAPH -- an unconditional, un-turn-off-able move of the
+       smallest distance that put the paragraph on screen, which is a move per
+       paragraph for ever and a reader who has scrolled away being dragged
+       back. `reader/follow.js` owns the scroller instead: one decision per
+       SENTENCE, on the sentence changing and at no other moment, and a button
+       on the play bar that turns it off. Two things moving one scroller is the
+       fight that reads as a jump, so this half is gone rather than gated.
+       `lastPara` stays -- `clearHighlights` resets it -- because it is still
+       what says a paragraph has changed. */
+    if (sHit && sHit.el && sHit.el !== lastPara) lastPara = sHit.el;
 
     if (!clock.paused && sent.words.length) {
       const w = sent.words[findIndex(sent.words, t)];

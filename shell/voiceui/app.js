@@ -77,6 +77,133 @@ function parseLookupQuery(text) {
   return null;
 }
 
+// ---------------------------------------------------------------- the ring
+// QUIET.md, 13 Sep: the same brain, a second input and a second output. A
+// quiet question enters at exactly the point a heard utterance does --
+// handleUtterance -- and the only new thing is that the answer is WRITTEN
+// instead of spoken. So there is no second grammar and no second command
+// set here: the ring is a MAP FROM A DIRECTION TO AN UTTERANCE, and
+// grammar.js/detour.js/resolve.js/answers.js are byte-unchanged.
+//
+// Four positions, two faces; the second face exists only while a ground
+// stop is standing (detour.inDetour), and asking and coming back are both a
+// flick to the RIGHT:
+//
+//        reading                     stopped in the ground (L1)
+//           ^  what                       ^  finish sentence
+//    again  <   >  ground      from start <   >  continue  (target 1)
+//           v  again, slower                v  continue from end
+//
+// THE ONE THING THE PAGE LEFT TO THE BUILD, AND WHAT IT IS (13 Sep). `what`
+// is on the ring under two readings: the grammar's `what` (the ground pane
+// replays the aligned sentence ALOUD and comes straight back -- what silence
+// in the listening window has always meant) and the lookup of the word you
+// are on. §1 of QUIET.md splits the two itself -- questions "produce an
+// answer OR a re-hearing" -- and the gate Osca wrote is "read in the
+// one-word view, flick for 'what', THE ANSWER APPEARS SILENTLY". An answer
+// can only appear if a lookup ran, so `^` on the reading face is the lookup,
+// spelled as the utterance `what does this mean` (parseLookupQuery's
+// no-word-named case, the word the reader is on). `ground` and `again` stay
+// the re-hearings they are and still play the book aloud -- quiet is about
+// the APP not talking, never about the book going silent.
+//
+// Nothing else joins the ring. The controls -- play/pause/faster/slower/
+// normal/back N/start at -- each have a press already (QUIET.md §1), and a
+// second worse copy of the transport is not a feature.
+const QUIET_RING = {
+  reading: { up: "what does this mean", right: "ground", left: "again", down: "again, slower" },
+  ground: { up: "finish sentence", right: "continue", left: "continue from start", down: "continue from end" },
+};
+
+const QUIET_DIRECTIONS = ["up", "down", "left", "right"];
+
+// Which face the ring is showing. A ground stop is standing exactly when the
+// detour stack has a frame on it: `ground` pushes one and nothing pops it
+// until a `continue` (or `target`); `what`'s one-shot pushes and pops inside
+// one utterance, so it never leaves the ring on the second face.
+function quietFace(inGround) {
+  return inGround ? "ground" : "reading";
+}
+
+// direction + face -> the utterance a heard command would have been, or null
+function quietCommand(direction, inGround) {
+  const face = QUIET_RING[quietFace(inGround)];
+  return (face && face[direction]) || null;
+}
+
+// THE MAC: M, THEN AN ARROW (QUIET.md §2). The arrows are taken three times
+// over -- prefs/prefs.js's `word`/`line` rows, marginalia.js's Shift+arrow
+// highlight run, and book-nav.js's axis keydown, which tests `e.key` and NO
+// modifier at all -- so every <modifier>+arrow map is taken before it
+// starts. What is free is a BOUNDED CLAIM on the bare arrows inside the
+// 2.5 s window `M` already opens. Every modifier disqualifies, Shift
+// included: ⇧→ is a mark being extended and must stay one even mid-window.
+const ARROW_DIR = {
+  ArrowUp: "up", ArrowDown: "down", ArrowLeft: "left", ArrowRight: "right",
+  // the pre-2016 WebKit spellings, which an old WKWebView can still send
+  Up: "up", Down: "down", Left: "left", Right: "right",
+};
+function arrowDirection(e) {
+  if (!e || e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) return null;
+  return ARROW_DIR[e.key] || null;
+}
+
+// THE PHONE: A TWO-FINGER FLICK (QUIET.md §3). One finger is spoken for in
+// every direction in one-word view -- sideways is the three positions of
+// book-nav.js's swipe, up and down is bumpWord -- and TWO fingers are
+// `refusePinch`: taken, preventDefault-ed and thrown away. So this is the
+// only free gesture, and it cannot collide, because book-nav.js decides by
+// COUNT before axis or timer.
+//
+// The numbers are book-nav.js's own TOUCH constants, deliberately: a hand
+// that has learned one flick should not have to learn a second.
+const FLICK = { win: 80, v: 0.3, min: 16 };
+
+// samples: [{t, x, y}] of the two-finger CENTROID, oldest first, the last
+// one being the lift. -> "up"|"down"|"left"|"right"|null.
+//
+// Displacement from the touch-down decides the axis and the direction (>=
+// `min` px on that axis); velocity over the last `win` ms decides that it
+// was a flick and not a slow drag that happened to end somewhere. A finger
+// that travelled fast and then STOPPED before lifting has no velocity, which
+// is the property book-nav.js's touchV was written for and the reason the
+// window ends at the lift rather than spanning the whole gesture.
+function flickDirection(samples, opts) {
+  const o = opts || {};
+  const win = o.win === undefined ? FLICK.win : o.win;
+  const minV = o.v === undefined ? FLICK.v : o.v;
+  const minPx = o.min === undefined ? FLICK.min : o.min;
+  const S = (Array.isArray(samples) ? samples : []).filter(Boolean);
+  if (S.length < 2) return null;
+  const first = S[0], last = S[S.length - 1];
+  const dx = last.x - first.x, dy = last.y - first.y;
+  const horizontal = Math.abs(dx) >= Math.abs(dy);
+  const travel = horizontal ? Math.abs(dx) : Math.abs(dy);
+  if (travel < minPx) return null;
+  let old = null;
+  for (let i = S.length - 1; i >= 0; i--) {
+    if (last.t - S[i].t <= win) old = S[i]; else break;
+  }
+  if (!old || old === last) return null;
+  const dt = last.t - old.t;
+  if (dt <= 0) return null;
+  const v = Math.abs((horizontal ? last.x - old.x : last.y - old.y) / dt);
+  if (v < minV) return null;
+  if (horizontal) return dx > 0 ? "right" : "left";
+  return dy > 0 ? "down" : "up";   // a screen's y grows downward
+}
+
+// The centroid of every finger currently down -- what a two-finger flick
+// travels by, so a hand whose two fingers are not quite parallel still
+// flicks in the direction the hand went.
+function touchCentroid(touches) {
+  const n = touches ? touches.length : 0;
+  if (!n) return null;
+  let x = 0, y = 0;
+  for (let i = 0; i < n; i++) { x += touches[i].clientX; y += touches[i].clientY; }
+  return { x: x / n, y: y / n };
+}
+
 // ------------------------------------------------------------- segments
 // Word ids are `<sentence id>.wNNN` (core/schema.py; e.g. c001.p0004.s02.w007),
 // so the ordinal of a word within its sentence is readable off the id
@@ -446,10 +573,12 @@ function createVoiceUI({ bridge, getSentenceWords, getPreviousSentenceId, getDic
   // playing or paused as it was found. Needs playRange + seekToWord
   // (reader/ c29d38d); without them the question is still asked and
   // `replayed: false` says why.
-  async function clarify(pos, ctx) {
+  async function clarify(pos, ctx, quiet) {
     const text = "Which word?";
-    await tts.speak(text, { synth });
-    const out = { type: "answer", text, clarify: true, replayed: false };
+    // PRESSED IS WRITTEN, SPOKEN IS SAID (QUIET.md §5). The input decided the
+    // output two frames ago; this is the only place the decision is spent.
+    if (!quiet) await tts.speak(text, { synth });
+    const out = { type: "answer", text, clarify: true, replayed: false, quiet: !!quiet };
     if (!pos || !bridge.playRange || !bridge.seekToWord) {
       out.note = "no playRange/seekToWord on this ReaderControl";
       return out;
@@ -475,9 +604,9 @@ function createVoiceUI({ bridge, getSentenceWords, getPreviousSentenceId, getDic
     return out;
   }
 
-  async function answerLookup(query, ctx) {
+  async function answerLookup(query, ctx, quiet) {
     const pos = bridge.getPosition(side);
-    if (!pos) return { type: "answer", text: "Nothing is playing yet." };
+    if (!pos) return { type: "answer", text: "Nothing is playing yet.", quiet: !!quiet };
 
     let wordId = pos.wordId;
     let surfaceText = null;
@@ -487,7 +616,7 @@ function createVoiceUI({ bridge, getSentenceWords, getPreviousSentenceId, getDic
       const prevId = getPreviousSentenceId(side, pos.sentenceId);
       const previous = prevId ? getSentenceWords(side, prevId) || [] : [];
       const match = resolve.resolveWord(query.word, current, previous);
-      if (!match) return clarify(pos, ctx);
+      if (!match) return clarify(pos, ctx, quiet);
       wordId = match.id;
       surfaceText = match.text;
     } else {
@@ -496,12 +625,12 @@ function createVoiceUI({ bridge, getSentenceWords, getPreviousSentenceId, getDic
       surfaceText = w ? w.text : null;
     }
 
-    if (!surfaceText) return clarify(pos, ctx);
+    if (!surfaceText) return clarify(pos, ctx, quiet);
 
     const entry = await lookupEntry(side, surfaceText);
     const text = answers.formatAnswer(entry, surfaceText);
-    await tts.speak(text, { synth });
-    return { type: "answer", text, wordId, word: surfaceText };
+    if (!quiet) await tts.speak(text, { synth });
+    return { type: "answer", text, wordId, word: surfaceText, quiet: !!quiet };
   }
 
   // Interrupt whatever segment is still playing from the previous
@@ -520,7 +649,16 @@ function createVoiceUI({ bridge, getSentenceWords, getPreviousSentenceId, getDic
     try { await prev.promise; } catch (e) { /* reported by its own caller */ }
   }
 
-  async function handleUtterance(text) {
+  async function handleUtterance(text, opts) {
+    // `quiet` is carried as an ARGUMENT the whole way down, never as a flag on
+    // the closure: interrupt() awaits the previous run, so a shared flag
+    // would be the NEXT utterance's while the PREVIOUS one was still
+    // unwinding, and the bug that makes is a phone speaking on a train.
+    const quiet = !!(opts && opts.quiet);
+    // A quiet question arriving over a spoken answer ends the spoken one in
+    // the same frame (QUIET.md §4). Only quiet cancels: a spoken question
+    // already interrupts through interrupt() below.
+    if (quiet) tts.cancel(synth);
     const query = parseLookupQuery(text);
     if (query) {
       // A question asked over a ground replay stops the replay first, the
@@ -531,7 +669,7 @@ function createVoiceUI({ bridge, getSentenceWords, getPreviousSentenceId, getDic
       await interrupt();
       const lookupCtx = { active: null, aborted: false };
       const run = { ctx: lookupCtx, promise: null };
-      run.promise = answerLookup(query, lookupCtx);
+      run.promise = answerLookup(query, lookupCtx, quiet);
       inflight = run;
       try {
         return await run.promise;
@@ -541,7 +679,7 @@ function createVoiceUI({ bridge, getSentenceWords, getPreviousSentenceId, getDic
     }
 
     const ops = grammar.tokenize(text);
-    if (!ops.length) return { type: "unrecognized", text };
+    if (!ops.length) return { type: "unrecognized", text, quiet };
 
     await interrupt();
     const ctx = { bridge, side, detour, getSentenceWords, getPreviousSentenceId, startAtSentences, schedule, wait, settleMs, active: null, aborted: false };
@@ -555,10 +693,13 @@ function createVoiceUI({ bridge, getSentenceWords, getPreviousSentenceId, getDic
       if (inflight === run) inflight = null;
     }
     side = result.side;
-    return { type: "ops", ops, side, stoppedAt: result.stoppedAt, aborted: result.aborted, note: result.note, interrupted: false };
+    return { type: "ops", ops, side, stoppedAt: result.stoppedAt, aborted: result.aborted, note: result.note, interrupted: false, quiet };
   }
 
-  return { handleUtterance, _detour: detour, side: () => side, _dictionaryWarm: () => dictionaryWarm };
+  // `inGround` is the ring's face: a ground stop is standing exactly when
+  // the detour stack has a frame on it (see quietFace).
+  return { handleUtterance, _detour: detour, side: () => side, inGround: () => detour.inDetour,
+           _dictionaryWarm: () => dictionaryWarm };
 }
 
 // ------------------------------------------------------------------ boot
@@ -604,6 +745,18 @@ const MIC_MASK =
   "<path d='M6.2 11.1a5.8 5.8 0 0 0 11.6 0M12 17v3.4M8.7 20.4h6.6' fill='none' stroke='black'" +
   " stroke-width='1.7' stroke-linecap='round'/></svg>\") center / 21px 21px no-repeat";
 
+// The hold ring around the thumb: four labels, slide to one, lift to fire.
+// It is ink and a target for nothing -- `pointer-events:none` throughout, so
+// the pointer stream stays the play button's and the ring never eats a move.
+const RING_CSS =
+  ".voiceui-ring{position:fixed;z-index:9998;width:0;height:0;pointer-events:none;" +
+  "font:12px/1 system-ui,sans-serif;opacity:0;transition:opacity .12s ease}" +
+  '.voiceui-ring[data-up="1"]{opacity:1}' +
+  ".voiceui-ring i{position:absolute;transform:translate(-50%,-50%);white-space:nowrap;" +
+  "font-style:normal;padding:5px 9px;border-radius:999px;" +
+  "background:var(--control-bg,#eee);color:var(--fg,#222);opacity:.85}" +
+  '.voiceui-ring i[data-on="1"]{background:var(--pivot,#c1121f);color:#fff;opacity:1}';
+
 const PILL_CSS =
   ".voiceui-pill{position:fixed;right:10px;bottom:var(--voiceui-pill-bottom, 12px);z-index:9999;" +
   "display:flex;gap:6px;align-items:center;font:12px/1.2 system-ui,sans-serif;color:inherit}" +
@@ -626,6 +779,140 @@ const PILL_CSS =
   '.voiceui-pill[data-state="armed"] .voiceui-pocket-btn,.voiceui-pill[data-state="listening"] .voiceui-pocket-btn{display:inline-block}' +
   ".voiceui-pill .voiceui-last{max-width:32vw;overflow:hidden;text-overflow:ellipsis;" +
   "white-space:nowrap;opacity:.75;color:var(--fg-dim,#777)}";
+
+// ------------------------------------------------------- the quiet OUTPUT
+// QUIET.md §4: the answer goes to a voiceui-owned line at `.wordsub`'s own
+// rect -- the caption's four custom properties, read off the same page, so
+// at position +2 it lands exactly where the caption was and at every other
+// position it is the only thing there (outside one-word view there IS no
+// caption, and a quiet answer still needs somewhere to go).
+//
+// ONE ELEMENT, EVERY POSITION, ONE RECT -- and the caption is suppressed for
+// its duration rather than drawn under it, because two texts at one rect is
+// unreadable. That suppression is the one declaration in this module that
+// names a `reader/` class; it is CSS, not a call, it is scoped to an
+// attribute only this module ever sets, and `reader/` is asked in the module
+// README §6 for a `--sub-hide` door so it can stop being a foreign selector.
+const SAY_CSS =
+  ".voiceui-say{position:fixed;left:50%;transform:translateX(-50%);" +
+  "bottom:var(--sub-bottom, 4.5vh);width:min(var(--sub-w, 104ch), 92vw);" +
+  "z-index:13;pointer-events:none;text-align:center;" +
+  "font-family:var(--serif);font-size:var(--sub-size, 13px);line-height:1.5;" +
+  "letter-spacing:-.01em;color:var(--ink, inherit);" +
+  "opacity:0;transition:opacity .16s ease;" +
+  "display:-webkit-box;-webkit-box-orient:vertical;" +
+  "-webkit-line-clamp:var(--voiceui-say-lines, 1);overflow:hidden;" +
+  "white-space:normal;text-overflow:ellipsis}" +
+  '.voiceui-say[data-up="1"]{opacity:1}' +
+  'body[data-voiceui-say="1"] .wordsub{opacity:0}';
+
+// A ONE-SENTENCE ANSWER IS ONE LINE; TWO WHEN THE SENSE NEEDS IT, NEVER
+// THREE. The box is min(104ch, 92vw) and `--sub-lines` exists precisely so
+// this is one declaration -- ours is `--voiceui-say-lines`, a sibling
+// element's own variable, so the caption's is never written to.
+const SAY_ONE_LINE_CHARS = 104;
+function sayLines(text) {
+  return String(text || "").length > SAY_ONE_LINE_CHARS ? 2 : 1;
+}
+
+// HOW LONG IT STAYS: a reading speed, not a fixed timer (QUIET.md §4) --
+// 1 s per six words, floor 3 s, ceiling 9 s. "broad is 'wide'" and a thirty-
+// word Wiktionary sense are not the same thing to read.
+function sayHoldMs(text) {
+  const words = String(text || "").trim().split(/\s+/).filter(Boolean).length;
+  return Math.min(9000, Math.max(3000, Math.ceil(words / 6) * 1000));
+}
+
+// While the reader is STOPPED the line never sleeps: a ground stop is a stop
+// to think, and an answer that vanishes while you are thinking is the
+// caption's own bug in a new coat. So the hold expiring asks the reader
+// whether it is playing, and if it is not, waits and asks again.
+const SAY_RECHECK_MS = 250;
+
+function createSayLine({ doc, noStyle, setTimeoutFn, clearTimeoutFn, isPaused, holdMs, recheckMs } = {}) {
+  const setT = setTimeoutFn || (typeof setTimeout !== "undefined" ? setTimeout : null);
+  const clearT = clearTimeoutFn || (typeof clearTimeout !== "undefined" ? clearTimeout : null);
+  const recheck = recheckMs === undefined ? SAY_RECHECK_MS : recheckMs;
+  let el = null, timer = null, up = "";
+
+  if (doc && typeof doc.createElement === "function") {
+    if (!noStyle) {
+      const style = doc.createElement("style");
+      style.textContent = SAY_CSS;
+      (doc.head || doc.body).appendChild(style);
+    }
+    el = doc.createElement("div");
+    el.className = "voiceui-say";
+    // it is read out by a screen reader because it is the ANSWER; the pill's
+    // own readout stays a log and is not announced.
+    el.setAttribute("aria-live", "polite");
+    doc.body.appendChild(el);
+  }
+
+  function stopTimer() {
+    if (timer !== null && clearT) clearT(timer);
+    timer = null;
+  }
+  function arm(ms) {
+    stopTimer();
+    if (setT) timer = setT(tick, ms);
+  }
+  function tick() {
+    timer = null;
+    let paused = false;
+    try { paused = !!(isPaused && isPaused()); } catch (e) { paused = false; }
+    if (paused) { arm(recheck); return; }
+    clear();
+  }
+  function show(text) {
+    const t = String(text == null ? "" : text);
+    if (!t) return clear();
+    up = t;
+    if (el) {
+      el.textContent = t;
+      if (el.style && typeof el.style.setProperty === "function") {
+        el.style.setProperty("--voiceui-say-lines", String(sayLines(t)));
+      }
+      el.setAttribute("data-up", "1");
+    }
+    if (doc && doc.body && typeof doc.body.setAttribute === "function") {
+      doc.body.setAttribute("data-voiceui-say", "1");
+    }
+    arm(holdMs === undefined ? sayHoldMs(t) : holdMs);
+    return t;
+  }
+  function clear() {
+    stopTimer();
+    up = "";
+    if (el) { el.textContent = ""; el.setAttribute("data-up", "0"); }
+    if (doc && doc.body && typeof doc.body.removeAttribute === "function") {
+      doc.body.removeAttribute("data-voiceui-say");
+    }
+    return "";
+  }
+  function destroy() {
+    clear();
+    if (el && el.parentNode) el.parentNode.removeChild(el);
+    el = null;
+  }
+  return { show, clear, destroy, text: () => up, isUp: () => !!up, _el: () => el, lines: () => sayLines(up) };
+}
+
+// What a quiet command puts on the line. An ANSWER is its own text. A
+// re-hearing (`ground`, `again`, `again, slower`, `finish sentence`) is the
+// ring's own word, so a press in a pocket is still visibly a press. A
+// `continue` is the way back to the book and clears the line at once
+// (QUIET.md §4) -- writing "continue" there would leave the answer's
+// replacement standing over the caption you just went back to reading.
+function quietLine(result, command) {
+  if (!result) return null;
+  if (result.type === "answer") return result.text;
+  if (result.type === "ops") {
+    if (result.ops.some((o) => o.op === "continue" || o.op === "pop")) return null;
+    return command;
+  }
+  return command;
+}
 
 // One short phrase for the pill's readout after a playback utterance:
 // which ops ran, on which pane it ended, and where a ground stop landed.
@@ -965,8 +1252,27 @@ function boot(opts = {}) {
   });
   if (!hooksReady) log("boot: ReaderControl lacks", missingHooks.join(", "), "-- spoken dictionary answers are off until reader/ adds them");
 
+  // the quiet OUTPUT: one element, the caption's own rect, every position
+  const sayLine = createSayLine({
+    doc,
+    noStyle: opts.noStyle,
+    setTimeoutFn: opts.setTimeoutFn,
+    clearTimeoutFn: opts.clearTimeoutFn,
+    holdMs: opts.sayHoldMs,
+    recheckMs: opts.sayRecheckMs,
+    // the reader STOPPED is the one state the line must outlive
+    isPaused() {
+      try { return bridge.isPaused(app.side()); } catch (e) { return false; }
+    },
+  });
+
   // ---- one utterance, end to end
-  async function handleUtterance(text) {
+  // `opts.quiet` says the command arrived by PRESS -- a key, a flick, the
+  // ring, the headset -- and is the whole of what decides the medium of the
+  // answer. There is no toggle and nothing is sensed: pressing is already
+  // the declaration (QUIET.md §5).
+  async function handleUtterance(text, opts) {
+    const quietAsked = !!(opts && opts.quiet);
     showLast("“" + text + "”");
     const wasArmed = state !== "off" && state !== "unavailable";
     if (wasArmed) setState("busy");
@@ -974,12 +1280,12 @@ function boot(opts = {}) {
     try {
       if (!hooksReady && synth && parseLookupQuery(text)) {
         const msg = "The dictionary isn't connected to the reader yet.";
-        await tts.speak(msg, { synth });
-        result = { type: "answer", text: msg, unavailable: missingHooks };
+        if (!quietAsked) await tts.speak(msg, { synth });
+        result = { type: "answer", text: msg, unavailable: missingHooks, quiet: quietAsked };
       } else if (!synth && parseLookupQuery(text)) {
-        result = { type: "answer", text: "No speechSynthesis in this browser.", unavailable: ["speechSynthesis"] };
+        result = { type: "answer", text: "No speechSynthesis in this browser.", unavailable: ["speechSynthesis"], quiet: quietAsked };
       } else {
-        result = await app.handleUtterance(text);
+        result = await app.handleUtterance(text, opts);
       }
     } catch (e) {
       log("utterance failed:", text, e);
@@ -990,7 +1296,10 @@ function boot(opts = {}) {
     else if (result.type === "unrecognized") showLast("“" + text + "” → not a command");
     else if (result.type === "error") showLast("“" + text + "” → error: " + (result.error && result.error.message));
     if (wasArmed && state === "busy") setState("armed");
-    log("utterance:", text, "->", result.type);
+    // THE SECOND OUTPUT, and it is used whenever the command arrived by press
+    const line = quietAsked ? quietLine(result, text) : undefined;
+    if (quietAsked) { if (line === null) sayLine.clear(); else sayLine.show(line); }
+    log("utterance:", text, quietAsked ? "(quiet) ->" : "->", result.type);
     return result;
   }
 
@@ -1117,6 +1426,240 @@ function boot(opts = {}) {
     listen();
   }
 
+  /* ================= THE SECOND INPUT (QUIET.md, 13 Sep) ==================
+   * Four directions, two faces, one command brain. Every route below ends in
+   * the SAME call -- `quiet(direction)` -> `handleUtterance(cmd, {quiet:true})`
+   * -- so there is exactly one place a quiet question can be produced and
+   * exactly one place its medium is decided.
+   *
+   * It only works while the mic layer is ARMED, the same rule the M key has
+   * had since 5 Sep: nobody who has never turned the voice layer on can trip
+   * over a flick. */
+  function quietReady() {
+    return state !== "off" && state !== "unavailable";
+  }
+  function quiet(direction) {
+    if (!quietReady()) return null;
+    const cmd = quietCommand(direction, app.inGround());
+    if (!cmd) return null;
+    log("quiet:", direction, "->", cmd, app.inGround() ? "(ground face)" : "");
+    return handleUtterance(cmd, { quiet: true });
+  }
+
+  /* ---- THE MAC: M, then an arrow, each arrow re-opening the window.
+   * The arrows are contested by three separate handlers (prefs' word/line
+   * rows, marginalia's Shift+arrow, book-nav's unguarded axis keydown), so
+   * the claim is BOUNDED BY A WINDOW that already exists and is given back
+   * the moment it closes. Capture phase on the document runs before every
+   * one of those, which are target/bubble, and stopImmediatePropagation ends
+   * the press there -- no edit outside voiceui/.
+   *
+   * The window the ARROWS run in is voiceui's OWN, not the trigger's: the
+   * first arrow takes the listening window off the recogniser (the mic
+   * closes, and no silence-"what" fires) and opens a quiet window of the
+   * same length instead. A ring that re-opened the microphone each press
+   * would be a quiet interface that keeps switching a microphone on. */
+  let quietTimer = null;
+  const setT = opts.setTimeoutFn || (typeof setTimeout !== "undefined" ? setTimeout : null);
+  const clearT = opts.clearTimeoutFn || (typeof clearTimeout !== "undefined" ? clearTimeout : null);
+  function quietWindowOpen() { return quietTimer !== null; }
+  function openQuietWindow() {
+    if (quietTimer !== null && clearT) clearT(quietTimer);
+    quietTimer = setT ? setT(() => { quietTimer = null; }, listenWindowMs()) : null;
+  }
+  function closeQuietWindow() {
+    if (quietTimer !== null && clearT) clearT(quietTimer);
+    quietTimer = null;
+  }
+  // the first of {an arrow, an utterance} takes the window and closes it to
+  // the other -- this is the arrow taking it.
+  function takeWindowForQuiet() {
+    trigger.noteUtteranceReceived();
+    stopRecognizer();
+    if (state === "listening") setState("armed");
+  }
+  function eat(e) {
+    if (e && typeof e.preventDefault === "function") e.preventDefault();
+    if (e && typeof e.stopImmediatePropagation === "function") e.stopImmediatePropagation();
+    else if (e && typeof e.stopPropagation === "function") e.stopPropagation();
+  }
+  // Escape closes the window and gives the arrows straight back -- the whole
+  // stated cost of this map, undone in one press.
+  function escapeQuiet() {
+    closeQuietWindow();
+    takeWindowForQuiet();
+    sayLine.clear();
+  }
+  function onKeyDownQuiet(e) {
+    if (!quietReady()) return;
+    if (!(trigger.isListening() || quietWindowOpen())) return;
+    if (typingNow()) return;
+    if (e && e.key === "Escape") { eat(e); escapeQuiet(); return; }
+    const dir = arrowDirection(e);
+    if (!dir) return;
+    eat(e);
+    takeWindowForQuiet();
+    openQuietWindow();
+    quiet(dir);
+  }
+
+  /* ---- THE PHONE: a two-finger flick, the same four directions.
+   * It cannot collide with the axis: book-nav.js decides by COUNT before
+   * axis or timer, and a second finger drops the swipe and is
+   * preventDefault-ed by `refusePinch`. Nothing here preventDefaults or
+   * stops anything -- the reader has already thrown the gesture away, and
+   * this listens to what it threw. The thresholds are book-nav.js's own
+   * TOUCH numbers so a hand does not learn two flicks. */
+  const touchTarget = opts.touchTarget !== undefined ? opts.touchTarget : win;
+  const flickOpts = opts.flick || undefined;
+  let two = null;
+  function sampleTwo(e) {
+    const c = touchCentroid(e.touches);
+    if (!c) return null;
+    return { t: e.timeStamp === undefined ? Date.now() : e.timeStamp, x: c.x, y: c.y };
+  }
+  function onTouchStartQuiet(e) {
+    if (!quietReady()) return;
+    const n = (e.touches && e.touches.length) || 0;
+    if (n !== 2) { if (n > 2) two = null; return; }
+    const p = sampleTwo(e);
+    two = p ? { samples: [p] } : null;
+  }
+  function onTouchMoveQuiet(e) {
+    if (!two) return;
+    const n = (e.touches && e.touches.length) || 0;
+    if (n !== 2) { two = null; return; }   // a third finger is not this gesture
+    const p = sampleTwo(e);
+    if (!p) return;
+    two.samples.push(p);
+    if (two.samples.length > 24) two.samples.shift();
+  }
+  function onTouchEndQuiet(e) {
+    if (!two) return;
+    const g = two;
+    two = null;                             // a finger has left: the gesture is over
+    if (e && e.type === "touchcancel") return;
+    const dir = flickDirection(g.samples, flickOpts);
+    if (dir) quiet(dir);
+  }
+
+  /* ---- THE HEADSET: the triple-press, and nothing else.
+   * A press-and-hold on an AirPod is the system's -- Siri, or noise control
+   * -- and iOS never forwards it; the Media Session API has no hold event at
+   * all. The one unclaimed headset gesture is the triple-press
+   * (`previoustrack`), and the one question worth having with the screen
+   * black is the repair: the ring's own DOWN. A four-way ring you cannot
+   * see is not a ring, so nothing else goes here. */
+  function onTriplePress() { quiet("down"); }
+  function attachHeadset(on) {
+    if (!mediaSession || typeof mediaSession.setActionHandler !== "function") return;
+    try { mediaSession.setActionHandler("previoustrack", on ? onTriplePress : null); } catch (e) { log("previoustrack:", e && e.message); }
+  }
+
+  /* ---- THE ON-SCREEN PLAY BUTTON: hold, slide, lift.
+   * `#pplaygo` is bound on `click` alone, so a hold is free. It is the
+   * SECOND door and not the map, because `.pplay` is hidden in one-word view
+   * (shell.css: "HIDDEN WHILE ZOOMED") -- the very view Osca's note was
+   * about -- so it is the page-view route and the flick is the phone's.
+   * Lift without moving fires nothing, and either way the drag's trailing
+   * click is eaten, the trick pbar.js already uses for exactly this. */
+  const RING_HOLD_MS = opts.ringHoldMs === undefined ? 400 : opts.ringHoldMs;
+  const RING_PICK_PX = opts.ringPickPx === undefined ? 24 : opts.ringPickPx;
+  const RING_AT = { up: [0, -54], down: [0, 54], left: [-78, 0], right: [78, 0] };
+  let ring = null, ringEl = null, ringLabels = null, ringTimer = null, eatClickUntil = 0;
+  function ringBuild() {
+    if (ringEl || !doc || typeof doc.createElement !== "function") return;
+    if (!opts.noStyle) {
+      const st = doc.createElement("style");
+      st.textContent = RING_CSS;
+      (doc.head || doc.body).appendChild(st);
+    }
+    ringEl = doc.createElement("div");
+    ringEl.className = "voiceui-ring";
+    ringLabels = {};
+    for (const d of QUIET_DIRECTIONS) {
+      const i = doc.createElement("i");
+      i.style.left = RING_AT[d][0] + "px";
+      i.style.top = RING_AT[d][1] + "px";
+      ringLabels[d] = i;
+      ringEl.appendChild(i);
+    }
+    doc.body.appendChild(ringEl);
+  }
+  function ringPaint(picked) {
+    if (!ringEl) return;
+    const face = QUIET_RING[quietFace(app.inGround())];
+    for (const d of QUIET_DIRECTIONS) {
+      ringLabels[d].textContent = face[d];
+      ringLabels[d].setAttribute("data-on", picked === d ? "1" : "0");
+    }
+  }
+  function ringOpen(x, y) {
+    ringBuild();
+    ring = { x, y, picked: null };
+    if (ringEl) {
+      ringEl.style.left = x + "px";
+      ringEl.style.top = y + "px";
+      ringEl.setAttribute("data-up", "1");
+    }
+    ringPaint(null);
+  }
+  function ringClose() {
+    ring = null;
+    if (ringEl) ringEl.setAttribute("data-up", "0");
+  }
+  function ringPick(x, y) {
+    if (!ring) return;
+    const dx = x - ring.x, dy = y - ring.y;
+    const horizontal = Math.abs(dx) >= Math.abs(dy);
+    const travel = horizontal ? Math.abs(dx) : Math.abs(dy);
+    ring.picked = travel < RING_PICK_PX ? null : horizontal ? (dx > 0 ? "right" : "left") : (dy > 0 ? "down" : "up");
+    ringPaint(ring.picked);
+  }
+  function onPlayDown(e) {
+    if (!quietReady() || ring || ringTimer !== null) return;
+    const x = e.clientX, y = e.clientY;
+    ringTimer = setT ? setT(() => { ringTimer = null; ringOpen(x, y); }, RING_HOLD_MS) : null;
+  }
+  function onPlayMove(e) {
+    if (ring) ringPick(e.clientX, e.clientY);
+  }
+  function onPlayUp() {
+    if (ringTimer !== null) { if (clearT) clearT(ringTimer); ringTimer = null; return; }  // a tap: the click decides
+    if (!ring) return;
+    const picked = ring.picked;
+    ringClose();
+    // the hold's own trailing click is not a tap, whether or not it fired
+    eatClickUntil = (opts.now || Date.now)() + 400;
+    if (picked) quiet(picked);
+  }
+  function onClickCapture(e) {
+    if (!eatClickUntil || (opts.now || Date.now)() > eatClickUntil) return;
+    eatClickUntil = 0;
+    eat(e);
+  }
+  const playEl = opts.playEl !== undefined ? opts.playEl : (doc && typeof doc.querySelector === "function" ? doc.querySelector("#pplaygo") : null);
+
+  function attachQuiet(on) {
+    const add = on ? "addEventListener" : "removeEventListener";
+    if (keyTarget && typeof keyTarget[add] === "function") keyTarget[add]("keydown", onKeyDownQuiet, true);
+    if (touchTarget && typeof touchTarget[add] === "function") {
+      touchTarget[add]("touchstart", onTouchStartQuiet, true);
+      touchTarget[add]("touchmove", onTouchMoveQuiet, true);
+      touchTarget[add]("touchend", onTouchEndQuiet, true);
+      touchTarget[add]("touchcancel", onTouchEndQuiet, true);
+    }
+    if (playEl && typeof playEl[add] === "function") {
+      playEl[add]("pointerdown", onPlayDown);
+      playEl[add]("pointermove", onPlayMove);
+      playEl[add]("pointerup", onPlayUp);
+      playEl[add]("pointercancel", onPlayUp);
+    }
+    if (win && typeof win[add] === "function") win[add]("click", onClickCapture, true);
+    attachHeadset(on);
+    if (!on) { closeQuietWindow(); ringClose(); two = null; if (ringTimer !== null && clearT) { clearT(ringTimer); ringTimer = null; } }
+  }
+
   // reader/README.md §6 asked voiceui to say when the mic is live -- it is
   // the only way that page learns a microphone is on, and what it decides
   // with it is one thing (the volume control stays on a chapter with no
@@ -1131,6 +1674,7 @@ function boot(opts = {}) {
     if (state === "unavailable" || state !== "off") return;
     trigger.attach();
     if (keyTarget && typeof keyTarget.addEventListener === "function") keyTarget.addEventListener("keydown", onKeyDown);
+    attachQuiet(true);
     tellReader(true);
     setState("armed", mediaSession ? "" : "Armed, but this browser has no Media Session API -- use the Listen button or " + triggerWord());
     log("armed", mediaSession ? "(Media Session double-tap on " + (opts.action || "nexttrack") + ")" : "(no mediaSession; Listen button / " + triggerWord() + " only)");
@@ -1139,6 +1683,8 @@ function boot(opts = {}) {
     if (state === "off" || state === "unavailable") return;
     trigger.detach();
     if (keyTarget && typeof keyTarget.removeEventListener === "function") keyTarget.removeEventListener("keydown", onKeyDown);
+    attachQuiet(false);
+    sayLine.clear();
     stopRecognizer();
     if (pocket && pocket.isOn()) pocket.exit("disarm");
     tellReader(false);
@@ -1214,6 +1760,13 @@ function boot(opts = {}) {
     disarm,
     listen,
     handleUtterance,
+    // the second input, one door: a direction, the face the ring is on, and
+    // the same command brain a heard utterance goes through
+    quiet,
+    quietFace: () => quietFace(app.inGround()),
+    quietRing: () => QUIET_RING[quietFace(app.inGround())],
+    quietWindowOpen,
+    said: () => sayLine.text(),
     state: () => state,
     isArmed: () => state !== "off" && state !== "unavailable",
     missingHooks,
@@ -1222,6 +1775,8 @@ function boot(opts = {}) {
     pocketState: () => pocket.state(),
     destroy() {
       disarm();
+      sayLine.destroy();
+      if (ringEl && ringEl.parentNode) ringEl.parentNode.removeChild(ringEl);
       if (stopPrefs) { try { stopPrefs(); } catch (e) { /* already gone */ } }
       pocket.exit("destroy");
       if (pill && pill.parentNode) pill.parentNode.removeChild(pill);
@@ -1233,6 +1788,8 @@ function boot(opts = {}) {
     prefs: prefsNow,
     listenWindowMs,
     _trigger: trigger,
+    _say: sayLine,
+    _ring: () => (ring ? { x: ring.x, y: ring.y, picked: ring.picked } : null),
     _pocket: pocket,
     _app: app,
     _bridge: bridge,
@@ -1243,5 +1800,8 @@ function boot(opts = {}) {
 }
 
   return { createVoiceUI, parseLookupQuery, runOps, watchUntil, wordOrdinal, groundStopOrdinal, boot, OPTIONAL_DATA_HOOKS,
-           phraseKey, phraseTokens, findPhraseBackwards, createPocket };
+           phraseKey, phraseTokens, findPhraseBackwards, createPocket,
+           // the quiet layer (QUIET.md): a ring, two inputs, one line
+           QUIET_RING, QUIET_DIRECTIONS, quietFace, quietCommand, arrowDirection,
+           flickDirection, touchCentroid, FLICK, createSayLine, sayLines, sayHoldMs, quietLine };
 });

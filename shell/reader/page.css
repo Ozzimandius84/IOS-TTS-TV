@@ -110,8 +110,38 @@ html[data-hardsnap] .pane{ scroll-snap-type:y mandatory; }
    short one hangs -- the reference never centres a line, and lets "Steve"
    sit at 288 under a full-width paragraph. --w is set per section by
    Page's classifier. */
+/* ...AND THE MARGIN IS ONE NUMBER, END TO END (Osca, 13 Sep: "Margin set end
+   to end like a book"). Two things were making it many numbers.
+
+   1. `--w` per chapter. page.js measured the paint and handed each chapter
+      one of three standard boxes, so the left margin moved as you read:
+      measured at 1440 before this change, Hamlet stood at 589.98 / 750.89 /
+      865 and therefore at 425 / 344.55 / 287.5. The paragraph above this one
+      says the reference puts 1,085 of 1,085 paragraphs in ONE box -- so one
+      box is what a book does, and `--w` is now written only under
+      `html[data-verse-box]` (page.js::placeAxis). The `min()` stays exactly as
+      it was: with no `--w` it resolves to `--measure` and nothing else
+      changes, which is why the opt-in costs no second rule.
+
+   2. `calc(100% - 3rem)`. A FIXED 1.5rem gutter is the web-column habit, not a
+      page: measured at 393x852 it put the text at 337.52 wide on a 27.73
+      margin (7.06%) while 1440 sat at 865 on 287.5 (19.97%) -- two different
+      pages. `--gutter` is one proportion with a floor and a ceiling, so the
+      phone gets a book's margin rather than a browser's and the Mac is
+      untouched (7.5% of 1440 is 108, and `--measure`'s 865 bites first).
+
+   It stays a PERCENTAGE, deliberately: the zoom note above turns on this cap
+   refusing to scale inside the subtree, and `.column.zoomed .chapter` takes it
+   off for exactly as long as the zoom is on. Changing the number does not
+   touch that argument. */
+/* THREE PARTS, so a bench can move the proportion without restating the floor
+   and the ceiling -- one definition of each number, which is tokens.css's own
+   rule applied to a value that does not live in tokens.css because only this
+   page spends it. --gutter-pc is the one a slider writes. */
+:root{ --gutter-min:1.05rem; --gutter-pc:7.5%; --gutter-max:3.25rem;
+       --gutter: clamp(var(--gutter-min), var(--gutter-pc), var(--gutter-max)); }
 .chapter{ width:min(var(--w, var(--measure)), var(--measure));
-          max-width:calc(100% - 3rem);
+          max-width:calc(100% - var(--gutter) * 2);
           margin-inline:auto; position:relative;
           padding-bottom:22vh; }
 
@@ -158,8 +188,10 @@ html[data-hardsnap] .pane{ scroll-snap-type:y mandatory; }
 .plate > figure{ margin:0; display:flex; flex-direction:column; align-items:center; gap:1.1rem; }
 .plate img{ display:block; max-width:100%; max-height:var(--plate-h, 100vh);
   width:auto; height:auto; }
+/* A CAPTION KEEPS ITS OWN SHAPE TOO: the running-head's face, centred under
+   the plate, and never the prose indent -- it is not a paragraph of the book. */
 .plate figcaption{ font-family:var(--ui); font-size:.78rem; letter-spacing:.02em;
-  color:var(--dim); text-align:center; max-width:34ch; }
+  color:var(--dim); text-align:center; max-width:34ch; text-indent:0; }
 .plate > snap{ position:absolute; top:0; height:1px; width:1px;
   scroll-snap-align:var(--snap-plate, start);
   scroll-snap-stop:var(--stop-plate, normal); }
@@ -172,12 +204,58 @@ html[data-hardsnap] .pane{ scroll-snap-type:y mandatory; }
 p{ margin:0; font-size:1rem; line-height:var(--read-line, 1.5); }
 p + p{ margin-top:0; }
 p.line + p.line{ margin-top:0; }
+/* the stanza break is verse's own and only page.js's verse branch writes it */
 p.line.stanza{ margin-top:1em; }
-.prose p + p{ margin-top:1em; }
+
+/* ================= AND A PROSE PARAGRAPH IS NOT A LINE ===================
+   Osca, 13 September: *"Margin set end to end like a book, indentation where
+   appropriate."* And: *"The reader CANNOT be the LCD. It must just follow the
+   parser."*
+
+   `.prose p + p{ margin-top:1em; }` STOOD HERE AND WAS DEAD. Nothing in this
+   product has ever written a `prose` class -- page.js sets `chapter` on the
+   section and `line` on every paragraph -- so the one rule that was supposed
+   to separate prose reached nothing at all. Measured before this change:
+   Walden's 775 paragraphs, 497 of which the parser calls `kind="body"`, ALL
+   reported `text-indent: 0px` and `margin-top: 0px`, at 393 and at 1440. Prose
+   was being set as verse, which is the LCD in one sentence.
+
+   So the rule is deleted rather than fixed, and the class it wanted is written
+   by page.js off the parser's own stanza number: `p.para` is a paragraph,
+   `p.line` is a line of verse. Nothing in this file asks how wide anything is.
+
+   HOW A BOOK SETS PROSE: the indent marks the break, so there is no gap as
+   well -- a gap AND an indent is a web page. `--para-gap` is here at 0 for a
+   bench to open, not because anything should.
+
+   AND THE FIRST OF A RUN IS FLUSH -- "prose paragraphs indent, the first after
+   a heading does not" (plan-12-sep.md 8.7). That is what the adjacency
+   selector says and it needs no class: the first paragraph after the chapter
+   opener, after a speaker cue, after a stage direction, after a plate, or at
+   the head of its own `.unit`, has no `p.para` immediately before it and so is
+   not indented. Every later one in the run is. */
+/* `para` IS ADDED TO `line`, NEVER SUBSTITUTED FOR IT, and the reason is in
+   page.js at length: `p.line` is the product's word index -- book-nav.js,
+   follow.js, listen.js, sysvoice.js and marginalia.js each number words
+   positionally over `querySelectorAll("p.line")`, so a prose paragraph that
+   left that set would shift every word id after it. Every paragraph here is
+   `p.line`; the prose ones are `p.line.para`. The selectors below are written
+   on `.para` and `:not(.para)` for that reason and not for brevity. */
+p.para{ text-indent:0; }
+p.para + p.para{ text-indent:var(--indent, 1.2em);
+                 margin-top:var(--para-gap, 0); }
+/* VERSE NEVER INDENTS, and says so rather than inheriting it -- a line's
+   left edge IS the verse. */
+p.line:not(.para){ text-indent:0; }
 .sp{ margin-top:1.6em; margin-bottom:.55em; color:var(--dim); font-size:.58rem;
      letter-spacing:.17em; text-transform:uppercase; }
 p:first-child, .sp:first-child{ margin-top:0; }
 .dir{ color:var(--dim); font-style:italic; margin-top:.4em; }
+/* THE CUE AND THE DIRECTION KEEP THEIR OWN SHAPES and neither takes the prose
+   indent -- a speaker's name is a label and a direction is an aside, and both
+   are flush by every convention a play has been set in. Stated here so that
+   adding a paragraph rule above can never reach them by inheritance. */
+.sp, .dir{ text-indent:0; }
 
 /* THE OPENER IS A SLIDE: a whole screen, the title alone on it. */
 .opener{ height:100vh; display:flex; flex-direction:column; justify-content:center;
@@ -305,6 +383,24 @@ html[data-skipoff] .chapter.wordzoom{
   content-visibility:visible;
   contain-intrinsic-size:none;
 }
+/* ...AND A SECTION THAT IS NOT MOUNTED IS NOT SKIPPED, IT IS EMPTY (13 Sep).
+   page.js keeps only a window of chapters around the reading line; the rest
+   are `<section class="chapter stub">` with nothing inside them and their own
+   height written on as a `min-height` -- measured when they were last mounted,
+   or priced from their own characters at this book's measured px-per-unit
+   until then. There is nothing in one to skip, so `content-visibility` has no
+   work to do, and it must be OFF: `contain-intrinsic-size` would otherwise
+   size the empty box at the 900px fallback (or the zoom's fixed 900px) and
+   overrule the height the stub is carrying, which is the axis, the rail and
+   the scrollbar all told the wrong shape of the book. Three selectors because
+   both rules above out-specify a bare `.chapter.stub`. */
+html[data-skipoff] .chapter.stub,
+html[data-skipoff] .column .chapter.stub,
+html[data-skipoff] .column.zoomed .chapter.stub{
+  content-visibility:visible;
+  contain-intrinsic-size:none;
+}
+
 /* ============ AND WHILE THE AXIS IS MOVING, NOTHING IS REMEMBERED ============
    Measured 10 September, off the compositor's own frames: on the complete
    Shakespeare the page painted ONE FRAME PER SECOND while dx climbed 0 -> 1 --

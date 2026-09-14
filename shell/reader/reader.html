@@ -116,6 +116,15 @@
      the two mounts that are its only callers. -->
 <script src="transport.js"></script>
 
+<!-- ...AND FOLLOW WITH IT, FOR THE SAME REASON (13 Sep). The bar below is
+     built at parse time and carries FOLLOW's button; `follow.js` depends on
+     nothing, reads no global until it is mounted, and answers `off` to every
+     door until then -- so it is safe this early and belongs beside the
+     transport, which is its only other caller. The ENGINE is mounted much
+     further down, where `nav` and the open book exist (THE PAGE FOLLOWS THE
+     VOICE). -->
+<script src="follow.js"></script>
+
 <!-- ================== THE PLAYBACK BARS — the two mounts ====================
      Osca, 7 September: *"a SEPARATE PLAYBACK bar -- the TTS transport
      (play/pause, scrub the chapter, speed) -- on BOTH platforms. Same shell,
@@ -198,6 +207,17 @@
              + '<path d="M10 1.9 10 7.3 13.4 4.6z" fill="currentColor" stroke="none"/>'
              + '<text class="sec" x="10" y="12.9" text-anchor="middle" font-size="6.4"'
              + ' font-weight="700" fill="currentColor" stroke="none">15</text>'),
+    /* FOLLOW: three lines of a page with a caret standing on the middle one.
+       Not an eye and not a pin -- what the button does is keep a MARK on the
+       line being read, and the same glyph lit or faint is the whole state. */
+    follow: svg('<path d="M7.6 5.2h8.8M7.6 10h8.8M7.6 14.8h6"/>'
+             + '<path d="M2.9 7.8 5.9 10l-3 2.2z" fill="currentColor" stroke="none"/>'),
+    /* FLOAT: a small card standing off the corner of a bigger one. Not a
+       window and not an arrow -- what the button does is put ONE WORD in a
+       card that stays in front of everything else. */
+    float: svg('<rect x="2.6" y="3.4" width="10.6" height="9" rx="1.8"/>'
+             + '<rect x="9.4" y="9.2" width="8" height="7.4" rx="1.8" fill="var(--ground)"/>'
+             + '<path d="M11.6 12.9h3.6"/>'),
   };
   function num(v) { return String(Math.round(v)); }
   function cssVar(name, fallback) {
@@ -220,8 +240,49 @@
            + ' min="0" max="1000" step="1" value="0" aria-label="Scrub the chapter">';
   var t0 = '<span class="' + P + '-t left" id="' + P + 't">0:00</span>';
   var t1 = '<span class="' + P + '-t" id="' + P + 'left">0:00</span>';
+  /* ★ THE PACE READOUT (Osca, 13 Sep: *"Needs to be a rough wpm play in the
+     voice."*). THE SAME SLOT, AND THE BAR STAYS ONE PIECE -- this is the
+     element the speed multiplier stood in, the same class, the same id, the
+     same `--*-speed` dial that turns it off; what changed is what it SAYS and
+     what it WRITES. It says the pace in words a minute, because that is the
+     number Settings calls Pace and the one thing stored (`wpm`); it used to
+     say a multiple of nothing in particular. A tap is one coarse stop along
+     `Transport.PACES` -- 150 200 250 300 350 400 500 600 -- wrapping.
+     The Mac has room for the unit and the phone's 44px slot does not, so the
+     Mac says "300 wpm" and the phone says "300". Nothing else moves: no
+     second control, no second row, no new element on either bar. */
+  /* FOLLOW IS THE LAST CONTROL ON BOTH BARS (13 Sep). Osca: *"simple button
+     in the playback bar."* It is the only LATCHING control here -- everything
+     else is a press that does a thing -- so it sits at the end, off the
+     transport cluster, on the Mac and on the phone alike. `aria-pressed` is
+     the state for a screen reader; `data-follow` is the same state for the
+     sheet, which needs three values and not two (on / held / off). */
+  var follow = '<button type="button" class="' + P + '-b ' + P + '-follow" id="' + P + 'follow"'
+             + ' aria-label="Follow the voice" title="Follow the voice"'
+             + ' aria-pressed="false" data-follow="off">' + ICON.follow + '</button>';
   var speed = '<button type="button" class="' + P + '-speed" id="' + P + 'speed"'
-            + ' aria-label="Speed" title="Speed">1&times;</button>';
+            + ' aria-label="Pace" title="Pace">' + (PHONE ? "300" : "300 wpm") + '</button>';
+  /* ★ THE FLOAT IS THE MAC'S AND ONLY THE MAC'S (13 Sep, design/reader/FLOAT.md).
+     "The Mac has no PiP limit": the float there is our own always-on-top
+     window and every pixel of it is ours. The phone's float is Apple's window
+     with Apple's buttons in it (FLOAT.md §1, §2) and is a different road
+     entirely. The string below is built once like `follow` and `speed` are,
+     and it is appended in the MAC branch alone -- there is no `.pplay-float`
+     rule in shell.css and no id for one, so the phone's strip cannot hold a
+     hidden copy of it even by accident.
+
+     AND THIS IS WHERE THE READER'S RULE 7 MOVED. reader/README.md: *"The Mac
+     page draws no control but the playback capsule"*, and FLOAT.md §6.4 left
+     the button's place open -- *"a change to that rule or a menu item. It is
+     not drawn until Osca says which."* Osca, 13 Sep, and it is a dated line,
+     so it wins: *"a Float button on the Mac reader's play bar."* It is ON the
+     capsule, which is the one control the page already draws, so no rule
+     moves. It LATCHES like FOLLOW beside it -- `aria-pressed` for a screen
+     reader, `data-float` for the sheet -- and it is last, off the transport
+     cluster, because the transport cluster is a press that does a thing. */
+  var floatb = '<button type="button" class="mplay-b mplay-float" id="mplayfloat"'
+             + ' aria-label="Float" title="Float this word"'
+             + ' aria-pressed="false" data-float="off">' + ICON.float + '</button>';
 
   if (PHONE) {
     bar.className = "pplay"; bar.id = "pplay";
@@ -233,6 +294,7 @@
       +   b("pplaygo",   "pplay-b pplay-go", "Play", ICON.play)
       +   b("pplaynext", "pplay-b", "The sentence after", ICON.next)
       +   speed
+      +   follow
       + '</div>';
   } else {
     bar.className = "mplay"; bar.id = "mplay";
@@ -242,7 +304,7 @@
       + b("mplaygo",   "mplay-b mplay-go", "Play", ICON.play)
       + b("mplaynext", "mplay-b", "The sentence after", ICON.next)
       + b("mplayfwd",  "mplay-b", "Forward fifteen seconds", ICON.fwd)
-      + t0 + rail + t1 + speed;
+      + t0 + rail + t1 + speed + follow + floatb;
   }
   bar.setAttribute("data-shown", "off");
   bar.hidden = true;                    /* until the transport says there is a voice */
@@ -250,7 +312,57 @@
 
   var $ = function (id) { return document.getElementById(id); };
   var railEl = $(P + "rail"), tEl = $(P + "t"), leftEl = $(P + "left"),
-      goEl = $(P + "go"), speedEl = $(P + "speed");
+      goEl = $(P + "go"), speedEl = $(P + "speed"), followEl = $(P + "follow");
+  var floatEl = $("mplayfloat");                 /* null on the phone */
+
+  /* ★ THE FLOAT BUTTON. One press opens the panel, the next dismisses it, and
+     what it paints is what the panel IS after the press -- the answer Rust
+     gives back, never a flag kept here, because the window can also be closed
+     by its own X and a second copy of its state would be wrong the moment it
+     was. `floatdoor.js` is mounted lazily for the same reason FOLLOW's press
+     goes to the module and not to a handle: this bar is built before a book is
+     open. With no host there is no panel, so the button never appears at all
+     -- a control that cannot do anything is worse than no control. */
+  var floatDoor = null;
+  function floatReady() {
+    if (floatDoor) return floatDoor;
+    if (!window.FloatDoor) return null;
+    var d = FloatDoor.mount({
+      slug: (function () { try { return OPEN_BOOK && OPEN_BOOK.slug; } catch (_) { return ""; } })(),
+      control: function () { return window.ReaderControl; },
+      /* `Transport.system` IS the registered engine, and it is asked for
+         rather than held: the system voice is registered further down this
+         file, after this bar is built. */
+      sysvoice: function () { return window.Transport ? Transport.system : null; },
+      doors: {
+        voiceui: function () { return window.VoiceUI && VoiceUI.instance; },
+        transport: function () { return window.Transport; },
+        define: function () { window.dispatchEvent(new CustomEvent("ttstv:float-define")); },
+        translate: function () { window.dispatchEvent(new CustomEvent("ttstv:float-translate")); },
+        close: function () { if (floatDoor) floatDoor.stop(); },
+        said: function () {
+          var V = window.VoiceUI && VoiceUI.instance;
+          return V && typeof V.said === "function" ? V.said() : "";
+        },
+      },
+    });
+    floatDoor = d && d.ok ? d : null;
+    return floatDoor;
+  }
+  if (floatEl) {
+    if (!window.TTSTVHost || typeof window.TTSTVHost.float !== "function") {
+      floatEl.hidden = true;                  /* no panel to open: no button */
+    } else {
+      floatEl.addEventListener("click", function () {
+        var d = floatReady();
+        if (!d) return;
+        d.toggle().then(function (open) {
+          floatEl.setAttribute("data-float", open ? "on" : "off");
+          floatEl.setAttribute("aria-pressed", open ? "true" : "false");
+        });
+      });
+    }
+  }
 
   /* -------------------------------------------------------------- the doors
      Every one of them is a call into `Transport`, which guards itself: with no
@@ -261,8 +373,19 @@
   if ($(P + "fwd")) $(P + "fwd").addEventListener("click", function () { T.nudge(skip()); });
   $(P + "prev").addEventListener("click", function () { T.stepSentence(-1); });
   $(P + "next").addEventListener("click", function () { T.stepSentence(1); });
+  /* FOLLOW's press goes to the module and not to a handle: the bar is built
+     before a book is open and `follow.js` is mounted after one is, so a button
+     that held a handle would hold null for ever. With nothing mounted this is
+     a no-op that answers `off`, which is exactly what the button should show. */
+  followEl.addEventListener("click", function () {
+    if (window.Follow) { Follow.toggle(); repaint(); }
+  });
   goEl.addEventListener("click", function () { T.toggle(); });
-  speedEl.addEventListener("click", function () { T.cycleSpeed(); });
+  /* ★ ONE STORE. The press writes Settings' `wpm` and nothing else; the
+     rendered master follows through `playbackRate` inside the same call and
+     the system voice re-bases off the store's own subscriber (below). No
+     re-render (D7), and POSITION IS SACRED -- nothing here seeks. */
+  speedEl.addEventListener("click", function () { T.stepPace(1); });
 
   /* THE RAIL IS THE ONE CONTROL THAT FIGHTS THE CLOCK. While a finger or a
      pointer is on it, the paint below must not put the thumb back where the
@@ -326,6 +449,30 @@
      so the capsule's page registered no folder and `arm()` opened the chapter
      to look, and listen.js's paint scrolled its first sentence in: 976 px on
      the Mac. One question now, asked the same way by both bars. */
+  /* ★ THE PACE STORE, REGISTERED (13 Sep). `Transport` owns no store and no
+     engine; the page owns both, exactly as it does for `voiceFolder` and the
+     system voice. `prefs/prefs.js` is in this document's <head>, before first
+     paint, so the store is here by the time this line runs.
+
+     THE SECOND HALF IS THE SETTINGS WINDOW. Pace is also the seventh row of
+     Settings, and a drag there must reach a playing master as surely as a tap
+     on the bar does -- so the store's own subscriber re-applies the rate. The
+     system voice's half of the same change is wired where the system voice is
+     (THE SYSTEM VOICE, MOUNTED, below): `sys.rebase()`, which speaks the same
+     word again. Two engines, one write, and neither is asked to seek. */
+  (function () {
+    var S = window.TTSTVSettings;
+    if (!S || !T.pace) return;
+    T.pace({ read: function () { return +S.read().wpm; },
+             write: function (w) { S.patch({ wpm: w }); } });
+    var was = +S.read().wpm;
+    S.subscribe(function (st) {
+      if (+st.wpm === was) return;
+      was = +st.wpm;
+      T.applyPace();
+    });
+  })();
+
   if (T.voiceFolder) T.voiceFolder(function () {
     var b = null;
     try { b = OPEN_BOOK; } catch (_) { b = null; }   /* declared further down this file */
@@ -354,7 +501,7 @@
     return !n || n.getAttribute("data-shown") !== "off";
   }
 
-  var lastRate = null, lastPlaying = null;
+  var lastWpm = null, lastPlaying = null, lastFollow = null;
   function paint(s) {
     var here = wanted(s);
     if (bar.hidden === here) bar.hidden = !here;
@@ -375,16 +522,36 @@
       goEl.setAttribute("title", s.playing ? "Pause" : "Play");
     }
 
+    /* FOLLOW's three states, written when they CHANGE like the play glyph
+       above and for the same reason: paint() runs ten times a second while a
+       voice plays and the attribute is almost always the one already there. */
+    var fs = window.Follow ? Follow.state() : null;
+    var fw = !fs || !fs.on ? "off" : (fs.held ? "held" : "on");
+    if (fw !== lastFollow) {
+      lastFollow = fw;
+      followEl.setAttribute("data-follow", fw);
+      followEl.setAttribute("aria-pressed", fw === "off" ? "false" : "true");
+      followEl.setAttribute("title", fw === "held"
+        ? "Follow the voice \u2014 waiting for the next play"
+        : (fw === "on" ? "Follow the voice \u2014 on" : "Follow the voice \u2014 off"));
+    }
+
     bar.style.setProperty("--" + P + "-f", s.f.toFixed(4));
     if (!dragging) railEl.value = String(Math.round(s.f * 1000));
     railEl.setAttribute("aria-valuetext", T.fmt(s.t) + " of " + T.fmt(s.d));
     tEl.textContent = T.fmt(s.t);
     leftEl.textContent = "-" + T.fmt(Math.max(0, s.d - s.t));
 
-    if (s.rate !== lastRate) {
-      lastRate = s.rate;
-      speedEl.innerHTML = (Math.round(s.rate * 100) / 100) + "&times;";
-      speedEl.setAttribute("aria-label", "Speed, " + s.rate + " times");
+    /* THE READOUT IS THE STORE, not the element's rate. `s.rate` is what the
+       master is playing at this second and voiceui moves it by itself (its
+       "slower", its clarify); `s.wpm` is what the reader chose, which is what
+       a control showing a setting must say. A page with no store registered
+       reports 0 and the readout is left exactly as it is. */
+    if (s.wpm && s.wpm !== lastWpm) {
+      lastWpm = s.wpm;
+      speedEl.textContent = PHONE ? String(Math.round(s.wpm)) : (Math.round(s.wpm) + " wpm");
+      speedEl.setAttribute("aria-label", "Pace, " + Math.round(s.wpm) + " words a minute");
+      speedEl.setAttribute("title", "Pace");
     }
     /* the seconds on the two arcs are a dial, so they are written, not drawn */
     var sec = num(skip());
@@ -394,6 +561,21 @@
   }
   var repaint = function () { paint(T.state()); };
   T.on(paint);
+  /* A PLAY, A PAUSE AND A SEEK ARE THE THREE THINGS THE FLOAT CANNOT WORK OUT
+     FOR ITSELF -- its clock runs forward off the last tick, so a jump has to
+     be told. `sync` is one `float_feed`, it is refused in Rust when there is
+     no panel, and `floatdoor.js` stops its own clock on that refusal; with no
+     float open this costs the bar nothing but a property read. */
+  var floatWas = null;
+  T.on(function (s) {
+    /* ITS OWN LAST VALUE, not `lastPlaying`: `paint` is registered first and
+       has already moved that one by the time this runs, so reading it would
+       compare a thing with itself and this would never fire. */
+    if (!floatDoor || !floatDoor.isOpen()) { floatWas = s.playing; return; }
+    if (s.playing === floatWas) return;
+    floatWas = s.playing;
+    floatDoor.sync();
+  });
 
   /* the three things that change the ANSWER without changing the clock: the
      zoom going in or out, the nav bar going away, and a dial being turned on
@@ -413,6 +595,13 @@
     var z = zoomed();
     if (z === stripZoomed) return;
     stripZoomed = z;
+    /* COMING OUT OF THE ZOOM CATCHES FOLLOW UP. While the page is zoomed
+       FOLLOW stands down -- book-nav.js's own cursor seat owns the scroller
+       there, and two things seating one scroller is the fight follow.js exists
+       to end -- so the sentence being spoken when the zoom comes out has
+       already had its one decision taken and refused. `kick()` gives it back,
+       and the very next tick follows it. */
+    if (!z && window.Follow) Follow.kick();
     repaint();
   }
   [document.querySelector(".pane"), document.querySelector(".column")]
@@ -426,6 +615,8 @@
      there is none and this observer is simply never created. */
 
   window.PlayBar = { el: bar, phone: PHONE, sync: repaint, zoomed: zoomed, zoomFlip: zoomFlip,
+                     follow: followEl,
+                     pace: speedEl,
                      wanted: function () { return wanted(T.state()); } };
 })();
 </script>
@@ -583,6 +774,19 @@ function buildStampText(b) {
 <script src="lookup.js"></script>
 <script src="marginalia.js"></script>
 <script src="cursor.js"></script>
+<!-- THE FLOAT'S DOOR (13 Sep, F1). The reader's half of design/reader/FLOAT.md
+     -- the chapter once, a drift correction four times a second, and the
+     panel's seven presses routed back to the quiet ring and the transport.
+     It names `window.TTSTVHost` and no Tauri global, so in a plain browser, on
+     the phone shell and on the design bench it is inert and this page is
+     exactly the page it was. -->
+<script src="floatdoor.js"></script>
+<!-- THE SYSTEM VOICE (design/reader/sysvoice.js), D1(a). It reads a chapter
+     that has no rendered master, off window.speechSynthesis, and its
+     `onboundary` moves book-nav.js's ONE cursor. Loaded after book-nav.js
+     because the block that mounts it reads `nav`; it starts nothing on its
+     own and speaks only when the play key reaches it. -->
+<script src="sysvoice.js"></script>
 <!-- THE SEARCH SURFACE (design/reader/surface.js). It mounts itself over this
      page and opens on ⌘K, on the bar's ⏎, and on the phone bar's ⌕ -- the
      reader has no askbar, so surface.js's own `bar()` takes `TTSTVPage.ask`
@@ -846,7 +1050,14 @@ try{ (function(){
     return 60000 / ((isFinite(w) && w > 0) ? w : S.DEFAULTS.wpm);
   };
   const atWord = () => { try{ return nav.level === "word"; }catch(e){ return false; } };
-  const playing = () => { try{ return !!listen && !listen.isPaused(); }catch(e){ return false; } };
+  /* ...and the system voice counts as playing (D1(a)). The pace and a voice
+     reading aloud are two drivers of the ONE cursor and only one of them may
+     have it; `listen.isPaused()` is true the whole time speechSynthesis is
+     speaking, because there is no master and no clock running. */
+  const playing = () => { try{
+      if(window.Transport && Transport.speaking()) return true;
+      return !!listen && !listen.isPaused();
+    }catch(e){ return false; } };
 
   function anchor(){ t0 = performance.now(); taken = 0; anchors++; }
 
@@ -1088,6 +1299,210 @@ addEventListener("hashchange", () => {
   const slug = slugFromUrl();
   if(slug) onOpenBook(slug).then(b => { if(b && b.chapters && b.chapters.length) nav.openBook(b); });
 });
+
+/* ================== THE SYSTEM VOICE, MOUNTED (D1(a), 13 Sep) ============
+   `plan-12-sep-cd.md` D1(a): *"I haven't even heard the apple voice on my mac
+   yet."* `sysvoice.js` is the engine; this is the four things it needs that
+   only the PAGE can answer, and nothing else. It starts nothing: the engine
+   speaks when the play key reaches it through `Transport` and at no other
+   moment.
+
+   (1) THE WORDS, OFF THE PAGE'S OWN DOM, and this is the one block that has
+   to be exactly right. `book-nav.js::buildWordDomIndex` numbers a chapter's
+   words by walking `p.line` in document order and splitting each one's single
+   text node on whitespace; `nav.goTo(ch, i)` takes THAT number. So this walks
+   the same elements in the same order with the same split -- one array per
+   `p.line`, dropped when it holds no words, which `buildWordDomIndex` also
+   contributes nothing for. The flat index the engine counts is then the flat
+   index the cursor wants, by construction rather than by luck, and
+   `design/reader/test-sysvoice.mjs` §2 is the number: 3,719 of 3,719 chapters
+   on the shelf, every boundary on the right id. The paragraph GROUPING is the
+   second reason to read the DOM rather than a flat list -- a sentence never
+   runs across a paragraph, so the silence between two utterances is the
+   silence the text has.
+
+   NOTHING IS WRAPPED, MARKED OR MEASURED HERE. It reads `nodeValue` and
+   leaves; the 74 boxes are the 74 boxes.
+
+   (2) THE LANGUAGE is the book's, not the browser's -- `OPEN_BOOK.lang`, the
+   same field `lookup.js` reads. The Iliad stays `el`.
+
+   (3) THE RATE is Settings' `wpm`, the row the pace already reads, and a
+   change to it mid-sentence RE-BASES: the word is read, the utterance is
+   cancelled, and the same word is spoken again at the new rate. ★ A2c.32,
+   POSITION IS SACRED -- and the rebase is the engine's, proved in the node
+   test, not re-implemented here.
+
+   (4) THE CURSOR, both ways: `startAt` hands the engine `nav.cursor` for a
+   cold start, so play speaks from the word you are looking at; `onWord` hands
+   the boundary back to `nav.goTo`, so the word being spoken is the word the
+   page is showing. One cursor, two drivers, never both at once (the pace
+   stands down above). */
+try{ (function(){
+  if(!window.SysVoice || !window.Transport) return;
+  /* WHICH SYNTHESISER THIS PAGE HAS (D1(b), 13 Sep). One question, asked
+     once, answered by `sysvoice.js::pickSynth`: the phone's own
+     AVSpeechSynthesizer where Frank injected the door (`TTSTVHost.speech`),
+     and `window.speechSynthesis` everywhere else -- a browser, the PWA, and
+     the Mac's desktop app, which speaks with the same system voices and has
+     no lock screen to survive. The ENGINE is the same object either way and
+     nothing below this line knows which it got; the only difference is that
+     the native one is handed the rest of the chapter at once, because iOS
+     suspends a backgrounded webview's JavaScript and a sentence-at-a-time
+     reader stops at the lock button. Null is a page with no synthesiser at
+     all, and nothing changes. */
+  const picked = SysVoice.pickSynth(window);
+  if(!picked) return;
+  const synth = picked.synth;
+  const S = window.TTSTVSettings;
+
+  /* buildWordDomIndex's own walk, grouped by paragraph */
+  function chapterWords(ch){
+    const col = $("readercol");
+    const sec = col && col.querySelector('.chapter[data-ch="' + ch + '"]');
+    if(!sec) return null;
+    const paras = [];
+    sec.querySelectorAll("p.line").forEach(p => {
+      const tn = p.firstChild;
+      if(!tn || tn.nodeType !== 3) return;                  /* an empty line indexes nothing */
+      const ws = (tn.nodeValue || "").split(/\s+/).filter(Boolean);
+      if(ws.length) paras.push(ws);
+    });
+    return paras.length ? paras : null;
+  }
+
+  const sys = SysVoice.create({
+    synth,
+    Utterance: picked.Utterance,
+    chapterWords,
+    chapterCount(){ try{ return (OPEN_BOOK && OPEN_BOOK.chapters && OPEN_BOOK.chapters.length) || 0; }
+                    catch(e){ return 0; } },
+    startAt(){ try{ const c = nav.cursor; return c && c.chapter >= 0 ? c : null; }catch(e){ return null; } },
+    onWord(ch, wi){ try{ nav.goTo(ch, wi); }catch(e){} },
+    lang(){ try{ return (OPEN_BOOK && OPEN_BOOK.lang) || "en"; }catch(e){ return "en"; } },
+    wpm(){ try{ return S ? +S.read().wpm : 300; }catch(e){ return 300; } },
+    /* FOLLOW'S OTHER CLOCK (13 Sep). This engine moves no `currentTime`, so
+       `Transport.on` -- whose signature is the tenth of a second the clock is
+       at -- never fires while it speaks, and the page would follow a rendered
+       master and stand still for the system voice. `onState` fires at the top
+       of every utterance and on every word boundary, which is the same beat
+       the rendered path rides. FOLLOW takes one decision per sentence either
+       way (follow.js, THE TRACKER), so ticking it per word costs one map
+       lookup and nothing else. */
+    onState(){ try{ if(window.Follow) Follow.tick(); }catch(e){} },
+  });
+  Transport.sysvoice(sys);
+
+  /* the rate row, live. Only while it is actually speaking -- a change made
+     with nothing playing is read at the next `speak()` and costs nothing. */
+  if(S){
+    let lastWpm = S.read().wpm;
+    S.subscribe(st => { if(st.wpm !== lastWpm){ lastWpm = st.wpm; try{ sys.rebase(); }catch(e){} } });
+  }
+  /* leaving the page with a synthesiser still talking is the one way this can
+     outlive the reader -- speechSynthesis is the WINDOW's, not the page's */
+  addEventListener("pagehide", () => { try{ sys.stop(); }catch(e){} });
+
+  /* read-only, for a browser driver and a console -- the same shape `__pace`
+     publishes, and nothing in the page reads it */
+  window.__sysvoice = sys;
+  window.__sysvoice_kind = picked.kind;   /* "native" | "web" -- a console and the report */
+})(); }catch(e){ console.warn("[sysvoice] not wired:", e); }
+
+/* ================== THE PAGE FOLLOWS THE VOICE (FOLLOW, 13 Sep) ===========
+   Osca, 13 September: *"Follow along the voice, you need to be able to track
+   this, simple button in the playback bar, doesn't need to highlight text much
+   at all in the main reader, just the page should follow nicely, between
+   panes/slides too."*
+
+   `reader/follow.js` is the engine and its head carries the rule; this is the
+   four things only the PAGE can answer, exactly as the block above is for the
+   system voice. It starts nothing and moves nothing on its own: it is TICKED,
+   and the two ticks below are the two clocks this app has.
+
+   (1) WHICH SENTENCE IS BEING SPOKEN, and there are two voices to ask. The
+   SYSTEM VOICE is asked first, because when it is speaking it IS the voice --
+   `state().span` is the flat word span of the sentence in its mouth and
+   `Follow.spanRange` measures that span on the page with `buildWordDomIndex`'s
+   own walk. A RENDERED master answers through `listen.js`: `getPosition()`
+   names the sentence and `control.map.bySentId` already holds its node and its
+   two offsets, which is a Range with nothing added to the page. Both hand back
+   `{key, range}` and follow.js cannot tell which voice it got, which is the
+   point -- the free tier follows on day one.
+
+   (2) THE SCROLLER is `#readerpane`, the one page.js lays the column out in.
+
+   (3) WHEN THE PAGE IS NOT OURS: the `.pane.zoomed, .column.zoomed` pair --
+   the same question the play bar asks, never `#readerpane.zoomed`, which is
+   the name this page guessed once before the pinch landed. Inside one word
+   view the CURSOR is the view and book-nav.js seats it; FOLLOW standing down
+   there is what keeps one thing moving one scroller.
+
+   (4) THE TWO TICKS. A rendered master moves a clock, so `Transport.on` fires
+   ten times a second while it plays and FOLLOW rides it. The system voice
+   moves NO clock -- `state().t` stays 0 and the transport's own signature never
+   changes -- so it would never be ticked at all; `sysvoice`'s `onState` fires
+   on every word boundary and at the top of every utterance, which is the same
+   beat, and the two are wired to the one `Follow.tick()`.
+
+   WHAT IT DOES NOT DO: it never moves the AXIS. The panes, the slides and one
+   word view are one finger's decision and taking them from the reader would be
+   the biggest jump this could make -- see the report's §6, which asks Osca
+   whether FOLLOW should pull the axis home as well. */
+try{ (function(){
+  if(!window.Follow || !window.Transport) return;
+  const T = window.Transport;
+
+  function section(ch){
+    const col = $("readercol");
+    return col ? col.querySelector('.chapter[data-ch="' + ch + '"]') : null;
+  }
+  /* the system voice, when it is the one speaking */
+  function spoken(){
+    const sys = T.system;
+    if(!sys || !T.speaking || !T.speaking()) return null;
+    let st = null;
+    try{ st = sys.state(); }catch(e){ return null; }
+    if(!st || !st.span || !(st.chapter >= 0)) return null;
+    const r = Follow.spanRange(section(st.chapter), st.span.from, st.span.to);
+    return r ? { key: "sys:" + st.chapter + ":" + st.sentence, range: r } : null;
+  }
+  /* a rendered master, through listen.js's own map */
+  function rendered(){
+    const c = T.control;
+    if(!c || typeof c.getPosition !== "function") return null;
+    let pos = null;
+    try{ pos = c.getPosition(); }catch(e){ return null; }
+    const map = c.map;
+    if(!pos || !pos.sentenceId || !map || !map.bySentId) return null;
+    const hit = map.bySentId.get(pos.sentenceId);
+    if(!hit || !hit.node) return null;
+    try{
+      const r = document.createRange();
+      r.setStart(hit.node, hit.s); r.setEnd(hit.node, hit.e);
+      return { key: pos.chapterId + ":" + pos.sentenceId, range: r };
+    }catch(e){ return null; }
+  }
+
+  Follow.mount({
+    pane(){ return $("readerpane"); },
+    sentence(){ return spoken() || rendered(); },
+    playing(){ try{ return !!T.playing(); }catch(e){ return false; } },
+    still(){ return !!document.querySelector(".pane.zoomed, .column.zoomed"); },
+    onState(){ try{ if(window.PlayBar) PlayBar.sync(); }catch(e){} },
+  });
+
+  /* ★ OSCA'S ONE CONSTANT, ON THE PAGE. `Follow.MARK` is "sentence" or "none";
+     reader/listen.css draws both off this attribute and nothing else reads it.
+     Written once, here, so a page with no follow.js on it looks exactly as it
+     did. */
+  document.documentElement.setAttribute("data-follow-mark", Follow.MARK);
+
+  T.on(function(){ Follow.tick(); });
+
+  /* read-only, for a driver and the report */
+  window.__follow = Follow;
+})(); }catch(e){ console.warn("[follow] not wired:", e); }
 
 /* THE STRIP ITSELF, built rather than written down. It used to be markup at
    the bottom of the page and it is gone from there (Osca, 6 Sep); the handlers
@@ -1369,7 +1784,17 @@ addEventListener("keydown", e => {
   if(!listen) return;
   const is = (id) => S ? S.hotkeyIs(e, id) : false;
   const which = (id) => S ? S.hotkeyWhich(e, id) : -1;
-  if(is("play") || (!S && e.code === "Space")){ e.preventDefault(); listen.toggle(); return; }
+  /* THE PLAY KEY, AND THE THIRD OWNER OF IT. The pace answered above; the
+     narration answers here; and between them sits a chapter with no master,
+     where `listen.toggle()` used to arm a VirtualClock and make no sound at
+     all. `Transport.speaks()` is true only there (transport.js, THE SYSTEM
+     VOICE), so a rendered chapter reaches `listen` exactly as it always did. */
+  if(is("play") || (!S && e.code === "Space")){
+    e.preventDefault();
+    if(window.Transport && (Transport.speaks() || Transport.speaking())) Transport.toggle();
+    else listen.toggle();
+    return;
+  }
   const w = which("word");
   if(w >= 0){ e.preventDefault(); listen.seekWordDelta(null, w === 0 ? 1 : -1); }
 });

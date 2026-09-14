@@ -20,6 +20,36 @@
   background-color: color-mix(in oklab, var(--ink, #17150f) 26%, transparent);
 }
 
+/* ============ FOLLOW's ONE CONSTANT, AS THE PICTURE (13 Sep) ==============
+   Osca: *"doesn't need to highlight text much at all in the main reader, just
+   the page should follow nicely."* So the two marks above are what the reader
+   had, and `follow.js`'s `MARK` -- one word in one file -- says which of the
+   two things he asked for the main reader actually does. It is written onto
+   <html> as `data-follow-mark` when FOLLOW mounts, so a page with no book open
+   and a page with no follow.js on it look exactly as they did.
+
+     sentence   the sentence, and a fifth of the wash it used to be: enough to
+                find your place on a page you have looked away from, not enough
+                to read as marked-up text. No word mark at all -- the word is
+                the CURSOR's, and one word view is where it is looked at.
+     none       nothing in the main reader. The page follows and the text is
+                just text.
+
+   Neither rule adds an element or a class: they re-colour the SAME two
+   highlights listen.js already sets, so nothing about the map, the ranges or
+   the 74 boxes changes. `word-target` (the cursor) and the four `marg-*`
+   colours are other highlights and are untouched by both. */
+html[data-follow-mark="sentence"] ::highlight(listen-sentence) {
+  background-color: color-mix(in oklab, var(--ink, #17150f) 5%, transparent);
+}
+html[data-follow-mark="sentence"] ::highlight(listen-word) {
+  background-color: transparent;
+}
+html[data-follow-mark="none"] ::highlight(listen-sentence),
+html[data-follow-mark="none"] ::highlight(listen-word) {
+  background-color: transparent;
+}
+
 /* the <audio> is furniture: it plays, it is never seen and it never takes
    part in the layout the shell measures */
 audio.listen-audio { display: none; }

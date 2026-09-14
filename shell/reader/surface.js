@@ -142,6 +142,9 @@
                        can be compared side by side on one machine
        <meta name="ttstv-api" content="...">    a page that is hosted apart
        location.origin the app, and every page studio serves -- unchanged
+       the pairing    the phone, whose pages are not http(s) at all: the
+                      Studio it paired with, and the token to talk to it.
+                      13 Sep -- the section below this one is the whole of it
 
      WHAT IT DOES NOT BUY, and saying so is the point of writing it down: a
      base on ANOTHER origin is a cross-origin fetch, and studio's loopback
@@ -153,6 +156,81 @@
      page, same switches, same origin, and the fetches are ordinary.
      `?api=` is still what makes that possible, because the bench has to be
      able to say which studio it came back from. */
+  /* ------------------------------------ AN ORIGIN THE PHONE CAN HAVE (13 Sep)
+     G-STUDIOPHONE. Osca, 12 Sep: *"It will not ship on the 13th without
+     studio on the phone."*
+
+     THE BUG, IN ONE LINE. The `location.protocol` test below is the last
+     step of the base, and on the phone it is false: Frank's pages are
+     `frank://localhost` (iOS) and `tauri://localhost`, not http(s). So the
+     base was "", `S.live` was false, and the whole surface -- the shelf, the
+     search, the works, every control -- was the bench's mock on a device
+     that had a Studio on the same Wi-Fi and a token to talk to it with.
+
+     WHERE THE ANSWER ALREADY WAS. The phone pairs with a Studio in
+     Settings -> Transfer: six digits typed once, and
+     `settings/settings.js::pairFromPicker` writes ONE key --
+
+         localStorage["ttstv.sync.pair"] = {base, token, name, paired}
+
+     -- where `base` is `http://<lan>:<port>` of that Studio's SECOND
+     listener (`studio/serve.py::SyncListener`, bound `0.0.0.0`) and `token`
+     is what `studio/sync.py::Pairing.pair` handed back. That record is the
+     origin and the pass, and until today nothing but the Sync button read
+     it. This function is the second reader.
+
+     A BASE WITHOUT A TOKEN IS NOT A STUDIO, and that is why both halves are
+     required here. The LAN listener answers `/sync/hello` and `/sync/pair`
+     to anyone and 404s everything else without a paired token
+     (`sync_path_allowed`), so a page that took the base alone would come up
+     `S.live` and then fail every single call -- which is precisely the
+     "true or absent, never both" fault this lane exists to end. No token,
+     no origin.
+
+     `TTSTVHost.studioUrl` is honoured for the base when a host offers one
+     (no host does today; `Frank/src-tauri/src/lib.rs` injects `syncDiscover`
+     and not this), because the day one does, it is the better answer than a
+     record a person could have left behind. The token still comes off the
+     record: a host that knows the address does not thereby know the pass. */
+  var PAIR_KEY = "ttstv.sync.pair";   /* settings/settings.js SYNC_PAIR_KEY */
+  function pairBase(s) {
+    s = String(s == null ? "" : s).trim().replace(/\/+$/, "");
+    return /^https?:\/\//i.test(s) ? s : "";
+  }
+  function pairedStudio() {
+    var rec = null, hostUrl = "";
+    try { rec = JSON.parse(window.localStorage.getItem(PAIR_KEY) || "null"); } catch (e) { rec = null; }
+    try {
+      var h = window.TTSTVHost;
+      if (h && typeof h.studioUrl === "string") hostUrl = h.studioUrl;
+      else if (h && typeof h.studioUrl === "function") hostUrl = h.studioUrl();
+    } catch (e) { hostUrl = ""; }
+    var base = pairBase(hostUrl) || pairBase(rec && rec.base);
+    var tok = (rec && typeof rec.token === "string" && rec.token) ? rec.token : "";
+    if (!base || !tok) return null;
+    return { base: base, token: tok, name: (rec && rec.name) || "" };
+  }
+  var PAIRED = null;   /* the record `api()` puts the pass on, or null       */
+
+  /* Is this page inside Frank? `TTSTVHost` is injected into every page the
+     app opens -- `desktop/src/host.js` on the Mac, `lib.rs::HOST_JS` on the
+     phone -- and into no page a plain browser opens. It is the ONLY honest
+     way to tell "Frank, with no studio" from "the design bench", and it is
+     what `S.bench` is decided by (see `S.bench`). */
+  function hostHere() {
+    try { return !!window.TTSTVHost; } catch (e) { return false; }
+  }
+  /* THE SENTENCE, and there is one of it. A page with no studio says which
+     of the two it is and, in Frank, what to do about it -- "Studio is not
+     here" with no next step is the half-answer the phone was giving. */
+  function noStudioLine() {
+    return S.bench
+      ? "No server behind this page — these rows are the mock."
+      : (PAIRED
+          ? "Can't reach Studio at " + PAIRED.base + " — same Wi-Fi?"
+          : "Not paired with a Studio — pair in Settings ▸ Transfer, then this fills in.");
+  }
+
   var BASE = (function () {
     var q = "";
     try { q = String(location.search || ""); } catch (e) { q = ""; }
@@ -164,9 +242,35 @@
     var tag = document.querySelector && document.querySelector('meta[name="ttstv-api"]');
     if (tag && tag.getAttribute("content"))
       return tag.getAttribute("content").replace(/\/+$/, "");
-    return /^https?:$/.test(location.protocol) ? location.origin : "";
+    if (/^https?:$/.test(location.protocol)) return location.origin;
+    /* G-STUDIOPHONE, 13 Sep: and when it is not http(s), THE PAIRING. See
+       `pairedStudio` above -- this is the phone, and this line is the whole
+       of "an origin the phone can have". */
+    PAIRED = pairedStudio();
+    return PAIRED ? PAIRED.base : "";
   })();
-  function api(path) { return BASE ? BASE + path : null; }
+  /* THE TOKEN RIDES ON EVERY CALL, and in exactly one place -- `api()` is
+     what every fetch in this file goes through, so the pass is added once
+     rather than at forty call sites. `t=` in the query string, never a
+     header: `studio/serve.py::SyncHandler` reads `?t=`, and a simple request
+     keeps a GET of a big payload to one round trip instead of a preflight
+     (that server's own note, and `settings/settings.js::syncUrl` does the
+     same thing for the same reason).
+
+     `path` may already carry a query (`/search?title=...`), so the joiner is
+     read off the path rather than assumed.
+
+     ON THE MAC `PAIRED` IS NULL AND THIS RETURNS `BASE + path` -- the same
+     string, character for character, that it returned before this change.
+     That is not a hope: Studio's own page is http(s), so the IIFE above has
+     already returned at `location.origin` and `pairedStudio()` was never
+     called. */
+  function api(path) {
+    if (!BASE) return null;
+    if (!PAIRED) return BASE + path;
+    return BASE + path + (path.indexOf("?") >= 0 ? "&" : "?")
+         + "t=" + encodeURIComponent(PAIRED.token);
+  }
 
   /* EVERY FETCH IN THIS FILE HAS A CLOCK ON IT (8 Sep). "Couldn't reach the
      search" was the page's word for a `fetch()` that never resolved, and a
@@ -483,6 +587,35 @@
     sel: null,          /* the row whose grid the works column is showing     */
     live: false,        /* is there a server behind us                        */
     base: "",           /* ...and where it is (`?api=`, or this origin)       */
+    /* ------------------------------------- TRUE OR ABSENT, NEVER BOTH (13 Sep)
+       G-STUDIOPHONE item 4. Osca, on the phone: the WORKING band read
+       "2 running, 2 queued" while the column above it read "No studio behind
+       this page". Both at once, and the queue was `MOCK_JOB`.
+
+       `live` and `bench` are NOT each other's opposite, and that is the whole
+       fix. There are THREE states, not two:
+
+         live          a studio answers -- nothing here is mocked
+         bench         no studio, and no app either: `design/reader/bench-*`
+                       in a plain browser, or `?mock=1`. The mock is what a
+                       bench is FOR, and it says so on the page.
+         neither       Frank, with no studio behind it -- an unpaired phone,
+                       or a paired one off the Wi-Fi. NOTHING is invented
+                       here: no shelf, no queue, no engines, no sample. The
+                       page says it cannot see Studio and says how to fix it.
+
+       The test for a bench is the HOST. `window.TTSTVHost` is injected into
+       every page Frank opens, on the Mac (`desktop/src/host.js`) and on the
+       phone (`Frank/src-tauri/src/lib.rs::HOST_JS`), and into no page a plain
+       browser opens. So "an app with no studio" and "a bench" are told apart
+       by the one thing that actually distinguishes them, never by the
+       protocol and never by a guess.
+
+       Every `!S.live` below that FABRICATED something is now `S.bench`. The
+       ones that DISABLE something are still `!S.live`, because a control
+       that cannot act must not be pressable in either of the two dead
+       states. */
+    bench: false,       /* ...and if not, is this the design bench            */
     stateErr: "",       /* ...and what it said when it would not answer       */
     videoOpen: false,
     /* --------------------------------------------------- 8 Sep, the honest half
@@ -546,7 +679,8 @@
        `yt:`, one item that is both), and this map is how a row knows. */
     pairs: {},
     /* ITEM 7: the audition, and only ever one of them */
-    peek: null
+    peek: null,
+    paired: ""           /* the Studio this device paired with, when it did  */
   };
   /* what the bench dials, and nothing else does */
   var CFG = { mixed: true, bias: 1.0, coarse: false,
@@ -613,9 +747,15 @@
     });
     S.base = BASE;
     S.live = !!BASE;
+    S.paired = PAIRED ? (PAIRED.name || PAIRED.base) : "";
+    /* the three states, decided once, at mount -- see `bench` in `S` above */
+    S.bench = !S.live && !hostHere();
     /* §5.9: with nothing to poll, the mock IS the payload -- the same three
-       fields `/state` would have filled, so `drawWorks` takes one path. */
-    if (!S.live) {
+       fields `/state` would have filled, so `drawWorks` takes one path.
+       ON A BENCH ONLY (13 Sep): in Frank with no studio this block is
+       skipped, and the queue it used to fill is the "2 running, 2 queued"
+       the phone was showing under "No studio behind this page". */
+    if (S.bench) {
       S.voices = MOCK_VOICES;
       S.settings = MOCK_SETTINGS;
       S.voice = MOCK_VOICES[0].name;
@@ -915,7 +1055,7 @@
      only be described. So the mock takes the job, the card follows it, and
      nothing is posted. Named as a mock in the card's own word. */
   function run(body, btn, word) {
-    if (!S.live) {
+    if (S.bench) {
       S.job = { mode: body.queue ? "push" : "single", phase: "running",
                 slug: body.slug, chapter: body.chapter || "the whole book",
                 step: body.step || "speak", where: whereNow(),
@@ -964,7 +1104,7 @@
     var name = voiceNameFromTitle(c.title || shortHost(c.url));
     S.voiceErr = "";
     if (!S.live) {                        /* §5.9 -- see pickVoiceFile */
-      S.voiceErr = "the bench has no importer — cloning “" + (c.title || c.url)
+      S.voiceErr = (S.bench ? "the bench" : "this page") + " has no importer — cloning “" + (c.title || c.url)
                  + "” as " + name + " needs studio behind the page";
       drawWorks(); return Promise.resolve(null);
     }
@@ -1506,7 +1646,7 @@
        line is not softened or reworded -- it is not there. What replaces it
        when the server is there but silent is `S.stateErr`, which names the
        route and the failure rather than calling live rows a mock. */
-    if (!S.live) listEl.appendChild(note("No server behind this page — these rows are the mock."));
+    if (!S.live) listEl.appendChild(note(noStudioLine()));
     else if (S.stateErr) listEl.appendChild(note(S.stateErr));
 
     /* the per-source strip that stood here moved to the TOP of Results --
@@ -2044,7 +2184,7 @@
     S.peek = { key: r0.key, title: c.title, kind: c.kind || "text", loading: true };
     S.cand = r0;                     /* the panel follows what you auditioned */
     draw();
-    if (!S.live) {
+    if (S.bench) {
       /* THE BENCH AUDITIONS TOO (item 9). There is no route to ask, so the
          mock answers in `/peek`'s own `{status, kind, url|text}` shape and
          says it is the mock. A silent, empty player would have made this
@@ -2236,7 +2376,7 @@
           act("/queue-row", row.qkind === "ingest" ? { ingest: row.id, action: "remove" }
                                                    : { id: row.id, action: "remove" }, b, "…");
         }, "qx"));
-      else if (!S.live)
+      else if (S.bench)
         acts.appendChild(rowBtn("×", "the bench's own bin, same effect", function () {
           S.pending = (S.pending || []).map(function (b2) {
             return { items: (b2.items || []).filter(function (i2) { return i2.id !== row.id; }) };
@@ -2474,7 +2614,7 @@
     w.failed = false; w.err = "";
     S.choose = null;
     draw();
-    if (!S.live) return simulate(w);          /* the bench: watch it arrive */
+    if (S.bench) return simulate(w);          /* the bench: watch it arrive */
     /* A MULTI-FILE CANDIDATE IS ANSWERED HERE NOW, not sent somewhere else
        (8 Sep addendum). `stage_for_ingest` takes `file_url`/`file_name` for
        exactly this second call -- `_resolve_ia_files`' own "Osca already
@@ -2633,7 +2773,7 @@
        WHAT REPLACES IT IS NOT A PLACEHOLDER. With nothing selected this column
        has genuinely nothing to say, and it says which of the two reasons it
        is -- no studio, a studio that would not answer, or nothing chosen. */
-    if (!S.live) worksEl.appendChild(note("No studio behind this page — nothing can run."));
+    if (!S.live) worksEl.appendChild(note(noStudioLine()));
     else if (S.stateErr) worksEl.appendChild(note(S.stateErr));
     else if (!S.sel && !S.cand && !S.choose)
       worksEl.appendChild(note(working.length
@@ -2657,7 +2797,7 @@
       /* §5.9: THE BENCH DRAWS IT TOO, and says which it is. A design surface
          that cannot show §4's four rows is not a bench -- and a bench that
          showed them without saying they were mocked would be worse. */
-      if (!S.live) worksEl.appendChild(note("these four rows are the mock — "
+      if (S.bench) worksEl.appendChild(note("these four rows are the mock — "
         + "the fixtures the real studio code generated, so the shapes are studio's; "
         + "nothing is being asked and nothing is being written."));
       worksEl.appendChild(st);
@@ -3003,7 +3143,7 @@
      probe that fails is remembered exactly like one that succeeds; `force` is
      the only thing that asks again. */
   function askEngines(force) {
-    if (!S.live) return MOCK_ENGINES;      /* §5.9: the bench has a studio too */
+    if (S.bench) return MOCK_ENGINES;      /* §5.9: the bench has a studio too */
     if ((ENG.value || ENG.err) && !force) return ENG.value;
     if (ENG.asking) return ENG.value;
     ENG.asking = true; ENG.err = "";
@@ -3017,7 +3157,7 @@
   }
 
   function askKaggle(force) {          /* the same rule -- see askEngines */
-    if (!S.live) return MOCK_KAGGLE;       /* §5.9 */
+    if (S.bench) return MOCK_KAGGLE;       /* §5.9 */
     if ((KAG.value || KAG.err) && !force) return KAG.value;
     if (KAG.asking) return KAG.value;
     KAG.asking = true; KAG.err = "";
@@ -3254,7 +3394,8 @@
        a clip and cloning a URL both END in files under `TTS_DATA/voices/` that
        refguard has measured; a bench that pretended would be teaching a
        refusal that never happened. So they say what they are instead. */
-    if (!S.live) { S.voiceErr = "the bench has no importer — this needs studio behind the page";
+    if (!S.live) { S.voiceErr = (S.bench ? "the bench" : "this page")
+                     + " has no importer — this needs studio behind the page";
                    drawWorks(); return; }
     if (!VFILE) {
       VFILE = document.createElement("input");
@@ -3380,7 +3521,7 @@
        sit beside it -- impossible to look at. So the mock's own destination
        block is what changes, and nothing is posted. The block's mock line
        above already says nothing is being written. */
-    if (!S.live) {
+    if (S.bench) {
       MOCK_KAGGLE.destinations["default"] = id;
       MOCK_SETTINGS.render = { where: id };
       S.settings = MOCK_SETTINGS;
@@ -3465,7 +3606,7 @@
      against. */
   function pickEngine(b, id, btn) {
     S.engineErr = "";
-    if (!S.live) {                        /* §5.9 -- see pickWhere */
+    if (S.bench) {                        /* §5.9 -- see pickWhere */
       if (b) b.engine = id;
       if (S.sel) S.sel.engine = id;
       drawWorks();
@@ -3580,7 +3721,7 @@
        one thing a still page cannot show is a state ARRIVING, so the bench
        walks the three the real job has (sampling -> numbers) on a timer. The
        numbers carry `(mock)` in the row that draws them. */
-    if (!S.live) {
+    if (S.bench) {
       setTimeout(function () {
         if (!S.sample || S.sample.phase !== "sampling") return;
         S.sample = { phase: "numbers", slug: b.slug, chapter: unit, mock: true,
@@ -4234,7 +4375,7 @@
       })(),
       chapters: listEl.querySelectorAll(".sf-ch").length,
       inBook: S.inBook,
-      live: S.live, base: S.base,
+      live: S.live, base: S.base, bench: S.bench, paired: S.paired || "",
       mockShown: !!(listEl.textContent || "").match(/these rows are the mock/),
       steps: (function () {
         var s = sheet.querySelector(".sf-steps");

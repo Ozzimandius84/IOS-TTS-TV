@@ -105,6 +105,14 @@
     if(!pane || !col || !host) return null;
     const cfg = Object.assign({}, DEFAULTS, o.cfg || {});
     let segs = [], hideT = null, dragging = false, track = null;
+    /* the book's own chapter list, kept from build() for chapterName(), and
+       which capsule the last paint filled (-1 = nothing written yet, which is
+       how a fresh build gets its one full pass -- see paint) */
+    let data = [], lastCur = -1;
+    /* when the PAGE last actually moved, which is what `hold` is measured from
+       -- see wake(). `lastTop` is a number this file already had to read. */
+    const now = () => (window.performance && performance.now) ? performance.now() : Date.now();
+    let lastTop = -1, lastMoved = 0;
 
     host.classList.add("scrub2");
 
@@ -114,7 +122,7 @@
        under your thumb. */
     function build(){
       host.textContent = "";
-      segs = [];
+      segs = []; lastCur = -1;
       /* THE ONE TRACK. It is created whatever the fill style is and costs
          nothing in "capsules" mode (css hides it), so the two shapes are one
          DOM and switching between them on the bench is a class, not a rebuild. */
@@ -165,7 +173,7 @@
         });
         return Math.max(80, n);          // even an empty chapter is a place
       };
-      const data = (o.book && o.book.chapters) || [];
+      data = (o.book && o.book.chapters) || [];
       // page.js draws a title slide of its own before the chapters, so the
       // DOM has one section more than the book has chapters
       /* the two lists now line up: `chapters` is the real chapters and `data` is
@@ -275,8 +283,27 @@
       segs.forEach(s => s.el.classList.toggle("tiny", s.share * H < cfg.labelMin));
     }
 
-    // the name page.js already wrote into the chapter's own opener
+    /* THE NAME COMES OFF THE BOOK, NOT OFF THE PAGE (13 Sep). It was read out
+       of `ch.querySelector(".opener h1")` -- the heading page.js had written
+       into that chapter's own opener. page.js keeps only a window of chapters
+       mounted now (see its THE WINDOW), so on the complete Shakespeare 862 of
+       866 sections are empty and that query answers `null`: the rail would
+       have come up with four names and 862 blanks.
+
+       `book.chapters[i]` has both halves of the heading -- `n` the number, `t`
+       the title -- in the same order and the same list `weigh()` above already
+       takes the segment's own share from, and for the same reason: the data
+       does not need the chapter to have been drawn. The opener is still read
+       when there is no data at all (the file-drop bench mounts a column with
+       no `book`), which is the one case that path was ever the only one. */
     function chapterName(ch, i){
+      const d = data[i];
+      if(d){
+        const t = String(d.t || "").trim(), n = String(d.n || "").trim();
+        if(t) return t;
+        if(n) return n;
+        return "chapter " + (i+1);
+      }
       const h1 = ch.querySelector(".opener h1");
       if(!h1) return "";
       const small = h1.querySelector("small");
@@ -355,9 +382,18 @@
   function progress(){
       const line = pane.scrollTop;
       const mark = line + pane.clientHeight * READ_LINE;
-      let cur = 0;
-      for(let i = 0; i < segs.length; i++){
-        if(segs[i].ch.offsetTop <= mark) cur = i; else break;
+      /* BY BINARY SEARCH, NOT BY WALKING THE BOOK (13 Sep) -- the same
+         medicine page.js::paint() and book-nav.js::sectionAt took, for the
+         same reason and against the same list. This walked from chapter 0 and
+         read `offsetTop` off every segment up to the one you are in: eleven
+         reads instead of eight hundred, four hundred chapters into the
+         complete Shakespeare, on every scroll event. The tops ascend, so the
+         search is sound, and it is still the LIVE geometry -- nothing is
+         cached and nothing is a snapshot. */
+      let cur = 0, lo = 0, hi = segs.length - 1;
+      while(lo <= hi){
+        const mid = (lo + hi) >> 1;
+        if(segs[mid].ch.offsetTop <= mark){ cur = mid; lo = mid + 1; } else hi = mid - 1;
       }
       const s = segs[cur];
       if(!s) return { cur:0, into:0, at:0 };
@@ -384,16 +420,36 @@
       /* the ONE fill, in "bar" shape: an unbroken track down the rail, filled
          to exactly `at`. The capsule boundaries are notched over it by css. */
       if(track) track.style.setProperty("--f", (at * 100).toFixed(4) + "%");
-      segs.forEach((s, i) => {
-        /* ...and the same number in "capsules" shape. `f` is that capsule's own
-           share of `at`, which for i < cur is 1 and for i > cur is 0 by
-           arithmetic rather than by a second rule. It is written as a custom
-           property and the capsule's own gradient reads it -- see `build`. */
-        const f = clamp((at - s.before) / Math.max(1e-9, s.share), 0, 1);
-        s.bar.style.setProperty("--f", (f * 100).toFixed(4) + "%");
+      /* ONLY THE CAPSULES THAT CHANGED, and on a scroll that is one of them.
+         13 Sep, measured: this wrote a custom property and toggled two classes
+         on EVERY segment on EVERY scroll event -- 866 of them on the complete
+         Shakespeare -- and Chromium spent 4,712 ms of style recalc inside a
+         one-second wheel flick doing it, 47 ms a frame, against 6.5 ms with
+         the rail's host display:none. It was the largest single cost left in
+         the reading scroll once page.js stopped mounting the whole book
+         (K25-a), and it was hidden behind that one before.
+
+         And nearly all of it was writing numbers that had not moved. The
+         comment below is the proof the pass was never needed: `f` is 1 for
+         every capsule before the one you are in and 0 for every one after,
+         BY ARITHMETIC -- so only the capsule you are IN carries a fraction
+         that changes as you read, and the others change only when `cur`
+         itself moves past them. So: the current capsule always; the ones
+         between the old `cur` and the new one when it moves; nothing else.
+         The first paint has no previous `cur`, so it writes them all once. */
+      const f = s => clamp((at - s.before) / Math.max(1e-9, s.share), 0, 1);
+      const write = i => {
+        const s = segs[i]; if(!s) return;
+        s.bar.style.setProperty("--f", (f(s) * 100).toFixed(4) + "%");
         s.el.classList.toggle("here", i === cur);
         s.el.classList.toggle("done", i < cur);
-      });
+      };
+      if(lastCur < 0){ for(let i = 0; i < segs.length; i++) write(i); }
+      else if(lastCur !== cur){
+        const a = Math.min(lastCur, cur), b = Math.max(lastCur, cur);
+        for(let i = a; i <= b; i++) write(i);
+      } else write(cur);
+      lastCur = cur;
     }
 
     /* AND IT STAYS UP WHILE YOU ARE ON IT. Osca, 9 Sep: *"if I rest ON TOP of
@@ -407,6 +463,30 @@
        pointer leaves. A drag holds it up the same way. */
     let hovering = false;
 
+    /* ...AND IT DOES NOT GO DOWN WHILE THE PAGE IS STILL MOVING (13 Sep).
+       Measured on the complete Shakespeare, inside one second of wheel: the
+       `awake` class went on and off the host 26 times, and EACH write is a
+       style recalc of every capsule on the rail -- 866 of them -- at ~47 ms.
+       That is a feedback loop, not a cost: one write blows the frame budget,
+       the next scroll event lands more than `hold` ms later, the hide timer
+       has therefore already fired, the scroll puts the class back, and the
+       page stops moving at all (0 px travelled under a full second of wheel,
+       against 2,355 px with the class pinned up). It is only visible now
+       because page.js stopped mounting the whole book in front of it (K25-a);
+       the loop was always there, waiting for a frame budget to be tight.
+
+       `clearTimeout` on every wake cannot prevent it: the timer fires in the
+       GAP between two scroll events, and a jammed main thread is exactly a
+       page whose gaps are longer than `hold`. So the hide is measured from
+       when the PAGE last moved rather than from the last event that reached
+       this file, and re-checks rather than firing blind. `hold` keeps its
+       meaning -- "ms it stays up after a scroll" -- and now keeps it on a
+       slow frame too.
+
+       THE RAIL'S REAL SIZE PROBLEM IS NOT FIXED HERE and is not this lane's:
+       one class on the host restyling 866 capsules is the rail mounting the
+       whole book, which is the same shape of fault page.js just stopped
+       making. See reader/STATUS.md 6. */
     function wake(){
       if(cfg.wake === "never") return;
       host.classList.add("awake");
@@ -418,7 +498,13 @@
       host.classList.toggle("named", hovering || dragging);
       clearTimeout(hideT);
       if(cfg.wake === "always" || hovering || dragging) return;
-      hideT = setTimeout(() => host.classList.remove("awake"), cfg.hold);
+      const tick = () => {
+        if(hovering || dragging) return;                     // a hand holds it up
+        const since = now() - lastMoved;
+        if(since < cfg.hold){ hideT = setTimeout(tick, cfg.hold - since); return; }
+        host.classList.remove("awake");
+      };
+      hideT = setTimeout(tick, cfg.hold);
     }
 
     /* ---- AND IT IS A CONTROL. Dragging anywhere on the rail scrubs the book:
@@ -506,7 +592,28 @@
     host.addEventListener("pointerenter", () => { hovering = true; wake(); });
     host.addEventListener("pointerleave", () => { hovering = false; wake(); });
 
-    pane.addEventListener("scroll", () => { paint(); wake(); }, { passive:true });
+    pane.addEventListener("scroll", () => {
+      const t = pane.scrollTop;
+      if(t !== lastTop){ lastTop = t; lastMoved = now(); }
+      paint(); wake();
+    }, { passive:true });
+    /* ...AND THE HAND, NOT ONLY THE PAGE (13 Sep). `scroll` is the only thing
+       that woke the rail, and a scroll event only exists if the page actually
+       MOVED. On a book heavy enough to drop frames it does not: the wheel is
+       still turning, the page is still gated behind the main thread, no
+       `scroll` arrives for 100ms, `hold` expires, the class comes off -- and
+       taking it off costs 75ms of style recalc across the capsules (measured,
+       complete Shakespeare, 865 of them), which guarantees the next gap too.
+       Twenty-six times a second, and the page ends up travelling 0px under a
+       full second of wheel.
+
+       The gesture is the truth here, not the scroller's answer to it: the rail
+       is up because a hand is moving, so the hand is what it listens to. Both
+       are passive -- nothing here may sit in front of the reading scroll -- and
+       neither reads or writes layout. */
+    const handMoved = () => { lastMoved = now(); wake(); };
+    addEventListener("wheel", handMoved, { passive:true });
+    addEventListener("touchmove", handMoved, { passive:true });
     addEventListener("resize", () => { build(); apply(); });
 
     /* ---- THE SETTINGS, as custom properties on the host, so a bench moves one

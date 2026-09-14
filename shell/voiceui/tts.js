@@ -79,6 +79,21 @@ function speak(text, { synth, rate = 1, voiceName = null, timeoutMs, setTimeoutF
   });
 }
 
+// Drop whatever the synth is saying or has queued. A question asked QUIETLY
+// over a spoken answer ends the spoken one (voiceui/QUIET.md §4: "the new
+// question interrupts it ... `tts.cancel()` on the synth, the old line is
+// replaced by the new one in the same frame") -- and a cancelled utterance's
+// own onend/onerror is what resolves speak()'s promise, so nothing is left
+// awaiting. It is NOT called on the spoken path: a spoken question already
+// interrupts a spoken answer through app.js's interrupt(), and cancelling
+// there would only take the fake synth's recorded list away from the tests
+// that read it. Never throws -- a synth with no cancel() is a synth that had
+// nothing to stop.
+function cancel(synth) {
+  if (!synth || typeof synth.cancel !== "function") return false;
+  try { synth.cancel(); return true; } catch (e) { return false; }
+}
+
 // True when this synth has no voice to speak with -- a headless Chrome, or a
 // browser whose voice list has not arrived yet. Only ever used to say so in
 // a report or a pill tooltip: speak() is called either way, because an empty
@@ -109,5 +124,5 @@ function createFakeSynth() {
   };
 }
 
-  return { speak, createFakeSynth, hasVoice, speakTimeoutMs };
+  return { speak, cancel, createFakeSynth, hasVoice, speakTimeoutMs };
 });

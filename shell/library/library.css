@@ -153,6 +153,12 @@
     overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .railrow-by { display:block; color:var(--fg-dim); font-size:0.8rem;
     overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  /* THE NO-PACK LINE (settings.js::tileLineHTML, G-LANG). Its own class since
+     13 Sep -- it wore `.railrow-by` and so was placed in the byline's cell at
+     the 1 ¶ rung and drawn on top of it. Same type, its own row. */
+  .railrow-lang { display:block; color:var(--fg-dim); font-size:0.8rem;
+    overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .railrow-lang[hidden] { display:none; }
   .railrow-status { display:block; margin-top:3px; color:var(--fg-dim); font-size:0.76rem; }
   .railrow-status b { color:var(--ok); font-weight:600; }
 
@@ -384,6 +390,7 @@
   /* a 75px board with an 11px corner reads as a lozenge, not a book */
   #shelf[data-zoom="16"] .tilecov { border-radius: 3px; }
   #shelf[data-zoom="16"] .railrow.tile .railrow-title,
+  #shelf[data-zoom="16"] .railrow.tile .railrow-lang,
   #shelf[data-zoom="16"] .railrow.tile .railrow-by { display: none; }
   @container shelf (max-width: 1100px) { #shelf[data-zoom="16"] .shelfgrid { --cols: 8; } }
   @container shelf (max-width: 620px) { #shelf[data-zoom="16"] .shelfgrid { --cols: 4; } }
@@ -392,6 +399,7 @@
   #shelf[data-zoom="8"] .shelfgrid { --cols: 8; --bookw: 150px; }
   #shelf[data-zoom="8"] .railrow.tile { grid-template-rows: auto; row-gap: 0.45rem; }
   #shelf[data-zoom="8"] .railrow.tile .railrow-title,
+  #shelf[data-zoom="8"] .railrow.tile .railrow-lang,
   #shelf[data-zoom="8"] .railrow.tile .railrow-by { display: none; }
   @container shelf (max-width: 1100px) { #shelf[data-zoom="8"] .shelfgrid { --cols: 4; } }
 
@@ -401,6 +409,7 @@
   #shelf[data-zoom="2"] .shelfgrid { --cols: 2; --bookw: 446px; }
   #shelf[data-zoom="2"] .railrow.tile { grid-template-rows: auto; row-gap: 0; }
   #shelf[data-zoom="2"] .railrow.tile .railrow-title,
+  #shelf[data-zoom="2"] .railrow.tile .railrow-lang,
   #shelf[data-zoom="2"] .railrow.tile .railrow-by { display: none; }
 
   /* ---------------- 1 UP ¶ : one book is the page, its text beside it ---- */
@@ -421,7 +430,7 @@
   html:not([data-phone]) #shelf[data-zoom="1t"] .railrow.tile {
     scroll-snap-align: center; min-height: calc(100vh - 3.4rem);
     grid-template-columns: minmax(0, 42%) minmax(0, 1fr);
-    grid-template-rows: auto auto minmax(0, 1fr);
+    grid-template-rows: auto auto auto minmax(0, 1fr);
     column-gap: 3.4rem; row-gap: 0.75rem; align-content: center;
     padding: 2.6rem 0; }
   /* nothing lifts when it is the page */
@@ -435,19 +444,22 @@
     font-size: 2.5rem; line-height: 1.12; height: auto; -webkit-line-clamp: 4; }
   html:not([data-phone]) #shelf[data-zoom="1t"] .railrow.tile .railrow-by {
     grid-column: 2; grid-row: 2; font-size: 0.78rem; }
+  html:not([data-phone]) #shelf[data-zoom="1t"] .railrow.tile .railrow-lang {
+    grid-column: 2; grid-row: 3; font-size: 0.78rem; }
   html:not([data-phone]) #shelf[data-zoom="1t"] .railrow.tile .tile-pane {
-    grid-column: 2; grid-row: 3; display: grid;
+    grid-column: 2; grid-row: 4; display: grid;
     gap: 1.15rem; align-content: start; padding-top: 1.1rem; }
   @container shelf (max-width: 820px) {
     html:not([data-phone]) #shelf[data-zoom="1t"] .railrow.tile {
-      grid-template-columns: minmax(0, 1fr); grid-template-rows: auto auto auto auto;
+      grid-template-columns: minmax(0, 1fr); grid-template-rows: auto auto auto auto auto;
       justify-items: start; }
     html:not([data-phone]) #shelf[data-zoom="1t"] .railrow.tile .tilecov {
       grid-column: 1; grid-row: 1; height: 38vh; margin: 0; }
     html:not([data-phone]) #shelf[data-zoom="1t"] .railrow.tile .railrow-title {
       grid-column: 1; grid-row: 2; font-size: 1.8rem; }
     html:not([data-phone]) #shelf[data-zoom="1t"] .railrow.tile .railrow-by { grid-column: 1; grid-row: 3; }
-    html:not([data-phone]) #shelf[data-zoom="1t"] .railrow.tile .tile-pane { grid-column: 1; grid-row: 4; width: 100%; }
+    html:not([data-phone]) #shelf[data-zoom="1t"] .railrow.tile .railrow-lang { grid-column: 1; grid-row: 4; }
+    html:not([data-phone]) #shelf[data-zoom="1t"] .railrow.tile .tile-pane { grid-column: 1; grid-row: 5; width: 100%; }
     html:not([data-phone]) #shelf[data-zoom="1t"] .tile-slotrow { grid-template-columns: minmax(0, 1fr); } }
 
   /* THE PANE'S PARTS. The pane is in every tile and is shown at 1 ¶ alone --
@@ -495,6 +507,7 @@
   #shelf[data-zoom="1"] .railrow.tile:focus-visible { transform: none; }
   #shelf[data-zoom="1"] .railrow.tile .tilecov { width: auto; height: min(88vh, 1000px); }
   #shelf[data-zoom="1"] .railrow.tile .railrow-title,
+  #shelf[data-zoom="1"] .railrow.tile .railrow-lang,
   #shelf[data-zoom="1"] .railrow.tile .railrow-by { display: none; }
 
   /* ---- THE SPACING, AS OSCA DIALLED IT (10 Sep, G-LIB2). The spacing log of
@@ -717,9 +730,10 @@
     font-size: 1rem; font-weight: 600; line-height: 1.25; height: 2.5em;
     display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
     overflow: hidden; }
-  .tile .railrow-by { font-family: var(--ui-font); font-size: 0.71rem;
+  .tile .railrow-by, .tile .railrow-lang { font-family: var(--ui-font); font-size: 0.71rem;
     letter-spacing: 0.03em; text-transform: uppercase; line-height: 1.4; margin: 0;
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .tile .railrow-lang { color: var(--fg-dim); }
   /* the order mark rides the cover, not the caption */
   .railrow.tile[data-sel-order]::after { top: 6px; right: 6px; }
   .railrow.tile[data-sel-order="1"]:not(.selFirst)::after { top: 10px; right: 10px; }
@@ -1097,7 +1111,7 @@
     }
     #shelf .railrow-title { white-space: normal; font-size: 1rem; line-height: 1.25;
       display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; }
-    #shelf .railrow-by { white-space: normal; }
+    #shelf .railrow-by, #shelf .railrow-lang { white-space: normal; }
     #shelf .railrow-status { margin-top: 6px; }
 
     /* the long-press menu as a bottom sheet */
@@ -1301,21 +1315,33 @@
     box-shadow: 0 1px 3px rgba(0,0,0,0.25); }
   html[data-phone] #shelf .railrow.tile .tile-close::before { display: none; }
 
+  /* THE SHELF'S GESTURES ARE THE SHELF'S (13 Sep). `pan-y` leaves the one
+     finger that scrolls the shelf alone and takes the PINCH off the web view,
+     which is the half `gesturestart` cannot be trusted with inside a
+     WKWebView: without it iOS may claim the two fingers as a page zoom before
+     a line of this page's script runs, and `data-zoom` never moves. The
+     viewport meta is `initial-scale=1` with no `maximum-scale`, deliberately
+     (a reader must stay zoomable); this narrows the refusal to the shelf. */
+  html[data-phone] #shelf { touch-action: pan-y; }
+
   /* ---- 16: four across, covers only */
   html[data-phone] #shelf[data-zoom="16"] .shelfgrid { --cols: 4; --bookw: 100px; }
   html[data-phone] #shelf[data-zoom="16"] .railrow.tile { grid-template-rows: auto; row-gap: 0; }
   html[data-phone] #shelf[data-zoom="16"] .railrow.tile .railrow-title,
+  html[data-phone] #shelf[data-zoom="16"] .railrow.tile .railrow-lang,
   html[data-phone] #shelf[data-zoom="16"] .railrow.tile .railrow-by { display: none; }
   /* ---- 8: three across, covers only */
   html[data-phone] #shelf[data-zoom="8"] .shelfgrid { --cols: 3; --bookw: 200px; }
   html[data-phone] #shelf[data-zoom="8"] .railrow.tile { grid-template-rows: auto; row-gap: 0; }
   html[data-phone] #shelf[data-zoom="8"] .railrow.tile .railrow-title,
+  html[data-phone] #shelf[data-zoom="8"] .railrow.tile .railrow-lang,
   html[data-phone] #shelf[data-zoom="8"] .railrow.tile .railrow-by { display: none; }
   /* ---- 4: PHONE FIT and THE PHONE, WHOLE, as they stand */
   /* ---- 2: two across, covers only, filling the shelf */
   html[data-phone] #shelf[data-zoom="2"] .shelfgrid { --cols: 2; --bookw: 400px; }
   html[data-phone] #shelf[data-zoom="2"] .railrow.tile { grid-template-rows: auto; row-gap: 0; }
   html[data-phone] #shelf[data-zoom="2"] .railrow.tile .railrow-title,
+  html[data-phone] #shelf[data-zoom="2"] .railrow.tile .railrow-lang,
   html[data-phone] #shelf[data-zoom="2"] .railrow.tile .railrow-by { display: none; }
   /* ---- 1 ¶ and 1 take the whole shelf: `100cqw` of the `shelf` container,
      a length, where `100%` would resolve against a band that is
@@ -1323,15 +1349,16 @@
   /* ---- 1 ¶: the Mac's narrow stack -- cover, title, byline, the pane */
   html[data-phone] #shelf[data-zoom="1t"] .shelfgrid { --cols: 1; --bookw: 100cqw; }
   html[data-phone] #shelf[data-zoom="1t"] .railrow.tile {
-    grid-template-columns: minmax(0, 1fr); grid-template-rows: auto auto auto auto;
+    grid-template-columns: minmax(0, 1fr); grid-template-rows: auto auto auto auto auto;
     justify-items: start; row-gap: 0.75rem; padding: 1.4rem 0 2.2rem; }
   html[data-phone] #shelf[data-zoom="1t"] .railrow.tile .tilecov {
     grid-column: 1; grid-row: 1; width: auto; height: 38vh; margin: 0; }
   html[data-phone] #shelf[data-zoom="1t"] .railrow.tile .railrow-title {
     grid-column: 1; grid-row: 2; font-size: 1.8rem; line-height: 1.12; height: auto; -webkit-line-clamp: 4; }
   html[data-phone] #shelf[data-zoom="1t"] .railrow.tile .railrow-by { grid-column: 1; grid-row: 3; font-size: 0.78rem; }
+  html[data-phone] #shelf[data-zoom="1t"] .railrow.tile .railrow-lang { grid-column: 1; grid-row: 4; font-size: 0.78rem; }
   html[data-phone] #shelf[data-zoom="1t"] .railrow.tile .tile-pane {
-    grid-column: 1; grid-row: 4; width: 100%; display: grid; gap: 1.15rem; align-content: start; padding-top: 0.6rem; }
+    grid-column: 1; grid-row: 5; width: 100%; display: grid; gap: 1.15rem; align-content: start; padding-top: 0.6rem; }
   html[data-phone] #shelf[data-zoom="1t"] .tile-slotrow { grid-template-columns: minmax(0, 1fr); }
   /* the ✕ rides the cover's corner, not the tile's, where the cover is narrower */
   html[data-phone] #shelf[data-zoom="1t"] .railrow.tile .tile-close { right: auto; left: calc(38vh * 88 / 120 - 34px); top: calc(1.4rem + 6px); }
@@ -1342,6 +1369,7 @@
     grid-template-rows: auto; row-gap: 0; scroll-snap-align: center;
     min-height: calc(100dvh - var(--safe-top, 0px) - var(--safe-bottom, 0px) - 24px); align-content: center; }
   html[data-phone] #shelf[data-zoom="1"] .railrow.tile .railrow-title,
+  html[data-phone] #shelf[data-zoom="1"] .railrow.tile .railrow-lang,
   html[data-phone] #shelf[data-zoom="1"] .railrow.tile .railrow-by { display: none; }
   /* the jacket is centred in a screen-high tile; the ✕ sits on its corner:
      half the tile, less half the jacket (the shelf's width, 100cqw of the

@@ -314,14 +314,20 @@ const DX_REST=0.0001;
    is remembered, so it is dialled once from the console or a bench and stays. */
 let LEAVE_SNAP=3;
 /* HOW FAR OUT OF THE BOOK COUNTS AS LEAVING IT, decided on release exactly as
-   WORD_COMMIT decides the word. Half of the rung past the last pane. */
-const LEAVE_COMMIT=0.5;
+   WORD_COMMIT decides the word. Half of the rung past the last pane -- on the
+   Mac. The phone's is PHYS's (13 Sep). */
+let LEAVE_COMMIT=0.5;
 /* ...and how far ONE event may carry you into it. The zone has resistance: a
    single push -- however big -- moves you a step of it, so getting out of a
    book is always a TRAVEL of several, never one flick that happened to be hard.
    That is the other half of "do not push me": momentum cannot spend the whole
    zone, and neither can one clumsy swipe. */
-const LEAVE_STEP=0.12;
+let LEAVE_STEP=0.12;
+/* ...and how much of the zone one screen-width of FINGER buys. It was
+   SWIPE.gain's, the pane ladder's own number, which made the zone cost a
+   screen and a bit; it is PHYS's now and it is the phone's alone -- nothing
+   on the Mac reads it. */
+let LEAVE_GAIN=1.15;
 /* HOW FAR INTO A RUNG A PUSH MUST GET FOR THE RELEASE TO COMMIT TO IT.
    0.5 is the old rule (ease to whichever rung is nearest). Lower is stickier:
    at 0.2, a fifth of a pane's worth of scroll takes you to the next pane. */
@@ -404,6 +410,74 @@ const SPEEDS = {
 };
 let speedName = "as-is";
 let T = SPEEDS[speedName];
+/* ============ PHYSICS PER PLATFORM (13 Sep) ============================
+   Osca, 12-13 Sep, on the phone: *"A different entropy/gravity scroll on the
+   phone than on the Mac."* Until today every number on this axis was one
+   number, dialled on a trackpad and inherited by a thumb. They are a TABLE
+   now, keyed by `html[data-phone]`, read once at mount.
+
+   THE MAC ROW IS TODAY'S FILE, VALUE FOR VALUE -- it is written out here so
+   that "the Mac is untouched" is a thing you can read rather than trust, and
+   `applyPhys()` on the Mac writes back exactly what it found.
+
+   WHAT IS REALLY DIFFERENT FOR A FINGER, AND WHAT IS NOT. `touchGo` zeroes
+   `dxVel` and `dxInput` on every phone gesture: a finger writes no momentum
+   at all, so friction and momentum -- decay, coast, vmax, couple -- and the
+   idle `snap`/`grace` are INERT under a thumb everywhere except the leaving
+   zone, which is the one stretch still driven by hand. They are in the table
+   because that is where these numbers live from today, not because the phone
+   wants different ones yet; the four that the phone really does want
+   different are the leaving four, which is where every one of Osca's three
+   symptoms is (see THE WAY OUT, by swipeMove).
+
+     friction  decay      how fast a throw dies
+     momentum  coast/vmax/couple   how much of a throw is spent, and its ceiling
+     snap      snap/grace/wordSnap/paneSnap/leaveSnap   how hard it settles
+     commit    stick/leaveCommit/leaveStep/leaveGain    how far is far enough  */
+const PHYS = {
+  mac: {
+    decay:null, coast:null, vmax:null, couple:null, snap:null, grace:null,
+    wordSnap:2, paneSnap:7, leaveSnap:3,
+    stick:0.5, leaveCommit:0.5, leaveStep:0.12, leaveGain:1.15,
+  },
+  phone: {
+    /* null = the preset's own, i.e. the Mac's: a finger writes no momentum,
+       so there is nothing here for the phone to want yet. */
+    decay:null, coast:null, vmax:null, couple:null, snap:null, grace:null,
+    /* the zoom and the ladder are Osca's own, watched and kept (G-STOPS) */
+    wordSnap:2, paneSnap:7,
+    /* the exit slide, a touch quicker than the Mac's 28 frames: 21, ~350ms */
+    leaveSnap:4,
+    stick:0.5,
+    /* LEAVING IS VERY EASY (Osca, 9 Sep, and again on the 12th). 0.28 of the
+       zone at leaveGain 1.6 is 69 px of thumb on a 393 px glass, where the
+       Mac's 0.5 at 1.15 was 171 px -- and the lift's own flick commits it
+       from `flickMin` like every other position on this axis. */
+    leaveCommit:0.28,
+    /* the cap on ONE event exists so a trackpad's momentum cannot spend the
+       zone. A finger sends no momentum and a coalesced move on a real phone
+       is 60-80 px, so on the phone the cap was throttling the HAND. */
+    leaveStep:0.22,
+    leaveGain:1.6,
+  },
+};
+function phoneFlag(){ try{ return !!(document.documentElement
+  && document.documentElement.hasAttribute("data-phone")); }catch(_){ return false; } }
+let physName = "mac";
+function applyPhys(){
+  physName = phoneFlag() ? "phone" : "mac";
+  const P = PHYS[physName];
+  T = Object.assign({}, T);
+  for(const k of ["decay","coast","vmax","couple","snap","grace"]) if(P[k] != null) T[k] = P[k];
+  WORD_SNAP = P.wordSnap; PANE_SNAP = P.paneSnap; LEAVE_SNAP = P.leaveSnap;
+  STICK = P.stick; LEAVE_COMMIT = P.leaveCommit; LEAVE_STEP = P.leaveStep;
+  LEAVE_GAIN = P.leaveGain;
+  /* the one number that was already remembered per machine stays remembered:
+     a dialled leaveSnap outranks the table, as it always has. */
+  try{ const v = localStorage.getItem("leavesnap");
+       if(v != null && +v > 0) LEAVE_SNAP = +v; }catch(_){}
+  return physName;
+}
 /* The two snap numbers are reachable on their own, because "snap controls"
    is a different question from "which preset". Overriding copies the preset
    first, so the presets themselves stay exactly as documented. */
@@ -455,6 +529,7 @@ function splitTitleNode(title){
 }
 
 function mount(o){
+  applyPhys();          // PHYSICS PER PLATFORM: the table, keyed by html[data-phone]
   // ---------------------------------------------------------------- THE
   // DASHBOARD -- thirteenth pass: a real grid of cards, not a Column. "it
   // will NOT be a collect-page left pane page asset... more like a
@@ -1318,18 +1393,53 @@ function mount(o){
   // any word moves it. It is remembered per book, so closing and reopening
   // finds it again, and every move is announced (`ttstv:cursor`) so the voice
   // can follow the same point rather than keeping a second one of its own.
+  //
+  // AND THE AXIS IT WAS LEFT ON (13 September, K24). Osca: *"Memory in the
+  // reader -- it has none."* It had half of one: the cursor was loaded on
+  // open and the highlight painted, but nothing seated the PAGE on it and
+  // nothing remembered which view you were reading in. Both are the same
+  // memory -- where you were -- so `v` rides on the cursor's own key rather
+  // than earning a second one. There is no second position store and this
+  // does not make one (cursor.js's own rule, 15b step 3).
+  //
+  // `v` is a POSITION ON THE AXIS -- posNow()'s own value: 1 the word, 0 the
+  // page, -n the nth contents pane. Never a scroll offset (POSITION IS
+  // SACRED), and never the leaving zone: only a REST is ever recorded, so a
+  // gesture that was on its way out of the book is not mistaken for a place.
+  // A default is absent, as everywhere else in this project: at 0 the record
+  // is byte-identical to the one this file has always written.
   let cursor = null;                       // {ch, wi} or null
+  let restLevel = 0, restWritten = 0;      // the axis position, and what is on disk
   function cursorKey(){ return "wordcursor:" + ((book && book.slug) || "?"); }
+  function writeCursor(){
+    if(!cursor) return;
+    const rec = {ch: cursor.ch, wi: cursor.wi};
+    if(restLevel !== 0) rec.v = restLevel;
+    try{ localStorage.setItem(cursorKey(), JSON.stringify(rec)); }catch(_){}
+  }
   function loadCursor(){
-    cursor = null;
+    cursor = null; restLevel = 0; restWritten = 0;
     try{
       const raw = localStorage.getItem(cursorKey());
-      if(raw){ const c = JSON.parse(raw); if(c && c.ch != null) cursor = {ch:+c.ch, wi:+c.wi||0}; }
+      if(raw){ const c = JSON.parse(raw);
+        if(c && c.ch != null) cursor = {ch:+c.ch, wi:+c.wi||0};
+        if(c && c.v != null && +c.v === +c.v){ restLevel = +c.v; restWritten = restLevel; }
+      }
     }catch(_){}
+  }
+  /* THE AXIS'S OWN WRITE, on the cursor's key. The frame loop calls it the
+     moment the axis has come to rest (`atZoomRest`), and it writes only when
+     the position has actually CHANGED -- so sitting and reading writes
+     nothing at all, and the write it does make goes through cursor.js's
+     coalescer like every other write to this key. */
+  function noteRest(p){
+    if(leavingBook || !cursor || p === restWritten) return;
+    restLevel = p; restWritten = p;
+    writeCursor();
   }
   function setCursor(ch, wi, why){
     cursor = {ch: ch, wi: wi};
-    try{ localStorage.setItem(cursorKey(), JSON.stringify(cursor)); }catch(_){}
+    writeCursor();
     try{
       (o.bookEl || document).dispatchEvent(new CustomEvent("ttstv:cursor", {
         bubbles: true,
@@ -2919,6 +3029,34 @@ function mount(o){
     if(o.small) o.small.textContent = book.author||"";
     showScreen("open");
     applyDx(true);
+    /* ========= AND IT OPENS WHERE YOU LEFT IT (13 September, K24) =========
+       `o.readerPane.scrollTop = 0` above is what a NEW book wants and what
+       every book got: the cursor was loaded and its highlight painted, but
+       the page itself was put back at chapter zero's slide, so only one word
+       view ever opened at the word. Osca, 13 Sep: *"A book must reopen on the
+       word you left."*
+
+       The seat is `seatOnWord()` -- the contents rail's own function, with
+       its own scrollIntoView, its own 24-frame settle and its own give-up
+       when the thing being measured will not answer (a chapter still skipped
+       by content-visibility, a rect that is a placeholder's). It is
+       deliberately the LAST thing openBook does: the page is rendered, the
+       rail is built and the axis is applied, so the rectangles it measures
+       are the ones the reader is about to look at. And it seats only when the
+       word is OFF SCREEN -- its own rule -- so a cursor on the first page
+       moves nothing, and "no transition that moves text up" holds on open
+       as well as everywhere else.
+
+       THEN THE VIEW. 0 is the page and needs nothing (dx is already 0), so
+       only a real elsewhere is restored, and it goes through `goPos` rather
+       than `setDx`: on the word side a position is reached by the zoom and
+       never cut to (goPos's own rule, 10 Sep), and a contents stack is
+       clamped to the trail this book actually has. */
+    if(cursor && wordDomIndex.length) seatOnWord();
+    if(restLevel !== 0){
+      const p = Math.max(-currentMaxLeft(), Math.min(DX_MAX, restLevel));
+      if(p !== 0) goPos(p);
+    }
   }
   // Everything applyDx() writes as an inline style or a class, put back.
   // applyDx early-returns on `!book || screen!=="open"`, so the moment
@@ -2935,6 +3073,7 @@ function mount(o){
   // it was covered.
   function resetReaderChrome(){
     clearWordZoom();
+    phoneRailOff();          // the phone's level rail, if this is one (13 Sep)
     if(o.readerBox){
       o.readerBox.style.left=""; o.readerBox.style.pointerEvents="";
       readerShift=0; readerScale=1; readerRestLeft=0; lastPush=-1;
@@ -3034,7 +3173,7 @@ function mount(o){
   }
 
   function leaveNow(){
-    leavingBook = false; leaveT = 0; leaveFrom = 0;
+    leavingBook = false; leaveT = 0; leaveFrom = 0; crossTo = null;
     exitWord();
     for(let i=1;i<MAX_LEFT_LEVELS;i++) destroyPane(i);   // every deeper pane, not just two
     resetReaderChrome();
@@ -3678,6 +3817,11 @@ function mount(o){
       first: marginW,
       seed: (book && book.slug) || "", cfg: PANE
     }) : { panes: [], right: 0 });
+    /* ...AND ON A PHONE THE STACK IS A STRIP (13 Sep, (e)). The measure above
+       is unchanged and the Mac reads it unchanged; phoneStrip re-lays what it
+       returned -- widths, lefts, which pane takes a touch -- and hands back
+       which level is front, for the rail. See THE PHONE IS A STRIP below. */
+    const stripFront = PHONE ? phoneStrip(laid, n) : -1;
     let stackRight = laid.right;
     let pushFromOutside = 0;
     /* ON THE WAY OUT, THE WHOLE BOOK LEAVES -- ITS CONTENTS INCLUDED. Osca,
@@ -3709,6 +3853,7 @@ function mount(o){
       // had not widened anything.)
     }
     paneWidthsStale = false;
+    if(PHONE) phoneRail(n, stripFront);
     // THE READER IS NEVER PUSHED OFF THE SCREEN. Measured in Chrome: widen
     // the panes enough and the push (1621px) passed the viewport (1512px),
     // the reader's own box had no width left, its scrollable height went with
@@ -4242,6 +4387,7 @@ function mount(o){
     lastT=now;
     if(screen==="open") {
       stepDx(dt);
+      crossStep();               // the second leg of a crossing, once home
       stepLeave(dt);
       if(levelOf(dx)==="word") coastWord(dt);
       stepPull(dt);                        // the travel toward an off-screen word
@@ -4251,6 +4397,11 @@ function mount(o){
          read at. Two frames unchanged, and nothing holding a gesture open. */
       if(dx === lastDxSeen){ if(dxStill < 3) dxStill++; } else { dxStill = 0; lastDxSeen = dx; }
       atZoomRest = dxStill >= 2 && snapTo == null;
+      /* THE SAME FRAME THAT SAYS THE ZOOM IS TYPE AGAIN says where the book
+         was left: an axis that has been still for two frames with nothing
+         holding it is a PLACE, and that is the only thing worth remembering
+         (K24, 13 Sep). noteRest writes only on a change. */
+      if(atZoomRest) noteRest(posNow());
       applyDx(false);
     }
     requestAnimationFrame(tick);
@@ -4528,6 +4679,153 @@ function mount(o){
   };
   const PHONE = (() => { try{ return !!(document.documentElement
     && document.documentElement.hasAttribute("data-phone")); }catch(_){ return false; } })();
+  /* ================= (e) ALL PANES: THE PHONE IS A STRIP ==================
+     Osca, 13 September, picking (e) off design/phone/STATUS.md's five
+     mock-ups: *"I'd essentially like to be able to open all panes."*
+
+     IT CANNOT MEAN ALL PANES READABLE, and the arithmetic is pane.js's own:
+     "on a phone each pane is already 88% and 80% of the screen, so two slots
+     ask for 168% of a 390px screen" -- which is why `narrowCap` is 1, and no
+     drawing repeals it. Measured on this file as it stood this morning, at
+     393x852, the reader in All's Well I.ii, four levels open: the panes came
+     out 120 / 314 / 283 / 252px, one of them on the screen at a time -- and
+     the first of them, the one every book has, only 120px wide, because pane
+     0 takes `marginW` and on a phone `marginW` IS its own 120px floor.
+
+     So all panes means ALL PANES PRESENT AND ONE TOUCH AWAY, in two parts:
+
+       THE RAIL   44px under the safe area, one cell per open level, each
+                  naming the level and what is live in it, the level you are
+                  in marked. A tap is `goPos(-(i+1))`, so every level is ONE
+                  gesture from every other, in both directions.
+       THE STRIP  one pane, the screen less the peek, with the NEXT level out
+                  standing at the left edge in its own colour -- so the strip
+                  reads as a strip and the swipe has a visible destination.
+
+     AND THE MOTION IS THE ONE THAT ALREADY SHIPS. Nothing here touches the
+     swipe: `axisPush` and the one-position finger (G-STOPS) are untouched,
+     `dx` is read and never written, and this only decides where the panes
+     that axis opens are drawn. The Mac never enters any of it -- every line
+     is behind `PHONE`, `html[data-phone]`, read once at mount. */
+  const STRIP = {
+    peek: 48,   // px of the next level out, standing at the left edge
+    rail: 44,   // px of level rail -- the tap minimum design/phone measures to
+  };
+  /* THE PANES, RE-LAID FOR THE STRIP. pane.js is still asked for the stack --
+     this is not a second geometry, it is the phone's own branch of the one --
+     and then every pane is given the strip's two numbers in place of the
+     ladder's widths.
+
+     `fr` is the axis's own LINEAR openness, not pane.js's eased `f`: the peek
+     is a pane arriving under a finger, and `ease:3` leaves it 91px along at
+     the half-way point of a travel the thumb has already spent. The pane the
+     finger is opening tracks the finger.
+
+     ONE PEEK AT A TIME. Everything further out than the next level is parked
+     off the left edge rather than left standing at the peek slot: pane.js
+     gives the OUTERMOST pane the highest z (`z: 3 + i`), so panes left there
+     would show the TOP of the book at the edge instead of the level the swipe
+     is actually about to reach.
+
+     AND NOTHING PEEKS AT THE BOOK. `show` is the level below this one being
+     out at all, so at dx = 0 -- the reading page, no contents -- not a pixel
+     of any pane is drawn, exactly as pane.js's own `opacity: f * 2.5` gave.
+
+     `open` is what pane.js's apply() turns into pointer-events, so only the
+     level you can actually read takes a touch: a tap in the 48px peek cannot
+     open a row of a list you cannot see. The rail is how you get there. */
+  function phoneStrip(laid, n){
+    const vw = window.innerWidth || 0;
+    const W  = Math.max(120, vw - STRIP.peek);
+    let front = 0, right = 0;
+    for(let i=0;i<n;i++) if(clamp(-dx - i, 0, 1) > 0.5) front = i;
+    for(let i=0;i<n;i++){
+      const p = laid.panes[i];
+      if(!p) continue;
+      const fr   = clamp(-dx - i, 0, 1);
+      const show = (i === 0) ? fr > 0 : clamp(-dx - (i-1), 0, 1) > 0;
+      p.width = W;
+      p.f     = show ? 1 : 0;        // solid from its first pixel: the peek IS the pane
+      p.open  = show && i === front;
+      p.left  = (i > front + 1) ? -(W + 1)                     // parked: one peek at a time
+                                : Math.round(STRIP.peek - W * (1 - fr));
+      if(show && i <= front + 1) right = Math.max(right, p.left + W);
+    }
+    laid.right = right;
+    return front;
+  }
+  /* ===================== THE LEVEL RAIL, AND IT IS A BUTTON ===============
+     One cell per open level, OUTERMOST at the left and the level you are in
+     at the right, so the rail's order is the stack's order and the swipe's
+     direction. Each cell carries that level's own head and the item live in
+     it -- Book/Plays, Plays/All's Well, All's Well/Act I, Act I/Scene II --
+     so "where am I" is answered once per level and every answer is a button.
+
+     BUILT ON CHANGE, NEVER ON A FRAME. applyDx runs sixty times a second
+     whether or not anything moved; the markup is rewritten only when the
+     signature -- the heads, the live rows, which level is front -- has
+     actually moved. That is pane.js's own discipline for its custom
+     properties, and the last two rounds of slowness were both this. */
+  let railEl = null, railSig = null, railOn = null, railTx = 0;
+  function phoneRailEl(){
+    if(railEl) return railEl;
+    railEl = document.createElement("div");
+    railEl.id = "phrail"; railEl.className = "phrail"; railEl.hidden = true;
+    railEl.addEventListener("click", e => {
+      const t = e.target;
+      const b = t && t.closest ? t.closest(".phseg") : null;
+      if(!b) return;
+      const i = +b.getAttribute("data-level");
+      if(i === i) goPos(-(i + 1));      // that level is the front pane there
+    });
+    (o.bookEl || document.body).appendChild(railEl);
+    return railEl;
+  }
+  function phoneRailOff(){
+    if(!railEl) return;
+    railOn = false; railSig = null; railTx = 0;
+    railEl.hidden = true; railEl.style.transform = "";
+    try{ document.documentElement.setAttribute("data-rail", "off"); }catch(_){}
+  }
+  function phoneRail(n, front){
+    const on = !!book && screen === "open" && dx < -0.02;
+    const el = phoneRailEl();
+    if(on !== railOn){
+      railOn = on;
+      el.hidden = !on;
+      try{ document.documentElement.setAttribute("data-rail", on ? "on" : "off"); }catch(_){}
+    }
+    if(!on) return;
+    const cells = [];
+    for(let k = n - 1; k >= 0; k--){
+      const lv = levelsCache[k];
+      const it = (lv && lv.items && lv.liveIdx >= 0) ? lv.items[lv.liveIdx] : null;
+      /* THE ROW'S OWN WORDS, not a tidied version of them. `splitTitleNode`
+         wants a LEADING numeral ("1.", "IV)"), and "SCENE II. Paris. A room
+         in the King's palace." has none -- so `n` is empty here and the cell
+         carries the whole title, ellipsised by the cell's own width. That is
+         the mock-up's own behaviour (design/phone/panes-e-all.html) and the
+         measured cost is in this lane's report: the rail is a PLACE, and the
+         title it stands for is whole in the pane one tap away. */
+      cells.push({ i:k, head:(lv && lv.head) || "", pick: it ? (it.t || it.n || "") : "" });
+    }
+    const sig = front + "|" + cells.map(c => c.i + ":" + c.head + ":" + c.pick).join("|");
+    if(sig !== railSig){
+      railSig = sig;
+      el.innerHTML = cells.map(c =>
+        '<button type="button" class="phseg' + (c.i === front ? " here" : "")
+        + '" data-level="' + c.i + '"><i>' + esc(c.head) + '</i><u>'
+        + esc(c.pick) + '</u></button>').join("");
+    }
+    /* ...AND IT LEAVES WITH THE BOOK. The panes and the reader are carried
+       off the right edge by `leaveShift()`; a rail that stayed put would be
+       the one thing still standing on an empty stage. */
+    const tx = Math.round(leaveShift() * (window.innerWidth || 0));
+    if(tx !== railTx){
+      railTx = tx;
+      el.style.transform = tx ? "translateX(" + tx + "px)" : "";
+    }
+  }
   let swipe = null, lastTouch = null;
   const tnow = t => (typeof t === "number" && t > 0) ? t
     : ((typeof performance !== "undefined" && performance.now) ? performance.now() : Date.now());
@@ -4559,28 +4857,69 @@ function mount(o){
      one's choice, never two past where the axis happens to be. */
   function touchFrom(){
     const m = currentMaxLeft();
-    let p = wz.hold ? wz.goal : (snapTo != null ? Math.round(snapTo) : posNow());
+    /* a CROSSING is already a named position, and the leg it is waiting on is
+       not it: a finger down during the first leg starts from where the
+       crossing is going, or the next flick would be one past the page. */
+    let p = wz.hold ? wz.goal
+          : (crossTo != null ? crossTo
+          : (snapTo != null ? Math.round(snapTo) : posNow()));
     return clamp(p, -m, DX_MAX);
   }
   /* a position the axis may be sent to: on the axis, and never across the
      book from where it stands -- a finger that reverses through its own
-     touch-down comes home first, one leg at a time, as the wheel does. */
+     touch-down comes home first, one leg at a time, as the wheel does.
+
+     ...AND "WHERE IT STANDS" IS WHERE IT IS GOING (13 Sep). `touchFrom` takes
+     p0 from the travel's own goal, and this took its veto from the LIVE dx, so
+     a second sweep begun while the axis was still coming home from the word --
+     WORD_SNAP is 42.5 frames, ~708 ms, and a thumb is back on the glass long
+     before that -- was measured from 0 and vetoed from 0.7, and did nothing at
+     all. Measured, 393x852: word -> page -> contents -> out took FOUR sweeps,
+     the second of them eaten. One source for both, and the crossing itself is
+     two legs (touchGo). */
   function touchLegal(p){
     p = clamp(p, -currentMaxLeft(), DX_MAX);
-    if(dx > DX_REST && p < 0) return 0;
-    if(dx < -DX_REST && p > 0) return 0;
+    const at = wz.hold ? wz.goal
+             : (crossTo != null ? crossTo : (snapTo != null ? snapTo : dx));
+    if(at > DX_REST && p < 0) return 0;
+    if(at < -DX_REST && p > 0) return 0;
     return p;
   }
   /* SEND THE AXIS TO A POSITION, by the travel the wheel itself uses -- and
      only when the mark actually changes (snapStart restarts its clock). */
+  let crossTo = null;
+  /* THE CROSSING IS TWO LEGS, NEVER A JUMP. A finger may name a position on
+     the far side of the book while the axis is still on this side of it (it
+     is coming home from the word and the hand has already asked for the
+     contents). The page is a DETENT -- the one thing this axis has never let
+     a gesture run through -- so the axis finishes the leg it is on, at the
+     zoom's own speed, and the named position is taken up from there, at the
+     ladder's. Continuous, and the page is still crossed on foot. */
+  function crossStep(){
+    if(crossTo == null || wz.hold || snapTo != null) return;
+    if(Math.abs(dx) > DX_REST) return;
+    const g = crossTo; crossTo = null; touchGo(g);
+  }
   function touchGo(g){
     dxVel = 0; dxInput = 0; detent = false; dxIdle = 0;
     if(wz.hold){ wz.goal = Math.max(0, g); return; }   // wzRelease sends it there
+    crossTo = null;
+    if((g < 0 && dx > DX_REST) || (g > 0 && dx < -DX_REST)){ crossTo = g; g = 0; }
     const going = snapTo != null ? snapTo : dx;
     if(g >= 0 && dx >= -DX_REST){
+      paneEnd();               // the ladder is behind us
       wordGoal = g; wordReach = g;
       if(Math.abs(going - g) > DX_REST) snapStart(g, WORD_SNAP);
     } else {
+      /* THE WORD SIDE IS BEHIND US, AND ITS REACH MUST GO WITH IT (13 Sep).
+         stepDx's rest branch runs `if(wordReach !== null && |wordGoal - dx| >
+         DX_REST){ wordLeg(); return; }` BEFORE it ever looks at the leaving
+         zone, so a wordReach left standing from a gesture that came out of the
+         one-word view held the rest branch for ever and the release out of the
+         book was never decided: measured, 393x852, the chain word -> page ->
+         contents -> out pushed the axis to a full -2 of a -1 book and the book
+         stayed open, dx easing back to 0 with nothing closed. */
+      wordEnd(); wordGoal = 0;
       paneReach = g;           // a hand is on the ladder: nothing arms until it lifts
       if(Math.abs(going - g) > DX_REST) snapStart(g, PANE_SNAP);
     }
@@ -4648,10 +4987,44 @@ function mount(o){
        round in it stops at the pane it came from. */
     if(s.p0 === -m && dir < 0){
       s.leaving = true;
-      const d = -(px / Math.max(1, window.innerWidth || 1)) * SWIPE.gain;
-      const was = s.leave;
-      s.leave = clamp(s.leave + d, -1, 0);
-      if(s.leave !== was) axisPush(s.leave - was);
+      /* ============ THE WAY OUT (13 Sep) ============================
+         Osca, 12-13 Sep, on the phone: *"Scroll out of books still too hard,
+         not smooth enough."* / *"Cannot scroll between library and open books
+         in the reader."* MEASURED at 393x852 (pixelcheck/touch.mjs, the way-out
+         group): from the one-word view, three sweeps -- into the page, into the
+         contents, and the whole glass out -- left the book OPEN, dx never once
+         past -1; on the Complete Works five sweeps did the same. Two faults,
+         both here.
+
+         ONE: THE ARM. `exitArmed` is set in stepDx's rest branch, which needs
+         the pane travel to land (PANE_SNAP, ~202ms) and then T.grace of idle
+         (~133ms) on top. A second sweep inside that ~335ms window is not
+         merely refused -- it LATCHES (s.leaving is set for the life of the
+         gesture) and every push in it is spent against `axisPush`'s gate, so
+         the whole sweep does nothing and shows nothing. The arm exists to stop
+         a TRACKPAD's momentum tail running the ladder and carrying straight
+         out of the book (9 Sep). A finger has no tail: `touchGo` zeroes dxVel
+         and dxInput on every gesture. So on the phone the HAND is the arm --
+         a finger that is on the glass, at the deepest pane, asking to go
+         further, is the second gesture that rule was written to require.
+
+         TWO: THE PUSH MUST NOT BE SPENT WHILE THE AXIS IS STILL ARRIVING.
+         Until dx is actually on the deepest pane, axisPush sends these pushes
+         to the pane LADDER (which is already there) and they are gone. They
+         are held now: the finger's travel is counted only once the zone will
+         take it, so a sweep that begins during the last pane's travel spends
+         its remainder on the way out instead of nothing at all. */
+      if(PHONE && !leavingBook && !exitArmed && Math.abs(dx + m) <= DX_REST){
+        paneEnd(); exitArmed = true; armedAt = m;
+      }
+      const ready = !leavingBook && exitArmed && armedAt === m
+                    && dx <= -m + DX_REST;
+      if(ready){
+        const d = -(px / Math.max(1, window.innerWidth || 1)) * LEAVE_GAIN;
+        const was = s.leave;
+        s.leave = clamp(s.leave + d, -1, 0);
+        if(s.leave !== was) axisPush(s.leave - was);
+      }
       markPaint();
       return true;
     }
@@ -4669,7 +5042,23 @@ function mount(o){
   function swipeLift(t, cancelled){
     const s = swipe; swipe = null;
     if(!s || !s.live || s.axis !== "dx" || !s.took) return;
-    if(s.leaving){ paneEnd(); return; }     // LEAVE_COMMIT decides, in stepDx, as on the Mac
+    if(s.leaving){
+      /* A FLICK LEAVES. Every other position on this axis is committed by a
+         lift at `flickV` from `flickMin` however short the drag; the way out
+         was the one place that read distance alone, so the phone's commonest
+         gesture -- measured: a 94 px flick lifted at 0.7 px/ms -- reached 0.30
+         of the zone and sprang back. Short of a flick, LEAVE_COMMIT still
+         decides in stepDx, as on the Mac, and a finger thrown back undoes it
+         there by falling short. */
+      const outDist = s.x - s.x0;
+      const outV = cancelled ? 0 : touchV(s, tnow(t));
+      s.lift = { dist: outDist, v: outV, goal: "out", p0: s.p0 };
+      lastTouch = s.lift;
+      paneEnd();
+      if(!leavingBook && s.leave < -DX_REST && outDist >= TOUCH.flickMin
+         && outV >= TOUCH.flickV) closeToLibrary();
+      return;
+    }
     const dist = s.x - s.x0, a = Math.abs(dist), dir = dist > 0 ? -1 : 1;
     const v = cancelled ? 0 : touchV(s, tnow(t));
     const toward = dist > 0 ? v : -v;       // + = still travelling the drag's way
@@ -4867,6 +5256,9 @@ function mount(o){
       if(k === "touchBack"){ TOUCH.back = +v; return TOUCH.back; }
       if(k === "flickV"){ TOUCH.flickV = +v; return TOUCH.flickV; }
       if(k === "flickMin"){ TOUCH.flickMin = +v; return TOUCH.flickMin; }
+      if(k === "leaveCommit"){ LEAVE_COMMIT = +v; return LEAVE_COMMIT; }
+      if(k === "leaveStep"){ LEAVE_STEP = +v; return LEAVE_STEP; }
+      if(k === "leaveGain"){ LEAVE_GAIN = +v; return LEAVE_GAIN; }
       if(k === "stick"){ STICK = clamp(+v || 0, 0, 0.99); return STICK; }
       if(k in T){ T[k] = +v; return T[k]; }
       return null;
@@ -4880,6 +5272,8 @@ function mount(o){
                swipeGain:SWIPE.gain, swipeSlop:SWIPE.slop, stick:STICK,
                touchEdge:TOUCH.edge, touchCommit:TOUCH.commit, touchBack:TOUCH.back,
                flickV:TOUCH.flickV, flickMin:TOUCH.flickMin,
+               phys:physName, leaveCommit:LEAVE_COMMIT, leaveStep:LEAVE_STEP,
+               leaveGain:LEAVE_GAIN, wordSnap:WORD_SNAP,
                outSnap:OUT_SNAP_, leaveSnap:LEAVE_SNAP,
                stick:STICK, open:OPEN, opens:OPENS, pastAt:PAST_AT,
                paneSnap:PANE_SNAP };

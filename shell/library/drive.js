@@ -639,7 +639,14 @@ function syncJobBook(row, transport, o) {
   var max = B && typeof B.SCHEMA_MAX === "number" ? B.SCHEMA_MAX : SYNC_SCHEMA_MAX;
   var files = row.files.filter(function (f) { return f && typeof f.rel === "string" && isPayload(f.rel); });
   var rels = files.map(function (f) { return f.rel; });
-  if (rels.indexOf("book.json") < 0) return { slug: row.slug, why: "Studio listed no book.json for " + row.slug };
+  // G-DIET, 13 Sep: the book file is `book.meta.json` now (a zip's is still
+  // `book.json`), and which one is import.js's answer -- `bookFileOf` -- so
+  // the planner never carries a second copy of the name. One line, and the
+  // only one in this file that named book.json; the pull planner itself
+  // (G-TOPUP's this round) is untouched.
+  var bookFileOf = B && typeof B.bookFileOf === "function" ? B.bookFileOf
+    : function (r) { return r.indexOf("book.meta.json") >= 0 ? "book.meta.json" : (r.indexOf("book.json") >= 0 ? "book.json" : null); };
+  if (!bookFileOf(rels)) return { slug: row.slug, why: "Studio listed no book.meta.json for " + row.slug };
   var v = row.schema_version == null ? 1 : row.schema_version;
   if (typeof v === "number" && v > max) {
     return { slug: row.slug, why: "book.json is schema_version " + v + "; this reader knows up to " + max + " — update the app" };

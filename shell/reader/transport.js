@@ -55,6 +55,45 @@
      to voiceui and "1.5x" tapped on a bar must mean the same thing. */
   var SPEEDS = [0.75, 1, 1.25, 1.5, 1.75, 2];
 
+  /* =========================== ★ THE PACE, IN WPM =========================
+     Osca, 13 September: *"Needs to be a rough wpm play in the voice."* A
+     COARSE rate the listener nudges while listening, and the number on the
+     bar is the number Settings calls Pace -- `wpm`, the one stored value.
+     Nothing here holds a second one: `paceNow()` reads the store through the
+     page that registered it, `stepPace()` writes it back through the same
+     door, and every engine is a CONSEQUENCE of that write.
+
+     THE EIGHT STOPS, and they are the whole list:
+         150  200  250  300  350  400  500  600
+     Coarse on purpose -- Settings' own slider is 80..900 in 25s (thirty-three
+     stops, `prefs/prefs.js`'s `WPM`), which is a thing you dial sitting down,
+     not a thing you nudge with a thumb while a voice is talking. Every stop
+     here is a multiple of that step and inside that range, so a pace picked
+     on the bar is a pace the Settings row can also show and land on exactly;
+     the two controls can never disagree about what is stored. 300 -- the
+     default -- is one of them, and the list runs half that to twice it.
+
+     TWO ENGINES, TWO CONSEQUENCES, and D7 is why they differ:
+       - A RENDERED MASTER is played faster or slower. `rate = wpm / 300`, so
+         the pace the audio was made at is rate 1 (a STATED reference, the
+         store's own default, not a measurement of any engine) and the eight
+         stops are 0.5x .. 2x. *"With rendered audio, word rate can change at
+         playback with no re-render"* -- so this writes `playbackRate` and
+         NOTHING ELSE. No render, no seek, no reload.
+       - THE SYSTEM VOICE re-bases. `sysvoice.js` reads the same `wpm` for
+         `utterance.rate` and its `rebase()` speaks the SAME word again at the
+         new rate; the page wires the store's change to it. Not this file's:
+         this file owns no engine (see THE SYSTEM VOICE, below).
+
+     ★ POSITION IS SACRED (`plan-12-sep-cd.md` D7). Changing the pace must not
+     move the reader -- not by a word. Every door below writes a rate and a
+     stored number; not one of them calls `seekTo`, `open`, `paint` or
+     `nav.goTo`, and `design/reader/test-pace.mjs` is that claim as a number
+     on both engines: note the word, change the pace, the word is the word. */
+  var PACES = [150, 200, 250, 300, 350, 400, 500, 600];
+  var PACE_REF = 300;                  /* wpm at rate 1 -- the store's default */
+  var PACE_MIN = 0.25, PACE_MAX = 4;   /* what an <audio> element honours */
+
   var IDLE_MS = 250;            /* the slow tick: not playing, still watching */
 
   function control() {
@@ -96,7 +135,10 @@
       return !!(t && t.sentences && t.sentences.length);
     }, false);
   }
-  function playing() { return ask(function (c) { return !c.isPaused(); }, false); }
+  function playing() {
+    if (sysSpeaking()) return true;
+    return ask(function (c) { return !c.isPaused(); }, false);
+  }
 
   function time() {
     return ask(function (c) {
@@ -246,6 +288,43 @@
     return !!cid && known[cid] === true;
   }
 
+  /* ------------------------------------------------- THE SYSTEM VOICE
+     `plan-12-sep-cd.md` D1(a). A chapter with no master used to mean the
+     space bar did nothing: `listen.js` armed a `VirtualClock`, the highlight
+     ran over a silence, and there was no sound in the building. There is a
+     synthesiser in every browser this app runs in, so a chapter with no
+     master is not a silent chapter -- it is a chapter this reads aloud.
+
+     `sysvoice.js` is that engine and it is REGISTERED, not imported: this
+     file owns no engine and knows nothing about `speechSynthesis`. The page
+     builds it (it needs the DOM's own word list and Settings' `wpm`) and
+     hands it over, exactly as it hands over `voiceFolder`.
+
+     WHEN IT TAKES THE PRESS -- `speaks()`, and every clause of it is load-
+     bearing: there is an engine; the chapter on screen has no master
+     (`hasVoice()`), none is being turned to (`turning`), and none has been
+     HEARD OF but not yet opened (`heard()` -- a rendered chapter before the
+     first press looks exactly like an unrendered one to `hasVoice()`, and
+     speaking over a book that has a cloned voice waiting would be the worst
+     failure this could have); and the engine has words for that chapter.
+
+     THE 1 SEPTEMBER RULE IS UNTOUCHED. `state().voice` still means A MASTER,
+     so neither bar appears for a chapter with no audio; `state().system` is
+     the separate fact, and what a bar does with it is the bars' lane, not
+     this one. */
+  var sys = null;
+  function sysvoice(engine) { sys = engine || null; }
+  function sysSpeaking() {
+    if (!sys) return false;
+    try { return !!sys.speaking; } catch (e) { return false; }
+  }
+  function speaks() {
+    if (!sys) return false;
+    if (hasVoice() || turning || heard()) return false;
+    if (sysSpeaking()) return true;
+    try { return !!sys.available(chapterOnScreen()); } catch (e) { return false; }
+  }
+
   /* ------------------------------------------------------- THE CHAPTER TURN
      G-PHONE step 4 (Osca, 10 Sep): *"the playback foot strip works ...
      play/pause/seek/speed act on a real render in the sim; survives a chapter
@@ -337,8 +416,18 @@
 
   /* ------------------------------------------------------------- the doors */
 
-  function play() { return tell(function (c) { c.play(); }); }
-  function pause() { return tell(function (c) { c.pause(); }); }
+  /* THE PRESS GOES TO ONE ENGINE OR THE OTHER, NEVER BOTH. `speaks()` is
+     asked first and answers no the moment a master is there, so a rendered
+     chapter reaches `listen.js` exactly as it always did. */
+  function play() {
+    if (speaks()) { try { return !!sys.play(); } catch (e) { return false; } }
+    return tell(function (c) { c.play(); });
+  }
+  function pause() {
+    var stopped = false;
+    if (sysSpeaking()) { try { stopped = !!sys.pause(); } catch (e) {} }
+    return tell(function (c) { c.pause(); }) || stopped;
+  }
   function toggle() { return playing() ? pause() : play(); }
 
   /* AN ABSOLUTE SEEK IS THE ONE THING ReaderControl HAS NO DOOR FOR -- it
@@ -385,6 +474,68 @@
     var v = +r || 1;
     return tell(function (c) { c.setSpeed(null, v); });
   }
+  /* ------------------------------------------------------------- the pace
+     REGISTERED, never imported -- the same shape as `voiceFolder` and
+     `sysvoice` above. The page owns the store (`prefs/prefs.js` is loaded in
+     its <head>, before first paint); this file owns what a rate change does
+     to a master. `io` is `{read: () -> wpm, write: (wpm) -> void}` and a page
+     that registers none leaves every door below a no-op returning 0. */
+  var paceIO = null, paceCid = null;
+  function pace(io) {
+    paceIO = (io && typeof io.read === "function" && typeof io.write === "function") ? io : null;
+    paceCid = null;
+    return !!paceIO;
+  }
+  /* the stored pace, or 0 for "there is no store" -- never a guessed default:
+     a bar with nothing behind it must draw nothing, not 300 */
+  function paceNow() {
+    if (!paceIO) return 0;
+    var w = 0;
+    try { w = +paceIO.read(); } catch (e) { return 0; }
+    return isFinite(w) && w > 0 ? w : 0;
+  }
+  /* wpm -> the multiple a master is played at, clamped to what an element takes */
+  function rateForPace(wpm) {
+    var w = +wpm;
+    if (!isFinite(w) || w <= 0) return 1;
+    return Math.max(PACE_MIN, Math.min(PACE_MAX, w / PACE_REF));
+  }
+  /* which stop a stored wpm is standing on -- the nearest, so a pace dialled
+     to 325 in Settings steps to 350 rather than to a number off the list */
+  function nearestPace(wpm) {
+    var w = +wpm, i = 0, best = Infinity;
+    for (var k = 0; k < PACES.length; k++) {
+      var d = Math.abs(PACES[k] - w);
+      if (d < best) { best = d; i = k; }
+    }
+    return i;
+  }
+  /* the master follows the stored pace. A WRITE OF ONE PROPERTY: no seek, no
+     open, no paint -- ★ POSITION IS SACRED. */
+  function applyPace() {
+    var w = paceNow();
+    if (!w) return false;
+    return setSpeed(rateForPace(w));
+  }
+  /* the listener's nudge: one stop along the list, wrapping, stored, applied.
+     Returns the wpm now stored (the old one if there is no store to write). */
+  function stepPace(n) {
+    var w = paceNow();
+    if (!w) return 0;
+    var i = nearestPace(w) + ((n | 0) || 1);
+    i = ((i % PACES.length) + PACES.length) % PACES.length;
+    return setPace(PACES[i]);
+  }
+  /* an exact pace, for voiceui or a driver. Off-list values are allowed --
+     the store's range is the store's -- and the master follows at once. */
+  function setPace(wpm) {
+    var w = +wpm, was = paceNow();
+    if (!paceIO || !isFinite(w) || w <= 0) return was;
+    try { paceIO.write(w); } catch (e) { return was; }
+    applyPace();
+    return paceNow() || w;
+  }
+
   /* the next speed up the list, wrapping -- what a one-button bar does */
   function cycleSpeed() {
     var now = speed(), i = 0, best = Infinity;
@@ -410,9 +561,11 @@
     var d = duration(), t = time();
     return {
       ready: ready(), voice: hasVoice() || turning || heard(), timings: hasTimings(),
+      system: speaks(),
       playing: playing(), t: t, d: d,
       f: d > 0 ? Math.max(0, Math.min(1, t / d)) : 0,
-      rate: speed(), chapterId: chapterId(), chapterIndex: chapterIndex(),
+      rate: speed(), wpm: paceNow(),
+      chapterId: chapterId(), chapterIndex: chapterIndex(),
     };
   }
 
@@ -425,7 +578,7 @@
      repaint per frame for a number that has not changed is the cost this
      avoids. */
   function sig(s) {
-    return [s.ready, s.voice, s.timings, s.playing, s.rate, s.chapterId,
+    return [s.ready, s.voice, s.system, s.timings, s.playing, s.rate, s.wpm, s.chapterId,
             Math.round(s.t * 10), Math.round(s.d * 10)].join("|");
   }
   function beat() {
@@ -437,6 +590,16 @@
        taken (see THE CHAPTER TURN) */
     if (wasPlaying && !s.playing && turn()) s = state(), k = sig(s);
     wasPlaying = s.playing;
+    /* A NEW MASTER STARTS AT RATE 1 and the listener did not ask for that.
+       listen.js's `rate` lives with the chapter it opened, so a chapter turn
+       -- or the first open of a book -- hands back an element playing at 1x
+       under a bar that says 400 wpm. The pace is re-asserted on the chapter
+       id CHANGING and at no other moment, so a rate voiceui set mid-chapter
+       (its "slower", its clarify) is left alone, which is voiceui's lane. */
+    if (paceIO && s.chapterId !== paceCid) {
+      paceCid = s.chapterId;
+      if (s.voice && applyPace()) s = state(), k = sig(s);
+    }
     if (k !== last) {
       last = k;
       for (var i = listeners.length - 1; i >= 0; i--) {
@@ -482,9 +645,14 @@
     play: play, pause: pause, toggle: toggle,
     seekTo: seekTo, seekFraction: seekFraction, nudge: nudge, arm: arm,
     voiceFolder: voiceFolder, heard: heard,
+    sysvoice: sysvoice, speaks: speaks, speaking: sysSpeaking,
+    get system() { return sys; },
     turn: turn, get turning() { return turning; },
     stepSentence: stepSentence, stepWord: stepWord,
     setSpeed: setSpeed, cycleSpeed: cycleSpeed,
+    PACES: PACES, PACE_REF: PACE_REF,
+    pace: pace, paceNow: paceNow, stepPace: stepPace, setPace: setPace,
+    applyPace: applyPace, rateForPace: rateForPace, nearestPace: nearestPace,
     fmt: fmt, state: state, on: on,
     get control() { return control(); },
   };

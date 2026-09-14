@@ -462,6 +462,62 @@
     if (Date.now() < eatDrag) { e.preventDefault(); e.stopPropagation(); }
   }, true);
 
+  /* ============ LIGHT / DARK -- A LONG PRESS ON THE ⚙ (Osca, 11 Sep) =======
+     *"Light/dark: a long-press on the gear in the bottom bar toggles it."*
+     A TAP STILL OPENS SETTINGS, and the bar stays three elements: no fourth
+     button, no second store. The value written is the ONE value the Settings
+     window's General row writes -- `prefs/prefs.js::toggleTheme()`, which
+     patches the `theme` field and tells every open surface through
+     `subscribe()` (the `storage` event in a browser, the BroadcastChannel
+     between the desktop app's webviews, and the one-second read that cannot
+     fail). So the reader, the one-word view, the Library and this bar all
+     repaint off one write; nothing here touches `data-theme` itself.
+
+     THE PRESS IS `PRESS_MS` (560 ms) AND IT FIRES ON THE CLOCK, not on the
+     lift, so the theme flips under your finger and the press is its own
+     answer. Releasing it must NOT also open Settings: the ⚙ is an `<a href>`,
+     so the fired press eats the trailing `click` (`eatSet`), and iOS's own
+     long-press callout is refused with `contextmenu` + `-webkit-touch-callout`
+     (pbar.css). A finger that moves more than `PRESS_SLOP` is a drag on the
+     bar, which the bar already owns, and the timer is dropped. */
+  var PRESS_MS = 560, PRESS_SLOP = 10;
+  var setEl = document.getElementById("pbarset");
+  var pressTimer = 0, pressFrom = null, pressFired = false, eatSet = 0, presses = 0;
+  function pressDrop() {
+    if (pressTimer) { clearTimeout(pressTimer); pressTimer = 0; }
+    pressFrom = null;
+  }
+  function pressFire() {
+    pressTimer = 0; pressFired = true; presses++;
+    eatSet = Date.now() + 700;            /* the lift's click is not a navigation */
+    try { if (window.TTSTVSettings && window.TTSTVSettings.toggleTheme) window.TTSTVSettings.toggleTheme(); }
+    catch (_) { /* no store on this page: the press does nothing, and says so by doing nothing */ }
+  }
+  if (setEl) {
+    setEl.addEventListener("pointerdown", function (e) {
+      pressFired = false;
+      pressFrom = { x: e.clientX, y: e.clientY };
+      if (pressTimer) clearTimeout(pressTimer);
+      pressTimer = setTimeout(pressFire, PRESS_MS);
+    });
+    setEl.addEventListener("pointermove", function (e) {
+      if (!pressFrom) return;
+      if (Math.abs(e.clientX - pressFrom.x) > PRESS_SLOP
+       || Math.abs(e.clientY - pressFrom.y) > PRESS_SLOP) pressDrop();
+    });
+    setEl.addEventListener("pointerup", pressDrop);
+    setEl.addEventListener("pointercancel", pressDrop);
+    setEl.addEventListener("pointerleave", pressDrop);
+    setEl.addEventListener("contextmenu", function (e) { if (e.preventDefault) e.preventDefault(); });
+    /* capture, and before the bar's own eater: a fired press is not a door */
+    setEl.addEventListener("click", function (e) {
+      if (pressFired || Date.now() < eatSet) {
+        pressFired = false;
+        e.preventDefault(); e.stopPropagation();
+      }
+    }, true);
+  }
+
   /* the bench writes its dials as inline properties on <html>; re-read them */
   new MutationObserver(function () { mic(); if (!autohide()) show(); })
     .observe(R, { attributes: true, attributeFilter: ["style"] });
@@ -545,7 +601,10 @@
                               get current() { return current; },
                               get peeking() { return peeking; },
                               get closed() { return closedLast; } },
-                      dials: { SLOP: SLOP, UP_AT: UP_AT, SLIDE_AT: SLIDE_AT, FLICK: FLICK },
+                      dials: { SLOP: SLOP, UP_AT: UP_AT, SLIDE_AT: SLIDE_AT, FLICK: FLICK,
+                               PRESS_MS: PRESS_MS, PRESS_SLOP: PRESS_SLOP },
+                      theme: { el: setEl, MS: PRESS_MS, slop: PRESS_SLOP,
+                               get presses() { return presses; } },
                       get last() { return lastG; } };
   mic();
   dotStart();

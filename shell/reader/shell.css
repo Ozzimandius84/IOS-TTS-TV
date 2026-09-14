@@ -431,6 +431,50 @@ html:not([data-phone]) .mplay-go{
   background:var(--ink); color:var(--ground); opacity:1; }
 html:not([data-phone]) .mplay-go:hover{ background:var(--ink); opacity:.86; }
 html:not([data-phone]) .mplay-go svg{ width:14px; height:14px; }
+/* ===================== FOLLOW, THE ONE LATCHING CONTROL ====================
+   Osca, 13 Sep: *"simple button in the playback bar."* Every other control on
+   this bar does a thing when you press it; this one is a STATE, and it has to
+   read as one from across the room, so it is the only control that keeps a
+   ground when the pointer is nowhere near it.
+
+   Three states, `data-follow` on the button, written by the bar's paint:
+     on     the page is following: the ink's own ground behind the glyph
+     held   a hand has been on the page, so following is waiting for the next
+            press of play. The same ground at a third of the weight -- the
+            button is still ON and says so; it is the following that is paused
+            (follow.js, "AND A HAND ON THE PAGE STOPS IT")
+     off    a plain control, fainter than its neighbours, because a reader who
+            has turned following off should not have it shouting at him
+   No border, no second size, nothing that changes the bar's layout in any
+   state: the row is the row whatever FOLLOW is doing. */
+html:not([data-phone]) .mplay-follow[data-follow="on"]{
+  opacity:1; background:color-mix(in srgb, var(--ink) 13%, transparent); }
+html:not([data-phone]) .mplay-follow[data-follow="held"]{
+  opacity:.78; background:color-mix(in srgb, var(--ink) 5%, transparent); }
+html:not([data-phone]) .mplay-follow[data-follow="off"]{ opacity:.42; }
+html:not([data-phone]) .mplay-follow[data-follow="off"]:hover{ opacity:.8; }
+
+/* ★ FLOAT, THE CAPSULE'S LAST CONTROL (13 Sep, design/reader/FLOAT.md).
+   THE MAC'S AND ONLY THE MAC'S, and this file's own `html:not([data-phone])`
+   says so rather than a width -- the phone's float is Apple's PiP window with
+   Apple's buttons in it (FLOAT.md §1) and is a different road entirely, so
+   there is no `.pplay-float` anywhere and the phone's strip holds no hidden
+   copy of this one.
+
+   IT WEARS FOLLOW'S CLOTHES because it is FOLLOW's kind of control: the second
+   LATCHING press on a bar where everything else is a press that does a thing.
+   Two states and not three -- a panel is open or it is not -- so `data-float`
+   takes `on` and `off` and there is no `held`. Same 13% wash at full opacity,
+   same .42 at rest, so the two ends of the capsule read as one pair. */
+html:not([data-phone]) .mplay-float[data-float="on"]{
+  opacity:1; background:color-mix(in srgb, var(--ink) 13%, transparent); }
+html:not([data-phone]) .mplay-float[data-float="off"]{ opacity:.42; }
+html:not([data-phone]) .mplay-float[data-float="off"]:hover{ opacity:.8; }
+/* NO HOST, NO PANEL, NO BUTTON. The mount hides it in a plain browser and on
+   the design bench, where `TTSTVHost.float` does not exist: a control that
+   cannot do anything is worse than no control. `hidden` has to beat the
+   `.mplay-b` display rule above it, exactly as `.mplay[hidden]` does. */
+html:not([data-phone]) .mplay-float[hidden]{ display:none; }
 /* THE TWO ARCS CARRY THEIR OWN NUMBER, and it is a <text> inside the svg
    rather than a span over it: the seconds are a dial (`--mplay-skip`), so the
    glyph has to be able to say 10 or 30 as readily as 15, and a number that
@@ -531,7 +575,61 @@ html[data-phone] .mplay{ display:none; }
     --pplay-speed:flex;       /* `none` -> no speed button on the phone */
     --pplay-skip:15;          /* read by the mount */
     --pplay-when:voice;       /* `timings` | `always` -- read by the mount */
+    --phrail-h:44px;          /* the level rail: a tap target, so 44 like the rest */
   }
+
+  /* =================== THE LEVEL RAIL -- (e), 13 September =================
+     Osca picked (e) ALL PANES off design/phone/STATUS.md's five mock-ups. The
+     rail is the readout that is also the control: one cell per open level,
+     the outermost at the left, the level you are in marked, and a tap on any
+     of them flies there. book-nav.js builds it -- phone only, `PHONE` is
+     `html[data-phone]` read once at mount -- and this file is what it looks
+     like. The Mac has no such element at all: nothing here can reach it.
+
+     WHY IT IS AT THE TOP. It is the one axis a phone has spare. The concertina
+     -- three closed levels as rails BESIDE the open one -- costs 60px off a
+     345px column to name the same three levels this takes no width at all to
+     name (design/phone/STATUS.md, stage 1 §3). The foot is the two bars'.
+
+     THE PANES START UNDER IT while it is up (`data-rail="on"`, written by the
+     same mount): a pane is `position:fixed; top:0` in pane.css, so this moves
+     its top rather than covering its first row. */
+  html[data-phone] .phrail{
+    position:fixed; left:0; right:0; z-index:48;
+    top:var(--safe-top, env(safe-area-inset-top, 0px));
+    height:var(--phrail-h); box-sizing:border-box;
+    display:flex; align-items:stretch;
+    background:var(--ground);
+    /* THE HAIRLINE IS A SHADOW, NOT A BORDER, and the reason is a tap target:
+       with `box-sizing:border-box` a 1px bottom border takes the cell to 43px
+       and design/phone's own check wants 44. A shadow is drawn outside the
+       box and costs the cells nothing. */
+    box-shadow:0 1px 0 var(--rule); }
+  html[data-phone] .phrail[hidden]{ display:none; }
+  /* one cell per level: 393/4 = 98px at the fixture's depth, and five levels
+     -- MAX_LEFT_LEVELS, the deepest tree book-nav.js will build -- is still
+     78px. Both clear the 44px minimum on both axes. */
+  html[data-phone] .phseg{
+    flex:1 1 0; min-width:0; padding:0 6px; margin:0;
+    border:0; border-right:1px solid var(--rule); background:none;
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    font-family:var(--ui); color:var(--dim);
+    -webkit-tap-highlight-color:transparent; }
+  html[data-phone] .phseg:last-child{ border-right:0; }
+  html[data-phone] .phseg:active{ background:var(--rule); }
+  /* the level's own head, and the item live in it -- one line each, and the
+     line is ellipsised rather than wrapped: the rail is a place, not a list */
+  html[data-phone] .phseg i{
+    font-style:normal; font-size:8.5px; letter-spacing:.12em; text-transform:uppercase;
+    opacity:.55; max-width:100%; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  html[data-phone] .phseg u{
+    text-decoration:none; font-size:11px; line-height:1.2;
+    max-width:100%; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  html[data-phone] .phseg.here{
+    color:var(--ink); box-shadow:inset 0 -2px 0 var(--ink); }
+
+  html[data-phone][data-rail="on"] .cpane{
+    top:calc(var(--safe-top, env(safe-area-inset-top, 0px)) + var(--phrail-h)); }
 
   html[data-phone] .pplay{
     position:fixed; left:0; right:0; z-index:60; box-sizing:border-box;
@@ -614,6 +712,17 @@ html[data-phone] .mplay{ display:none; }
     background:var(--ink); color:var(--ground); opacity:1; }
   html[data-phone] .pplay-go:active{ background:var(--ink); opacity:.85; }
   html[data-phone] .pplay-go svg{ width:24px; height:24px; }
+  /* FOLLOW, the same three states as the Mac's and the same reasons (see the
+     block over `.mplay-follow`). It is a sixth 44 in a row that had five: at
+     402 px, the phone's narrowest, six 44s and five 4px gaps come to 284 of the
+     382 inside the strip's own padding, so the row still has room to spread and
+     no target shrinks. The corner radius is the row's own 12, not a pill, so it
+     does not read as a second play button. */
+  html[data-phone] .pplay-follow[data-follow="on"]{
+    opacity:1; background:color-mix(in srgb, var(--ink) 13%, transparent); }
+  html[data-phone] .pplay-follow[data-follow="held"]{
+    opacity:.8; background:color-mix(in srgb, var(--ink) 5%, transparent); }
+  html[data-phone] .pplay-follow[data-follow="off"]{ opacity:.44; }
   html[data-phone] .pplay-speed{
     display:var(--pplay-speed); align-items:center; justify-content:center;
     flex:0 0 auto; width:44px; height:44px; min-width:44px; min-height:44px;

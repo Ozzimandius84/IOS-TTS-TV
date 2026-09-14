@@ -143,6 +143,16 @@
      and it is handed this page's own readers -- it names no key of the
      reader's. `window.TTSTVDrive`, and nothing runs until asked. -->
 <script src="../library/drive.js"></script>
+<!-- THE DOOR'S ONE CLIENT (G-SETTINGS2, 13 Sep). `library/transfer.js` is
+     the client for the cloud door -- `cloud/endpoint.py` on Modal, or
+     `serve_local.py` on the LAN -- and until today NO PAGE LOADED IT: it was
+     in `reader/sw.js`'s SHELL_FILES and in comments, and nowhere else, so
+     Settings' own "Your door" card wrote `transfer.pairing` for a reader
+     that never ran (the wiring audit, `2a0240a`). This page writes that key,
+     so this page is where its reader belongs: the card's Check button asks
+     the door's free `GET /` through it. Before `settings.js`, like every
+     other thing that file reaches for. -->
+<script src="../library/transfer.js"></script>
 <script src="settings.js"></script>
 <script>
 "use strict";

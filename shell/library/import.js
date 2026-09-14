@@ -144,10 +144,39 @@ const TTSTVBundle = (() => {
   // language once (Settings > Languages, `library/langs.js`) and looks a word
   // up through the app (`TTSTVHost.dict`, reader/lookup.js). A zip that still
   // carries one has it counted and dropped like any other stranger.
-  const PAYLOAD = new Set(["book.json", "book-data.js", "align.json", "render.json",
+  // `book.meta.json` (G-DIET, 13 Sep) is the SLIM META -- `studio/sync.py::
+  // meta_of` writes it off book.json: title, author, lang, source, hash,
+  // words, the chapter list, first_words, form, structure, and not one
+  // paragraph. It is what a SYNCED book validates and shelves by; `book.json`
+  // itself left Studio's manifest with this line (425.8 MB across 37 books,
+  // and the reader never read a byte of it -- `book-data.js` is the page,
+  // `chapters/*.txt` + `timings/*.json` are the word map). book.json STAYS on
+  // this list because a bundle ZIP still carries it: `importBook` takes
+  // whichever of the two a door hands it, meta first.
+  const PAYLOAD = new Set(["book.meta.json", "book.json", "book-data.js", "align.json", "render.json",
                            "names.json", "grammar.json", "spans.json",
                            "cover.jpg"]);
+  const BOOK_FILE = "book.json";
+  const META_BOOK_FILE = "book.meta.json";
+  // The slim meta's shape version, the same kind of ceiling SCHEMA_MAX is:
+  // a meta written by a newer Studio than this shell knows is refused by
+  // name, so the message can say "update the app".
+  const META_MAX = 1;
   const META_FILE = ".bundle.json";             // this module's own, never fetched by the reader
+
+  /** Which of the two book files a door has handed us, meta first. `null`
+   *  when neither is there -- the one refusal that costs no request. */
+  function bookFileOf(files) {
+    if (files && typeof files.has === "function") {
+      if (files.has(META_BOOK_FILE)) return META_BOOK_FILE;
+      if (files.has(BOOK_FILE)) return BOOK_FILE;
+      return null;
+    }
+    var rels = files || [];
+    if (rels.indexOf(META_BOOK_FILE) >= 0) return META_BOOK_FILE;
+    if (rels.indexOf(BOOK_FILE) >= 0) return BOOK_FILE;
+    return null;
+  }
 
   function isPayload(rel) {
     if (PAYLOAD.has(rel)) return true;
@@ -362,6 +391,42 @@ const TTSTVBundle = (() => {
     return { ok: true, errors: [], wordIds: ids, words: ids.length, chapters: obj.chapters.length };
   }
 
+  /** THE SLIM META'S OWN VALIDATION (G-DIET, 13 Sep). `validateBook` proves a
+   *  parse tree; there is no tree here, so what is proved is different and
+   *  smaller: the same six core keys, the same schema ceiling, plus the two
+   *  facts the tree used to yield -- `hash` (the sixteen hex characters
+   *  `core/provenance.py::book_word_id_hash` computes and `bookHash`
+   *  recomputed in the page) and `words`. The hash is now Studio's answer
+   *  rather than the page's, and that is the trade this file is making: the
+   *  page cannot re-derive a number from a tree it no longer receives. It is
+   *  the same number by construction -- `studio/sync.py::book_hash` is
+   *  provenance's own walk -- and a wrong one costs a cache under the wrong
+   *  name, never a wrong book: the bytes stored are the bytes sent.
+   *
+   *  `chapters` is the chapter list's length, which is what the row shows. */
+  function validateMeta(obj) {
+    const errors = [];
+    if (!obj || typeof obj !== "object" || Array.isArray(obj)) return { ok: false, errors: ["book.meta.json is not a JSON object"] };
+    const mv = obj.meta_version === undefined ? 1 : obj.meta_version;
+    if (typeof mv !== "number" || !Number.isInteger(mv) || mv < 1) errors.push(`meta_version ${JSON.stringify(obj.meta_version)} is not a version number`);
+    else if (mv > META_MAX) errors.push(`book.meta.json is meta_version ${mv}; this reader knows up to ${META_MAX} — update the app`);
+    for (const k of ["id", "title", "author", "lang", "source", "chapters"]) {
+      if (!(k in obj)) errors.push(`book.meta.json has no "${k}" (studio/sync.py meta_of writes it)`);
+    }
+    if (typeof obj.id === "string" && !/^[a-z0-9][a-z0-9-]*$/.test(obj.id)) {
+      errors.push(`"${obj.id}" is not a usable slug (lower-case letters, digits and hyphens)`);
+    }
+    const v = obj.schema_version === undefined ? 1 : obj.schema_version;
+    if (typeof v !== "number" || !Number.isInteger(v) || v < 1) errors.push(`schema_version ${JSON.stringify(obj.schema_version)} is not a version number`);
+    else if (v > SCHEMA_MAX) errors.push(`book.json is schema_version ${v}; this reader knows up to ${SCHEMA_MAX} — update the app`);
+    if (!Array.isArray(obj.chapters)) errors.push("chapters is not a list");
+    else if (!obj.chapters.length) errors.push("the book has no chapters");
+    if (typeof obj.hash !== "string" || !/^[0-9a-f]{16}$/.test(obj.hash)) errors.push("book.meta.json has no usable hash");
+    if (typeof obj.words !== "number" || !Number.isInteger(obj.words) || obj.words < 1) errors.push("the book has no words");
+    if (errors.length) return { ok: false, errors };
+    return { ok: true, errors: [], hash: obj.hash, words: obj.words, chapters: obj.chapters.length };
+  }
+
   function hex(buf) {
     return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, "0")).join("");
   }
@@ -418,27 +483,35 @@ const TTSTVBundle = (() => {
   async function importBook(prefix, files, read, o, count) {
     const onProgress = o.onProgress || (() => {});
     const href = o.href;
-    const bookEntry = files.get("book.json");
-    if (!bookEntry) {
+    // WHICH BOOK FILE (G-DIET, 13 Sep). A synced book arrives with
+    // `book.meta.json` and no parse tree; a zip from the bench still carries
+    // `book.json`. Both doors land here, and the difference is exactly two
+    // lines: which file is read, and where the hash comes from -- the meta's
+    // own (Studio computed it with `core/provenance.py`'s walk) or this
+    // page's, off the tree it was handed. Everything after is identical.
+    const bookName = bookFileOf(files);
+    if (!bookName) {
       count.done += files.size;
-      return { ok: false, prefix, slug: null, errors: ["no book.json"] };
+      return { ok: false, prefix, slug: null, errors: ["no book.meta.json and no book.json"] };
     }
-    onProgress({ done: count.done, total: count.total, label: "reading book.json", slug: null });
+    const bookEntry = files.get(bookName);
+    onProgress({ done: count.done, total: count.total, label: "reading " + bookName, slug: null });
     let book, bookBytes;
     try {
       bookBytes = await read(bookEntry);
       book = JSON.parse(new TextDecoder("utf-8").decode(bookBytes));
     } catch (e) {
       count.done += files.size;
-      return { ok: false, prefix, slug: null, errors: ["book.json could not be read: " + e.message] };
+      return { ok: false, prefix, slug: null, errors: [bookName + " could not be read: " + e.message] };
     }
-    const check = validateBook(book);
+    const slim = bookName === META_BOOK_FILE;
+    const check = slim ? validateMeta(book) : validateBook(book);
     if (!check.ok) {
       count.done += files.size;
       return { ok: false, prefix, slug: book && book.id || null, title: book && book.title || null, errors: check.errors };
     }
     const slug = book.id;
-    const hash = await bookHash(check.wordIds);
+    const hash = slim ? check.hash : await bookHash(check.wordIds);
     const store = storeFor(href);
     // "this exact book is already here" -- a version of the slug with this
     // hash, finished or not (a Cache with no meta entry is listed, broken)
@@ -527,7 +600,20 @@ const TTSTVBundle = (() => {
     for (const rel of rels) {
       if (isPayload(rel)) files.set(rel, rel); else ignored.push(rel);
     }
-    if (!files.has("book.json")) return { ok: false, prefix: slug + "/", slug, errors: ["Studio listed no book.json for " + slug], ignored };
+    // the book file FIRST, whatever order the manifest listed: a Map iterates
+    // by insertion and `importBook` validates before it stores, so a refused
+    // book must cost one request and not the whole set.
+    const first = bookFileOf(files);
+    if (first) {
+      const v = files.get(first);
+      files.delete(first);
+      const rest = Array.from(files.entries());
+      files.clear();
+      files.set(first, v);
+      for (const [k, x] of rest) files.set(k, x);
+    }
+    const bookName = bookFileOf(files);
+    if (!bookName) return { ok: false, prefix: slug + "/", slug, errors: ["Studio listed no book.meta.json for " + slug], ignored };
     const count = { done: 0, total: files.size };
     const report = await importBook(slug + "/", files, rel => fetchRel(rel), o, count);
     report.ignored = ignored;
@@ -604,8 +690,9 @@ const TTSTVBundle = (() => {
 
   return {
     CACHE_PREFIX, SCHEMA_MAX, META_FILE, PAYLOAD, AUDIO_EXTS,
+    META_MAX, BOOK_FILE, META_BOOK_FILE, bookFileOf,
     isPayload, cacheName, parseCacheName, booksBase, bookUrl,
-    validateBook, walkWordIds, bookHash, planBundle, contentType,
+    validateBook, validateMeta, walkWordIds, bookHash, planBundle, contentType,
     importBook, importZip, importFiles, listInstalled, removeBook, estimate, fmtBytes, topUps, TOPUP,
     CacheStore, HostStore, storeFor, useStore,
   };
