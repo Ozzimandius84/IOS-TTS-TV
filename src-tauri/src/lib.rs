@@ -168,8 +168,6 @@ fn shell_url(path: &str) -> String {
 
 /// The service `studio/sync.py::Advert` registers, and one of the two
 /// `NSBonjourServices` (gen/apple/project.yml) lets this app see.
-use sha2::{Digest, Sha256};
-
 pub const SYNC_SERVICE: &str = "_ttstv._tcp.local.";
 
 /// The SECOND name the Mac answers to (Osca, 14 Sep). `studio/sync.py`
@@ -192,10 +190,6 @@ pub const SYNC_SERVICES: [&str; 2] = [SYNC_SERVICE_FRANK, SYNC_SERVICE];
 /// reaches it by the pairing it already holds.
 pub const PHONE_SERVICE: &str = "_frank-phone._tcp.local.";
 
-/// The TXT key the advert carries the code's public half in, both ways.
-/// `studio/sync.py::code_fp` -- eight hex of `sha256(code)`.
-pub const FP_KEY: &str = "fp";
-
 /// How long a browse waits for answers. A Studio on the same network answers
 /// its first query inside a few hundred milliseconds; the rest is for a
 /// sleepy Wi-Fi radio. The page's own timeout (`settings.js`,
@@ -211,57 +205,23 @@ pub struct Studio {
     pub name: String,
     pub host: String,
     pub port: u16,
-    /// The advert's `fp` -- `studio/sync.py::code_fp`, eight hex of
-    /// `sha256(code)`, the live six-digit code's public half. Empty when the
-    /// advert carried none, which is every Studio older than 14 Sep.
-    pub fp: String,
-    /// THE ONE TAP (Osca, 14 Sep: *"one tap pairs"*), and the most honest
-    /// line in this file.
-    ///
-    /// A six-digit code is a space of one million. Given `fp`, walking that
-    /// space is **74 ms in a release build and 1.3 s in a debug one**
-    /// (measured on the container's CPU, `studio/STATUS.md` s2; Python's
-    /// OpenSSL does the same walk in 40 ms), so this field is the code the
-    /// advert committed to -- recovered, not received. That is what turns
-    /// "type the address and the six digits" into a button. **The debug
-    /// number is the one to watch**: it is per Studio and it is on the main
-    /// thread, so a `tauri ios dev` build with two Macs on the Wi-Fi pays
-    /// 2.6 s inside the browse. If that is ever felt, the walk moves off the
-    /// discover and behind the tap.
-    ///
-    /// **It is also the whole of what the `fp` costs**, and the cost is not
-    /// created here: anyone on this Wi-Fi can run the same forty milliseconds,
-    /// and could already have walked the same million against
-    /// `POST /sync/pair`, which has no rate limit. Publishing `fp` moves a
-    /// LAN attacker from minutes to microseconds; it does not move them from
-    /// impossible to possible. **The LAN is the trust boundary, and one tap
-    /// is the decision to say so out loud.** `studio/sync.py::code_fp` names
-    /// the two ways to make it false -- a longer code, or a rate limit -- and
-    /// neither is taken here, because both are Osca's.
-    ///
-    /// `None` when the advert carried no `fp`, or carried one no six-digit
-    /// code satisfies (a Studio on a shape this build does not know). The row
-    /// then offers the typed code, which is the fallback forever.
-    pub code: Option<String>,
 }
 
-/// The walk. `fp` -> the six digits it commits to, or `None`.
-/// Eight hex is 32 bits over a space of 2^20, so a false hit is about one in
-/// four thousand and a wrong code is refused at `/sync/pair` in words.
-fn code_for_fp(fp: &str) -> Option<String> {
-    if fp.len() != 8 || !fp.bytes().all(|b| b.is_ascii_hexdigit()) {
-        return None;
-    }
-    let want = fp.to_ascii_lowercase();
-    (0..1_000_000u32).find_map(|n| {
-        let code = format!("{n:06}");
-        let mut h = Sha256::new();
-        h.update(code.as_bytes());
-        let hex = h.finalize();
-        let got: String = hex.iter().take(4).map(|b| format!("{b:02x}")).collect();
-        if got == want { Some(code) } else { None }
-    })
-}
+// THE ONE TAP IS GONE, AND SO IS `fp` (Osca, 14 September, on reading 87's
+// own number): *"No, it's not safe enough. It's just got to be a 10-digit
+// number or a QR code."*
+//
+// What stood here was `Studio::fp`, `Studio::code` and `code_for_fp` -- the
+// walk that recovered a six-digit code from the eight hex the Mac broadcast,
+// in 74 ms. The docstring on `code` said plainly that publishing `fp` made the
+// LAN the trust boundary and called that a decision; Osca's answer is that it
+// is not one he is taking. So the Mac's TXT carries a name and a version and
+// nothing else (`studio/sync.py::advert_properties`), the code is TEN digits
+// behind a counter, and the three roads in are `studio/pairing.py`'s: a mail
+// to the account both devices sign in to, an offer in the Drive folder they
+// share, or ten typed digits and a square. This crate's share of that is
+// [`parse_studio_link`] -- the mail's button and the QR both arrive as one
+// `frank-pair://studio?...` link, and the press IS the pairing.
 
 /// WHAT THE ROW GETS BACK -- and the reason this stopped being a bare
 /// `Vec<Studio>` on 14 September.
@@ -362,9 +322,18 @@ fn cannot_look(detail: &str) -> String {
 /// THE REVERSE -- this phone advertises itself as `_frank-phone._tcp` so a
 /// Mac can find it for a LAN push (`studio/sync.py::find_phones`).
 ///
-/// `fp` is the fingerprint of the code this phone paired with, never the
-/// token and never the code: it is how a Mac tells one of its own phones from
-/// a stranger's, and it is already public on the Mac's own advert.
+/// `device` is this phone's own id -- the key `sync.json` files its token
+/// under -- and it is how a Mac tells one of its own phones from a stranger's.
+/// A device id is a NAME: it opens nothing, and a Mac that does not know it
+/// ignores the advert (`studio/sync.py::find_phones`).
+///
+/// `fp` is still ACCEPTED and is written nowhere (14 Sep). It used to carry
+/// eight hex of `sha256(code)`, which was the same mistake as the Mac's own
+/// advert in miniature -- a phone broadcasting a fingerprint of the code it
+/// paired with is broadcasting the code. It stays in the signature, and only
+/// in the signature, because `import_shell.py` carries a NEW Settings page
+/// into whatever build is on the phone: a page that still sends `fp` must not
+/// have its advert fail, and a page that has stopped must not either.
 ///
 /// The daemon is kept in `PhoneAdvert` because dropping it un-registers the
 /// service. Calling this twice replaces the advert rather than growing a
@@ -386,10 +355,8 @@ fn sync_advertise(
     };
     let name = name.unwrap_or_else(|| "Frank on this phone".to_string());
     let host = format!("{}.local.", name.replace(' ', "-").to_lowercase());
+    let _ = fp;                                 // accepted, never advertised -- see above
     let mut props: Vec<(String, String)> = vec![("v".into(), "1".into()), ("name".into(), name.clone())];
-    if let Some(fp) = fp.filter(|f| !f.is_empty()) {
-        props.push((FP_KEY.into(), fp));
-    }
     if let Some(d) = device.filter(|d| !d.is_empty()) {
         props.push(("device".into(), d));
     }
@@ -436,13 +403,10 @@ fn studio_of(info: &mdns_sd::ServiceInfo) -> Option<Studio> {
             }
         }
     }
-    let fp = info.get_property_val_str(FP_KEY).unwrap_or("").to_string();
     Some(Studio {
         name: studio_name(info.get_fullname(), info.get_property_val_str("name")),
         host: v4.or(v6)?,
         port: info.get_port(),
-        code: code_for_fp(&fp),
-        fp,
     })
 }
 
@@ -1008,6 +972,125 @@ pub struct PendingPair(pub Mutex<Option<Pairing>>);
 /// tied to a verifier only the page holds.
 #[derive(Default)]
 pub struct PendingGoogle(pub Mutex<Option<String>>);
+
+/// And the same again for a STUDIO pairing offer (G-PAIRMAIL, 14 Sep) -- the
+/// mail's button and the QR both land here.
+#[derive(Default)]
+pub struct PendingStudio(pub Mutex<Option<StudioOffer>>);
+
+// ------------------------------------------------------ the Studio offer
+//
+// ROAD 1 AND ROAD 2, ARRIVING BY THE SAME DOOR. The Mac mails a link; the Mac
+// draws a square whose payload is the same link; either way the OS hands this
+// app `frank-pair://studio?t=...&h=host:port&exp=...&n=name` and **the press
+// IS the pairing**: nothing is typed, and the secret never crossed the Wi-Fi.
+//
+// IT IS NOT `frank://pair?...`, which is what Osca's `> go` wrote. `frank://`
+// is this app's ASSET scheme, and [`PAIR_SCHEME`]'s own docstring says why a
+// launch scheme must never be the same word: the system camera could then ask
+// the app to open `frank://localhost/...` off a QR somebody else printed.
+// Where prose and code disagree the code is right (CLAUDE.md), so the kind
+// moved into the authority instead -- and `v1` (the cloud door, job 23b) and
+// `studio` cannot be confused, because `v1` parses as a version and `studio`
+// does not. One scheme already registered in three places, one new shape, and
+// `CFBundleURLTypes` did not have to change at all.
+
+/// What a `frank-pair://studio?...` link carries. `secret` is 32 random bytes
+/// base64url (`studio/pairing.py::SECRET_BYTES`) -- nobody types it, so it is
+/// as long as it likes.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct StudioOffer {
+    pub secret: String,
+    pub host: String,
+    pub port: u16,
+    pub name: String,
+    pub expires: u64,
+}
+
+/// The authority that says this is a Studio pairing and not the cloud door.
+pub const STUDIO_KIND: &str = "studio";
+
+/// The one key in the shell's `localStorage`; `settings/settings.js` reads it,
+/// pairs, and clears it.
+pub const STUDIO_OFFER_KEY: &str = "ttstv.sync.offer";
+
+/// `frank-pair://studio?t=…&h=host:port&exp=…&n=…` -> [`StudioOffer`].
+///
+/// Hand-parsed on the string with this file's own [`percent_decode`], for
+/// [`parse_pair_link`]'s two reasons: no dependency, and the authority is read
+/// exactly as sent. Every refusal is a sentence -- the only place a bad link
+/// is seen is a person's phone.
+///
+/// **`exp` is not enforced here.** It is carried so the card can say *"this
+/// pairing link has expired"* without a round trip, and that is all it is: the
+/// Mac refuses an expired secret whatever a link claims, because a link is a
+/// thing anybody can retype.
+pub fn parse_studio_link(link: &str) -> Result<StudioOffer, String> {
+    let prefix = format!("{PAIR_SCHEME}://");
+    if link.len() < prefix.len() || !link[..prefix.len()].eq_ignore_ascii_case(&prefix) {
+        return Err(format!(
+            "this is not a Frank pairing link (it does not start {prefix})"
+        ));
+    }
+    let rest = &link[prefix.len()..];
+    let (authority, query) = match rest.find('?') {
+        Some(i) => (&rest[..i], &rest[i + 1..]),
+        None => (rest, ""),
+    };
+    if !authority.trim_end_matches('/').eq_ignore_ascii_case(STUDIO_KIND) {
+        return Err(format!("{authority:?} is not a Studio pairing link"));
+    }
+    let mut secret = String::new();
+    let mut where_at = String::new();
+    let mut name = String::new();
+    let mut expires: u64 = 0;
+    for pair in query.split('&').filter(|p| !p.is_empty()) {
+        let (k, v) = match pair.find('=') {
+            Some(i) => (&pair[..i], percent_decode(&pair[i + 1..])),
+            None => (pair, String::new()),
+        };
+        match k {
+            "t" => secret = v,
+            "h" => where_at = v,
+            "n" => name = v,
+            "exp" => expires = v.parse().unwrap_or(0),
+            _ => {}
+        }
+    }
+    if secret.is_empty() {
+        return Err("this pairing link carries no secret".to_string());
+    }
+    // `host:port`, and the port is required: the phone posts to it. A bare
+    // host would mean guessing a port the Mac picked at random (the LAN
+    // listener binds 0), and a guess that fails looks like a broken link.
+    let (host, port) = match where_at.rsplit_once(':') {
+        Some((h, p)) => (h.to_string(), p.parse::<u16>().unwrap_or(0)),
+        None => (where_at.clone(), 0),
+    };
+    if host.is_empty() || port == 0 {
+        return Err("this pairing link carries no address".to_string());
+    }
+    Ok(StudioOffer { secret, host, port, name, expires })
+}
+
+/// The offer into the key the Settings page reads, plus an event so a Sync
+/// card that is already open redraws without a navigation -- `PAIR_JS`'s own
+/// shape. One `setItem`: the page decides whether to pair, and clears it.
+pub fn studio_write_js(o: &StudioOffer) -> String {
+    format!(
+        "try {{ localStorage.setItem({key}, {val}); \
+window.dispatchEvent(new CustomEvent(\"ttstv:studiooffer\")); }} catch (e) {{}}",
+        key = json_string(STUDIO_OFFER_KEY),
+        val = json_string(&format!(
+            "{{\"secret\":{},\"host\":{},\"port\":{},\"name\":{},\"expires\":{}}}",
+            json_string(&o.secret),
+            json_string(&o.host),
+            o.port,
+            json_string(&o.name),
+            o.expires
+        )),
+    )
+}
 
 /// Turn a request path into a path under `root`, or `None` if it tries to leave.
 ///
@@ -2878,6 +2961,7 @@ pub fn run() {
         .manage(PhoneAdvert::default())
         .manage(PendingPair::default())
         .manage(PendingGoogle::default())
+        .manage(PendingStudio::default())
         // The pull (G-SYNCBG): one runner per app, read by every page.
         .manage(PullState::default())
         // The open language packs (G-LANG), one per language, read by any page.
@@ -3149,6 +3233,25 @@ fn take_pair_links<R: tauri::Runtime, I: Iterator<Item = String>>(app: &tauri::A
             }
             continue;
         }
+        // A STUDIO OFFER (G-PAIRMAIL, 14 Sep) -- the same scheme, a different
+        // authority. Tried FIRST because `parse_pair_link` would refuse it
+        // with "studio is not a pairing-link version", which is a true
+        // sentence about the wrong link and would be the one logged.
+        match parse_studio_link(&u) {
+            Ok(o) => {
+                // The secret is in `o` and goes no further than the key. What
+                // the log gets is the address and the name; a log is read over
+                // a shoulder and copied into a bug report.
+                log::info!("frank: Studio pairing offer from {} ({}:{})", o.name, o.host, o.port);
+                if let Some(state) = app.try_state::<PendingStudio>() {
+                    if let Ok(mut slot) = state.0.lock() {
+                        *slot = Some(o);
+                    }
+                }
+                continue;
+            }
+            Err(why) => log::debug!("frank: not a Studio offer -- {why}"),
+        }
         match parse_pair_link(&u) {
             Ok(p) => {
                 // The pass is in `p` and goes no further than the store. What
@@ -3171,6 +3274,7 @@ fn take_pair_links<R: tauri::Runtime, I: Iterator<Item = String>>(app: &tauri::A
 /// is what stops one link being written twice.
 fn flush_pair<R: tauri::Runtime>(app: &tauri::AppHandle<R>) {
     flush_google(app);
+    flush_studio(app);
     let pending = app
         .try_state::<PendingPair>()
         .and_then(|s| s.0.lock().ok().and_then(|mut slot| slot.take()));
@@ -3187,6 +3291,30 @@ fn flush_pair<R: tauri::Runtime>(app: &tauri::AppHandle<R>) {
             if let Some(state) = app.try_state::<PendingPair>() {
                 if let Ok(mut slot) = state.0.lock() {
                     *slot = Some(p);
+                }
+            }
+        }
+    }
+}
+
+/// The Studio offer's half of [`flush_pair`], written the same way and for the
+/// same reason: an empty slot is a no-op, and the take is what stops one link
+/// being written twice.
+fn flush_studio<R: tauri::Runtime>(app: &tauri::AppHandle<R>) {
+    let pending = app
+        .try_state::<PendingStudio>()
+        .and_then(|s| s.0.lock().ok().and_then(|mut slot| slot.take()));
+    let Some(o) = pending else { return };
+    match app.get_webview_window("main") {
+        Some(w) => {
+            if let Err(why) = w.eval(studio_write_js(&o)) {
+                log::error!("frank: could not write the Studio offer -- {why}");
+            }
+        }
+        None => {
+            if let Some(state) = app.try_state::<PendingStudio>() {
+                if let Ok(mut slot) = state.0.lock() {
+                    *slot = Some(o);
                 }
             }
         }
@@ -3363,6 +3491,98 @@ mod tests {
         // the list has grown since this was the only command (google_sign_in,
         // audio_session_start, the book door); what matters is that it is IN it
         assert!(build.contains(r#""sync_discover","#), "build.rs declares sync_discover");
+    }
+
+    /// G-PAIRMAIL, 14 Sep. **Nothing secret is on the wire and nothing in this
+    /// crate walks a code.** 87's one-tap test is lifted whole and what is
+    /// asserted instead is the absence: the source of this file carries no
+    /// `code_for_fp`, the `Studio` the row is handed has no key-shaped field
+    /// on it, and `sha2` is out of the manifest because nothing left hashes.
+    #[test]
+    fn the_advert_carries_nothing_a_phone_can_pair_with() {
+        let me = include_str!("lib.rs");
+        // the definition, not the prose about it: a `fn` by that name
+        assert!(!me.contains("fn code_for_fp"), "the walk is gone");
+        let fields = &me[me.find("pub struct Studio {").unwrap()..];
+        let fields = &fields[..fields.find('}').unwrap()];
+        assert!(!fields.contains("fp"), "Studio carries no fingerprint: {fields}");
+        assert!(!fields.contains("code"), "and no code: {fields}");
+        let toml = include_str!("../Cargo.toml");
+        let live: Vec<&str> = toml
+            .lines()
+            .filter(|l| !l.trim_start().starts_with('#'))
+            .collect();
+        assert!(!live.join("\n").contains("sha2 ="), "sha2 is not a dependency");
+    }
+
+    /// The mail's button and the QR are ONE link, and this is its parse.
+    #[test]
+    fn a_studio_offer_is_read_off_the_link() {
+        let got = parse_studio_link(
+            "frank-pair://studio?t=PsOzkxs3H14eFtVwbhB0bVtvN4_2Dkv0uanXhrL1qjQ\
+&exp=1789390461667&h=192.168.1.5%3A41499&n=Air%20Studio",
+        )
+        .unwrap();
+        assert_eq!(got.secret, "PsOzkxs3H14eFtVwbhB0bVtvN4_2Dkv0uanXhrL1qjQ");
+        assert_eq!(got.secret.len(), 43, "32 bytes, base64url, and nobody types it");
+        assert_eq!((got.host.as_str(), got.port), ("192.168.1.5", 41499));
+        assert_eq!(got.name, "Air Studio");
+        assert_eq!(got.expires, 1789390461667);
+        // the digits are NOT in it -- the only road that has digits is the one
+        // a person types, and this is not that road
+        assert!(!got.secret.chars().all(|c| c.is_ascii_digit()));
+    }
+
+    /// The two kinds cannot be confused, in either direction. This is the
+    /// whole of what buys `frank-pair://` a second shape without a second
+    /// scheme in `CFBundleURLTypes`.
+    #[test]
+    fn the_cloud_door_and_the_studio_offer_do_not_answer_for_each_other() {
+        let cloud = "frank-pair://v1?url=https%3A%2F%2Fx.modal.run&pass=p";
+        let studio = "frank-pair://studio?t=abc&h=10.0.0.2%3A8099";
+        assert!(parse_studio_link(cloud).is_err(), "v1 is not a Studio offer");
+        assert!(parse_pair_link(studio).is_err(), "studio is not a version");
+        assert!(parse_studio_link(studio).is_ok());
+        assert!(parse_pair_link(cloud).is_ok());
+        // and neither is the asset scheme, which must never launch this app
+        assert!(parse_studio_link("frank://studio?t=abc&h=10.0.0.2%3A8099").is_err());
+    }
+
+    /// Every refusal is a sentence, because the only place a bad link is seen
+    /// is a person's phone.
+    #[test]
+    fn a_studio_offer_without_a_secret_or_an_address_is_refused_in_words() {
+        assert!(parse_studio_link("frank-pair://studio?h=10.0.0.2%3A8099")
+            .unwrap_err()
+            .contains("no secret"));
+        assert!(parse_studio_link("frank-pair://studio?t=abc")
+            .unwrap_err()
+            .contains("no address"));
+        // a host with no port is a guess, and a guess that fails looks like a
+        // broken link -- so it is refused here instead
+        assert!(parse_studio_link("frank-pair://studio?t=abc&h=10.0.0.2")
+            .unwrap_err()
+            .contains("no address"));
+    }
+
+    /// What lands in the page: one key, one event, and the secret quoted
+    /// through `json_string` rather than concatenated into a string the page
+    /// then parses.
+    #[test]
+    fn the_offer_is_written_into_the_one_key() {
+        let o = StudioOffer {
+            secret: "s\"1".to_string(),
+            host: "192.168.1.5".to_string(),
+            port: 41499,
+            name: "Air Studio".to_string(),
+            expires: 7,
+        };
+        let js = studio_write_js(&o);
+        assert!(js.contains(&json_string(STUDIO_OFFER_KEY)));
+        assert!(js.contains("ttstv:studiooffer"));
+        assert!(js.contains("try {"), "a page with no localStorage is not a crash");
+        assert!(!js.contains("s\"1"), "the quote is escaped, not carried");
+        assert_eq!(STUDIO_OFFER_KEY, "ttstv.sync.offer");
     }
 
     /// The 6 Sep phone bug, as an assertion. The Brotli bytes are real: they
