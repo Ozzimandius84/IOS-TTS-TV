@@ -1998,6 +1998,13 @@ pub fn audio_session_why(code: i32) -> &'static str {
         0 => "ok",
         1 => "setCategory(Playback) refused -- the sound will stop at the app switcher",
         2 => "setActive refused -- another app holds the session",
+        // Android (G-ANDROID, 14 Sep). NOT an AVAudioSession result: there is
+        // no session on Android, and until 14 Sep both calls returned 0 here
+        // and the launch log said "playback continues in the background",
+        // which was false. What Android needs is a foreground service
+        // (`FOREGROUND_SERVICE_MEDIA_PLAYBACK` + a `MediaSessionService`) and
+        // it has none, so sound stops with the app. PHONE.md §5.4.
+        3 => "no audio session on Android -- sound stops when the app leaves the front, until a foreground service exists (PHONE.md 5.4)",
         _ => "unknown AVAudioSession result",
     }
 }
@@ -2014,7 +2021,9 @@ pub fn audio_session_category() -> Result<(), String> {
     // never as it was built.
     #[cfg(target_os = "ios")]
     let code = unsafe { frank_audio_session_category() };
-    #[cfg(not(target_os = "ios"))]
+    #[cfg(target_os = "android")]
+    let code = 3i32;
+    #[cfg(not(any(target_os = "ios", target_os = "android")))]
     let code = 0i32;
     if code == 0 { Ok(()) } else { Err(audio_session_why(code).into()) }
 }
@@ -2025,7 +2034,9 @@ pub fn audio_session_activate() -> Result<(), String> {
     // SAFETY: as above.
     #[cfg(target_os = "ios")]
     let code = unsafe { frank_audio_session_activate() };
-    #[cfg(not(target_os = "ios"))]
+    #[cfg(target_os = "android")]
+    let code = 3i32;
+    #[cfg(not(any(target_os = "ios", target_os = "android")))]
     let code = 0i32;
     if code == 0 { Ok(()) } else { Err(audio_session_why(code).into()) }
 }

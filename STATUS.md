@@ -1,3 +1,192 @@
+# G-ANDROID — the apk comes out of CI, and the doors are counted · 14 Sep (Cowork, bridge VM + container), phone HEAD `fb81426` (no GPU, 0 GPU-minutes)
+
+## 1. Built
+
+**`.github/workflows/android.yml` — the first workflow in either repo.** Three
+jobs, three gates:
+
+* **`check`** — `cargo check` for all four Android triples. `tools/android_env.sh`
+  (new) exports `CC_*`/`AR_*`/`CARGO_TARGET_*_LINKER` for each; without it the
+  check dies inside `ring`'s assembler naming neither Android nor the NDK,
+  because two dependencies compile C on this target (`ring` through ureq's
+  rustls, `libsqlite3-sys` through `rusqlite`'s `bundled`).
+* **`apk`** — `npx tauri android init --skip-targets-install`, then
+  **`tools/android.sh --no-install`**: CI runs the same command a person runs,
+  so there is one build and not two to keep in step. Uploads `frank-debug-apk`
+  (`if-no-files-found: error`) and `frank-android-generated` — the patched
+  `AndroidManifest.xml`, the generated `build.gradle.kts`, `output-metadata.json`.
+* **`boot`** — the apk on an API-34 x86_64 emulator (KVM), launched, and
+  **`tools/android_smoke.py`** (new) counting the shell out of `adb logcat`:
+  `embedded`, `unpacked` and `ready` against `shell.manifest.json`'s own
+  `count`. That is PHONE.md §5.2's Brotli question — *does the shell survive
+  the apk* — answered by an integer instead of a look at the screen.
+
+**The door table — `PHONE.md` §5.4, eleven rows.** Every native door in this
+app is one of six `.m` files under `src-tauri/ios/`, all `cfg(target_os = "ios")`.
+The table says, per door, present / absent-and-said, and **who says it**.
+
+**One door was lying, and it is fixed.** `audio_session_category()` and
+`audio_session_activate()` returned `0` off iOS, so an Android launch logged
+*"audio session active — playback continues in the background"*, which is false:
+Android keeps sound alive with a foreground service and Frank has none. Both
+now answer `3` on Android only — a new line in `audio_session_why` — and the
+Mac still answers `0`. **The search sheet's absence is now shouted** rather than
+noted: off iOS the navigation is allowed, and on a phone that is the reader
+leaving the book, so the `cfg(not(ios))` arm logs at `error` on Android.
+Behaviour on every platform is unchanged.
+
+**`tests/test_android_ci.py`** — 12 tests holding the shape: CI still runs
+`android.sh` (and contains no `gradlew`/`tauri android build` of its own),
+`init` before build, the apk actually uploaded, the four triples named
+identically in the workflow and in `android_env.sh`, the `armv7a` clang prefix,
+the boot job counting rather than screenshotting, **every `src-tauri/ios/*.m`
+has a row in §5.4**, and the audio door's three cfg arms.
+
+## 2. Verified — and how
+
+* `python3 -m pytest tests -q` in the bridge VM: **118 passed, 4 failed, 1
+  skipped**. The four are red **at HEAD too** — `git archive HEAD | tar -x` into
+  a tree outside the repo, same three files run there: same four names,
+  `4 failed, 33 passed, 1 skipped`. They are `test_pair_link`,
+  `test_phone_loop` ×2 and `test_phone_shell`, and they read the *dirty*
+  `gen/apple/project.pbxproj` / `Info.plist` and `scratch26b/` — another lane's
+  files, named in §8b, not touched here.
+* The new file alone: `tests/test_android_ci.py` **12 collected, 12 passed**
+  (with `tests/test_android_permissions.py`, 16 passed in 0.09 s).
+* **The cfg arms are exhaustive, measured with `rustc --print cfg --target`,
+  not read**: `aarch64-linux-android`, `armv7-linux-androideabi`,
+  `i686-linux-android`, `x86_64-linux-android` → `target_os="android"` (all
+  four); `aarch64-apple-ios` → `"ios"`; `aarch64-apple-darwin` → `"macos"`;
+  `x86_64-pc-windows-msvc` → `"windows"`. So the new arm binds on exactly the
+  four Android triples and nowhere else, and the Mac keeps `let code = 0i32;`
+  (the test pins that count at 2).
+* The workflow parses: `yaml.safe_load` → jobs `['check','apk','boot']`, steps
+  5 / 12 / 6, `boot.needs == apk`.
+* `bash -n tools/android_env.sh`, `ast.parse(tools/android_smoke.py)` — both clean.
+* The boot job's target number: `shell.manifest.json` says **68 files,
+  2,385,058 bytes**; that is what `android_smoke.py` compares all three log
+  integers against.
+* **No PNG anywhere in this lane, and none in the emulator job** — a test
+  asserts the word `screenshot` does not appear in it.
+
+**What is NOT verified, and it is the honest half: nothing here has been
+built.** There is no NDK on either machine this session can reach —
+`dl.google.com` answers 403 through both the container's proxy and the bridge
+VM, and `rustup target add x86_64-linux-android` cannot reach
+`static.rust-lang.org` — so the `check` job has never run, no `.apk` exists,
+and no emulator has booted. **The press is the first CI run**, and the three
+gates this lane was given are met by that run, not by this report.
+
+## 3. Judgment calls
+
+* **CI calls `tools/android.sh`, it does not reimplement it.** A workflow with
+  its own Gradle line would be a second build to keep in step and the pair
+  would drift by the second week. The cost is that CI inherits the script's
+  demands (cargo, adb, a JDK, an NDK) — which is four lines of `setup-*`.
+* **Debug only.** PHONE.md §5.2: `usesCleartextTraffic` is `"true"` in the
+  debug build type alone, so a release apk cannot reach a plain-http Studio on
+  the LAN, and it carries no inspector. Signing is not in this repo.
+* **The generated manifest is an artefact on purpose.** Three rows of the door
+  table cannot be answered from anything committed here (`gen/android/` is not
+  tracked, by design): whether the deep-link plugin writes its own intent
+  filter, what `minSdk` really is, whether cleartext is really on in debug.
+  Uploading the file the run generates turns those from opinions into a
+  download.
+* **The audio door was changed; the search sheet was not.** Making the audio
+  session say `3` changes a log line and a rejected promise the page already
+  handles (`console.warn`). Making the search sheet open a Custom Tab changes
+  what a press *does* on a platform nobody has ever pressed — so it is a
+  Request (§6) and the arm merely says so loudly.
+* **`android_smoke.py` uninstalls first.** The unpack line is written once per
+  shell version; an app already carrying this shell prints "already unpacked"
+  and the run would prove nothing about the archive.
+* **API 24 in `android_env.sh`**, because that is Tauri 2's generated
+  `minSdkVersion` — the clang wrapper's number *is* the floor the objects are
+  built for, so a higher one here would silently raise the app's floor.
+
+## 4. Boundary check
+
+One repo, `TTSTV_IOS`, and inside it: `.github/`, `tools/`, `tests/`,
+`PHONE.md`, `STATUS.md`, and two `cfg`-guarded arms in `src-tauri/src/`.
+**Nothing in `TTSTV`** except the one Inbox line the round asks for
+(`PROMPTS/INTENT.md`). The iOS project is untouched: no `project.yml`, no
+`gen/apple/`, no `ios/*.m`, no Xcode file. No crown, no `core/`.
+
+## 5. Footprint
+
+| file | state |
+|---|---|
+| `.github/workflows/android.yml` | new, 3 jobs |
+| `tools/android_env.sh` | new |
+| `tools/android_smoke.py` | new |
+| `tests/test_android_ci.py` | new, 12 tests |
+| `PHONE.md` | §5.4 (11-row door table) and §5.5 (CI) inserted before §6; 530 → 580 lines |
+| `src-tauri/src/lib.rs` | `audio_session_why` + 2 cfg arms |
+| `src-tauri/src/search.rs` | 1 cfg arm, log level |
+
+## 6. Requests to core / other modules — and four for Osca
+
+1. **Press the workflow.** It has never run. The first run either produces
+   `frank-debug-apk` or names the line that stops it, and it also answers the
+   three unverified rows of §5.4 via `frank-android-generated`.
+2. **The native voice on Android is the biggest hole.** `speech_available()`
+   is `false` off iOS and the page falls back to `window.speechSynthesis` —
+   which the Android **WebView** does not implement (Chrome does; the WebView
+   inside an app does not). So the free tier has **no voice at all** on
+   Android. The twin is `android.speech.tts.TextToSpeech` behind the same seven
+   commands `src/speech.rs` already declares. A lane of its own.
+3. **Background audio.** A foreground service + `MediaSessionService`
+   (`FOREGROUND_SERVICE_MEDIA_PLAYBACK`) is what makes the lock-screen row real
+   on Android; until then the `mediaSession` metadata the page already writes
+   has nothing to hang on.
+4. **LAN discovery.** `mdns-sd` cannot take a `WifiManager.MulticastLock`, and
+   without one Android drops multicast to a sleeping Wi-Fi chip; the permission
+   alone does not do it. Pairing by the address Studio shows still works, so
+   this is a degradation, not a wall.
+
+## 7. Known gaps
+
+* **No apk, no boot, no `cargo check` result** — see §2. Every gate this lane
+  was given is met by a CI run that has not happened.
+* `reactivecircus/android-emulator-runner@v2`, `dtolnay/rust-toolchain@stable`,
+  `Swatinem/rust-cache@v2` are third-party actions on floating refs. Pinning
+  them to SHAs is a two-line change and wants Osca's word.
+* The `boot` job asserts the shell arrived; it does **not** press anything in
+  the page. A first press of the Library on Android is still a person with a
+  phone.
+* `tools/android_smoke.py` assumes `tauri_plugin_log`'s Stdout target reaches
+  `logcat`. It should; if it does not, the harness says "the app never printed
+  `frank: shell ready`" and the fix is a `logcat` tag, not a rewrite.
+
+## 8. Next
+
+Osca presses CI. Then the three unverified rows get their answer from the
+manifest artefact, and §6.2 (TextToSpeech) is the next Android lane.
+
+## 8b. Commit check
+
+`git status --short` before staging showed four modified and six untracked
+paths belonging to other lanes — `scratch-lookup/**` (five),
+`src-tauri/gen/apple/frank.xcodeproj/project.pbxproj`,
+`…/xcshareddata/xcschemes/frank_iOS.xcscheme`, `…/frank_iOS/Info.plist`,
+`src-tauri/gen/apple/FrankShare/Info.plist`. **Left unstaged, all of them.**
+Every commit here is by explicit file path; the four new files were
+`git add -- <one path>`ed first. No `.lock` file was moved.
+
+**And a trap, paid for once and written down: `/tmp` on the bridge VM is shared
+between lanes.** This report was first written to `/tmp/report.md`; the
+heredoc failed with `Permission denied` (the file was another lane's, owner
+`nobody`, 13 Sep) and the next line prepended **that lane's** 109-line report
+to `STATUS.md`. Restored with `git show HEAD:STATUS.md` written back over it —
+**not** `git checkout --`, which fails through the bridge with `unable to
+unlink old 'STATUS.md': Operation not permitted`. Session-home paths only.
+
+## 9. Status line
+
+**The Android apk has a CI that builds it and a harness that counts the shell
+inside it; the doors are an eleven-row table, and the one that was lying now
+says so. Nothing has been built — the press is the first run.**
+
 # G-SYSVOICE-NATIVE (D1(b)) — the free tier's phone half, 13 Sep
 
 *One engine, two synthesisers. `AVSpeechSynthesizer` behind the door

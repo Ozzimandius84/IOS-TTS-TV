@@ -231,6 +231,56 @@ This is where the numbers come from: `getBoundingClientRect` on the rendered
 page, `TTSTVHost.pairRead()`, and the console line the unpack writes if the
 shell did not land.
 
+### 5.4 The doors — what iOS has, and what Android has instead
+
+**Every native door in this app is one of six Objective-C files under
+`src-tauri/ios/`, and every one of them is `cfg(target_os = "ios")`.** So the
+crate compiles for Android today — that is the `check` job in
+`.github/workflows/android.yml` and it is the cheap half. The expensive half is
+this table: what the phone LOSES by being an Android phone, and whether the app
+says so or fails quietly.
+
+**"said" means the app says it, not that this page does** — a door that returns
+`Ok` on a platform where it did nothing is the bug this table exists to stop,
+and there was one (the audio session; fixed 14 Sep).
+
+| door | iOS | Android | said by |
+|---|---|---|---|
+| **background audio** | `UIBackgroundModes: [audio]` + `FrankAudio.m` takes an `AVAudioSession` on first `play` | **absent.** Android keeps sound alive with a *foreground service* (`FOREGROUND_SERVICE_MEDIA_PLAYBACK` + a `MediaSessionService`), which is Kotlin in the generated project and does not exist | `audio_session_why(3)`, logged at launch and again on the first `play`; the page's `console.warn` |
+| **lock-screen title** | `navigator.mediaSession` from `NOW_PLAYING_JS` | **present** in the webview — and inert until the row above exists, because there is no service for the notification to hang on | — |
+| **the black bar** | `FrankWebView.m` re-fills the root view under the notch | **absent, and not needed**: wry's Android webview is the activity's content view and there is no gap to fill | `lib.rs` setup, `cfg(not(ios))` arm |
+| **web search sheet** | `FrankSearch.m` — `SFSafariViewController` over the reader, navigation cancelled | **absent.** The navigation is allowed instead, which on a phone means the reader leaves the book. The twin is `tauri-plugin-opener` (already a dependency) handing the URL to a Custom Tab — a Request, not built | `search::init`'s `cfg(not(ios))` arm logs it at `error` |
+| **Apple's Look Up panel** | `FrankLookup.m` — the half sheet, second press | **absent.** `lookup_apple_offered` is `false` off iOS, so the control at the foot of our own card is never drawn: nothing to press, nothing to fail | `lookup_apple_offered` → `false` |
+| **the native voice** | `FrankSpeech.m` — `AVSpeechSynthesizer`, the free tier | **absent, and it is the biggest hole.** `speech_available()` is `false`, so the page falls back to `window.speechSynthesis` — which Android's **WebView does not implement** (Chrome does; the WebView shipped inside an app does not). The twin is `android.speech.tts.TextToSpeech`, a Kotlin door of the same seven commands. A Request | `speech_available()` → `false`, and `speech::open` logs "no speech door here" |
+| **the inbox — "Copy to Frank"** | `FrankInbox.m`, `<Documents>/Inbox` + the App Group | **absent.** Android's twin is an `intent-filter` (`ACTION_SEND`, `ACTION_VIEW`) on the main activity plus a content-URI read; no share target exists | `documents_inbox`/`group_inbox` → `Err(5)`, and the row reads the reason |
+| **the mic** | `NSMicrophoneUsageDescription` in `project.yml` | **present** — `RECORD_AUDIO`, put back after every `init` by `tools/android_permissions.py` | the script prints which |
+| **pairing, `frank-pair://`** | `CFBundleURLTypes`, written into `Info.plist` by the deep-link plugin's build script | **UNVERIFIED.** The plugin claims an Android intent filter from the same `tauri.conf.json` block; nothing here has ever seen the generated manifest. The `frank-android-generated` artefact of the `apk` job is that manifest — the first green run settles this row | the manifest artefact |
+| **Bonjour / LAN discovery** | `mdns-sd`, and Apple's multicast entitlement (PHONE.md §8) | **absent in practice.** Android drops multicast to a sleeping Wi-Fi chip unless the app holds a `WifiManager.MulticastLock`, which is Java and which `mdns-sd` cannot take. `CHANGE_WIFI_MULTICAST_STATE` alone does not do it. Pairing by the address Studio shows still works | nothing yet — a Request |
+| **the book door / the pack door** | `book_put`/`book_meta`/`book_list`/`book_remove`, `dict_*` | **present.** No Objective-C in either: app-data paths through Tauri, SQLite through `rusqlite`'s bundled C, both compiled for all four Android triples by the `check` job | — |
+
+### 5.5 CI — the apk without a Mac at all
+
+`.github/workflows/android.yml`. Three jobs, three gates:
+
+* **`check`** — `cargo check` for `aarch64-linux-android`, `armv7-linux-androideabi`,
+  `i686-linux-android` and `x86_64-linux-android`. `tools/android_env.sh` is
+  what points `cc` at the NDK's clang for each triple; without it the check
+  dies inside `ring`'s assembler naming neither Android nor the NDK.
+* **`apk`** — `npx tauri android init --skip-targets-install`, then
+  **`tools/android.sh --no-install`** — the same script a person runs, so
+  there is one build and not two. Uploads `frank-debug-apk`, and
+  `frank-android-generated` (the patched `AndroidManifest.xml`, the generated
+  `build.gradle.kts`, `output-metadata.json`).
+* **`boot`** — the apk installed on an API-34 x86_64 emulator and launched, and
+  `tools/android_smoke.py` counting the shell out of `adb logcat`:
+  `embedded`, `unpacked` and `ready` against `shell.manifest.json`'s own
+  `count`. That is §5.2's Brotli question answered by an integer.
+
+The apk is a **debug** apk in all three (§5.2): signing is not in this repo.
+`tools/android_smoke.py` runs against a real phone too — `--device <serial>` —
+and it is the check to run the first time Frank is on the friend's Android.
+
+
 ---
 
 ## 6. What the phone is, and what it is not

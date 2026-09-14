@@ -1,0 +1,179 @@
+# The Android apk, out of CI -- the first workflow in this repo.
+#
+# Nobody has built Frank for Android since `tools/android.sh` was written, and
+# the reason is that the build needs a machine nobody keeps set up: the SDK, an
+# NDK, a JDK Gradle will accept, four Rust targets. A GitHub runner already has
+# every one of them, so the apk stops depending on whose laptop is free.
+#
+# THE SHAPE, and it is deliberate: CI runs the SAME command a person runs.
+# `tools/android.sh --no-install` is the build; this file only puts the four
+# things that script demands on the machine (cargo, adb, a JDK, an NDK) and
+# takes what it produces. A workflow that reimplemented the build would be a
+# second build to keep in step, and the pair would drift by the second week.
+#
+# Three jobs, and each one is a gate:
+#   check     `cargo check` for all four Android triples -- the compile, without
+#             Gradle, in ~4 minutes. It fails first and it fails clearly.
+#   apk       the debug apk itself, uploaded, with the generated manifest
+#             beside it (the manifest is the answer to several open questions
+#             -- see PHONE.md §5.4).
+#   boot      the apk installed on an emulator and launched, and the shell
+#             counted out of its own log (tools/android_smoke.py).
+#
+# `--debug`, always, and PHONE.md §5.2 is the reason: the generated
+# `build.gradle.kts` puts `usesCleartextTraffic` "true" in the debug build type
+# only, so a release apk cannot reach a plain-http Studio on the LAN and
+# carries no inspector. A release apk also wants a signing key, which is not in
+# this repo and is not this lane's.
+name: android
+
+on:
+  push:
+    branches: [main, FRANK]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: android-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # `tauri android init` and Gradle both read these. The runner image sets
+  # ANDROID_HOME and ANDROID_NDK_LATEST_HOME; NDK_HOME is Tauri's own spelling
+  # and is set per job from the latter, because a workflow-level `env` cannot
+  # read another `env`.
+  CARGO_TERM_COLOR: always
+
+jobs:
+  # ------------------------------------------------------------------ check
+  check:
+    name: cargo check -- the four triples
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android,armv7-linux-androideabi,i686-linux-android,x86_64-linux-android
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+      - name: the NDK
+        run: echo "NDK_HOME=$ANDROID_NDK_LATEST_HOME" >> "$GITHUB_ENV"
+      - name: check
+        working-directory: src-tauri
+        run: |
+          set -euo pipefail
+          source ../tools/android_env.sh
+          for t in aarch64-linux-android armv7-linux-androideabi i686-linux-android x86_64-linux-android; do
+            echo "::group::$t"
+            cargo check --target "$t"
+            echo "::endgroup::"
+          done
+
+  # -------------------------------------------------------------------- apk
+  apk:
+    name: the debug apk
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      # Temurin 17. Gradle's Android plugin refuses 8 and (today) 25; PHONE.md
+      # §5.0's JAVA_HOME dance is the Mac's version of this line -- there is no
+      # Android Studio on a runner, so `tools/android.sh`'s JBR branch does not
+      # fire and this JDK is the one Gradle gets.
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android,armv7-linux-androideabi,i686-linux-android,x86_64-linux-android
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+      - name: adb and the NDK on the path
+        run: |
+          echo "NDK_HOME=$ANDROID_NDK_LATEST_HOME" >> "$GITHUB_ENV"
+          echo "$ANDROID_HOME/platform-tools" >> "$GITHUB_PATH"
+      - run: npm ci
+      # `gen/android/` is generated whole and is not in this repo (.gitignore
+      # says why), so every run makes it. `--skip-targets-install`: the targets
+      # are already installed above, and letting `init` call rustup here means
+      # a network round trip and a second source of truth for the list.
+      - name: tauri android init
+        run: npx tauri android init --skip-targets-install
+      # THE BUILD. `android.sh` re-runs `android_permissions.py` itself (the
+      # manifest `init` just wrote has no RECORD_AUDIO), finds the apk rather
+      # than assuming its path, and prints it.
+      - name: tools/android.sh --no-install
+        run: tools/android.sh --no-install
+      - name: name the apk
+        id: find
+        run: |
+          set -euo pipefail
+          apk="$(find src-tauri/gen/android/app/build/outputs/apk -name '*debug*.apk' -type f | sort | head -1)"
+          [ -n "$apk" ] || { echo "no debug apk"; exit 1; }
+          echo "apk=$apk" >> "$GITHUB_OUTPUT"
+          echo "bytes=$(stat -c %s "$apk")" >> "$GITHUB_OUTPUT"
+          printf 'apk: %s (%s bytes)\n' "$apk" "$(stat -c %s "$apk")" >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: frank-debug-apk
+          path: ${{ steps.find.outputs.apk }}
+          if-no-files-found: error
+      # The generated manifest and the generated gradle, kept as artefacts
+      # BECAUSE they are generated: they are the only place the answers to
+      # "does the deep-link plugin write its own intent filter", "what is
+      # minSdk", "is cleartext really on in debug" are written down, and
+      # PHONE.md §5.4 marks those rows unverified until a run says.
+      - uses: actions/upload-artifact@v4
+        with:
+          name: frank-android-generated
+          path: |
+            src-tauri/gen/android/app/src/main/AndroidManifest.xml
+            src-tauri/gen/android/app/build.gradle.kts
+            src-tauri/gen/android/app/build/outputs/apk/**/output-metadata.json
+          if-no-files-found: warn
+
+  # ------------------------------------------------------------------- boot
+  boot:
+    name: the shell, counted on an emulator
+    runs-on: ubuntu-latest
+    needs: apk
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: actions/download-artifact@v4
+        with:
+          name: frank-debug-apk
+          path: apk
+      # KVM. Without this the emulator falls back to software rendering and a
+      # boot takes longer than the job is worth; the udev rule is the runner
+      # image's own documented step.
+      - name: KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
+            | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules && sudo udevadm trigger --name-match=kvm
+      # x86_64, because the apk `tauri android build --apk` writes is universal
+      # -- every ABI in one file -- so the emulator's own architecture installs
+      # from it unchanged.
+      - name: install, launch, count
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          arch: x86_64
+          target: google_apis
+          disable-animations: true
+          script: |
+            python3 tools/android_smoke.py --apk "$(find apk -name '*.apk' | head -1)" | tee smoke.txt
+      - name: the numbers, in the summary
+        if: always()
+        run: |
+          { echo '```'; cat smoke.txt 2>/dev/null || echo 'no output'; echo '```'; } >> "$GITHUB_STEP_SUMMARY"

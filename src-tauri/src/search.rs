@@ -382,7 +382,20 @@ pub fn init<R: Runtime>() -> TauriPlugin<R> {
             }
             #[cfg(not(target_os = "ios"))]
             {
-                log::info!("frank: search sheet is iOS only -- allowing {target}");
+                // `info` on a desktop, `error` on Android, and the difference
+                // is what happens next (G-ANDROID, 14 Sep). On the Mac a
+                // navigation is a window that can be come back from. On a
+                // phone with no sheet it is the reader LEAVING THE BOOK, which
+                // is precisely what the sheet was built to prevent -- so it is
+                // shouted rather than noted, and PHONE.md §5.4 carries the
+                // twin that would fix it (`tauri-plugin-opener` -> a Custom
+                // Tab). Behaviour is unchanged on both: nothing here has been
+                // pressed on an Android phone.
+                if cfg!(target_os = "android") {
+                    log::error!("frank: no search sheet on Android -- this navigation takes the reader out of the book: {target}");
+                } else {
+                    log::info!("frank: search sheet is iOS only -- allowing {target}");
+                }
                 true
             }
         })
