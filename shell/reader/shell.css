@@ -373,9 +373,14 @@ body{ font-family:var(--serif); color:var(--ink); }
    dragged narrow is still a Mac.
 
    NO CAPSULE WITHOUT A VOICE. The bar is `hidden` until the transport says
-   there is a rendered master for the chapter -- Osca's rule of 1 September,
-   *"no playback or volume control shows when the chapter has no audio"*.
+   the chapter can be played -- Osca's rule of 1 September, *"no playback or
+   volume control shows when the chapter has no audio"*.
    `--mplay-when` is the dial that says otherwise, and the mount reads it.
+   CAN BE PLAYED IS TWO THINGS SINCE 14 SEP (SILENCE 11): a rendered master,
+   or the SYSTEM voice with words for this chapter (`state().system`). The
+   rule's reason was that offering to play a silence is a regression, and a
+   chapter the app reads aloud is not a silence. A chapter with neither still
+   carries no capsule, which is the rule.
 
    The dials, one property each -- design/reader/bench-playbar.html:
      --mplay-place  how far off the foot of the window it floats
@@ -384,7 +389,9 @@ body{ font-family:var(--serif); color:var(--ink); }
      --mplay-rest   how quiet it is until the pointer comes near
      --mplay-skip   the seconds the two arcs move (read by the mount)
      --mplay-times  `inline` = elapsed and remaining; `none` = the line alone
-     --mplay-when   `voice` = only with a master; `timings`; `always`        */
+     --mplay-when   `voice` = a master or the system voice; `timings`; `always`
+     (and `data-clock="off"`, written by the mount, is the system voice's own
+      row: the three controls that work without a clock)                     */
 :root{
   --mplay-place:22px;
   --mplay-h:26px;
@@ -417,6 +424,24 @@ html:not([data-phone]) .mplay[hidden]{ display:none; }
 html:not([data-phone]) .mplay[data-shown="off"]{
   opacity:0; pointer-events:none;
   transform:translate(-50%, calc(100% + var(--mplay-place))); }
+
+/* ★ NO CLOCK, NO SCRUBBER (SILENCE 11, 14 Sep). The capsule now also appears
+   while the SYSTEM voice reads a chapter with no rendered master -- that is
+   the free tier, and before this there was no play button on such a page at
+   all. But the system voice moves no clock: `Transport.state().t` and `.d`
+   stay 0 and the seek doors all go to a master that is not there. So the
+   mount writes `data-clock="off"` (reader.html, `paint`) and the row keeps
+   only the controls that DO something in that state -- play/pause, the pace
+   readout, FOLLOW and FLOAT. The rail, the two clock faces and the four
+   transport arcs go: an inert control is worse than no control, and this
+   file already says so twice. `data-clock="on"` is every other bar, unchanged
+   in every pixel -- these rules cannot fire on a chapter with a master. */
+html:not([data-phone]) .mplay[data-clock="off"] .mplay-rail,
+html:not([data-phone]) .mplay[data-clock="off"] .mplay-t,
+html:not([data-phone]) .mplay[data-clock="off"] #mplayback,
+html:not([data-phone]) .mplay[data-clock="off"] #mplayfwd,
+html:not([data-phone]) .mplay[data-clock="off"] #mplayprev,
+html:not([data-phone]) .mplay[data-clock="off"] #mplaynext{ display:none; }
 
 html:not([data-phone]) .mplay-b{
   flex:0 0 auto; display:flex; align-items:center; justify-content:center;
@@ -547,6 +572,10 @@ html[data-phone] .mplay{ display:none; }
    highlight and shows NO player, because offering to play a silence is the
    regression that rule was written about. `timings` and `always` are the two
    other settings and the bench dials them.
+   AND THE SYSTEM VOICE IS NOT A SILENCE (SILENCE 11, 14 Sep). `voice` shows
+   the strip for a rendered master OR for `state().system` -- an engine that
+   has words for the chapter on screen. That is the free tier, and without it
+   a stranger's first book spoke with no play button on the page.
 
    IT DOES NOT PUSH THE PAGE. The strip floats over the foot of the column the
    way the nav bar floats over its head -- no bottom padding is added to the
@@ -561,7 +590,7 @@ html[data-phone] .mplay{ display:none; }
                       transport alone
      --pplay-speed    `flex` = the speed button; `none` = no speed on the phone
      --pplay-skip     the seconds the two arcs move (read by the mount)
-     --pplay-when     `voice` = only with a rendered master; `timings`; `always`
+     --pplay-when     `voice` = a master or the system voice; `timings`; `always`
      --pplay-pad      the side margin                                        */
 @media (max-width: 600px), (max-height: 500px){
   html[data-phone]{
@@ -653,6 +682,15 @@ html[data-phone] .mplay{ display:none; }
   html[data-phone] .pplay[hidden]{ display:none; }
 
   /* ---- THE SCRUB ROW: where you are, the chapter, and what is left ------- */
+  /* ★ THE PHONE'S HALF OF `data-clock` (SILENCE 11, 14 Sep) -- same reason as
+     the Mac's block above, and it is cheaper here because the rail and the two
+     clock faces are already one group. `--pplay-scrub` is the DIAL and this is
+     a STATE, so they are separate rules and neither reads the other. */
+  html[data-phone] .pplay[data-clock="off"] .pplay-scrub,
+  html[data-phone] .pplay[data-clock="off"] #pplayback,
+  html[data-phone] .pplay[data-clock="off"] #pplayprev,
+  html[data-phone] .pplay[data-clock="off"] #pplaynext{ display:none; }
+
   html[data-phone] .pplay-scrub{
     display:var(--pplay-scrub); align-items:center; gap:8px;
     height:var(--pplay-rail-h); }

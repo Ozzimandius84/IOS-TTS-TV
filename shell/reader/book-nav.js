@@ -635,14 +635,61 @@ function mount(o){
     }
     return firstChapterIdx(n);
   }
+  /* WHAT A NODE REACHES. Everything in this file that decides whether a
+     structure node is worth drawing at all asks this -- `depthBelow`,
+     `landingChapter`, `firstChainFrom`, `levelsFromPath`'s own filter -- so a
+     node it answers `null` about is not a row anywhere.
+
+     A UNIT INSIDE A CHAPTER REACHES ITS CHAPTER. P3 (`5b02506`) found 154
+     sonnets, 190 acts, 777 scenes and Pensees' fragments, and wrote them into
+     `book.json` and `book-data.js` as nodes that own NO chapter: a sonnet is
+     not a page of its own, it is a named run of paragraphs inside the one page
+     the hundred and fifty-four of them share, so it carries `chapter` (one id)
+     and `paragraphs`, never `chapters`. This function only ever looked at
+     `chapters`, so every one of them answered `null` and was filtered out of
+     every pane -- T-MAC2's A3.22, 14 Sep: **0 of 154 survived**, and the
+     sonnets' contents were one pane of three rows. The plays were never
+     affected, because a SCENE does own a chapter.
+
+     The reader follows the parser: a unit is drawn because the parse made one,
+     it is not invented here, and a unit whose chapter is not on the shelf
+     still answers `null` like anything else that reaches nothing. */
   function firstChapterIdx(node){
     if(node.chapters && node.chapters.length){
       for(const cid of node.chapters){ const idx=chIndexById.get(cid); if(idx!=null) return idx; }
+    }
+    if(node.chapter){
+      const idx=chIndexById.get(node.chapter);
+      if(idx!=null) return idx;
     }
     if(node.children && node.children.length){
       for(const c of node.children){ const r=firstChapterIdx(c); if(r!=null) return r; }
     }
     return null;
+  }
+  /* ...AND WHERE OPENING ONE PUTS YOU. A node that owns a chapter is a place
+     in the book by itself, and `scrollReaderTo` has always been the answer. A
+     UNIT is a place inside a chapter, and the chapter's opener is not it: 154
+     rows that all scrolled to the top of one page would be a list that reads
+     right and navigates to one destination.
+
+     So a unit seats on its own first word -- `core/bookdata.py` counts it
+     (`w`, the index of that word in its chapter's own word index, from the
+     parser's own paragraph anchors) and this is K24's `seatOnWord` reached
+     through the one cursor door, `jumpTo`. `ensure` is K25(a)'s: under the
+     window the chapter may be mounted EMPTY, and a word index built over a
+     section with no lines in it is empty too, so the text is asked for first.
+
+     A unit with no `w` (a `book-data.js` written before the seat existed, or
+     a unit whose paragraphs reach no indexed block) opens its chapter, which
+     is what every row did yesterday -- never a 0 that would look like an
+     answer and land on the wrong sonnet. */
+  function openNodeAt(node, idx){
+    const w = node && typeof node.w === "number" ? node.w : null;
+    if(w == null){ scrollReaderTo(idx); return; }
+    if(readerPage && readerPage.ensure) readerPage.ensure(idx);
+    jumpTo(idx, w, "contents", true);
+    railWake();
   }
   function findOwnerPath(nodes, chapterId, trail){
     for(const n of (nodes||[])){
@@ -879,7 +926,7 @@ function mount(o){
           const isLeaf = !(it.node.children||[]).some(c=>firstChapterIdx(c)!=null);
           if(isLeaf){
             const idx = firstChapterIdx(it.node);
-            if(idx!=null) scrollReaderTo(idx);
+            if(idx!=null) openNodeAt(it.node, idx);
           }
           // repaint every open pane against the directory we just moved to
           for(let L=0; L<currentMaxLeft(); L++)
@@ -2494,7 +2541,17 @@ function mount(o){
      the reader under it would fight whatever else that engine is doing.  */
   function jumpTo(ch, wi, why, seat){
     if(!book || !book.chapters || !book.chapters[ch]) return null;
-    if(ch !== wordChapterIdx){
+    /* THE SAME CHAPTER IS NOT THE SAME DOM, under the window (K25(a),
+       `26b65ee`). A section outside the window is emptied and filled in again
+       as the cursor comes near, so an index built over its lines before it was
+       emptied points at nodes that are no longer in the document -- and
+       `seatOnWord` then measures a rect that answers nothing and the page does
+       not move. `enterWord` has asked this question since the 6th (`kept`);
+       this door never did, and it is the door the rail and every voice engine
+       come through. Same test, one place further along. */
+    const live = wordDomIndex.length && wordDomIndex[0].node
+              && wordDomIndex[0].node.isConnected !== false;
+    if(ch !== wordChapterIdx || !live){
       wordChapterIdx = ch;
       wordWords = wordsOf(book.chapters[ch]);
       wordDomIndex = buildWordDomIndex(ch);
@@ -5300,6 +5357,31 @@ function mount(o){
        Read it, or set it from outside (a voice engine following along). */
     get cursor(){ return cursor ? {chapter:cursor.ch, word:cursor.wi} : null; },
     goTo(ch, wi){ return jumpTo(ch, wi, "goTo", false); },
+    /* ASK THE WINDOW FOR A CHAPTER'S TEXT (14 Sep, T-MAC2's A2c.28).
+       K25(a) mounts a WINDOW of chapters, so a chapter outside it is a
+       `<section>` with its height on it and NOTHING INSIDE. Anything that
+       reads the book off the page -- and the system voice does, because
+       `p.line` in document order IS this product's word index and a second
+       tokeniser over `blocks` would drift from it on the first figure
+       caption -- gets an empty answer there and stops. It read 1,847 of
+       Walden's 5,612 words and ended: chapter 3 was mounted empty and
+       `chapterWords(3)` returned null.
+
+       `page.js::ensure` is the door K25(a) built for exactly this ("anything
+       that needs a chapter's own text present ... asks for it here"), and
+       `readerPage` is private to this file, so this is the one line that
+       hands it out. `pin` keeps the chapter mounted while it is being read,
+       which is what the window would otherwise take back as the reading line
+       moves -- the same guarantee the one-word view already has.
+
+       It mounts and measures with the geometry bracketed (`hold`), so it
+       moves nothing on screen: POSITION IS SACRED holds through it. Returns
+       true when it actually mounted anything, false when the chapter was
+       already there or there is no page -- never throws. */
+    ensureChapter(i, pin){
+      if(!readerPage || typeof readerPage.ensure !== "function") return false;
+      try{ return !!readerPage.ensure(i, pin); }catch(e){ return false; }
+    },
     /* WHERE THE READER IS BY CHAPTER, AND HOW TO SEND IT TO ONE (7 Sep).
        Read-only over state this file already keeps: `curChapterIdx` is set by
        the reader's own scroll event (syncContentsLive), and `chIndexById` is

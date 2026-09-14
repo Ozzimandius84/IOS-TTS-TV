@@ -1605,6 +1605,47 @@ function tileCoverHTML(b) {
     `</span>`;
 }
 
+/* THE VERDICT, ON THE SHELF AND IN THE BOOK (P1, `90de5a8`; drawn 14 Sep).
+   `parser/facts.py`'s opening line is the rule: *"a book's verdict is VISIBLE
+   on the shelf and in the book -- the reader follows the parser; it never
+   hides a verdict."* Every `book.json` has carried `meta.verdict` since the
+   13th and until today NOTHING SHOWED IT -- T-MAC2 found 40 of 40 books
+   carrying a verdict, 0 of 40 rows of `/state` carrying the key, and no page
+   drawing it.
+
+   FOUR WORDS AND WHERE EACH GOES. `clean` is 23 of the 40 and is not news, so
+   it is silent on the shelf -- a word on twenty-three tiles is furniture, and
+   furniture is what an eye stops seeing, which is how the other seventeen
+   would go quiet too. It IS drawn on the book page, faint, because that page
+   is where you have gone to ASK about the book and "clean" is the answer.
+   DAMAGED, UNUSUAL and UNRECOVERABLE are one word on the tile and the same
+   word plus the parse's own one sentence on the book page.
+
+   Nothing here decides anything and nothing here styles a verdict away: the
+   word is the parser's, the sentence is the parse's own `why`, and a book with
+   no verdict (parsed before there were any) draws nothing, which is honest and
+   is not "clean". */
+const VERDICT_WORDS = { clean: "clean", damaged: "damaged",
+                        unusual: "unusual", unrecoverable: "unrecoverable" };
+function verdictOf(b) {
+  const v = b && typeof b.verdict === "string" ? b.verdict : "";
+  return VERDICT_WORDS[v] ? v : "";
+}
+function verdictTileHTML(b) {
+  const v = verdictOf(b);
+  if (!v || v === "clean") return "";
+  return `<span class="railrow-verdict tile-verdict" data-verdict="${esc(v)}">${
+    esc(VERDICT_WORDS[v].toUpperCase())}</span>`;
+}
+function verdictBookHTML(b) {
+  const v = verdictOf(b);
+  if (!v) return "";
+  const why = v === "clean" ? "" : String((b && b.verdict_why) || "");
+  return `<span class="tile-slot tile-verdictslot" data-verdict="${esc(v)}">` +
+    `<b>${esc(VERDICT_WORDS[v].toUpperCase())}</b>` +
+    (why ? `<span>${esc(why)}</span>` : "") + `</span>`;
+}
+
 function tileHTML(b) {
   const m = b.merge || null;
   const stale = m ? mergeStale(m) : [];
@@ -1621,6 +1662,8 @@ function tileHTML(b) {
     tileCoverHTML(b) +
     `<span class="railrow-title">${esc(b.title)}</span>` +
     `<span class="railrow-by">${esc(tileLine(b))}</span>` +
+    // P1: the one word, where the book is not clean (above)
+    verdictTileHTML(b) +
     // G-LANG: a book here in a language with no pack says so -- settings.js TTSTVLangs
     (b.device && window.TTSTVLangs ? TTSTVLangs.tileLineHTML(b) : "") +
     // 1 ¶'s pane: empty in the memo'd markup, filled by paintBookViews
@@ -2301,6 +2344,10 @@ function bookViewHTML(b) {
   if (langs.length) row.push(`<span class="tile-slot"><b>languages</b><span>${langs.map(esc).join(" · ")}</span></span>`);
   if (voices.length) row.push(`<span class="tile-slot"><b>voices</b><span>${voices.map(esc).join(" · ")}</span></span>`);
   if (row.length) parts.push(`<span class="tile-slotrow">${row.join("")}</span>`);
+
+  // P1: the word, and the parse's own sentence for a book that is not clean
+  const verdict = verdictBookHTML(b);
+  if (verdict) parts.push(verdict);
 
   if (one && one.chapters.length) {
     const shown = one.chapters.slice(0, BOOK_VIEW_CHAPTERS).map(t => `<span>${esc(t)}</span>`);

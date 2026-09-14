@@ -221,6 +221,23 @@
     var n = ((v && v.name) || "") + " " + ((v && v.voiceURI) || "");
     if (/premium/i.test(n)) return 3;
     if (/enhanced/i.test(n)) return 2;
+    /* AND MICROSOFT'S WORDS, WHICH ARE NOT APPLE'S (G-WINDOWS, chat 66 ->
+       chat 70). Everything above is Apple's vocabulary, so on Windows every
+       voice scored 1 and the whole free tier reported `quality: "default"` --
+       which is precisely the report Q-D1 says not to judge the system voice
+       from. Windows names its own three tiers in the name too:
+         `Microsoft Aria Online (Natural) - English (United States)`  neural
+         `Microsoft David - English (United States)`                  OneCore
+         `Microsoft David Desktop - English (United States)`          SAPI5
+       so the map is the same three ranks, read off the same string. `natural`
+       (or `online`, the same voices under Edge's other spelling) is the
+       premium rung; a Microsoft voice that is not one of the legacy `Desktop`
+       voices is the middle one; the `Desktop` voices stay stock. This changes
+       the PICK as well as the report, and only where it should: with every
+       voice scoring 1 the next key was `localService`, which ranked a local
+       SAPI voice ABOVE an online Natural one. */
+    if (/natural|online/i.test(n)) return 3;
+    if (/\bmicrosoft\b/i.test(n)) return /desktop/i.test(n) ? 1 : 2;
     return 1;
   }
   var QNAME = { 3: "premium", 2: "enhanced", 1: "default" };

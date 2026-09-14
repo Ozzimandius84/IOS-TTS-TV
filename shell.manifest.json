@@ -2,7 +2,7 @@
   "added_here": [
     "index.html"
   ],
-  "bytes": 2385058,
+  "bytes": 2418168,
   "count": 68,
   "files": {
     "bar/askbar.css": {
@@ -26,20 +26,20 @@
       "sha256": "899c3ffa9eadbbd0746f7cd112027982db421c2a63102e86b9abe01e91aeede0"
     },
     "library/drive.js": {
-      "bytes": 41440,
-      "sha256": "d7c08e31c6ee5abaf1d375a0ea84aa6e0d2a7e12948763df79dc2b97c4023f4e"
+      "bytes": 52438,
+      "sha256": "ca6558e3feca7036c0e3cee40c52e5258605fa9163348c5e79745d284ed5e7d3"
     },
     "library/import.js": {
       "bytes": 39218,
       "sha256": "b421b26ca76653c0d51868a15391df0b830fd7d39b0223a3510d2ffd8d9b45b4"
     },
     "library/library.css": {
-      "bytes": 89827,
-      "sha256": "840f902a22148d7b76359520913b2551b0e166b28d6d6fc388161c1a04f7ee85"
+      "bytes": 93125,
+      "sha256": "ed80df0307852aedcfb815b2ce565a065df6be8b8d2e2961a7e12b1184ee0836"
     },
     "library/library.html": {
-      "bytes": 293649,
-      "sha256": "80a79053e38d72623101924e00d724cc8930f5be5a51e413d35283b5faced8fc"
+      "bytes": 295977,
+      "sha256": "fe57be3c3b3c17b637b52eba9d73e2975180d6e220e18057a2777d8d9d545f68"
     },
     "library/transfer.js": {
       "bytes": 11069,
@@ -54,8 +54,8 @@
       "sha256": "2b0c86208e4e044b7fec34956b014f34b4837527364a5824910391af43677c9c"
     },
     "reader/book-nav.js": {
-      "bytes": 301381,
-      "sha256": "f9ae0b87afd4ff8872b9f92d115a811f013467d227637a9f5153aecdf429093d"
+      "bytes": 306383,
+      "sha256": "39edc462b0b41994ab61223fe6b0f42ec1403d07fae5a60008eff1ef48ae4198"
     },
     "reader/book.js": {
       "bytes": 6116,
@@ -162,8 +162,8 @@
       "sha256": "01d0599452f0583b677409bef75c8211aeee66c02d6033831ced4bace0fc37cd"
     },
     "reader/reader.html": {
-      "bytes": 97840,
-      "sha256": "5ebc0bd1b85636ad4b26e882ae03edd356b0488d71a6ba2110d9c3add74d08f8"
+      "bytes": 101682,
+      "sha256": "a6426c534969999b5e87e2bac40a60bf44efdc1e04323126310bd49b17432e5d"
     },
     "reader/scrub.css": {
       "bytes": 10487,
@@ -174,8 +174,8 @@
       "sha256": "61847671a09d8bc2e5f968d321a95facacf3183da2e660d04b4df4f9423d0d10"
     },
     "reader/shell.css": {
-      "bytes": 46124,
-      "sha256": "0975987d36a7cc6121b53823c26a8452d619ae55ebc5b66478bf7b68c1eb5830"
+      "bytes": 48683,
+      "sha256": "178b6b6d342baf8d926910ede61bba35d828ec16159422991d9fb794220ff8ff"
     },
     "reader/surface.css": {
       "bytes": 36057,
@@ -190,8 +190,8 @@
       "sha256": "a5c66f528dea81c8bdbf4ee4ab6448dfab7b287821fc214d28d2b99f5e5978d8"
     },
     "reader/sysvoice.js": {
-      "bytes": 44734,
-      "sha256": "6f16548efcee03f0f16378552b4e4dfa87b6d50c6713a1f9f402dea1d19cfa22"
+      "bytes": 45964,
+      "sha256": "36386feeaba0d3356308550b25ed808eae6c256012375492415fa66aa3acee90"
     },
     "reader/tokens.css": {
       "bytes": 5848,
@@ -238,8 +238,8 @@
       "sha256": "b0b9b57ba224db841dcaecc01cf0c81ab6d223eff3205e8d25670732e52b1c49"
     },
     "settings/settings.js": {
-      "bytes": 290590,
-      "sha256": "24855d1fd20dd59fc86701c6502bb6bedb55f05770d92a572ffb9c7ea77bdee2"
+      "bytes": 294443,
+      "sha256": "c657ba75292a4c60579049140ecb1e1173f2f47185255a5ddd8529680c6be466"
     },
     "voiceui/answers.js": {
       "bytes": 4253,
@@ -280,8 +280,8 @@
   },
   "home_page": "library/library.html",
   "source": {
-    "commit": "ffc2479",
-    "repo": "/sessions/rcw-01fmsvfdiwacj17e2mtmmpyd/mnt/TTSTV",
+    "commit": "unknown",
+    "repo": "/sessions/rcw-01u28qduywpwxtiibzqbsjvq/shadow",
     "shell_cache": "ttstv-shell-v55"
   }
 }

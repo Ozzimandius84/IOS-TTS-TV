@@ -2833,6 +2833,10 @@
   var SYNC = {
     GET: "/sync", HELLO: "/sync/hello", PAIR: "/sync/pair", MANIFEST: "/sync/manifest",
     MARGINALIA: "/sync/marginalia", POSITIONS: "/sync/positions",
+    // studio's own settings file, the same POST the Cloud GPU tab's WHERE
+    // uses (`KAGGLE.SETTINGS`): one file, one endpoint, and each row sends
+    // the key it owns.
+    SETTINGS: "/settings",
   };
   var SYNC_PAIR_KEY = "ttstv.sync.pair";       // {base, token, name, paired}
   var SYNC_LAST_KEY = "ttstv.sync.last";       // {at, books, marks}
@@ -3600,6 +3604,52 @@
     row.appendChild(l); row.appendChild(c);
     card.appendChild(row);
 
+    /* ---- Push when a job finishes (Osca, 12 Sep): *"when auto is ON,
+     * Studio pushes after every finished job. When auto is OFF, the work
+     * goes up on the next manual Sync -- of course."*
+     *
+     * ONE ROW, AND IT IS THE MAC'S. The value is studio's own
+     * (`studio/settings.py`'s `sync.auto`, read back on `GET /sync` as
+     * `auto`), the thing it switches runs on the Mac (`studio/tasks.py` ->
+     * `studio/pending.py`), and the two routes behind it -- `GET /sync` and
+     * `POST /settings` -- both 404 on the LAN door whatever the token
+     * (`studio/serve.py::sync_path_allowed`). A phone drawing this row
+     * would be a switch for a machine it cannot reach, so on a phone the
+     * row is not on the card at all.
+     *
+     * OFF IS NOT "DO NOTHING": the chapter's two files are queued either
+     * way and the next press of Sync sends them, which is what the
+     * sub-line says rather than leaving a person to find out. */
+    var autoRow = kEl(doc, "div", "set-row tr-autorow");
+    var autoL = kEl(doc, "div", "set-l");
+    autoL.appendChild(kEl(doc, "div", "set-name", "Push when a job finishes"));
+    var autoWhy = kEl(doc, "small", "kag-why-here tr-autoline", "");
+    autoL.appendChild(autoWhy);
+    autoRow.appendChild(autoL);
+    // NOT `.opts` -- the value is studio's, not the reader's, and mount()'s
+    // painter must not walk it (the WHERE control's own comment, verbatim).
+    var autoOpts = kEl(doc, "div", "set-c kag-opts set-seg");
+    autoOpts.setAttribute("role", "group");
+    var autoBtns = {};
+    [["on", "On"], ["off", "Off"]].forEach(function (o) {
+      var b = doc.createElement("button");
+      b.type = "button"; b.dataset.auto = o[0];
+      b.setAttribute("aria-pressed", "false");
+      b.appendChild(kEl(doc, "span", "opt-main", o[1]));
+      autoOpts.appendChild(b); autoBtns[o[0]] = b;
+    });
+    autoRow.appendChild(autoOpts);
+    if (isStudio) card.appendChild(autoRow);
+
+    /* Pure: the sub-line, from what studio answered. `null` is a studio that
+     * has not answered yet -- never a claim in either direction. */
+    function autoLine(auto) {
+      if (auto == null) return "Studio has not said yet";
+      return auto
+        ? "A finished chapter's audio and timings go up at once \u00b7 the book itself only on a press"
+        : "Queued \u00b7 the next press of Sync sends them";
+    }
+
     /* ---- Account: one row, one fact -- who. Sign out when there is an
      * account; the Google button, inert with its reason, when there is not. */
     panel.appendChild(kEl(doc, "div", "set-head", "Account"));
@@ -3898,6 +3948,10 @@
         lanPick.classList.toggle("kag-primary", lanUsed);
         lanPick.setAttribute("aria-pressed", lanUsed ? "true" : "false");
         lanPick.disabled = !on || !signed;          // a way back to the LAN, only when Drive is the other choice
+        var auto = typeof s.auto === "boolean" ? s.auto : null;
+        autoWhy.textContent = autoLine(auto);
+        autoBtns.on.setAttribute("aria-pressed", auto === true ? "true" : "false");
+        autoBtns.off.setAttribute("aria-pressed", auto === false ? "true" : "false");
       } else {
         var paired = !!(pair && pair.token);
         lanRow.name.classList.toggle("kag-on", paired);
@@ -4112,6 +4166,27 @@
     }
 
     syncBtn.addEventListener("click", press);
+    autoOpts.addEventListener("click", function (e) {
+      var b = e.target && e.target.closest ? e.target.closest("button[data-auto]") : null;
+      if (!b || !isStudio) return;
+      var want = b.dataset.auto === "on";
+      if (studio && studio.auto === want) return;
+      // paint the press at once, then let studio's answer be the truth --
+      // a refused write must not leave the row claiming the new value
+      studio = studio || {};
+      studio.auto = want;
+      paint();
+      ctx.postJSON(SYNC.SETTINGS, { sync: { auto: want } }).then(function (r) {
+        if (r && r.sync && typeof r.sync.auto === "boolean") studio.auto = r.sync.auto;
+        say.textContent = studio.auto
+          ? "Finished jobs go up as they finish."
+          : "Finished jobs wait for the next Sync.";
+        paint();
+      }, function (err) {
+        say.textContent = "Studio did not take that: " + String((err && err.message) || err) + ".";
+        return ask().then(paint);
+      });
+    });
     acctBtn.addEventListener("click", function () {
       var a = acctNow();
       return (a && a.kind === "google" && a.who) ? signOut() : signIn();

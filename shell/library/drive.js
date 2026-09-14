@@ -459,6 +459,65 @@ function countMarks(rec) {
  * writeSettings(rec), deviceId() -> string} -- so this file names no key of
  * the reader's (settings/settings.js hands its own in). Resolves the same
  * {ok, books, marks, pulled, why} the LAN loop resolves. */
+/* ==================================== THE THREE LEDGERS, ONE AT A TIME
+ * Marks, positions and settings: small, merged BOTH ways, and until today
+ * only ever merged by a press (`runDriveSync` below, whose three steps these
+ * are, lifted out unchanged). G-SYNCBG left the automatic run pulling books
+ * alone, which defeats the point of it -- *"the reading position is the
+ * thing you most want carried without pressing anything"* (Osca, 14 Sep) --
+ * so `syncLedgers` runs the same three on launch and on every return to the
+ * foreground. Each takes the opened `driveFolder` and the page's store, and
+ * each is exactly what it was inside the press. */
+
+/* Every marginalia record here and there, merged by the one rule, written
+ * back to whichever side is behind. Answers how many marks the merge holds. */
+function syncMarksLedger(folder, store, device) {
+  return folder.marks().then(function (theirs) {
+    var mine = store.marginalia();
+    var slugs = Object.keys(Object.assign({}, mine, theirs)).sort();
+    var i = 0, n = 0;
+    function next() {
+      if (i >= slugs.length) return null;
+      var slug = slugs[i++];
+      if (!syncSlugOk(slug)) return next();
+      var a = mine[slug], b = theirs[slug];
+      var merged = syncMergeMarks(a || { version: 1, slug: slug, saved: 0, notes: [], highlights: [], bookmarks: [] },
+                                  b || { version: 1, slug: slug, saved: 0, notes: [], highlights: [], bookmarks: [] });
+      if (device && !merged.device) merged.device = device;
+      n += countMarks(merged);
+      var w = Promise.resolve();
+      if (!a || !sameJSON(syncMergeMarks(a, a), merged)) store.writeMarginalia(slug, merged);
+      if (!b || !sameJSON(syncMergeMarks(b, b), merged)) w = folder.writeMarks(slug, merged);
+      return w.then(next);
+    }
+    return Promise.resolve(next()).then(function () { return n; });
+  });
+}
+
+/* One document, one map: the newest position per book wins (`syncMergePositions`). */
+function syncPositionsLedger(folder, store) {
+  return folder.readJSON(DRIVE.POSITIONS).then(function (doc) {
+    var theirs = doc && doc.positions && typeof doc.positions === "object" ? doc.positions : {};
+    var mine = store.positions();
+    var merged = syncMergePositions(mine, theirs);
+    if (!sameJSON(merged, mine)) store.writePositions(merged);
+    if (!sameJSON(merged, theirs)) return folder.writeJSON(DRIVE.POSITIONS, { version: 1, saved: Date.now(), positions: merged });
+    return null;
+  });
+}
+
+/* The reader's own settings record: the later `saved` wins, whole. */
+function syncSettingsLedger(folder, store) {
+  return folder.readJSON(DRIVE.SETTINGS).then(function (theirs) {
+    var mine = store.settings ? store.settings() : null;
+    var win = syncMergeSettings(mine, theirs);
+    if (!win) return null;
+    if (!sameJSON(win, mine) && store.writeSettings) store.writeSettings(win);
+    if (!sameJSON(win, theirs)) return folder.writeJSON(DRIVE.SETTINGS, win);
+    return null;
+  });
+}
+
 function runDriveSync(remote, o) {
   o = o || {};
   var say = o.say || function () {};
@@ -480,36 +539,11 @@ function runDriveSync(remote, o) {
   say("Connecting to Drive…");
   return folder.open().then(function () {
     say("Pushing marks…");
-    return folder.marks();
-  }).then(function (theirs) {
-    var mine = store.marginalia();
-    var slugs = Object.keys(Object.assign({}, mine, theirs)).sort();
-    var i = 0, n = 0;
-    function next() {
-      if (i >= slugs.length) return null;
-      var slug = slugs[i++];
-      if (!syncSlugOk(slug)) return next();
-      var a = mine[slug], b = theirs[slug];
-      var merged = syncMergeMarks(a || { version: 1, slug: slug, saved: 0, notes: [], highlights: [], bookmarks: [] },
-                                  b || { version: 1, slug: slug, saved: 0, notes: [], highlights: [], bookmarks: [] });
-      if (device && !merged.device) merged.device = device;
-      n += countMarks(merged);
-      var w = Promise.resolve();
-      if (!a || !sameJSON(syncMergeMarks(a, a), merged)) store.writeMarginalia(slug, merged);
-      if (!b || !sameJSON(syncMergeMarks(b, b), merged)) w = folder.writeMarks(slug, merged);
-      return w.then(next);
-    }
-    return Promise.resolve(next()).then(function () { out.marks = n; });
-  }).then(function () {
+    return syncMarksLedger(folder, store, device);
+  }).then(function (n) {
+    out.marks = n;
     say("Pushing position…");
-    return folder.readJSON(DRIVE.POSITIONS).then(function (doc) {
-      var theirs = doc && doc.positions && typeof doc.positions === "object" ? doc.positions : {};
-      var mine = store.positions();
-      var merged = syncMergePositions(mine, theirs);
-      if (!sameJSON(merged, mine)) store.writePositions(merged);
-      if (!sameJSON(merged, theirs)) return folder.writeJSON(DRIVE.POSITIONS, { version: 1, saved: Date.now(), positions: merged });
-      return null;
-    });
+    return syncPositionsLedger(folder, store);
   }).then(function () {
     say("Asking what Drive has…");
     return folder.library();
@@ -551,14 +585,7 @@ function runDriveSync(remote, o) {
     });
   }).then(function () {
     say("Settings…");
-    return folder.readJSON(DRIVE.SETTINGS).then(function (theirs) {
-      var mine = store.settings ? store.settings() : null;
-      var win = syncMergeSettings(mine, theirs);
-      if (!win) return null;
-      if (!sameJSON(win, mine) && store.writeSettings) store.writeSettings(win);
-      if (!sameJSON(win, theirs)) return folder.writeJSON(DRIVE.SETTINGS, win);
-      return null;
-    });
+    return syncSettingsLedger(folder, store);
   }).then(function () {
     if (!pull) return null;
     say("Handing the books to Frank…");
@@ -682,7 +709,77 @@ function syncJob(transport, auth, rows, have, o) {
     var b = syncJobBook(r, transport, o);
     if (b.why) refused.push(b); else books.push(b);
   });
-  return { transport: transport, trigger: o.trigger || "press", auth: auth || {}, books: books, refused: refused };
+  return { transport: transport, trigger: o.trigger || "press", auth: auth || {}, books: books, refused: refused,
+           topUp: syncTopUpJob(transport, auth, rows, have, o) };
+}
+
+/* ===================================== WHAT A ROW GAINED AT THE SAME HASH
+ * G-TOPUP (Osca, 14 Sep). `cover.jpg` arrives AFTER its book does: a cover
+ * changes no word id, so the hash does not move, and "pull the books whose
+ * hash this device lacks" -- the rule that makes a resume cheap -- never
+ * sees it. That is why the 26 books on Osca's phone are white slabs.
+ *
+ * import.js already knows the signal (`TTSTVBundle.topUps`, G-COVERS). This
+ * turns its answer into a JOB of its own, `kind: "topup"`, which the app
+ * runs through `pull.rs::TopUp`: ONE allowlisted file written INTO the
+ * installed folder, and that file's flag flipped on the installed row.
+ * Never a `.part/` -- the app's commit swaps a whole folder, so a `.part/`
+ * holding only a cover would REPLACE the book. */
+var SYNC_TOPUP = { "cover.jpg": "has_cover" };   // import.js's TOPUP, for a page that has not loaded it
+
+/* import.js's rule when this page has it, its own copy when it has not: the
+ * app's ask lands on whatever page is showing, and the reader has no
+ * import.js. Same answer either way -- `library/tests/test_sync_topup.py`
+ * holds the two equal. */
+function syncTopUps(rows, have, o) {
+  var B = (o && o.bundle !== undefined && o.bundle !== null) ? o.bundle : global.TTSTVBundle;
+  if (B && typeof B.topUps === "function") return B.topUps(rows, have);
+  var map = (B && B.TOPUP) || SYNC_TOPUP;
+  var mine = {};
+  (have || []).forEach(function (b) { if (b && b.slug) mine[b.slug + "@" + b.hash] = b; });
+  var out = [];
+  (rows || []).forEach(function (r) {
+    if (!r || !r.slug || !r.hash || r.superseded || !Array.isArray(r.files)) return;
+    var row = mine[r.slug + "@" + r.hash];
+    if (!row) return;
+    var files = r.files.filter(function (f) { return f && map[f.rel] && row[map[f.rel]] !== true; });
+    if (files.length) out.push({ slug: r.slug, hash: r.hash, files: files });
+  });
+  return out;
+}
+
+/* Pure: the top-up job, or null when nothing gained anything. ONE file a
+ * book -- the app refuses a second, and a book may be in a job once -- and
+ * `meta` is THIS DEVICE'S row, not the Mac's: the app patches the row it
+ * already has, which is the row written when the book was pulled here. */
+function syncTopUpJob(transport, auth, rows, have, o) {
+  o = o || {};
+  var mine = {};
+  (have || []).forEach(function (b) { if (b && b.slug) mine[b.slug + "@" + b.hash] = b; });
+  var books = [];
+  syncTopUps(rows, have, o).forEach(function (t) {
+    var row = mine[t.slug + "@" + t.hash], f = t.files[0];
+    if (!row || !f || typeof f.rel !== "string") return;
+    var one = { rel: f.rel, bytes: typeof f.bytes === "number" ? f.bytes : null };
+    if (transport === "drive") one.id = f.id; else one.url = f.url;
+    books.push({ slug: t.slug, hash: t.hash, title: row.title || t.slug, meta: row, files: [one] });
+  });
+  if (!books.length) return null;
+  return { transport: transport, trigger: o.trigger || "press", kind: "topup", auth: auth || {}, books: books };
+}
+
+/* Hand a planned job to the app: the books, then the top-ups, which WAIT
+ * for the books rather than being refused by them (`pull.rs::queues`).
+ * `topUp` and `refused` are this page's own bookkeeping and do not ride
+ * over the wire with the books. Resolves the BOOKS job's status, which is
+ * what every row in the app paints. */
+function syncStartJob(pull, job) {
+  var books = Object.assign({}, job);
+  delete books.topUp;
+  return Promise.resolve(pull.start(books)).then(function (st) {
+    if (!job.topUp) return st;
+    return Promise.resolve(pull.start(job.topUp)).then(function () { return st; }, function () { return st; });
+  });
 }
 
 /* The credentials, read when the job is handed over (a refresh a moment
@@ -705,6 +802,67 @@ function syncHave(o, host) {
   return Promise.resolve([]);
 }
 
+/* ===================================== THE READER'S OWN KEYS, READ HERE
+ * This file names no key of the reader's: `settings/settings.js` hands its
+ * own readers and writers in (`syncStore`), and that is still true of every
+ * press. But the APP's ask lands on whatever page is showing -- the Library,
+ * the reader -- and those pages have no Settings and no store to hand. So,
+ * for the app's ask and nothing else, the keys are here, exactly as
+ * `ttstv.sync.pair` is (G-SYNCBG, the same reason in the same words).
+ * `library/tests/test_sync_topup.py` holds this store and settings.js's
+ * equal over the same storage, key for key, so the two cannot drift. */
+var SYNC_MARG_PREFIX = "ttstv.reader.marginalia.";   // reader/marginalia.js's records
+var SYNC_LIB_KEY = "ttstv.reader.library";           // the position map lives in this one
+var SYNC_SETTINGS_KEY = "ttstv.reader.settings";     // prefs.js's record
+var SYNC_DEVICE_KEY = "ttstv.reader.deviceId";       // one id per browser profile
+
+function syncDefaultStore() {
+  if (typeof global.localStorage === "undefined" || !global.localStorage) return null;
+  var positions = function () {
+    var lib = syncRead(SYNC_LIB_KEY);
+    return (lib && lib.positions && typeof lib.positions === "object") ? lib.positions : {};
+  };
+  return {
+    marginalia: function () {
+      var out = {}, ls = global.localStorage;
+      var take = function (k) {
+        if (!k || k.indexOf(SYNC_MARG_PREFIX) !== 0) return;
+        var rec = syncRead(k);
+        if (rec && typeof rec === "object") out[k.slice(SYNC_MARG_PREFIX.length)] = rec;
+      };
+      try {
+        if (ls && typeof ls.key === "function") { for (var i = 0; i < ls.length; i++) take(ls.key(i)); }
+        else { Object.keys(positions()).forEach(function (slug) { take(SYNC_MARG_PREFIX + slug); }); }
+      } catch (e) {}
+      return out;
+    },
+    writeMarginalia: function (slug, rec) { return syncWrite(SYNC_MARG_PREFIX + slug, rec); },
+    positions: positions,
+    /* a read-modify-write of the ONE key the position lives in: everything
+     * else in `ttstv.reader.library` goes back as found (cursor.js's rule) */
+    writePositions: function (map) {
+      var lib = syncRead(SYNC_LIB_KEY);
+      if (!lib || typeof lib !== "object") lib = {};
+      lib.positions = map && typeof map === "object" ? map : {};
+      return syncWrite(SYNC_LIB_KEY, lib);
+    },
+    settings: function () { return syncRead(SYNC_SETTINGS_KEY); },
+    writeSettings: function (rec) { return syncWrite(SYNC_SETTINGS_KEY, rec); },
+    /* made here only when no page has made it yet, so the device a phone
+     * pushes as is the device its marks are stamped with */
+    deviceId: function () {
+      try {
+        var id = global.localStorage.getItem(SYNC_DEVICE_KEY);
+        if (!id) {
+          id = "d-" + Math.random().toString(36).slice(2, 10) + Math.random().toString(36).slice(2, 6);
+          global.localStorage.setItem(SYNC_DEVICE_KEY, id);
+        }
+        return id;
+      } catch (e) { return null; }
+    },
+  };
+}
+
 /* The press's last step on the phone: plan against what is here, hand the
  * job over. Resolves {handed, refused, status}. `auth` may be a function,
  * read at the moment of the hand-off. */
@@ -712,8 +870,9 @@ function syncHandOff(pull, transport, auth, rows, o) {
   o = o || {};
   return syncHave(o, o.host || global.TTSTVHost).then(function (have) {
     var job = syncJob(transport, typeof auth === "function" ? auth() : auth, rows, have, o);
-    return Promise.resolve(pull.start(job)).then(function (st) {
-      return { handed: job.books.length, refused: job.refused, status: st || null };
+    return syncStartJob(pull, job).then(function (st) {
+      return { handed: job.books.length, refused: job.refused,
+               topped: job.topUp ? job.topUp.books.length : 0, status: st || null };
     });
   });
 }
@@ -777,10 +936,60 @@ function syncPlan(host, o) {
   });
 }
 
+/* ======================== THE LEDGERS ON A RUN NOBODY PRESSED (14 Sep)
+ * G-SYNCBG left the automatic run pulling BOOKS only; marks, positions and
+ * settings merged on a manual press alone, *"which defeats the point -- the
+ * reading position is the thing you most want carried without pressing
+ * anything"* (Osca, 14 Sep). So the app's own ask merges them too, and it
+ * merges them the way the press does: `syncMarksLedger`, `syncPositionsLedger`,
+ * `syncSettingsLedger`, in that order, the very three functions.
+ *
+ * OVER DRIVE, whichever way the books came. The three are two devices'
+ * shared record and Drive is the one place both reach; the LAN's merge is
+ * settings.js's press (its own POSTs to Studio's `/sync/*`) and has never
+ * been this file's. A device that is not signed in merges nothing here and
+ * says so -- its ledgers still merge on a press, as they always did.
+ *
+ * Never throws and never rejects: the APP asked, and a page has no one to
+ * tell. Resolves {ok, marks, why}. */
+function syncLedgers(o) {
+  o = o || {};
+  var out = { ok: false, marks: 0, why: null };
+  var tok = syncRead(GOOGLE_TOKEN_KEY);
+  if (!(tok && tok.refresh && tok.clientId)) {
+    out.why = "this device is not signed in to Drive";
+    return Promise.resolve(out);
+  }
+  var store = o.store || syncDefaultStore();
+  if (!store) {
+    out.why = "this page has no ledgers to merge";
+    return Promise.resolve(out);
+  }
+  var fetchFn = o.fetch || global.fetch;
+  var folder = driveFolder(driveClient(function (force) { return googleAccessToken(fetchFn, force); }, fetchFn));
+  var device = o.device || (store.deviceId && store.deviceId());
+  return folder.open().then(function () {
+    return syncMarksLedger(folder, store, device);
+  }).then(function (n) {
+    out.marks = n;
+    return syncPositionsLedger(folder, store);
+  }).then(function () {
+    return syncSettingsLedger(folder, store);
+  }).then(function () {
+    out.ok = true;
+    return out;
+  }, function (e) {
+    out.why = whyOf(e);
+    return out;
+  });
+}
+
 /* `TTSTVHost.sync.auto(trigger)` lands here: leave a running pull alone,
- * else plan and start. Resolves the app's status, or null when there was
- * nothing to ask. Never throws: the app asked, and a page has no one to
- * tell. */
+ * else plan, start, and merge the three ledgers. Resolves the app's status,
+ * or null when there was nothing to ask. The pull is started FIRST because
+ * starting it is one call that spawns a thread -- the books begin arriving
+ * while this page is still talking to Drive about a position map, instead of
+ * three round-trips after it. Never throws. */
 function syncAuto(host, o) {
   o = o || {};
   var pull = syncHostPull(host);
@@ -790,7 +999,10 @@ function syncAuto(host, o) {
     return syncPlan(host, o).then(function (job) {
       if (!job) return null;
       job.trigger = o.trigger || "foreground";
-      return pull.start(job);
+      if (job.topUp) job.topUp.trigger = job.trigger;
+      return syncStartJob(pull, job).then(function (started) {
+        return syncLedgers(o).then(function () { return started; });
+      });
     });
   }).catch(function () { return null; });
 }
@@ -806,5 +1018,12 @@ global.TTSTVDrive = {
   SYNC_PAIR_KEY: SYNC_PAIR_KEY, syncHostPull: syncHostPull, syncBookMeta: syncBookMeta, syncJobBook: syncJobBook,
   syncJob: syncJob, syncDriveAuth: syncDriveAuth, syncHave: syncHave, syncHandOff: syncHandOff,
   syncPlanLan: syncPlanLan, syncPlanDrive: syncPlanDrive, syncPlan: syncPlan, syncAuto: syncAuto,
+  // the top-up (G-TOPUP): what a row gained at the same hash, as a job of its own
+  SYNC_TOPUP: SYNC_TOPUP, syncTopUps: syncTopUps, syncTopUpJob: syncTopUpJob, syncStartJob: syncStartJob,
+  // the three ledgers, one at a time -- and on a run nobody pressed
+  SYNC_MARG_PREFIX: SYNC_MARG_PREFIX, SYNC_LIB_KEY: SYNC_LIB_KEY,
+  SYNC_SETTINGS_KEY: SYNC_SETTINGS_KEY, SYNC_DEVICE_KEY: SYNC_DEVICE_KEY,
+  syncMarksLedger: syncMarksLedger, syncPositionsLedger: syncPositionsLedger,
+  syncSettingsLedger: syncSettingsLedger, syncDefaultStore: syncDefaultStore, syncLedgers: syncLedgers,
 };
 })(typeof window !== "undefined" ? window : globalThis);

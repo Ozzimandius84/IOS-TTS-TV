@@ -482,12 +482,32 @@
   /* ------------------------------------------------------------- when it is
      `--*-when`: `voice` (the default, and Osca's 1 Sep rule), `timings` (a
      silent preview is worth a bar), `always` (the bench, measuring a layout on
-     a shelf with nothing rendered). */
+     a shelf with nothing rendered).
+
+     ★ AND `s.system`, WHICH IS THE WHOLE FREE TIER (SILENCE 11, chat 69 ->
+     chat 70). This read `s.voice` alone, and `state().voice` means A RENDERED
+     MASTER -- so on a freshly imported book the system voice spoke out of a
+     page with no play button, no pause button and no pace readout, and the
+     only control was the same key pressed again. `transport.js`'s own comment
+     left it here on purpose (*"`state().system` is the separate fact, and what
+     a bar does with it is the bars' lane, not this one"*); this is that lane
+     running.
+
+     OSCA'S 1 SEPTEMBER RULE IS NOT REVERSED, it is satisfied. The rule is
+     *"no playback control shows when the chapter has no audio"*, and its
+     reason -- written down in shell.css -- is that *"offering to play a
+     silence is the regression that rule was written about"*. `state().system`
+     is true only when there IS an engine and it HAS words for the chapter on
+     screen (`transport.js::speaks()`, every clause load-bearing), so what the
+     bar now offers is not a silence: it is a chapter this app reads aloud.
+     A chapter with timings and no master and no engine still shows nothing.
+
+     AND THE CLOCK IS NOT A CLOCK WHILE IT SPEAKS -- `data-clock`, below. */
   function wanted(s) {
     var w = cssVar(PHONE ? "--pplay-when" : "--mplay-when", "voice");
     if (w === "always") return true;
-    if (w === "timings") return s.voice || s.timings;
-    return s.voice;
+    if (w === "timings") return s.voice || s.timings || s.system;
+    return s.voice || s.system;
   }
   function zoomed() { return !!document.querySelector(".pane.zoomed, .column.zoomed"); }
   function autohide() {
@@ -506,6 +526,18 @@
     var here = wanted(s);
     if (bar.hidden === here) bar.hidden = !here;
     if (!here) { R.removeAttribute("data-pplay"); return; }
+
+    /* ★ NO CLOCK, AND THE BAR SAYS SO. The system voice moves no clock --
+       `state().t` and `state().d` both stay 0 and `seekFraction`, `nudge` and
+       `stepSentence` all go to `ReaderControl`, which has no master to move.
+       So a bar shown for `s.system` alone would read `0:00 / -0:00` under a
+       dead scrubber and four arcs that do nothing, which is a bar that lies.
+       One attribute; shell.css takes the row down to the three controls that
+       DO work while the system voice speaks -- play/pause, pace and FOLLOW.
+       `s.voice` and not `!s.system`: the question is whether there is a
+       clock, and a master is the only thing that is one. */
+    var clock = s.voice ? "on" : "off";
+    if (bar.getAttribute("data-clock") !== clock) bar.setAttribute("data-clock", clock);
 
     var on = !zoomed() && (PHONE ? (autohide() ? navShown() : true) : true);
     if (bar.getAttribute("data-shown") !== (on ? "on" : "off")) bar.setAttribute("data-shown", on ? "on" : "off");
@@ -1356,11 +1388,40 @@ try{ (function(){
   const synth = picked.synth;
   const S = window.TTSTVSettings;
 
-  /* buildWordDomIndex's own walk, grouped by paragraph */
+  /* buildWordDomIndex's own walk, grouped by paragraph.
+
+     ...AND THE CHAPTER HAS TO BE THERE TO WALK (14 Sep, T-MAC2's A2c.28).
+     K25(a) mounts a WINDOW of chapters: a section outside it carries its
+     height and is EMPTY. So this walk found no `p.line` in chapter 3 of
+     Walden, returned null, `load(3)` failed, and the system voice stopped
+     after 1,847 of 5,612 words -- every word it HAD read being right
+     (565/565, 492/492, 790/790, no gap, no backward step).
+
+     THE VOICE ASKS THE WINDOW, rather than reading the book's data instead.
+     Two reasons, and the second is the one that decided it. (1) `page.js`
+     already has the door -- `ensure`, built by K25(a) for "anything that needs
+     a chapter's own text present". (2) `p.line` in document order IS this
+     product's word index; `blocks` is a DIFFERENT list -- it carries figure
+     captions, which page.js draws as a `<figure>` and never as a `p.line` --
+     so a data path would hand `onWord` indices that `nav.goTo` resolves
+     against the DOM, and the cursor would sit one word further along for every
+     caption above it. book-nav.js already settled which list wins ("the DOM
+     index wins wherever it exists, because it is the thing being pointed AT").
+     One list, one index, one cursor.
+
+     `ensureChapter` pins the chapter while the voice is inside it, mounts its
+     neighbours with it, and brackets the geometry so nothing on screen moves.
+     The NATIVE door (D1(b)) needs no separate fix and gets none: it hands the
+     rest of the chapter to AVSpeechSynthesizer at once, and the words it hands
+     over come through this same function. */
   function chapterWords(ch){
     const col = $("readercol");
-    const sec = col && col.querySelector('.chapter[data-ch="' + ch + '"]');
+    let sec = col && col.querySelector('.chapter[data-ch="' + ch + '"]');
     if(!sec) return null;
+    if(!sec.querySelector("p.line")){
+      try{ nav.ensureChapter(ch); }catch(e){}
+      sec = col.querySelector('.chapter[data-ch="' + ch + '"]') || sec;
+    }
     const paras = [];
     sec.querySelectorAll("p.line").forEach(p => {
       const tn = p.firstChild;

@@ -153,12 +153,6 @@
     overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .railrow-by { display:block; color:var(--fg-dim); font-size:0.8rem;
     overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-  /* THE NO-PACK LINE (settings.js::tileLineHTML, G-LANG). Its own class since
-     13 Sep -- it wore `.railrow-by` and so was placed in the byline's cell at
-     the 1 ¶ rung and drawn on top of it. Same type, its own row. */
-  .railrow-lang { display:block; color:var(--fg-dim); font-size:0.8rem;
-    overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-  .railrow-lang[hidden] { display:none; }
   .railrow-status { display:block; margin-top:3px; color:var(--fg-dim); font-size:0.76rem; }
   .railrow-status b { color:var(--ok); font-weight:600; }
 
@@ -171,6 +165,47 @@
      it is not in the picture, and nothing here turns it into a tile */
   #shelf .railrow:not(.tile) { max-width: 560px; }
   .empty { padding: 16px; color: var(--fg-dim); font-size: 0.9rem; }
+
+  /* THE NO-PACK LINE (settings.js::tileLineHTML, G-LANG). Its own class since
+     13 Sep -- it wore `.railrow-by` and so was placed in the byline's cell at
+     the 1 ¶ rung and drawn on top of it. Same type, its own row. */
+  .railrow-lang { display:block; color:var(--fg-dim); font-size:0.8rem;
+    overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .railrow-lang[hidden] { display:none; }
+  /* ...MOVED OUT OF THE SHARED BLOCK, 14 Sep, and not one byte of it changed.
+     It was written between `.railrow-by` and `.railrow-status`, which is
+     INSIDE `.rail` .. `.railrow-status b` -- studio's half of a contract this
+     page may not restyle, asserted byte for byte by
+     `library/tests/test_library_rail.py::test_rail_css_byte_identical`. That
+     test has been red since 13 Sep for this reason alone (measured: the whole
+     of the drift is these six lines). Like the verdict below it, the no-pack
+     line is drawn on TILES and on nothing else -- `tileLineHTML` is called
+     from `tileHTML`, never from `railRows` -- so this is where it always
+     belonged. Same rule, same order relative to everything that reads it. */
+
+  /* THE VERDICT, ON THE TILE (P1; drawn 14 Sep). One word, the parser's own,
+     and only where the book is not clean -- `library.html::verdictTileHTML`
+     says why `clean` is silent here and spoken on the book page.
+
+     ITS OWN ROW, LEARNED FROM THE LINE ABOVE IT. G-SMALL, 13 Sep: the no-pack
+     line wore `.railrow-by` and was placed in the byline's cell at the 1 ¶
+     rung and drawn on top of it. So this is its own class, and -- see the
+     rungs below -- it is not drawn at 1 ¶ at all, where the pane says the same
+     thing in full: no new grid row anywhere, and every rectangle G-SMALL
+     measured stands unchanged.
+
+     AND IT IS OUTSIDE THE SHARED BLOCK. `.rail` .. `.railrow-status b` is
+     studio's half of a contract this page may not restyle
+     (`library/tests/test_library_rail.py::test_rail_css_byte_identical`, which
+     caught this rule sitting inside it). The word is drawn on TILES and on
+     nothing else -- `verdictTileHTML` is called from `tileHTML`, never from
+     `railRows` -- so it belongs here, with every other rule that turns a row
+     into a tile. */
+  .railrow-verdict { display:block; font: 600 0.66rem/1.4 var(--ui-font);
+    letter-spacing:0.14em; color:var(--fg-dim);
+    overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .railrow-verdict[data-verdict="damaged"],
+  .railrow-verdict[data-verdict="unrecoverable"] { color:var(--warn, #b4622a); }
 
   /* ---- THE SHELF IS COVER TILES (PROMPTS/mock/library.html, 1 Sep).
      The shared `.rail` block above is studio's half of a contract this page
@@ -391,6 +426,7 @@
   #shelf[data-zoom="16"] .tilecov { border-radius: 3px; }
   #shelf[data-zoom="16"] .railrow.tile .railrow-title,
   #shelf[data-zoom="16"] .railrow.tile .railrow-lang,
+  #shelf[data-zoom="16"] .railrow.tile .railrow-verdict,
   #shelf[data-zoom="16"] .railrow.tile .railrow-by { display: none; }
   @container shelf (max-width: 1100px) { #shelf[data-zoom="16"] .shelfgrid { --cols: 8; } }
   @container shelf (max-width: 620px) { #shelf[data-zoom="16"] .shelfgrid { --cols: 4; } }
@@ -400,6 +436,7 @@
   #shelf[data-zoom="8"] .railrow.tile { grid-template-rows: auto; row-gap: 0.45rem; }
   #shelf[data-zoom="8"] .railrow.tile .railrow-title,
   #shelf[data-zoom="8"] .railrow.tile .railrow-lang,
+  #shelf[data-zoom="8"] .railrow.tile .railrow-verdict,
   #shelf[data-zoom="8"] .railrow.tile .railrow-by { display: none; }
   @container shelf (max-width: 1100px) { #shelf[data-zoom="8"] .shelfgrid { --cols: 4; } }
 
@@ -410,6 +447,7 @@
   #shelf[data-zoom="2"] .railrow.tile { grid-template-rows: auto; row-gap: 0; }
   #shelf[data-zoom="2"] .railrow.tile .railrow-title,
   #shelf[data-zoom="2"] .railrow.tile .railrow-lang,
+  #shelf[data-zoom="2"] .railrow.tile .railrow-verdict,
   #shelf[data-zoom="2"] .railrow.tile .railrow-by { display: none; }
 
   /* ---------------- 1 UP ¶ : one book is the page, its text beside it ---- */
@@ -446,6 +484,11 @@
     grid-column: 2; grid-row: 2; font-size: 0.78rem; }
   html:not([data-phone]) #shelf[data-zoom="1t"] .railrow.tile .railrow-lang {
     grid-column: 2; grid-row: 3; font-size: 0.78rem; }
+  /* not at 1 ¶: the pane below says the word AND the sentence (`.tile-verdictslot`),
+     and the same word twice on one screen is furniture. No grid row is taken,
+     so the rungs G-SMALL measured are untouched. */
+  html:not([data-phone]) #shelf[data-zoom="1t"] .railrow.tile .railrow-verdict,
+  html[data-phone] #shelf[data-zoom="1t"] .railrow.tile .railrow-verdict { display: none; }
   html:not([data-phone]) #shelf[data-zoom="1t"] .railrow.tile .tile-pane {
     grid-column: 2; grid-row: 4; display: grid;
     gap: 1.15rem; align-content: start; padding-top: 1.1rem; }
@@ -484,6 +527,13 @@
   .tile-slot.tile-blurb > span { display: -webkit-box; -webkit-box-orient: vertical;
     -webkit-line-clamp: 8; overflow: hidden; }
   .tile-slotrow { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 0.9rem; }
+  /* THE VERDICT ON THE BOOK PAGE. A slot like every other one, so it inherits
+     the pane's own type and gap and adds no layout of its own; `clean` is the
+     head alone (there is no sentence for a clean book -- `facts.verdict_line`
+     returns "" for one) and takes the dim ink the other heads take. */
+  .tile-verdictslot[data-verdict="damaged"] > b,
+  .tile-verdictslot[data-verdict="unusual"] > b,
+  .tile-verdictslot[data-verdict="unrecoverable"] > b { color: var(--warn, #b4622a); }
   .tile-chapters > span > span { display: block; white-space: nowrap; overflow: hidden;
     text-overflow: ellipsis; }
   .tile-chapters .tile-more { color: var(--fg-dim); }
@@ -1342,6 +1392,7 @@
   html[data-phone] #shelf[data-zoom="2"] .railrow.tile { grid-template-rows: auto; row-gap: 0; }
   html[data-phone] #shelf[data-zoom="2"] .railrow.tile .railrow-title,
   html[data-phone] #shelf[data-zoom="2"] .railrow.tile .railrow-lang,
+  html[data-phone] #shelf[data-zoom="2"] .railrow.tile .railrow-verdict,
   html[data-phone] #shelf[data-zoom="2"] .railrow.tile .railrow-by { display: none; }
   /* ---- 1 ¶ and 1 take the whole shelf: `100cqw` of the `shelf` container,
      a length, where `100%` would resolve against a band that is
