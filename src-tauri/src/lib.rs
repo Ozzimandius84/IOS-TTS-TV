@@ -1160,22 +1160,52 @@ fn route(shell: &Path, books: &Path, request_path: &str) -> Option<PathBuf> {
     }
 }
 
-/// import.js's slug rule (`validateBook`): lower-case letters, digits and
-/// hyphens, a letter or digit first. It is a folder name and a URL segment
-/// here, exactly as it is a Cache name and a URL segment on the web.
+/// import.js's slug rule (`bookSlugOk`), whose rule is `studio/slug.py`:
+/// lower-case letters OF ANY SCRIPT, ASCII digits, hyphens, and the `+` a
+/// stitched book carries; a letter or digit first. It is a folder name here
+/// -- `books/<slug>/`, `.part/<slug>@<hash>/` -- exactly as it is a Cache
+/// name on the web.
+///
+/// G-SLUGSIX (14 Sep). Six books on the Mac's shelf were outside the old
+/// ASCII-only alphabet and had therefore never reached a phone: `ιλιάδα`,
+/// four accented French books, and `eclogues-la+eclogues-en`. The alphabet
+/// widened at every door together, and nothing about a URL changed with it:
+/// a slug crosses percent-encoded, because `pull.rs::lan_path_ok` refuses a
+/// URL byte >= 0x7f and always did. `studio/sync.py::book_files` is the one
+/// encode seam; [`route`] -> [`percent_decode`] is this side's one decode.
+///
+/// DELIBERATELY A SUPERSET of the Mac's rule, in two named ways, because
+/// this crate has no Unicode category table and no normaliser:
+///   * `char::is_alphabetic()` is the Alphabetic property, which is wider
+///     than category L* -- it also covers Nl and Other_Alphabetic marks;
+///   * NFC is not checked here (the Mac refuses a slug that is not NFC).
+/// Both are safe and both are the right direction: the Mac is the
+/// gatekeeper, and what THIS function exists to stop is a slug becoming a
+/// path it should not -- `/`, `\`, `.`, `..`, `%`, `:`, an empty segment, a
+/// control character are all still outside the alphabet, character for
+/// character as before. `studio/tests/test_slug.py` holds the four
+/// implementations equal on one case list and asserts the direction of the
+/// one inequality.
 fn book_slug_ok(slug: &str) -> Result<(), String> {
-    let b = slug.as_bytes();
-    let first = b
-        .first()
-        .map_or(false, |c| c.is_ascii_lowercase() || c.is_ascii_digit());
-    let rest = b
-        .iter()
-        .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || *c == b'-');
-    if first && rest && b.len() <= 128 {
+    fn lower_letter(c: char) -> bool {
+        c.is_alphabetic() && !c.is_uppercase()
+    }
+    let mut chars = slug.chars();
+    let first = chars
+        .next()
+        .map_or(false, |c| lower_letter(c) || c.is_ascii_digit());
+    let rest = slug
+        .chars()
+        .all(|c| lower_letter(c) || c.is_ascii_digit() || c == '-' || c == '+');
+    // CHARACTERS, not bytes (G-SLUGSIX): `slug.len()` is the UTF-8 byte
+    // count, and 64 Greek characters -- the Mac's own ceiling -- is 128
+    // bytes, so a byte cap would have refused what the Mac accepts and
+    // broken the superset this function promises above.
+    if first && rest && slug.chars().count() <= 128 {
         Ok(())
     } else {
         Err(format!(
-            "{slug:?} is not a book slug (lower-case letters, digits and hyphens)"
+            "{slug:?} is not a book slug (lower-case letters, digits, hyphens, and the `+` a merged book carries)"
         ))
     }
 }
@@ -3667,7 +3697,22 @@ mod book_tests {
             assert!(!why.is_empty(), "{bad:?}");
         }
         assert!(book_slug_ok("eclogues-en").is_ok() && book_slug_ok("c001").is_ok());
-        for bad in ["", "-a", "A", "les-pensées", "a/b", "..", "a b", "a.b"] {
+        // G-SLUGSIX, 14 Sep -- the six books that had never reached a phone.
+        for ok in [
+            "eclogues-la+eclogues-en",
+            "\u{3b9}\u{3bb}\u{3b9}\u{3ac}\u{3b4}\u{3b1}",
+            "les-pens\u{e9}es",
+            "les-mis\u{e9}rables",
+            "r\u{e9}flexions-ou-sentences-et-maximes-morales",
+            "correspondance-de-napol\u{e9}on-ier",
+        ] {
+            assert!(book_slug_ok(ok).is_ok(), "{ok:?}");
+        }
+        // and everything a traversal needs is still outside the alphabet
+        for bad in [
+            "", "-a", "+a", "A", "a/b", "..", "a b", "a.b", "a\\b", "a%2Fb", "a:b", "a\u{0}b",
+            "\u{399}\u{3bb}\u{3b9}\u{3ac}\u{3b4}\u{3b1}",
+        ] {
             assert!(book_slug_ok(bad).is_err(), "{bad:?}");
         }
         assert!(book_hash_ok("0123456789abcdef").is_ok());
