@@ -16,8 +16,31 @@
 //!
 //! ```text
 //!   {transport: "drive" | "lan", trigger, auth: {...},
-//!    books: [{slug, hash, title, meta, files: [{rel, id | url, bytes}]}]}
+//!    books: [{slug, hash, title, meta,
+//!             files: [{rel, id | url, bytes, gz?, wire_bytes?}]}]}
 //! ```
+//!
+//! GZIP, AND WHICH HALF OF IT IS HERE (G-GZPULL, 14 Sep)
+//! -----------------------------------------------------
+//! Over the LAN there is nothing to do. Studio's server compresses the
+//! ANSWER when the client asks for it (G-DIET), `ureq`'s default `gzip`
+//! feature asks and inflates transparently, and the file on Studio's disk
+//! is plain either way -- so `bytes` is both what crosses and what lands,
+//! and the check below has always been right.
+//!
+//! Drive has no such half: `files.get?alt=media` hands back the bytes that
+//! are STORED, with no `Content-Encoding` for anyone to act on. So Studio
+//! stores the text gzipped -- `<base>.gz` instead of the plain file, the
+//! rel unchanged (`studio/drive.py::wire_of`) -- and the inflating is this
+//! module's. `gz: true` on a file says the bytes on the wire are a gzip
+//! stream; `wire_bytes` is how many of them there should be, and `bytes`
+//! stays what the file is once inflated. BOTH are checked, which makes the
+//! arrival stricter than it was, not looser: a truncated download now
+//! fails its own length AND the inflated length.
+//!
+//! A row with no `gz` is a book Drive has held since before that change.
+//! Nothing re-uploads and nothing re-pulls: the flag is per file, and a
+//! file without it takes the path it always took.
 //!
 //! -- and this module does the HOW on its own thread: each file downloaded
 //! (Drive `files/<id>?alt=media` with the bearer; the LAN `<base><url>?t=`
@@ -148,9 +171,34 @@ pub struct File {
     /// LAN: the path on Studio's sync server (`/books/<slug>/<rel>`,
     /// `/sync/audio/<slug>/<cid>.opus`).
     pub url: Option<String>,
-    /// The size the other side says it has, when it knows. `None` for a
-    /// chapter Studio has not transcoded yet -- that file is always fetched.
+    /// The size the other side says it has, when it knows -- ONCE INFLATED,
+    /// which is also the size on this phone's disk and the resume's
+    /// question. `None` for a chapter Studio has not transcoded yet -- that
+    /// file is always fetched.
     pub bytes: Option<u64>,
+    /// Drive only: the stored bytes are a gzip stream (`<rel>.gz` on Drive)
+    /// and this module inflates them. Never true on the LAN -- see the
+    /// module's own note -- and [`check_job`] refuses a job that says so.
+    pub gz: bool,
+    /// How many bytes should cross for a `gz` file. `None` leaves the wire
+    /// unchecked and the inflated length alone answering for the file.
+    pub wire_bytes: Option<u64>,
+}
+
+/// A reader that counts what passes through it, so the gzip stream can be
+/// measured on its way into the decoder -- `flate2` reads the compressed
+/// bytes and reports only the plain ones.
+struct Counted<R> {
+    inner: R,
+    n: u64,
+}
+
+impl<R: Read> Read for Counted<R> {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        let k = self.inner.read(buf)?;
+        self.n += k as u64;
+        Ok(k)
+    }
 }
 
 // ------------------------------------------------------------- the status
@@ -535,8 +583,17 @@ pub fn check_job(job: &Job) -> Result<(), String> {
                 if !f.id.as_deref().map_or(false, drive_id_ok) {
                     return Err(format!("{}: {} has no Drive id", b.slug, f.rel));
                 }
-            } else if !f.url.as_deref().map_or(false, lan_path_ok) {
-                return Err(format!("{}: {} has no path on Studio", b.slug, f.rel));
+            } else {
+                if !f.url.as_deref().map_or(false, lan_path_ok) {
+                    return Err(format!("{}: {} has no path on Studio", b.slug, f.rel));
+                }
+                // G-GZPULL: the LAN's gzip is the ANSWER's, already inflated
+                // by `ureq` before this module sees a byte. A job that asks
+                // for a second inflate is a planner bug, and it is refused
+                // before anything is written rather than corrupting a file.
+                if f.gz {
+                    return Err(format!("{}: {} is marked gzipped, and the LAN never is", b.slug, f.rel));
+                }
             }
         }
         if b.files.is_empty() {
@@ -599,6 +656,39 @@ fn refresh(wire: &mut dyn Wire, auth: &Auth, bearer: &mut Bearer, pull: &Pull) -
     Ok(())
 }
 
+/// One answered GET into the door -- INFLATED on the way when the row says
+/// Drive stores this file gzipped (G-GZPULL) -- and then held to the row's
+/// lengths. Answers the byte count of the file as it landed, which for a
+/// `gz` file is the inflated one: the door wrote plain bytes, so the
+/// resume's question ([`Door::have`]) is asked and answered in the same
+/// units it always was.
+///
+/// A sentence here is not fatal: [`fetch_file`] retries it like any other
+/// lost download, which is right for both new ways to fail -- a truncated
+/// gzip and a wire length that does not match are both "try again".
+fn take_body(door: &dyn Door, b: &Book, f: &File, gz: bool, body: Box<dyn Read + Send>) -> Result<u64, String> {
+    let (n, wire) = if gz {
+        // `MultiGzDecoder` and not `GzDecoder`: `dict.rs::inflate` learned
+        // the same lesson on the language packs -- a writer may emit more
+        // than one member, and the single-member decoder stops at the first.
+        let mut dec = flate2::read::MultiGzDecoder::new(Counted { inner: body, n: 0 });
+        let n = door.write_from(&b.slug, &b.hash, &f.rel, &mut dec)?;
+        (n, Some(dec.get_ref().n))
+    } else {
+        let mut body = body;
+        (door.write_from(&b.slug, &b.hash, &f.rel, &mut body)?, None)
+    };
+    if let (Some(got), Some(want)) = (wire, f.wire_bytes) {
+        if got != want {
+            return Err(format!("{}: {got} gzipped bytes arrived, {want} were listed", f.rel));
+        }
+    }
+    match f.bytes {
+        Some(want) if want != n => Err(format!("{}: {n} bytes arrived, {want} were listed", f.rel)),
+        _ => Ok(n),
+    }
+}
+
 /// One file into `.part/`: fetched, retried while the network is the
 /// problem, a Drive 401 refreshed once, the byte count held to the job's.
 fn fetch_file(
@@ -630,11 +720,8 @@ fn fetch_file(
             refreshed = true;
         }
         let lost = match wire.get(&url, if drive { Some(bearer.access.as_str()) } else { None }) {
-            Reply::Body(mut body) => match door.write_from(&b.slug, &b.hash, &f.rel, &mut body) {
-                Ok(n) => match f.bytes {
-                    Some(want) if want != n => format!("{}: {n} bytes arrived, {want} were listed", f.rel),
-                    _ => return Ok(n),
-                },
+            Reply::Body(body) => match take_body(door, b, f, drive && f.gz, body) {
+                Ok(n) => return Ok(n),
                 Err(e) => e,
             },
             Reply::Refused(401, _) if drive && !refreshed => {
@@ -947,7 +1034,7 @@ mod pull_tests {
     }
 
     fn file(rel: &str, id: &str, bytes: usize) -> File {
-        File { rel: rel.into(), id: Some(id.into()), url: None, bytes: Some(bytes as u64) }
+        File { rel: rel.into(), id: Some(id.into()), bytes: Some(bytes as u64), ..File::default() }
     }
 
     fn book(slug: &str, hash: &str, files: Vec<File>) -> Book {
@@ -1055,6 +1142,155 @@ mod pull_tests {
         assert_eq!(fs::read(books.join("aeneid").join("chapters").join("c003.txt")).unwrap(), b"cano");
         assert_eq!(fs::read(books.join("aeneid").join("book.json")).unwrap(), b"{}");
         let _ = fs::remove_dir_all(&books);
+    }
+
+    /// One gzip member, as `studio/drive.py::gz_of` writes it.
+    fn gzip(raw: &[u8]) -> Vec<u8> {
+        use std::io::Write;
+        let mut e = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::new(6));
+        e.write_all(raw).unwrap();
+        e.finish().unwrap()
+    }
+
+    fn gz_file(rel: &str, id: &str, plain: usize, wire: usize) -> File {
+        File {
+            rel: rel.into(),
+            id: Some(id.into()),
+            bytes: Some(plain as u64),
+            gz: true,
+            wire_bytes: Some(wire as u64),
+            ..File::default()
+        }
+    }
+
+    /// G-GZPULL. Drive stores the text gzipped and the phone inflates it:
+    /// the file that LANDS is the plain one, byte for byte, and both
+    /// lengths on the row are checked on the way.
+    #[test]
+    fn a_gz_file_crosses_compressed_lands_plain_and_both_lengths_are_held() {
+        let plain = b"arma virumque cano, Troiae qui primus ab oris ".repeat(40);
+        let z = gzip(&plain);
+        assert!(z.len() < plain.len() / 4, "{} -> {}", plain.len(), z.len());
+
+        // -- it arrives, it inflates, the bytes on disk are the plain ones
+        let books = scratch("gz");
+        let mut w = Fake::new().drive("i1", b"{}").drive("i2", &z);
+        let job = drive_job(vec![book(
+            "eclogues-la",
+            "bbbb",
+            vec![file("book.meta.json", "i1", 2), gz_file("chapters/c001.txt", "i2", plain.len(), z.len())],
+        )]);
+        let (_, st) = go(&books, &job, &mut w);
+        assert_eq!(st.why, None, "{st:?}");
+        assert_eq!(
+            fs::read(books.join("eclogues-la").join("chapters").join("c001.txt")).unwrap(),
+            plain,
+            "the door wrote the INFLATED bytes, so the reader opens what Studio parsed"
+        );
+        assert_eq!(book_installed(&books, "eclogues-la").as_deref(), Some("bbbb"));
+        let _ = fs::remove_dir_all(&books);
+
+        // -- the resume asks in PLAIN bytes, so a whole file is not re-fetched
+        let books = scratch("gz-resume");
+        crate::book_write(&books, "eclogues-la", "bbbb", "chapters/c001.txt", &plain).unwrap();
+        assert_eq!(book_have(&books, "eclogues-la", "bbbb", "chapters/c001.txt"), Some(plain.len() as u64));
+        let mut w = Fake::new().drive("i1", b"{}").drive("i2", &z);
+        let (_, st) = go(&books, &job, &mut w);
+        assert_eq!(st.why, None, "{st:?}");
+        assert_eq!(w.gets(), vec![format!("GET {} tok-1", url("i1"))], "the inflated file was already there");
+        let _ = fs::remove_dir_all(&books);
+
+        // -- MULTI-member: `dict.rs`'s lesson, kept here
+        let books = scratch("gz-multi");
+        let mut two = gzip(&plain[..plain.len() / 2]);
+        two.extend(gzip(&plain[plain.len() / 2..]));
+        let mut w = Fake::new().drive("i1", b"{}").drive("i2", &two);
+        let job2 = drive_job(vec![book(
+            "eclogues-la",
+            "bbbb",
+            vec![file("book.meta.json", "i1", 2), gz_file("chapters/c001.txt", "i2", plain.len(), two.len())],
+        )]);
+        let (_, st) = go(&books, &job2, &mut w);
+        assert_eq!(st.why, None, "{st:?}");
+        assert_eq!(fs::read(books.join("eclogues-la").join("chapters").join("c001.txt")).unwrap(), plain);
+        let _ = fs::remove_dir_all(&books);
+
+        // -- a wire length that does not match: a sentence, no row
+        let books = scratch("gz-wire");
+        let mut w = Fake::new().drive("i1", b"{}").drive("i2", &z);
+        let job3 = drive_job(vec![book(
+            "eclogues-la",
+            "bbbb",
+            vec![file("book.meta.json", "i1", 2), gz_file("chapters/c001.txt", "i2", plain.len(), z.len() + 1)],
+        )]);
+        let (_, st) = go(&books, &job3, &mut w);
+        assert!(st.why.as_deref().unwrap().contains("gzipped bytes arrived"), "{:?}", st.why);
+        assert!(crate::book_rows(&books).is_empty(), "not on the shelf");
+        let _ = fs::remove_dir_all(&books);
+
+        // -- an inflated length that does not match: the OLD sentence, still
+        let books = scratch("gz-plain");
+        let mut w = Fake::new().drive("i1", b"{}").drive("i2", &z);
+        let job4 = drive_job(vec![book(
+            "eclogues-la",
+            "bbbb",
+            vec![file("book.meta.json", "i1", 2), gz_file("chapters/c001.txt", "i2", plain.len() + 9, z.len())],
+        )]);
+        let (_, st) = go(&books, &job4, &mut w);
+        assert!(st.why.as_deref().unwrap().contains("bytes arrived"), "{:?}", st.why);
+        let _ = fs::remove_dir_all(&books);
+
+        // -- bytes that are not a gzip at all: a sentence, never a half file
+        let books = scratch("gz-not");
+        let mut w = Fake::new().drive("i1", b"{}").drive("i2", &plain);
+        let (_, st) = go(&books, &job, &mut w);
+        assert!(st.why.is_some(), "plain bytes under a gz flag are refused");
+        assert!(crate::book_rows(&books).is_empty());
+        let _ = fs::remove_dir_all(&books);
+
+        // -- a file with NO flag is untouched by any of this (the 29 books
+        //    already on Drive): plain bytes in, plain bytes out
+        let books = scratch("gz-none");
+        let mut w = Fake::new().drive("i1", b"{}").drive("i2", &plain);
+        let job5 = drive_job(vec![book(
+            "eclogues-la",
+            "bbbb",
+            vec![file("book.meta.json", "i1", 2), file("chapters/c001.txt", "i2", plain.len())],
+        )]);
+        let (_, st) = go(&books, &job5, &mut w);
+        assert_eq!(st.why, None, "{st:?}");
+        assert_eq!(fs::read(books.join("eclogues-la").join("chapters").join("c001.txt")).unwrap(), plain);
+        let _ = fs::remove_dir_all(&books);
+    }
+
+    /// The LAN's gzip is the ANSWER's and `ureq` has already inflated it --
+    /// so a LAN job that claims a stored gzip is refused whole.
+    #[test]
+    fn the_lan_never_carries_a_gz_flag_and_a_job_that_does_is_refused() {
+        let mut job = Job {
+            transport: "lan".into(),
+            trigger: "press".into(),
+            auth: Auth {
+                base: Some("http://192.168.1.5:41499".into()),
+                token: Some("t".into()),
+                ..Auth::default()
+            },
+            books: vec![Book {
+                files: vec![File {
+                    rel: "book.meta.json".into(),
+                    url: Some("/books/hamlet/book.meta.json".into()),
+                    bytes: Some(2),
+                    ..File::default()
+                }],
+                ..book("hamlet", "aaaa", vec![])
+            }],
+            kind: String::new(),
+            why: None,
+        };
+        assert!(check_job(&job).is_ok(), "{:?}", check_job(&job));
+        job.books[0].files[0].gz = true;
+        let why = check_job(&job).unwrap_err();
+        assert!(why.contains("the LAN never is"), "{why}");
     }
 
     #[test]
@@ -1240,8 +1476,8 @@ mod pull_tests {
             auth: Auth { base: Some(base.into()), token: Some("a/b c".into()), ..Auth::default() },
             books: vec![Book {
                 files: vec![
-                    File { rel: "book.json".into(), url: Some("/books/hamlet/book.json".into()), bytes: Some(2), id: None },
-                    File { rel: "audio/c001.opus".into(), url: Some("/sync/audio/hamlet/c001.opus".into()), bytes: None, id: None },
+                    File { rel: "book.json".into(), url: Some("/books/hamlet/book.json".into()), bytes: Some(2), ..File::default() },
+                    File { rel: "audio/c001.opus".into(), url: Some("/sync/audio/hamlet/c001.opus".into()), ..File::default() },
                 ],
                 ..book("hamlet", "aaaa", vec![])
             }],

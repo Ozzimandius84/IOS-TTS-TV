@@ -1,3 +1,16 @@
+## Status — 14 Sep (Cowork, bridge VM), `G-GZPULL`: **the Drive pull inflates — `<base>.gz` on Drive, plain bytes on disk, both lengths checked** (no build, no phone, no simulator)
+
+**Status line:** `pull.rs · G-GZPULL · 14 Sep · take_body inflates a gz Drive file on the stream; Eclogues 2,063,777 -> 267,037 bytes on the wire, 26/26 md5 identical; cargo NOT run`
+
+**The full nine-heading report is in the Mac repo: `studio/STATUS.md`, top.** This file carries what changed HERE.
+
+- **`src-tauri/src/pull.rs`, and nothing else in this repo.** `File` gains `gz: bool` and `wire_bytes: Option<u64>`. `Counted<R>` is a `Read` that counts what passes through it. **`take_body(door, b, f, gz, body)`** wraps the body in `Counted` inside a `flate2::read::MultiGzDecoder` and hands THAT to the door — so every `Door` (book, top-up, packs) writes plain bytes and knows nothing about any of this, and the resume's question (`Door::have` vs `bytes`) stays in the units it always was. `fetch_file`'s body arm is one line into it; the retries, the 401 refresh, the backoff and the status are untouched.
+- **Both lengths are held**, which is stricter than before: `wire_bytes` against what crossed, `bytes` against what landed. `check_job` refuses `gz` on a LAN job before a byte is written — over the LAN Studio gzips the ANSWER and `ureq`'s own `gzip` feature has already inflated it.
+- **`MultiGzDecoder`, not `GzDecoder`** — `dict.rs::inflate` learned that on the language packs and the reason has not changed.
+- **Verified, and the honest half.** `take_body` + `Counted` were lifted out of this file VERBATIM and compiled against `flate2` in the Cowork container (there is no cargo in the bridge VM), then run over the real Eclogues as `studio/drive.py::push_book` really stores them: **267,037 bytes crossed, 2,063,777 landed, 26 of 26 files md5-identical to the Mac's**; bytes that are not a gzip and a wire length one byte out are both sentences and install nothing. **`cargo test` has NOT been run and this file has NOT been type-checked** — the two new tests (`a_gz_file_crosses_compressed_lands_plain_and_both_lengths_are_held`, `the_lan_never_carries_a_gz_flag_and_a_job_that_does_is_refused`) are written and waiting for a Mac with cargo: `cargo test --manifest-path "IOS TTS TV/src-tauri/Cargo.toml" pull::tests`.
+
+---
+
 # G-TOPUP — the cover of a book that is already here, and the ledgers of a run nobody pressed · 14 Sep (Cowork, bridge VM + container) · TTSTV `9a8fb74` · phone `4b8f5f4` `f045706` (no GPU, no Kaggle, no Modal, 0 GPU-minutes)
 
 **Status line:** `library · G-TOPUP code done · 14 Sep · a topup job writes one file INTO an installed book and flips its row; jpg is image/jpeg; an auto run merges all three ledgers; owed: clean/ (another lane holds six shell files dirty), cargo test on the real crate, and Osca's two presses`
