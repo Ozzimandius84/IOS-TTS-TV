@@ -34,6 +34,14 @@ log = "0.4"
 # team -- so on Osca's phone under the free team the browse may find nothing,
 # and the row then takes the address Studio's row shows (PHONE.md §8).
 mdns-sd = "0.13"
+# THE ONE TAP (14 Sep). The Mac's advert carries `fp` -- eight hex of
+# sha256(the six-digit pairing code), `studio/sync.py::code_fp` -- and
+# `code_for_fp` walks the million to recover the code the advert committed to,
+# which is what makes "Found <Mac name> -- Pair" one press instead of a typed
+# address and six digits. Pure Rust, no platform framework, same as mdns-sd.
+# The forty milliseconds this costs, and what it means that it is only forty,
+# are written out on `Studio::code` and in `studio/sync.py::code_fp`.
+sha2 = "0.10"
 serde = { version = "1", features = ["derive"] }
 # `tauri::generate_context!()` emits code that names `::serde_json` in THIS
 # crate -- E0433, found by Osca on the first real `tauri ios build --debug`,

@@ -75,11 +75,28 @@ targets:
         NSSpeechRecognitionUsageDescription: Frank turns what you say into text on this phone so it can act on it -- "read on", "what?", the name of a chapter.
         # Sync (job 26, 6 Sep). iOS 14+ asks once before an app may look at the
         # local network; this sentence is the ask. NSBonjourServices names the
-        # one service the browse is allowed to see. NSAllowsLocalNetworking lets
+        # services the browse is allowed to see. NSAllowsLocalNetworking lets
         # the page fetch http://<lan address> -- Studio is plain HTTP on the LAN
         # and App Transport Security would otherwise refuse it silently.
+        #
+        # THREE NAMES SINCE 14 SEPTEMBER, and this key is why the entitlement
+        # question has an answer that is not "file the form and wait". Apple's
+        # own words (`com.apple.developer.networking.multicast`): the
+        # entitlement "allows your app to browse and advertise ARBITRARY
+        # Bonjour service types" -- arbitrary being the operative word. A
+        # service type DECLARED here is not arbitrary, and browsing it through
+        # Apple's own APIs needs no entitlement at all, only the local-network
+        # prompt above. What needs the entitlement is a raw multicast socket,
+        # which is exactly what `mdns-sd` opens for itself. See
+        # `IOS TTS TV/ENTITLEMENT.md` -- the two roads, and which one is free.
+        #
+        # `_ttstv._tcp` is what `studio/sync.py::Advert` has registered since
+        # job 26; `_frank._tcp` is the same Mac under the product's name (Osca,
+        # 14 Sep) and both go up from one Zeroconf; `_frank-phone._tcp` is this
+        # phone's OWN advert (`sync_advertise`), which the Mac browses so a
+        # push can take the LAN instead of Drive.
         NSLocalNetworkUsageDescription: Frank looks for Frank Studio on this network to sync your books, marks and reading position with it. Nothing leaves your network.
-        NSBonjourServices: [_ttstv._tcp]
+        NSBonjourServices: [_frank._tcp, _ttstv._tcp, _frank-phone._tcp]
         NSAppTransportSecurity:
           NSAllowsLocalNetworking: true
         # Pairing (job 23d, 6 Sep). The launch scheme, and it is NOT `frank`:

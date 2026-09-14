@@ -39,7 +39,9 @@
 	</dict>
 	<key>NSBonjourServices</key>
 	<array>
+		<string>_frank._tcp</string>
 		<string>_ttstv._tcp</string>
+		<string>_frank-phone._tcp</string>
 	</array>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>Frank looks for Frank Studio on this network to sync your books, marks and reading position with it. Nothing leaves your network.</string>

@@ -168,7 +168,33 @@ fn shell_url(path: &str) -> String {
 
 /// The service `studio/sync.py::Advert` registers, and the one
 /// `NSBonjourServices` (gen/apple/project.yml) lets this app see.
+use sha2::{Digest, Sha256};
+
 pub const SYNC_SERVICE: &str = "_ttstv._tcp.local.";
+
+/// The SECOND name the Mac answers to (Osca, 14 Sep). `studio/sync.py`
+/// registers both from one `Zeroconf` on one port with one TXT: `_ttstv._tcp`
+/// because that is what the build that synced on 11 September browses, and
+/// this because the product is Frank. Browsing both costs one more browse and
+/// means neither end has to be updated in step with the other.
+pub const SYNC_SERVICE_FRANK: &str = "_frank._tcp.local.";
+
+/// Both, in the order the row prefers them when the same Studio answers
+/// twice -- which it will, because one Mac registers both.
+pub const SYNC_SERVICES: [&str; 2] = [SYNC_SERVICE_FRANK, SYNC_SERVICE];
+
+/// THE PHONE'S OWN ADVERT (Osca, 14 Sep: *"also the reverse for a Mac finding
+/// a phone on the LAN (for LAN pulls)"*). `studio/sync.py::find_phones`
+/// browses this. It carries `fp` -- the fingerprint of the code this phone
+/// paired with -- so a Mac can tell one of ITS phones from a stranger's
+/// without the phone shouting a token across the LAN. **It is not a door**:
+/// nothing here accepts a connection, and a Mac that finds this phone still
+/// reaches it by the pairing it already holds.
+pub const PHONE_SERVICE: &str = "_frank-phone._tcp.local.";
+
+/// The TXT key the advert carries the code's public half in, both ways.
+/// `studio/sync.py::code_fp` -- eight hex of `sha256(code)`.
+pub const FP_KEY: &str = "fp";
 
 /// How long a browse waits for answers. A Studio on the same network answers
 /// its first query inside a few hundred milliseconds; the rest is for a
@@ -185,33 +211,207 @@ pub struct Studio {
     pub name: String,
     pub host: String,
     pub port: u16,
+    /// The advert's `fp` -- `studio/sync.py::code_fp`, eight hex of
+    /// `sha256(code)`, the live six-digit code's public half. Empty when the
+    /// advert carried none, which is every Studio older than 14 Sep.
+    pub fp: String,
+    /// THE ONE TAP (Osca, 14 Sep: *"one tap pairs"*), and the most honest
+    /// line in this file.
+    ///
+    /// A six-digit code is a space of one million. Given `fp`, walking that
+    /// space is **74 ms in a release build and 1.3 s in a debug one**
+    /// (measured on the container's CPU, `studio/STATUS.md` s2; Python's
+    /// OpenSSL does the same walk in 40 ms), so this field is the code the
+    /// advert committed to -- recovered, not received. That is what turns
+    /// "type the address and the six digits" into a button. **The debug
+    /// number is the one to watch**: it is per Studio and it is on the main
+    /// thread, so a `tauri ios dev` build with two Macs on the Wi-Fi pays
+    /// 2.6 s inside the browse. If that is ever felt, the walk moves off the
+    /// discover and behind the tap.
+    ///
+    /// **It is also the whole of what the `fp` costs**, and the cost is not
+    /// created here: anyone on this Wi-Fi can run the same forty milliseconds,
+    /// and could already have walked the same million against
+    /// `POST /sync/pair`, which has no rate limit. Publishing `fp` moves a
+    /// LAN attacker from minutes to microseconds; it does not move them from
+    /// impossible to possible. **The LAN is the trust boundary, and one tap
+    /// is the decision to say so out loud.** `studio/sync.py::code_fp` names
+    /// the two ways to make it false -- a longer code, or a rate limit -- and
+    /// neither is taken here, because both are Osca's.
+    ///
+    /// `None` when the advert carried no `fp`, or carried one no six-digit
+    /// code satisfies (a Studio on a shape this build does not know). The row
+    /// then offers the typed code, which is the fallback forever.
+    pub code: Option<String>,
 }
 
-/// The page's view of the browse: `sync_discover(ms)` -> `[Studio]`, at most
-/// one per advertised name, IPv4 first. `ms` is clamped to
+/// The walk. `fp` -> the six digits it commits to, or `None`.
+/// Eight hex is 32 bits over a space of 2^20, so a false hit is about one in
+/// four thousand and a wrong code is refused at `/sync/pair` in words.
+fn code_for_fp(fp: &str) -> Option<String> {
+    if fp.len() != 8 || !fp.bytes().all(|b| b.is_ascii_hexdigit()) {
+        return None;
+    }
+    let want = fp.to_ascii_lowercase();
+    (0..1_000_000u32).find_map(|n| {
+        let code = format!("{n:06}");
+        let mut h = Sha256::new();
+        h.update(code.as_bytes());
+        let hex = h.finalize();
+        let got: String = hex.iter().take(4).map(|b| format!("{b:02x}")).collect();
+        if got == want { Some(code) } else { None }
+    })
+}
+
+/// WHAT THE ROW GETS BACK -- and the reason this stopped being a bare
+/// `Vec<Studio>` on 14 September.
+///
+/// An empty list used to mean two different things and the card could not
+/// tell them apart: *there is no Mac on this Wi-Fi* (true, ordinary, and the
+/// typed address is the answer) and *this build is not allowed to look*
+/// (`com.apple.developer.networking.multicast`, or the local-network
+/// permission refused at the prompt). Both drew "No Studio found on this
+/// network", which is a lie in the second case and sends the person hunting
+/// for a router problem they do not have. So the browse now answers with a
+/// SENTENCE when it could not look, and `None` when it looked and saw
+/// nothing.
+///
+/// `allowed` is the runtime check the Sync card switches on. It is a PROBE,
+/// not a read of the embedded entitlements plist, and that is deliberate: a
+/// granted entitlement with the local-network prompt declined still sees
+/// nothing, so the plist would answer a question the card is not asking. What
+/// the card wants to know is "can this build see the Mac?", and the only
+/// honest source of that answer is trying.
+#[derive(Clone, Debug, Serialize, PartialEq, Eq)]
+pub struct Discovery {
+    pub studios: Vec<Studio>,
+    pub allowed: bool,
+    pub why: Option<String>,
+}
+
+/// The page's view of the browse: `sync_discover(ms)` -> [`Discovery`], at
+/// most one Studio per advertised name, IPv4 first. `ms` is clamped to
 /// `[500, 3 * SYNC_BROWSE_MS]` so a page cannot hold the radio open.
+///
+/// Both `SYNC_SERVICES` are browsed on one daemon and one deadline, and a Mac
+/// that answers to both is ONE row: `found` is keyed by the advertised name,
+/// and `_frank._tcp` is tried first so its answer is the one kept.
 #[tauri::command]
-fn sync_discover(ms: Option<u64>) -> Result<Vec<Studio>, String> {
+fn sync_discover(ms: Option<u64>) -> Result<Discovery, String> {
     let wait = Duration::from_millis(ms.unwrap_or(SYNC_BROWSE_MS).clamp(500, 3 * SYNC_BROWSE_MS));
-    let daemon = mdns_sd::ServiceDaemon::new().map_err(|e| format!("mDNS: {e}"))?;
-    let rx = daemon.browse(SYNC_SERVICE).map_err(|e| format!("mDNS browse: {e}"))?;
+    let daemon = match mdns_sd::ServiceDaemon::new() {
+        Ok(d) => d,
+        // The refusal this lane exists for. On a real iPhone the multicast
+        // socket this crate opens for itself is what needs the entitlement,
+        // and the failure arrives here rather than as an empty browse.
+        Err(e) => return Ok(Discovery { studios: vec![], allowed: false, why: Some(cannot_look(&e.to_string())) }),
+    };
     let mut found: BTreeMap<String, Studio> = BTreeMap::new();
+    let mut browsing: Vec<(&str, _)> = Vec::new();
+    for service in SYNC_SERVICES {
+        match daemon.browse(service) {
+            Ok(rx) => browsing.push((service, rx)),
+            Err(e) => {
+                let _ = daemon.shutdown();
+                return Ok(Discovery { studios: vec![], allowed: false, why: Some(cannot_look(&e.to_string())) });
+            }
+        }
+    }
     let end = Instant::now() + wait;
-    while let Some(left) = end.checked_duration_since(Instant::now()).filter(|d| !d.is_zero()) {
-        match rx.recv_timeout(left) {
-            Ok(mdns_sd::ServiceEvent::ServiceResolved(info)) => {
-                if let Some(studio) = studio_of(&info) {
-                    found.entry(studio.name.clone()).or_insert(studio);
+    // One deadline across both browses: each is polled for what is left of
+    // the window, so two services cost the same wall clock as one did.
+    'outer: loop {
+        let mut quiet = true;
+        for (_, rx) in &browsing {
+            let left = match end.checked_duration_since(Instant::now()).filter(|d| !d.is_zero()) {
+                Some(d) => d,
+                None => break 'outer,
+            };
+            match rx.recv_timeout(std::cmp::min(left, Duration::from_millis(100))) {
+                Ok(mdns_sd::ServiceEvent::ServiceResolved(info)) => {
+                    quiet = false;
+                    if let Some(studio) = studio_of(&info) {
+                        found.entry(studio.name.clone()).or_insert(studio);
+                    }
                 }
             }
             Ok(_) => continue,
             Err(_) => break,
         }
     }
-    let _ = daemon.stop_browse(SYNC_SERVICE);
+    for (service, _) in &browsing {
+        let _ = daemon.stop_browse(service);
+    }
     let _ = daemon.shutdown();
-    Ok(found.into_values().collect())
+    Ok(Discovery { studios: found.into_values().collect(), allowed: true, why: None })
 }
+
+/// The one sentence the card prints when the browse could not look. It names
+/// the cause in the person's words and then the way through, because the
+/// typed card is the fallback FOREVER (Osca, 14 Sep) and a person who reads
+/// this must not be left with nothing to do.
+fn cannot_look(detail: &str) -> String {
+    format!(
+        "Frank cannot look for Studio on this network on this device ({detail}).          Type the address and code Studio's row shows."
+    )
+}
+
+/// THE REVERSE -- this phone advertises itself as `_frank-phone._tcp` so a
+/// Mac can find it for a LAN push (`studio/sync.py::find_phones`).
+///
+/// `fp` is the fingerprint of the code this phone paired with, never the
+/// token and never the code: it is how a Mac tells one of its own phones from
+/// a stranger's, and it is already public on the Mac's own advert.
+///
+/// The daemon is kept in `PhoneAdvert` because dropping it un-registers the
+/// service. Calling this twice replaces the advert rather than growing a
+/// second one.
+#[tauri::command]
+fn sync_advertise(
+    name: Option<String>,
+    fp: Option<String>,
+    device: Option<String>,
+    state: tauri::State<'_, PhoneAdvert>,
+) -> Result<bool, String> {
+    let mut held = state.0.lock().map_err(|_| "the advert is wedged".to_string())?;
+    if let Some(old) = held.take() {
+        let _ = old.shutdown();
+    }
+    let daemon = match mdns_sd::ServiceDaemon::new() {
+        Ok(d) => d,
+        Err(_) => return Ok(false),
+    };
+    let name = name.unwrap_or_else(|| "Frank on this phone".to_string());
+    let host = format!("{}.local.", name.replace(' ', "-").to_lowercase());
+    let mut props: Vec<(String, String)> = vec![("v".into(), "1".into()), ("name".into(), name.clone())];
+    if let Some(fp) = fp.filter(|f| !f.is_empty()) {
+        props.push((FP_KEY.into(), fp));
+    }
+    if let Some(d) = device.filter(|d| !d.is_empty()) {
+        props.push(("device".into(), d));
+    }
+    // Port 0: this advert is a WHERE, not a door. Nothing on the phone
+    // listens, and a Mac that finds it reaches the phone the way it always
+    // has -- by the pairing it already holds.
+    let info = match mdns_sd::ServiceInfo::new(PHONE_SERVICE, &name, &host, "", 0u16, &props[..]) {
+        Ok(i) => i.enable_addr_auto(),
+        Err(_) => {
+            let _ = daemon.shutdown();
+            return Ok(false);
+        }
+    };
+    if daemon.register(info).is_err() {
+        let _ = daemon.shutdown();
+        return Ok(false);
+    }
+    *held = Some(daemon);
+    Ok(true)
+}
+
+/// The phone's own advert, held for as long as the app runs. `None` until
+/// `sync_advertise` is called, which the Sync card does once it is paired.
+#[derive(Default)]
+pub struct PhoneAdvert(pub Mutex<Option<mdns_sd::ServiceDaemon>>);
 
 /// A resolved advert -> the row's `Studio`, preferring an IPv4 address (the
 /// page prints it, and `http://[fe80::…%en0]` is not a thing a person
@@ -233,22 +433,33 @@ fn studio_of(info: &mdns_sd::ServiceInfo) -> Option<Studio> {
             }
         }
     }
+    let fp = info.get_property_val_str(FP_KEY).unwrap_or("").to_string();
     Some(Studio {
         name: studio_name(info.get_fullname(), info.get_property_val_str("name")),
         host: v4.or(v6)?,
         port: info.get_port(),
+        code: code_for_fp(&fp),
+        fp,
     })
 }
 
 /// The name the row prints: the advert's `name` TXT when it carries one,
 /// else the instance name cut off the full name
 /// (`Air Studio._ttstv._tcp.local.` -> `Air Studio`).
+///
+/// **EITHER type, since 14 September.** This stripped `SYNC_SERVICE` and
+/// nothing else, so the moment the Mac started answering to `_frank._tcp` as
+/// well, a Studio found under the new name fell through to `unwrap_or` and
+/// the row printed the whole of `Air Studio._frank._tcp.local.` as the Mac's
+/// name. Found by lifting this function into a scratch crate and asking it
+/// for both spellings -- never by reading it.
 fn studio_name(fullname: &str, txt: Option<&str>) -> String {
     if let Some(n) = txt.filter(|n| !n.is_empty()) {
         return n.to_string();
     }
-    fullname
-        .strip_suffix(SYNC_SERVICE)
+    SYNC_SERVICES
+        .iter()
+        .find_map(|t| fullname.strip_suffix(t))
         .map(|s| s.trim_end_matches('.'))
         .unwrap_or(fullname)
         .to_string()
@@ -300,6 +511,13 @@ pub const HOST_JS: &str = r#"(function () {
   window.TTSTVHost = window.TTSTVHost || {};
   /* the Bonjour browse behind the Transfer tab's Sync button (job 26) */
   window.TTSTVHost.syncDiscover = function (ms) { return TAURI.invoke("sync_discover", { ms: ms }); };
+  /* the reverse (14 Sep): tell the LAN this phone is here, so a Mac can push
+     to it without going round by Drive. `fp` is the code's public half, which
+     the Mac already advertises itself; never the token. */
+  window.TTSTVHost.syncAdvertise = function (a) {
+    a = a || {};
+    return TAURI.invoke("sync_advertise", { name: a.name, fp: a.fp, device: a.device });
+  };
   window.TTSTVHost.deviceName = "Frank on this phone";
   /* design/reader/search.html's COVERED, in its order, and its webQuery():
      the words, then -site: for every source the app already covers. The
@@ -2560,6 +2778,7 @@ pub fn run() {
     tauri::Builder::default()
         .invoke_handler(tauri::generate_handler![
             sync_discover,
+            sync_advertise,
             google_sign_in,
             audio_session_start,
             book_put,
@@ -2614,6 +2833,7 @@ pub fn run() {
         // to it, and it opens Google's authorization endpoint or nothing.
         .plugin(tauri_plugin_opener::init())
         .plugin(search::init())
+        .manage(PhoneAdvert::default())
         .manage(PendingPair::default())
         .manage(PendingGoogle::default())
         // The pull (G-SYNCBG): one runner per app, read by every page.

@@ -105,6 +105,8 @@ fn main() {
         tauri_build::Attributes::new().app_manifest(
             tauri_build::AppManifest::new().commands(&[
                 "sync_discover",
+                // the reverse browse (14 Sep): this phone says it is here
+                "sync_advertise",
                 "google_sign_in",
                 "audio_session_start",
                 "book_put",
