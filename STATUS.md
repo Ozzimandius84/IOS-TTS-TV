@@ -240,11 +240,22 @@ papered over; `bc63a8f` and the two below carry them.
 taken AFTER both moves; the baseline 25/25 for `test-sysvoice.mjs` was taken
 before the TTSTV move and re-taken after it, unchanged.
 
-The bridge cannot unlink `.git/*.lock` or `.git/objects/*/tmp_obj_*`: every git
-call above printed `Operation not permitted` warnings and **succeeded anyway**
-(the lock-retry loop was armed and never fired). No lock was moved to
-`_to_delete/`; the `tmp_obj_*` residue is git's own and is named here because
-CLAUDE.md asks for it.
+The bridge cannot unlink `.git/*.lock` or `.git/objects/*/tmp_obj_*`, so every
+git call above printed `Operation not permitted` warnings. The two code commits
+went through first time; **both STATUS commits hit a live `index.lock` and the
+lock-retry loop fired**, moving eight stale locks aside — Osca to clear them:
+
+```
+TTSTV/_to_delete/       HEAD.lock.1789344060  index.lock.1789344060
+                        next-index-8.lock.1789344060  next-index-9.lock.1789344060
+TTSTV_IOS/_to_delete/   HEAD.lock.1789344075  index.lock.1789344078
+                        next-index-7.lock.1789344075  next-index-9.lock.1789344078
+```
+
+Both retries then succeeded. Every lock moved was older than 3 s, so none was
+another session mid-write; other lanes are moving locks in the same two folders
+throughout, and only the eight timestamps above are mine. The `tmp_obj_*`
+residue is git's own and cannot be deleted from here.
 
 Left unstaged, and why: the four files in §4.
 
