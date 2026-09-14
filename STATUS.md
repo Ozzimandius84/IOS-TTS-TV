@@ -173,6 +173,13 @@ paths belonging to other lanes — `scratch-lookup/**` (five),
 Every commit here is by explicit file path; the four new files were
 `git add -- <one path>`ed first. No `.lock` file was moved.
 
+**Locks moved, for Osca to clear.** Three, all older than 3 s and all left by
+this lane's own commits, into each repo's `_to_delete/`:
+`TTSTV_IOS/.git/HEAD.lock`, `TTSTV_IOS/.git/next-index-11.lock`,
+`TTSTV/.git/next-index-40.lock`. The INTENT.md commit took three passes of the
+retry loop because of the second pair; `git log -1` in both repos is this
+lane's commit and `git status --short` on every path is clean.
+
 **And a trap, paid for once and written down: `/tmp` on the bridge VM is shared
 between lanes.** This report was first written to `/tmp/report.md`; the
 heredoc failed with `Permission denied` (the file was another lane's, owner
