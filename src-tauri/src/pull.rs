@@ -374,6 +374,38 @@ pub trait Wire {
     fn post_form(&mut self, url: &str, form: &[(&str, &str)]) -> Result<(u16, String), String>;
     fn now(&self) -> u64;
     fn wait(&mut self, ms: u64);
+
+    // ------------------------------------------------- the courier's three
+    //
+    // Kaggle is HTTP Basic, not Bearer (`kaggle.json`'s username and key), it
+    // takes JSON bodies rather than forms, and a file goes up as raw bytes to
+    // a signed URL Kaggle hands back. None of that fits the four above, and
+    // the four above are Drive's and are not changing.
+    //
+    // THEY HAVE DEFAULTS ON PURPOSE. A required method here would be a
+    // required method on `pull_tests::Fake` too -- a test fake for the SYNC
+    // runner, which will never make a Kaggle call, made to grow three
+    // methods it cannot mean. The default is a refusal in words, not a
+    // silent success and not a dropped credential: a wire that does not
+    // carry these says so, and `kaggle.rs`'s own `Fake` implements all three.
+    /// GET with a RAW `Authorization:` header value (`Basic <base64>`), so a
+    /// scheme that is not Bearer can be sent without `get` learning about it.
+    fn get_auth(&mut self, url: &str, auth: Option<&str>) -> Reply {
+        let _ = (url, auth);
+        Reply::Lost("this wire carries no Authorization header of its own".into())
+    }
+    /// `application/json` POST: the status and the body text.
+    fn post_json(&mut self, url: &str, auth: Option<&str>, body: &str) -> Result<(u16, String), String> {
+        let _ = (url, auth, body);
+        Err("this wire posts no JSON".into())
+    }
+    /// PUT of raw bytes, UNAUTHENTICATED by design -- the URL Kaggle answers
+    /// with is already signed, and sending the key to a storage host that did
+    /// not ask for it is how a credential leaves the app by accident.
+    fn put_bytes(&mut self, url: &str, bytes: &[u8]) -> Result<(u16, String), String> {
+        let _ = (url, bytes);
+        Err("this wire puts no bytes".into())
+    }
 }
 
 pub fn now_ms() -> u64 {
@@ -923,6 +955,48 @@ impl Wire for Net {
 
     fn wait(&mut self, ms: u64) {
         std::thread::sleep(std::time::Duration::from_millis(ms));
+    }
+
+    fn get_auth(&mut self, url: &str, auth: Option<&str>) -> Reply {
+        let mut req = self.agent.get(url);
+        if let Some(a) = auth {
+            req = req.set("Authorization", a);
+        }
+        match req.call() {
+            Ok(res) => Reply::Body(Box::new(res.into_reader())),
+            Err(ureq::Error::Status(code, res)) => {
+                let mut text = String::new();
+                let _ = res.into_reader().take(8192).read_to_string(&mut text);
+                Reply::Refused(code, text)
+            }
+            Err(ureq::Error::Transport(t)) => Reply::Lost(t.to_string()),
+        }
+    }
+
+    fn post_json(&mut self, url: &str, auth: Option<&str>, body: &str) -> Result<(u16, String), String> {
+        let mut req = self.agent.post(url).set("Content-Type", "application/json");
+        if let Some(a) = auth {
+            req = req.set("Authorization", a);
+        }
+        match req.send_string(body) {
+            Ok(res) => {
+                let code = res.status();
+                res.into_string().map(|t| (code, t)).map_err(|e| e.to_string())
+            }
+            Err(ureq::Error::Status(code, res)) => Ok((code, res.into_string().unwrap_or_default())),
+            Err(ureq::Error::Transport(t)) => Err(t.to_string()),
+        }
+    }
+
+    fn put_bytes(&mut self, url: &str, bytes: &[u8]) -> Result<(u16, String), String> {
+        match self.agent.put(url).send_bytes(bytes) {
+            Ok(res) => {
+                let code = res.status();
+                res.into_string().map(|t| (code, t)).map_err(|e| e.to_string())
+            }
+            Err(ureq::Error::Status(code, res)) => Ok((code, res.into_string().unwrap_or_default())),
+            Err(ureq::Error::Transport(t)) => Err(t.to_string()),
+        }
     }
 }
 

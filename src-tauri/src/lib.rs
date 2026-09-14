@@ -102,6 +102,12 @@ use tauri_plugin_deep_link::DeepLinkExt;
 mod dict;
 // The inbox (C2/K8, 13 Sep): what a share put on this phone, read only.
 mod inbox;
+// The courier (85 Stage 2, 14 Sep): Kaggle's five verbs, so a phone with no
+// Mac has a Studio. Rust and not JS because the page is a `frank://` origin
+// and kaggle.com sends no `Access-Control-Allow-Origin`; on `pull.rs`'s own
+// `Wire`, with a `Fake` of its own -- no route in this file yet, which is
+// Stage 3's (`settings.js`'s phone branch, one row one commit).
+mod kaggle;
 // Apple's own Look Up panel (G-LOOKUP2, 13 Sep): the SECOND press, and the
 // once-per-book question that decides whether its control is drawn at all.
 mod lookup;
