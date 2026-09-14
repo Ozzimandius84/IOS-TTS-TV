@@ -166,7 +166,7 @@ fn shell_url(path: &str) -> String {
 // token, the store, the merge: none of it is here. The phone's half of sync
 // is a browse and forty lines.
 
-/// The service `studio/sync.py::Advert` registers, and the one
+/// The service `studio/sync.py::Advert` registers, and one of the two
 /// `NSBonjourServices` (gen/apple/project.yml) lets this app see.
 use sha2::{Digest, Sha256};
 
@@ -334,9 +334,12 @@ fn sync_discover(ms: Option<u64>) -> Result<Discovery, String> {
                         found.entry(studio.name.clone()).or_insert(studio);
                     }
                 }
+                Ok(_) => quiet = false,
+                Err(_) => continue,
             }
-            Ok(_) => continue,
-            Err(_) => break,
+        }
+        if quiet && Instant::now() >= end {
+            break;
         }
     }
     for (service, _) in &browsing {
