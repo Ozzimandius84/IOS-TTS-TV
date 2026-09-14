@@ -22,7 +22,7 @@ and a sentence-at-a-time reader stops at the lock button.*
 | file | what it is |
 |---|---|
 | `design/reader/sysvoice.js` → `reader/sysvoice.js` (+373) | `createNativeSynth(host)` — the door in `speechSynthesis`'s shape; `pickSynth(win)`; `ENGINE` (the `system` card); `synth.queues`, the batch path (`build(j,k,mine)` split out of `utter`); `qualityOf` reads an explicit `quality` FIELD before the name substring; `stats()` gains `native` and `capped`. |
-| `reader/reader.html` (+~20 of a 119-line diff — see §8b) | the mount asks `SysVoice.pickSynth(window)` instead of reaching for `window.speechSynthesis`, and passes `picked.Utterance`. |
+| `reader/reader.html` (+~20 of a 119-line diff — **landed in the float lane's `a9012eb`, not mine; §4**) | the mount asks `SysVoice.pickSynth(window)` instead of reaching for `window.speechSynthesis`, and passes `picked.Utterance`. |
 | `design/reader/test-sysvoice.mjs` (+175) | §6, thirteen assertions over a fake phone. |
 
 **No new engine.** `create()` is unchanged in every respect that decides a word
@@ -106,13 +106,21 @@ RE-WIRE and claims no second folder.
 **Touched and deliberately left UNSTAGED** — four files that are another
 session's, named here so Osca can tell a leak from a coincidence:
 
-- `TTSTV reader/reader.html` — **co-edited.** It was clean at my gate and the
-  float lane's uncommitted work (the Float button, `FloatDoor.mount`,
-  `ICON.float`) is in it now: 119 insertions, ~20 of them mine. A pathspec
-  commit takes the whole working-tree file and would carry their float under
-  my message — the `design/ship.py` trap, going the other way. **My three
-  hunks stay in the tree** so the build and the phone shell have them; whoever
-  commits `reader.html` next carries them.
+- `TTSTV reader/reader.html` — **co-edited, and it went the other way.** It was
+  clean at my gate; the float lane's uncommitted work (the Float button,
+  `FloatDoor.mount`, `ICON.float`) appeared in it during the session, 119
+  insertions with ~20 of them mine. I did not commit it, for the
+  `design/ship.py` reason — a pathspec commit takes the whole working-tree
+  file and would have carried their float under my message. **Then their own
+  pathspec commit took mine instead:** `a9012eb`
+  *"F1 / G-FLOATMAC: the Mac float…"*, 23:56:56, carries all three of my hunks
+  (`pickSynth`, `Utterance: picked.Utterance`, `__sysvoice_kind`). Nothing is
+  lost and nothing is duplicated — the mount change is in `FRANK` — but it is
+  in a commit whose message does not mention it, which is the trap CLAUDE.md
+  names and the reason this line exists. `reader/reader.html` is clean in the
+  tree now; my own commits `bc63a8f` and `de1be6f` do not list it. Same sweep
+  that put G-LOOKUP3's five registration edits inside the inbox lane's
+  `6f0f199`.
 - `TTSTV_IOS shell/reader/sysvoice.js`, `shell/reader/reader.html`,
   `shell.manifest.json` — the publish lane's uncommitted snapshot. My two
   files were **carried** into it (`sysvoice.js` replaced whole; `reader.html`
@@ -257,7 +265,10 @@ another session mid-write; other lanes are moving locks in the same two folders
 throughout, and only the eight timestamps above are mine. The `tmp_obj_*`
 residue is git's own and cannot be deleted from here.
 
-Left unstaged, and why: the four files in §4.
+Left unstaged, and why: the four files in §4 — of which
+`TTSTV reader/reader.html` was then committed by the float lane's own pathspec
+(`a9012eb`, with my three hunks in it and unmentioned in its message; §4).
+The three in `TTSTV_IOS` are still unstaged.
 
 ## 9. Status line
 
