@@ -35,7 +35,6 @@ targets:
     sources:
       - path: Sources
       - path: Assets.xcassets
-      - path: Externals
       - path: frank_iOS
       - path: assets
         buildPhase: resources
