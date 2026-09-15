@@ -2,7 +2,7 @@
   "added_here": [
     "index.html"
   ],
-  "bytes": 2706209,
+  "bytes": 2707100,
   "count": 71,
   "files": {
     "bar/askbar.css": {
@@ -182,8 +182,8 @@
       "sha256": "f4024b385cd2a8edf3ab5671935806580112267c02520d96c643bb44f27ff13d"
     },
     "reader/surface.js": {
-      "bytes": 270992,
-      "sha256": "77f3978429ca598bbd092499d715bd8cc28527ef1e5e12608839c81761800db0"
+      "bytes": 271441,
+      "sha256": "a76965458b781e0b84bc5d3507436afc296c9092c7e8ac904c53bacf17753df5"
     },
     "reader/sw.js": {
       "bytes": 24918,
@@ -238,8 +238,8 @@
       "sha256": "b0b9b57ba224db841dcaecc01cf0c81ab6d223eff3205e8d25670732e52b1c49"
     },
     "settings/settings.js": {
-      "bytes": 327804,
-      "sha256": "015985fc680aa3f0e93cbcfda1bafe5642148566922af400d4c7ab519aebb64f"
+      "bytes": 328246,
+      "sha256": "24bc56fecd489f02b1cb7185edacc2795d87a86922edde968de018b2f8c6f08e"
     },
     "voiceui/answers.js": {
       "bytes": 4253,
@@ -292,7 +292,7 @@
   },
   "home_page": "library/library.html",
   "source": {
-    "commit": "611e99b",
+    "commit": "983a047",
     "repo": "/sessions/rcw-017kym87j7u1vx6ruxoa1de3/mnt/TTSTV",
     "shell_cache": "ttstv-shell-v55"
   }

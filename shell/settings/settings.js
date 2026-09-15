@@ -2851,15 +2851,22 @@
       ctx.postJSON(MODAL.DEPLOY, {}).then(function (r) {
         doorBtn.disabled = false;
         var b = (r && r.body) || {};
-        if (!r.ok) {
+        /* A 409 with a url means the door IS up but the render lane failed:
+         * draw the pairing (the pass is still good) and name which half. */
+        if (!r.ok && !(r.status === 409 && b.url)) {
           say.textContent = r.status === 404
             ? "This studio cannot put a door up yet."
             : ("Not set up: " + (b.error || r.why) + ".");
           return ask(true);
         }
         drawPairing(b);
-        say.textContent = "Your door is up"
+        var doorLine = "Your door is up"
           + (b.workspace ? " in " + b.workspace : "") + ".";
+        var renderLine = (b.render && b.render.ok)
+          ? "  Render lane deployed."
+          : "  Render lane failed"
+            + (b.render && b.render.error ? ": " + b.render.error : "") + ".";
+        say.textContent = doorLine + "\n" + renderLine;
         return ask(true);
       });
     });

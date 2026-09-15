@@ -4326,6 +4326,15 @@
                                 o.why || ""));
         return;
       }
+      /* Modal connected but the render lane not deployed: the pill is drawn
+         disabled rather than dashed-off, because the connection IS there --
+         the person needs to press Deploy in Settings, not re-sign-in. */
+      if (id === "modal" && !o.render_deployed) {
+        var dp = onPill(label, false, true);
+        dp.title = "Deploy the render lane in Settings ▸ Modal first";
+        box.appendChild(dp);
+        return;
+      }
       var p = onPill(label, id === on, false);
       p.title = o.label || "";
       p.addEventListener("click", function () { pickWhere(id, p); });
