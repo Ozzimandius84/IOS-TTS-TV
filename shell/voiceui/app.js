@@ -542,7 +542,7 @@ async function runOps(ops, ctx) {
   return { side: currentSide, stoppedAt, aborted: !!ctx.aborted, note };
 }
 
-function createVoiceUI({ bridge, getSentenceWords, getPreviousSentenceId, getDictionaryEntry, synth, schedule, wait, settleMs, dictWaitMs, clarifyRate, startAtSentences }) {
+function createVoiceUI({ bridge, getSentenceWords, getPreviousSentenceId, getDictionaryEntry, synth, schedule, wait, settleMs, dictWaitMs, clarifyRate, startAtSentences, assistant }) {
   const detour = new DetourStack();
   let side = "target";
   let inflight = null; // { ctx, promise } for the utterance currently executing
@@ -558,6 +558,7 @@ function createVoiceUI({ bridge, getSentenceWords, getPreviousSentenceId, getDic
   // answered once. After that a null is a real miss and is answered at once.
   const dictionaryWait = dictWaitMs === undefined ? 3000 : dictWaitMs;
   let dictionaryWarm = false;
+  const sayOut = (text) => tts.say(text, { synth, assistant });
   async function lookupEntry(role, surfaceText) {
     let entry = getDictionaryEntry(role, surfaceText);
     if (entry || dictionaryWarm || dictionaryWait <= 0) {
@@ -586,7 +587,7 @@ function createVoiceUI({ bridge, getSentenceWords, getPreviousSentenceId, getDic
     const text = "Which word?";
     // PRESSED IS WRITTEN, SPOKEN IS SAID (QUIET.md §5). The input decided the
     // output two frames ago; this is the only place the decision is spent.
-    if (!quiet) await tts.speak(text, { synth });
+    if (!quiet) await sayOut(text);
     const out = { type: "answer", text, clarify: true, replayed: false, quiet: !!quiet };
     if (!pos || !bridge.playRange || !bridge.seekToWord) {
       out.note = "no playRange/seekToWord on this ReaderControl";
@@ -638,7 +639,7 @@ function createVoiceUI({ bridge, getSentenceWords, getPreviousSentenceId, getDic
 
     const entry = await lookupEntry(side, surfaceText);
     const text = answers.formatAnswer(entry, surfaceText);
-    if (!quiet) await tts.speak(text, { synth });
+    if (!quiet) await sayOut(text);
     return { type: "answer", text, wordId, word: surfaceText, quiet: !!quiet };
   }
 
@@ -1253,9 +1254,18 @@ function boot(opts = {}) {
   const control = win.ReaderControl;
   const missingHooks = OPTIONAL_DATA_HOOKS.filter((n) => typeof control[n] !== "function");
   const hooksReady = missingHooks.length === 0;
+  const assistant = opts.assistant !== undefined ? opts.assistant : tts.createAssistant({
+    transport: opts.transport !== undefined ? opts.transport : (win && win.Transport) || null,
+    bookBase: () => { const s = tts.slugFromLocation(win && win.location); return s ? "../books/" + encodeURIComponent(s) + "/" : null; },
+    renderJson: (b) => (win && typeof win.fetch === "function" ? win.fetch(b + "render.json").then((r) => (r.ok ? r.json() : null)) : null),
+    manifest: (b) => (win && typeof win.fetch === "function" ? win.fetch(b + tts.manifestUrl("")).then((r) => (r.ok ? r.json() : null)) : null),
+    storage: win && win.localStorage, store,
+    playFile: win && typeof win.Audio === "function" ? tts.createFilePlayer(win.Audio).playFile : null,
+  });
   const app = createVoiceUI({
     bridge,
     synth,
+    assistant,
     schedule: opts.schedule,
     wait: opts.wait,
     settleMs: opts.settleMs,
@@ -1402,8 +1412,8 @@ function boot(opts = {}) {
     result.command = parsed.cmd;
     if (result.type === "answer" && result.text) {
       remember(text, result.text);
-      // PRESSED IS WRITTEN, SPOKEN IS SAID -- and the voice is 103's seam
-      if (!quietAsked && synth) await tts.speak(result.text, { synth });
+      // PRESSED IS WRITTEN, SPOKEN IS SAID -- the book's voice (chat 103/125)
+      if (!quietAsked && synth) await tts.say(result.text, { synth, assistant });
     }
     return result;
   }
@@ -1471,7 +1481,7 @@ function boot(opts = {}) {
         result = await runCommand(parsed, text, quietAsked);
       } else if (!hooksReady && synth && parseLookupQuery(text)) {
         const msg = "The dictionary isn't connected to the reader yet.";
-        if (!quietAsked) await tts.speak(msg, { synth });
+        if (!quietAsked) await tts.say(msg, { synth, assistant });
         result = { type: "answer", text: msg, unavailable: missingHooks, quiet: quietAsked };
       } else if (!synth && parseLookupQuery(text)) {
         result = { type: "answer", text: "No speechSynthesis in this browser.", unavailable: ["speechSynthesis"], quiet: quietAsked };
@@ -1979,7 +1989,8 @@ function boot(opts = {}) {
     quietRing: () => QUIET_RING[quietFace(app.inGround(), bookFace)],
     bookFace: () => bookFace,
     flipToBook,
-    // the assistant (chat 106): where the reader is, the packet, the prompt
+    // the assistant (chat 103/106/125): where the reader is, the packet, the prompt
+    assistant: () => assistant,
     position: positionNow,
     context,
     ask,

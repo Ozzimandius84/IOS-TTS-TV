@@ -512,6 +512,10 @@
              sub: "The screen goes black and every touch is swallowed, so the "
                 + "phone can go in a pocket. Hold the bottom-left corner for "
                 + "1.2 s to come back." },
+    assistantVoice: { field: "assistantVoice", label: "Assistant voice",
+                      control: "fixed", text: "the narrator's",
+                      sub: "The voice the assistant speaks back in. "
+                         + "Press a voice in the reader to choose a different one." },
   };
 
   /* THE FOLD, one table. General and Reading as they are; Transfer becomes
@@ -569,8 +573,76 @@
     ];
   }
 
+
+  /* =================== EXTENSION CARD (General tab, 15 Sep) ==============
+   * "Send articles from your browser" — a card on General that tells a Mac
+   * user about the Chrome extension and lets them reveal the folder.  Not
+   * drawn on phone (`opts.phone`).  Not a stored setting, so it is a
+   * custom `build`, not a declarative card.  The three loading steps are
+   * quoted verbatim from `extension/README.md` so a test can hold them. */
+
+  var EXTENSION_STEPS = [
+    "Chrome / Edge — chrome://extensions → Developer mode → Load unpacked → this folder.",
+    "Firefox — about:debugging#/runtime/this-firefox → Load Temporary Add-on… → this folder’s manifest.json."
+  ];
+
+  function buildExtensionCard(panel, netCtx, opts) {
+    if (opts.phone) return;
+    var doc = panel.ownerDocument;
+
+    var head = kEl(doc, "div", "set-head", "Send articles from your browser");
+    panel.appendChild(head);
+
+    var box = kEl(doc, "div", "set-card");
+
+    /* explanation */
+    var explain = kEl(doc, "div", "set-note",
+      "One press in Chrome on an article, and the article is in your library.");
+    explain.style.marginBottom = "12px";
+    box.appendChild(explain);
+
+    /* loading steps */
+    var stepsHead = kEl(doc, "div", null, "Load the extension unpacked:");
+    stepsHead.style.fontWeight = "600";
+    stepsHead.style.marginBottom = "6px";
+    box.appendChild(stepsHead);
+
+    var ol = doc.createElement("ol");
+    ol.style.margin = "0 0 12px 1.2em";
+    ol.style.padding = "0";
+    EXTENSION_STEPS.forEach(function (s) {
+      var li = doc.createElement("li");
+      li.textContent = s;
+      li.style.marginBottom = "4px";
+      ol.appendChild(li);
+    });
+    box.appendChild(ol);
+
+    /* port line */
+    var portLine = kEl(doc, "div", "set-note",
+      "Frank is listening on port " + location.port + ".");
+    box.appendChild(portLine);
+
+    /* reveal button */
+    var revealBtn = doc.createElement("button");
+    revealBtn.className = "set-btn";
+    revealBtn.textContent = "Reveal in Finder";
+    revealBtn.style.marginTop = "10px";
+    revealBtn.addEventListener("click", function () {
+      netCtx.getJSON("/extension-path").then(function (r) {
+        if (r && r.path && typeof TTSTVHost !== "undefined" && TTSTVHost.reveal) {
+          TTSTVHost.reveal(r.path);
+        }
+      });
+    });
+    box.appendChild(revealBtn);
+
+    panel.appendChild(box);
+  }
+
   var TABS = [
     { id: "general", label: "General", sub: "the app itself",
+      build: buildExtensionCard,
       cards: [
         /* WARMTH IS HERE NOW (Osca, 7 Sep: "MOVE WARMTH TO GENERAL"). The
          * field, the store and the gradient rail moved unchanged -- one line
@@ -5762,6 +5834,7 @@
       else hk = buildHotkeysPanel(box, netCtx, { only: ["mic"], bare: true, settings: current });
       box.appendChild(rowEl(VOICE_ROWS.window));
       box.appendChild(rowEl(VOICE_ROWS.touch));
+      box.appendChild(rowEl(VOICE_ROWS.assistantVoice));
       var note = kEl(doc, "div", "set-note", VOICE_ROWS.note);
       panel.insertBefore(box, panel.firstChild);
       panel.insertBefore(head, box);

@@ -349,7 +349,13 @@
                     * settings file written before this existed needs no
                     * migration and why an untouched reader stores nothing new.
                     * See `normaliseKeys`, below the form. */
-                   keys: {} };
+                   keys: {},
+                   /* THE ASSISTANT'S VOICE (chat 103/125). "narrator" means
+                    * the book's own narrator, and is the default: an untouched
+                    * reader speaks back in whatever voice the book was rendered
+                    * with. A voice id chosen from the press stores here and
+                    * voiceui/tts.js reads it in readSetting(). */
+                   assistantVoice: "narrator" };
 
   function familyById(id) {
     for (var i = 0; i < FAMILIES.length; i++) if (FAMILIES[i].id === id) return FAMILIES[i];
@@ -392,6 +398,7 @@
              context: s.context === undefined ? DEFAULTS.context : !!s.context,
              resume: s.resume === undefined ? DEFAULTS.resume : !!s.resume,
              sidebar: SIDEBARS.indexOf(s.sidebar) >= 0 ? s.sidebar : DEFAULTS.sidebar,
+             assistantVoice: typeof s.assistantVoice === "string" && s.assistantVoice ? s.assistantVoice : DEFAULTS.assistantVoice,
              keys: normaliseKeys(s.keys) };
   }
 

@@ -186,7 +186,7 @@ const SHELL_FILES = [
   "./icon-192.png",            // restored in this commit -- 3e64b7e deleted both
   "./icon-512.png",            // while manifest.webmanifest still named them
   // ========================== HANDS FREE ==================================
-  // reader.html loads all nine and boots them once a book is open.
+  // reader.html loads all twelve and boots them once a book is open.
   "../voiceui/app.js",
   "../voiceui/reader-bridge.js",
   "../voiceui/grammar.js",
@@ -196,6 +196,9 @@ const SHELL_FILES = [
   "../voiceui/tts.js",
   "../voiceui/asr.js",
   "../voiceui/trigger.js",
+  "../voiceui/commands.js",
+  "../voiceui/context.js",
+  "../voiceui/records.js",
 ];
 
 // WHAT LEFT THE SHELL IN JOB 15, AND WHY IT IS A SUBTRACTION AND NOT A LOSS.

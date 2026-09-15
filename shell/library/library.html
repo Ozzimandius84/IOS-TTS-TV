@@ -3277,7 +3277,7 @@ async function libHash(text) {
   return { hash: ("00000000" + h.toString(16)).slice(-8), kind: "fnv1a-word-ids" };
 }
 
-function libMergeSlug(a, b) { return String(a) + "+" + String(b); }
+function libMergeSlug(a, b) { return String(a) + "-" + String(b); }
 
 /* A MERGE IS EXACTLY TWO (Osca, confirmed 30 Aug; READER_FIRST.md "Logged for
  * later"). The parallel view holds two panes, so a pair of pairs is a view

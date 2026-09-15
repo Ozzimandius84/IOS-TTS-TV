@@ -930,7 +930,18 @@
     scrim.classList.add("on"); sheet.classList.add("on");
     if (q != null && q !== input.value) input.value = q;
     input.focus(); input.select();
+    var prevInBook = S.inBook;
     S.inBook = openBookHere();      /* the reader may have moved since mount */
+    /* G-AUTOSEL: the book underneath is pre-selected so the reader does not
+       land on "Choose a book" for a book they are already in. A click
+       (select()) outranks the page -- selAuto tracks which it was, and a
+       re-open follows a changed book only when the previous selection was
+       automatic, not clicked. */
+    if (S.inBook && !S.sel) {
+      selectSlug(S.inBook); S.selAuto = true;
+    } else if (S.selAuto && S.inBook && S.inBook !== prevInBook) {
+      selectSlug(S.inBook); /* S.selAuto stays true */
+    }
     ask(input.value, !!now);
     pollWorks();
   }
@@ -2984,6 +2995,7 @@
       function (n) { n.classList.remove("sel"); });
     rowEl.classList.add("sel");
     S.sel = subject;
+    S.selAuto = false;      /* a click outranks the page underneath */
     S.cand = null;          /* a book and a candidate are not both selected */
     if (!subject || S.unitSlug !== subject.slug) { S.unit = null; S.unitSlug = null; }
     if (S.live && subject && subject.slug) loadBook(subject.slug);

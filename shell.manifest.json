@@ -2,8 +2,8 @@
   "added_here": [
     "index.html"
   ],
-  "bytes": 2640764,
-  "count": 68,
+  "bytes": 2700485,
+  "count": 71,
   "files": {
     "bar/askbar.css": {
       "bytes": 12271,
@@ -39,7 +39,7 @@
     },
     "library/library.html": {
       "bytes": 303779,
-      "sha256": "7e342df8346b9cf19318431324fb934c049bae995bbd3da0ce603d90b3a7994b"
+      "sha256": "91b23efaaa0fe39defeda2ac6486c3d5f2d587555dbebeb93fbf9c7e430578d4"
     },
     "library/transfer.js": {
       "bytes": 11069,
@@ -50,8 +50,8 @@
       "sha256": "da3d15f0ef120aac304c36f380d69325408aa1d1c6a10fafb2bd4bf90ecafba3"
     },
     "prefs/prefs.js": {
-      "bytes": 79699,
-      "sha256": "2b0c86208e4e044b7fec34956b014f34b4837527364a5824910391af43677c9c"
+      "bytes": 80260,
+      "sha256": "c72db785693b3f30094c3140e05de391012f7aadc8dbda75c00e9f0fc06643eb"
     },
     "reader/book-nav.js": {
       "bytes": 320050,
@@ -150,8 +150,8 @@
       "sha256": "1fd51f42fa8bf22a124e26872fe4fa1d96af088bf0f0cd0f4567f89efcefadc5"
     },
     "reader/pbar.js": {
-      "bytes": 32708,
-      "sha256": "2c3a1cadaedb021a499f836680cc058c373a1669b41c54219ad585587120383d"
+      "bytes": 36275,
+      "sha256": "ed9ecd7241534483fcf0a575f1608701f0fcaa59984b20c3f8b2a5d9fc2a68fe"
     },
     "reader/popover.js": {
       "bytes": 11571,
@@ -162,8 +162,8 @@
       "sha256": "01d0599452f0583b677409bef75c8211aeee66c02d6033831ced4bace0fc37cd"
     },
     "reader/reader.html": {
-      "bytes": 105615,
-      "sha256": "398f50af3fa8704a407f083a0e11bc599f0ca7575ad5c97b13cdedf2dd8d3a0d"
+      "bytes": 105754,
+      "sha256": "482fe27c98a4d6b3f1fa956b4c8406893947e6616124f13d5b1f9e8616ff1d7a"
     },
     "reader/scrub.css": {
       "bytes": 10487,
@@ -182,12 +182,12 @@
       "sha256": "f4024b385cd2a8edf3ab5671935806580112267c02520d96c643bb44f27ff13d"
     },
     "reader/surface.js": {
-      "bytes": 264631,
-      "sha256": "236aa9e477522a2c04def3baee81ce645f124c59142cf26519c26326ddd8ca07"
+      "bytes": 265268,
+      "sha256": "11aa8dd2045d0c52e1b2213543f90f32db68f31d260a36de88a589157b45d0f4"
     },
     "reader/sw.js": {
-      "bytes": 24834,
-      "sha256": "a5c66f528dea81c8bdbf4ee4ab6448dfab7b287821fc214d28d2b99f5e5978d8"
+      "bytes": 24918,
+      "sha256": "9d8316e93205fde2ebe7b203ae03504e15156165bff89097f5907f59928647de"
     },
     "reader/sysvoice.js": {
       "bytes": 45964,
@@ -238,20 +238,28 @@
       "sha256": "b0b9b57ba224db841dcaecc01cf0c81ab6d223eff3205e8d25670732e52b1c49"
     },
     "settings/settings.js": {
-      "bytes": 325016,
-      "sha256": "75710573f01fdc3da59c3d8a59eef25332b14ca783a043f8767a65ecbacaf761"
+      "bytes": 327804,
+      "sha256": "015985fc680aa3f0e93cbcfda1bafe5642148566922af400d4c7ab519aebb64f"
     },
     "voiceui/answers.js": {
       "bytes": 4253,
       "sha256": "0c55d57f09fe434f21bf4500733fecb86eb18224ce65d0cba9133aae40495a9e"
     },
     "voiceui/app.js": {
-      "bytes": 96174,
-      "sha256": "84873f72bf05ae6cbbad8a4b6e38dafbf6587e20215605e42ae8b1bd50499cd0"
+      "bytes": 97063,
+      "sha256": "0b9167156b572be90f350394a2124713bbadaff72555494772304243849dc1b7"
     },
     "voiceui/asr.js": {
       "bytes": 2546,
       "sha256": "d7318f22cedf53876be23685db7d1baf564f263d39e174523109e46ef4ec2c75"
+    },
+    "voiceui/commands.js": {
+      "bytes": 34378,
+      "sha256": "94ba1fbbbcb1d4ab92557ad959f53cf2e5da1c16a6d0e52081da7908071a49e4"
+    },
+    "voiceui/context.js": {
+      "bytes": 8830,
+      "sha256": "b852e9e577475a95ed56116a607dbb5d55847666030a60271ba7209df0e95460"
     },
     "voiceui/detour.js": {
       "bytes": 5457,
@@ -264,6 +272,10 @@
     "voiceui/reader-bridge.js": {
       "bytes": 6523,
       "sha256": "46ff799250a6c5325dcc91af2d5ce1c69d9272c3549595a9a695eee64f3f205c"
+    },
+    "voiceui/records.js": {
+      "bytes": 7848,
+      "sha256": "abcbd30241181999746139ce9e4ca8b3701313075c00e855ab942dd1103f9fca"
     },
     "voiceui/resolve.js": {
       "bytes": 4830,
@@ -280,7 +292,7 @@
   },
   "home_page": "library/library.html",
   "source": {
-    "commit": "2c59823",
+    "commit": "0d61764",
     "repo": "/sessions/rcw-017kym87j7u1vx6ruxoa1de3/mnt/TTSTV",
     "shell_cache": "ttstv-shell-v55"
   }

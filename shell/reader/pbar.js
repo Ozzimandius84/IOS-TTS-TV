@@ -451,11 +451,80 @@
   bar.addEventListener("pointerup", function (e) { release(e, false); });
   bar.addEventListener("pointercancel", function (e) { release(e, true); });
   pill.addEventListener("click", function (e) {
-    /* a drag's trailing click, or the bottom-edge tap's (see the peek) */
-    if (Date.now() < eatDrag || Date.now() < eatUntil) { e.preventDefault(); return; }
+    /* a drag's trailing click, the bottom-edge tap's (see the peek), or
+       a long-press that already fired the studio door */
+    if (Date.now() < eatDrag || Date.now() < eatUntil || Date.now() < eatPillPress) {
+      e.preventDefault(); return;
+    }
     show();
     if (window.SearchSurface) window.SearchSurface.open("");
   });
+
+  /* ============ THE STUDIO DOOR -- A LONG PRESS ON THE PILL ================
+     chat 125, 15 Sep: *"No phone control opens it."* `reader/surface.js` reads
+     `?studio=<slug>&units=` (the door), but nothing on the phone's foot bar
+     fires it. The pill's TAP already opens the search surface; a LONG PRESS
+     opens the STUDIO door -- the works column with the book pre-selected, and
+     the voice / engine / progress controls live.
+
+     THE PATTERN IS THE ⚙'s: PRESS_MS on the clock, not the lift, and the fired
+     press eats the trailing click. The same thresholds, because a finger that
+     expects one threshold should find the same in both. A finger that moves
+     more than PRESS_SLOP is a slide or a drag: the bar already owns those, and
+     the timer is dropped (the gesture system's `g` starting is the signal —
+     when `g` is non-null the finger has committed to the gesture axis).
+
+     FROM INSIDE A BOOK the surface auto-selects the book underneath (S.inBook
+     is set at open time), so `SearchSurface.open("")` already selects it. But
+     the door also fires `selectSlug` explicitly, which is what brings the works
+     column's controls to life with that book in focus, even from the Library
+     where there is no book underneath.
+
+     UNPAIRED PHONE: the surface opens to "No studio behind this page" — and the
+     left list still searches the shelf. The control still fires; the surface's
+     own state handles the rest.
+     ========================================================================== */
+  var pillPressTimer = 0, pillPressFrom = null, pillPressFired = false, eatPillPress = 0, pillPresses = 0;
+  function pillPressDrop() {
+    if (pillPressTimer) { clearTimeout(pillPressTimer); pillPressTimer = 0; }
+    pillPressFrom = null;
+  }
+  function pillPressFire() {
+    pillPressTimer = 0; pillPressFired = true; pillPresses++;
+    eatPillPress = Date.now() + 700;
+    show();
+    var S = window.SearchSurface;
+    if (!S) return;
+    /* the slug is the book under the reader, or null on the Library */
+    var slug = null;
+    try { slug = typeof readingSlug === "function" ? readingSlug() : null; } catch (_) {}
+    S.open("");
+    if (slug && typeof S.selectSlug === "function") S.selectSlug(slug);
+  }
+  pill.addEventListener("pointerdown", function (e) {
+    if (e.button > 0) return;
+    pillPressFired = false;
+    pillPressFrom = { x: e.clientX, y: e.clientY };
+    if (pillPressTimer) clearTimeout(pillPressTimer);
+    pillPressTimer = setTimeout(pillPressFire, PRESS_MS);
+  });
+  pill.addEventListener("pointermove", function (e) {
+    if (!pillPressFrom) return;
+    /* a slide or a drag: the gesture system owns the finger now */
+    if (g || Math.abs(e.clientX - pillPressFrom.x) > PRESS_SLOP
+          || Math.abs(e.clientY - pillPressFrom.y) > PRESS_SLOP) pillPressDrop();
+  });
+  pill.addEventListener("pointerup", pillPressDrop);
+  pill.addEventListener("pointercancel", pillPressDrop);
+  pill.addEventListener("contextmenu", function (e) { if (e.preventDefault) e.preventDefault(); });
+  /* capture: a fired press is not a search open */
+  pill.addEventListener("click", function (e) {
+    if (pillPressFired || Date.now() < eatPillPress) {
+      pillPressFired = false;
+      e.preventDefault(); e.stopPropagation();
+    }
+  }, true);
+
   /* the ⚙ and the mic are the bar's too: a lift begun on them is a lift, and
      its trailing click must not also be a press */
   bar.addEventListener("click", function (e) {
@@ -605,6 +674,8 @@
                                PRESS_MS: PRESS_MS, PRESS_SLOP: PRESS_SLOP },
                       theme: { el: setEl, MS: PRESS_MS, slop: PRESS_SLOP,
                                get presses() { return presses; } },
+                      studio: { MS: PRESS_MS, slop: PRESS_SLOP, fire: pillPressFire,
+                                get presses() { return pillPresses; } },
                       get last() { return lastG; } };
   mic();
   dotStart();
