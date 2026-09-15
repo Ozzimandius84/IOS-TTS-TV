@@ -1189,6 +1189,7 @@
       .then(function (d) {
         S.detail[slug] = { loading: false,
                            chapters: (d && d.chapters) || [],
+                           voiceLang: (d && d.voice_lang) || [],
                            error: (d && d.error) || "" };
         drawWorks();
         return S.detail[slug];
@@ -1768,11 +1769,15 @@
       o.addEventListener("click", function () { openOut(p.url); });
       acts.appendChild(o);
     }
+    // Reveal opens Finder on the Mac — meaningless on the phone, and a 404
+    // on the LAN listener.  Hide the control entirely when paired.
+    var isPhone = document.documentElement.hasAttribute("data-phone");
     var r = el("button", "sf-verb ghost");
     r.type = "button"; r.textContent = "Show in Finder";
     r.title = p.path ? "POST /reveal — Finder, with " + p.file + " selected"
                      : "this book has no source file on record";
-    if (!p.path || !S.live) r.disabled = true;
+    if (isPhone) r.hidden = true;
+    else if (!p.path || !S.live) r.disabled = true;
     r.addEventListener("click", function () {
       if (r.disabled) return;
       r.disabled = true;
@@ -3545,6 +3550,24 @@
     return box;
   }
 
+  /* ---- PAIR CANDIDATES (15 Sep). The shelf does not carry `linked_id` —
+     that lives on search candidates only (`tools/search/pair.py`). For the
+     grid's pair control, candidates come from `S.shelf`: shelf books with a
+     DIFFERENT `lang` from the selected book. `pair.py`'s own pairing rule
+     (`suggest_pairs`) works within one search, where `names_match` has
+     already established everything is plausibly the same work; but the shelf
+     is INGESTED books, and an ingested book with a different language is
+     exactly the partner `align_books` needs. A book with one language and no
+     candidate draws nothing (§1 rule). */
+  function pairCandidates(subject) {
+    if (!subject || !subject.slug || !subject.lang) return [];
+    return S.shelf.filter(function (b) {
+      if (b.slug === subject.slug) return false;
+      if (!b.lang) return false;
+      return b.lang !== subject.lang;
+    });
+  }
+
   /* the grid: one line per chapter, the eight cells at its right. Studio's
      own table has eight columns and a button in every cell; at 330px it is
      one ribbon a row, and pressing the ROW is what runs its remaining steps
@@ -3596,6 +3619,31 @@
         run({ slug: subject.slug, step: "speak", queue: true }, vo, "Starting");
       });
       acts.appendChild(vo);
+
+      /* ---- PAIR CONTROL (15 Sep). Candidates are MEASURED, never typed:
+         shelf books with a different `lang` from this book. studio.html's own
+         pair picker shows the whole shelf and lets the user choose; this
+         surface shows only the plausible candidates — different language, so
+         `align_books` has something to align — and posts the same route. A
+         book with one language and no candidate draws nothing. */
+      var cands = pairCandidates(subject);
+      if (cands.length) {
+        var pairDiv = el("div", "sf-pair");
+        pairDiv.appendChild(el("span", "sf-pair-label", "Pair with"));
+        cands.forEach(function (c) {
+          var pb = el("button", "sf-verb ghost");
+          pb.type = "button";
+          pb.textContent = c.title + " (" + c.lang + ")";
+          pb.title = "align sentences: POST /pair {" + subject.slug + ", " + c.slug + "}";
+          pb.addEventListener("click", function (e) {
+            e.stopPropagation();
+            act("/pair", { left: subject.slug, right: c.slug }, pb, "Pairing");
+          });
+          pairDiv.appendChild(pb);
+        });
+        acts.appendChild(pairDiv);
+      }
+
       box.appendChild(acts);
     }
 
@@ -3618,17 +3666,42 @@
          read off the cells studio itself sent -- so the button does the next
          thing rather than a step somebody guessed. Nothing here invents a
          step: `STEPS` is `studio/state.py`'s own list and the cells are its
-         own marks. */
+         own marks.
+
+         RESTITCH (15 Sep): when the next step is "restitch", the button
+         posts to `POST /restitch` instead of `POST /run`. The route's
+         precondition is that the chapter's chunks are fully cached
+         (`voice.restitch` raises if they aren't, and `audition.run_restitch`
+         translates that into its own sentence). The button is enabled only
+         when `speak` is `"ok"` — speak having run is the prerequisite for
+         any chunks to be cached at all. The disabled button's title is
+         `audition.run_restitch`'s own precondition sentence, verbatim. */
       if (subject.slug && ch.id) {
         var next = nextStepFor(ch);
+        var isRestitch = next === "restitch";
+        var speakDone = (ch.state || {}).speak === "ok";
         var b = el("button", "sf-verb");
         b.type = "button";
         b.textContent = next ? next : "done";
-        b.disabled = !next;
-        b.title = next ? "run " + next + " on " + ch.id : "every step of this chapter is done";
+        if (isRestitch) {
+          /* restitch is enabled only when speak is done — the chunks cannot
+             exist before speak ran. The disabled title is the route's own
+             precondition, verbatim from `audition.run_restitch`. */
+          b.disabled = !speakDone;
+          b.title = speakDone
+            ? "re-stitch " + ch.id + " from its cached chunks"
+            : "this chapter's chunks are not fully cached yet — run speak first";
+        } else {
+          b.disabled = !next;
+          b.title = next ? "run " + next + " on " + ch.id : "every step of this chapter is done";
+        }
         b.addEventListener("click", function (e) {
           e.stopPropagation();
-          if (next) run({ slug: subject.slug, chapter: ch.id, step: next }, b, next);
+          if (isRestitch && speakDone) {
+            act("/restitch", { slug: subject.slug, chapter: ch.id }, b, "restitch");
+          } else if (next && !isRestitch) {
+            run({ slug: subject.slug, chapter: ch.id, step: next }, b, next);
+          }
         });
         row.appendChild(b);
         row.classList.add("pick");
@@ -3929,7 +4002,49 @@
       draw();
     });
   }
-  function voiceBlock(b) {
+  /* G-VOICELANG: "Add a language in this voice" -- one control, three states.
+     Data arrives on GET /book as voice_lang[], stored in S.detail[slug].voiceLang.
+     States: available (green pill), already_set (dimmed), no_edition (dimmed with title). */
+  function voiceLangBlock(b) {
+    if (!b || !b.slug || !S.voice) return null;
+    var d = S.detail[b.slug];
+    var items = (d && d.voiceLang) || [];
+    if (!items.length) return null;
+    var available = items.filter(function (c) { return c.status === "available"; });
+    var already = items.filter(function (c) { return c.status === "already_set"; });
+    if (!available.length && !already.length) return null;
+    var box = pills();
+    available.forEach(function (c) {
+      var p = onPill(c.label, false, false);
+      p.title = c.route + " — press to pair, stitch and queue";
+      p.addEventListener("click", function () { addVoiceLang(b, c.lang, p); });
+      box.appendChild(p);
+    });
+    already.forEach(function (c) {
+      var p = offPill(c.label, "already on " + (c.stitched || "a stitched book"));
+      box.appendChild(p);
+    });
+    var line = el("div", "sf-vsub");
+    line.appendChild(sub("pair + stitch + set voice + queue render — one press"));
+    if (S.voiceLangErr) line.appendChild(note(S.voiceLangErr));
+    return prow("Add language", box, line);
+  }
+  function addVoiceLang(b, lang, btn) {
+    if (!b || !b.slug) return;
+    S.voiceLangErr = "";
+    act("/voice-lang", { slug: b.slug, lang: lang, voice: S.voice }, btn, "adding")
+      .then(function (j) {
+        if (!j) return;
+        if (j.error) { S.voiceLangErr = j.error; draw(); return; }
+        /* The book detail is stale now — a new stitched book exists.
+           Force a reload of the shelf and this book's detail. */
+        delete S.detail[b.slug];
+        loadBook(b.slug);
+        pollWorks();
+      });
+  }
+
+    function voiceBlock(b) {
     var box = pills();
     var list = S.voices || [];
     if (!list.length) {
@@ -4511,6 +4626,8 @@
     if (!b) return null;
     var box = el("div", "sf-studio");
     box.appendChild(voiceBlock(b));
+    var vlb = voiceLangBlock(b);
+    if (vlb) box.appendChild(vlb);
     box.appendChild(langBlock(b));
     box.appendChild(whereBlock());
     box.appendChild(engineBlock(b));
