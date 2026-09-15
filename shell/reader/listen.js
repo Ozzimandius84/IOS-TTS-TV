@@ -138,6 +138,66 @@ class VirtualClock extends EventTarget {
   }
 }
 
+/* ------------------------------------- THE APPARATUS IS NOT READ ALOUD
+   P6 (parser/matter.py, 14 Sep). The parser marks the book's front and back
+   matter -- a title page, the notes, an index, a publisher's catalogue -- as
+   units of `book.structure` carrying `apparatus: <kind>` and `speak: false`
+   (core/bookdata.py passes both through). The rule is the plan's: *navigable,
+   kept, never stripped, and not read aloud unasked.* "Unasked" is the whole
+   of it. A reader who presses play ON the notes hears the notes; the voice
+   running off the end of the text does not carry on into them by itself.
+
+   Two shapes, and the map below reads both. A chapter that IS apparatus (the
+   Penguin's `ACKNOWLEDGEMENTS`, its `INDEX OF FIRST LINES`) is owned by a
+   unit marked so, or sits under one (`bm2 Footnotes` holding a section per
+   poet): `chapters` is the set of chapter INDEXES the turn skips. A run
+   INSIDE a chapter (La Vita Nuova's `NOTES`, 43 paragraphs at the tail of
+   its one text chapter) is a unit with `chapter` and `paragraphs`: `runs`
+   maps the chapter id to those paragraph ids, for the engine that reads a
+   chapter paragraph by paragraph (sysvoice.js) and for a render lane that
+   wants to know where the text ends. A rendered master is one file per
+   chapter, so this file can only turn the chapter; the run is named, not cut.
+
+   THE FLAG. `readApparatus` on the control (default false) is the ask: set
+   it and `nextChapterIndex` is `from + 1` again, exactly as before this
+   existed. Nothing here writes a setting -- a settings lane may wire one.  */
+function apparatusOf(book) {
+  const chapters = new Set();
+  const runs = new Map();
+  const kinds = new Map();
+  const idx = new Map(((book && book.chapters) || []).map((c, i) => [c.id, i]));
+  function walk(nodes, under) {
+    for (const n of (nodes || [])) {
+      const mine = n.speak === false || !!n.apparatus;
+      const off = under || mine;
+      if (off && n.chapters) {
+        for (const cid of n.chapters) {
+          if (idx.has(cid)) { chapters.add(idx.get(cid)); kinds.set(cid, n.apparatus || under || "apparatus"); }
+        }
+      }
+      if (mine && n.chapter && n.paragraphs && n.paragraphs.length) {
+        if (!runs.has(n.chapter)) runs.set(n.chapter, new Set());
+        const set = runs.get(n.chapter);
+        for (const pid of n.paragraphs) set.add(pid);
+      }
+      walk(n.children, off ? (n.apparatus || under || "apparatus") : null);
+    }
+  }
+  walk(book && book.structure, null);
+  return { chapters, runs, kinds };
+}
+
+/* the next chapter the voice may turn to on its own: the first after `from`
+   that is not apparatus -- every chapter when asked -- or -1 at the book's end */
+function nextSpeakable(book, from, readApparatus, map) {
+  const n = ((book && book.chapters) || []).length;
+  const m = map || apparatusOf(book);
+  for (let i = from + 1; i < n; i++) {
+    if (readApparatus || !m.chapters.has(i)) return i;
+  }
+  return -1;
+}
+
 /* items sorted ascending by .start; the last one whose start <= t
    (3d2c7a9 reader.html:333) */
 function findIndex(items, t) {
@@ -214,6 +274,8 @@ function mount(o) {
   let lastPara = null;
 
   const chIndexById = new Map(((book && book.chapters) || []).map((c, i) => [c.id, i]));
+  const apparatus = apparatusOf(book);   /* P6: what the voice skips unasked */
+  let readApparatus = false;
 
   /* ------------------------------------------------------------ the map */
 
@@ -748,6 +810,15 @@ function mount(o) {
       return ch ? ch.id : null;
     },
     toggle, open, paint,
+    /* ---- P6: the apparatus, for transport.js's chapter turn --------------
+       `nextChapterIndex(from)` is the chapter the voice may turn to by
+       itself; `speakable(i)` says whether a chapter is text; `readApparatus`
+       is the ask that makes every chapter speakable again. */
+    nextChapterIndex(from) { return nextSpeakable(book, from, readApparatus, apparatus); },
+    speakable(chIdx) { return readApparatus || !apparatus.chapters.has(chIdx); },
+    apparatusIn(cid) { const s = apparatus.runs.get(cid); return s ? [...s] : []; },
+    get readApparatus() { return readApparatus; },
+    set readApparatus(v) { readApparatus = !!v; },
     get chapterIndex() { return curIdx; },
     get clock() { return clock; },
     get timings() { return cur ? cur.timings : null; },
@@ -758,5 +829,6 @@ function mount(o) {
   return control;
 }
 
-window.Listen = { mount, VirtualClock, findIndex, tokenise, textOf, blockRole };
+window.Listen = { mount, VirtualClock, findIndex, tokenise, textOf, blockRole,
+                  apparatusOf, nextSpeakable };
 })();

@@ -113,6 +113,14 @@ function parseLookupQuery(text) {
 const QUIET_RING = {
   reading: { up: "what does this mean", right: "ground", left: "again", down: "again, slower" },
   ground: { up: "finish sentence", right: "continue", left: "continue from start", down: "continue from end" },
+  // THE BOOK'S FACE (chat 106, 14 Sep -- "every command here must also be a
+  // press"). The assistant's four questions of the book, reached by pressing
+  // the TRIGGER a second time while the window is open (M M on the Mac, a
+  // two-finger TAP on the phone -- a tap, which the flick lifted-without-
+  // moving used to throw away). `define` is not here because it already is:
+  // the reading face's own ^. `slower` is not here because it has a press
+  // (the pace button on both bars). The face lasts one press or one window.
+  book: { up: "grammar", right: "switch", left: "about", down: "where" },
 };
 
 const QUIET_DIRECTIONS = ["up", "down", "left", "right"];
@@ -121,13 +129,14 @@ const QUIET_DIRECTIONS = ["up", "down", "left", "right"];
 // detour stack has a frame on it: `ground` pushes one and nothing pops it
 // until a `continue` (or `target`); `what`'s one-shot pushes and pops inside
 // one utterance, so it never leaves the ring on the second face.
-function quietFace(inGround) {
+function quietFace(inGround, bookFace) {
+  if (bookFace) return "book";
   return inGround ? "ground" : "reading";
 }
 
 // direction + face -> the utterance a heard command would have been, or null
-function quietCommand(direction, inGround) {
-  const face = QUIET_RING[quietFace(inGround)];
+function quietCommand(direction, inGround, bookFace) {
+  const face = QUIET_RING[quietFace(inGround, bookFace)];
   return (face && face[direction]) || null;
 }
 
@@ -698,7 +707,7 @@ function createVoiceUI({ bridge, getSentenceWords, getPreviousSentenceId, getDic
 
   // `inGround` is the ring's face: a ground stop is standing exactly when
   // the detour stack has a frame on it (see quietFace).
-  return { handleUtterance, _detour: detour, side: () => side, inGround: () => detour.inDetour,
+  return { handleUtterance, interrupt, _detour: detour, side: () => side, inGround: () => detour.inDetour,
            _dictionaryWarm: () => dictionaryWarm };
 }
 
@@ -1124,10 +1133,16 @@ function boot(opts = {}) {
     },
     opts.modules || {}
   );
+  mods.commands = mods.commands || (root && root.commands);
+  mods.records = mods.records || (root && root.records);
+  mods.context = mods.context || (root && root.context);
   if (typeof module === "object" && module.exports) {
     mods.trigger = mods.trigger || require("./trigger");
     mods.asr = mods.asr || require("./asr");
     mods.readerBridge = mods.readerBridge || require("./reader-bridge");
+    mods.commands = mods.commands || require("./commands");
+    mods.records = mods.records || require("./records");
+    mods.context = mods.context || require("./context");
   }
 
   const log = opts.log || ((...a) => { if (typeof console !== "undefined") console.info("[voiceui]", ...a); });
@@ -1266,6 +1281,171 @@ function boot(opts = {}) {
     },
   });
 
+  /* ================= THE ASSISTANT IS THE BOOK SPEAKING BACK (chat 106) ====
+   * Six deterministic commands (voiceui/commands.js) and the context packet
+   * (voiceui/context.js), fed by the book's own records (voiceui/records.js)
+   * and by ONE view of where the reader is -- `positionNow()` -- which is the
+   * audio clock when a chapter has timings and book-nav.js's announced
+   * cursor (`ttstv:cursor`) when it has not, so a system-voice book answers
+   * `grammar` and `where` too. Nothing here reaches into reader.html: the
+   * slug comes off the URL and the cursor event, the chapter map off
+   * ReaderControl.mapOf, the pace off window.Transport (registered by the
+   * page, like the store). */
+  const records = opts.records || (mods.records ? mods.records.createRecords({
+    slug: opts.slug || (mods.records.slugFromLocation && win && win.location ? mods.records.slugFromLocation(win.location) : null),
+    win,
+    fetchJson: opts.fetchJson,
+  }) : null);
+  let lastCursor = null;   // {chapter, word, text, slug} from ttstv:cursor
+  function onCursor(e) {
+    const d = e && e.detail;
+    if (!d) return;
+    lastCursor = { chapter: d.chapter | 0, word: d.word | 0, text: d.text || "", slug: d.slug || null };
+    if (d.slug && records && records.setSlug(d.slug) === d.slug) refreshLangs();
+  }
+  const cursorTarget = opts.cursorTarget !== undefined ? opts.cursorTarget : doc;
+  if (cursorTarget && typeof cursorTarget.addEventListener === "function") cursorTarget.addEventListener("ttstv:cursor", onCursor);
+  const transport = opts.transport !== undefined ? opts.transport : (win && win.Transport) || null;
+  // the pace door: the ONE stored rate (G-WPM). Transport first (it applies
+  // the rate to the master and the store both); the store alone as the
+  // fallback; nothing at all -> commands.js answers "no pace to change".
+  function paceDoor() {
+    if (opts.pace !== undefined) return opts.pace;
+    try {
+      if (transport && typeof transport.paceNow === "function" && transport.paceNow() > 0) {
+        return { now: () => transport.paceNow(), set: (w) => transport.setPace(w), paces: transport.PACES,
+                 defaultWpm: store && store.DEFAULTS && store.DEFAULTS.wpm };
+      }
+      const st = prefsNow();
+      if (st && +st.wpm > 0 && store && typeof store.patch === "function") {
+        return { now: () => +prefsNow().wpm || 0, set: (w) => { store.patch({ wpm: w }); return +prefsNow().wpm || w; },
+                 defaultWpm: store.DEFAULTS && store.DEFAULTS.wpm };
+      }
+    } catch (e) { /* no pace */ }
+    return null;
+  }
+  function chapterMap(idx) {
+    if (control && typeof control.mapOf === "function") {
+      try { return Promise.resolve(control.mapOf(idx)).catch(() => null); } catch (e) { return Promise.resolve(null); }
+    }
+    return Promise.resolve(null);
+  }
+  function fractionNow() {
+    try { if (transport && typeof transport.fraction === "function") { const f = transport.fraction(); if (isFinite(f) && f >= 0) return f; } } catch (e) { /* none */ }
+    return null;
+  }
+  // -> {wordId, sentenceId, chapterId, chapterIndex, chapterCount, chapterTitle, fraction, text, lang} | null
+  async function positionNow() {
+    if (opts.position) return opts.position();
+    const side = app.side();
+    let pos = null;
+    try { pos = bridge.getPosition(side); } catch (e) { pos = null; }
+    let out = null;
+    if (pos && pos.wordId) {
+      const words = control && typeof control.getSentenceWords === "function" ? control.getSentenceWords(side, pos.sentenceId) : null;
+      const w = Array.isArray(words) ? words.find((x) => x.id === pos.wordId) : null;
+      out = { wordId: pos.wordId, sentenceId: pos.sentenceId, chapterId: pos.chapterId, text: w ? w.text : "", fraction: fractionNow() };
+    } else if (lastCursor) {
+      const map = await chapterMap(lastCursor.chapter);
+      const wordId = map && map.byFlat && typeof map.byFlat.get === "function" ? map.byFlat.get(lastCursor.word) || null : null;
+      out = { wordId, sentenceId: wordId ? wordId.replace(/\.w\d+$/, "") : null, chapterId: map && map.id ? map.id : null,
+              chapterIndex: lastCursor.chapter, flat: lastCursor.word, text: lastCursor.text || "", fraction: fractionNow() };
+    }
+    if (!out || !records) return out;
+    try {
+      const m = await records.meta();
+      const list = (m && Array.isArray(m.chapters)) ? m.chapters : [];
+      let i = out.chapterId ? list.findIndex((c) => c && c.id === out.chapterId) : -1;
+      if (i < 0 && typeof out.chapterIndex === "number") i = out.chapterIndex;
+      out.chapterIndex = i;
+      out.chapterCount = list.length;
+      out.chapterTitle = i >= 0 && list[i] ? list[i].title : "";
+      if (!out.chapterId && i >= 0 && list[i]) out.chapterId = list[i].id;
+      if (out.fraction === null && typeof out.flat === "number" && i >= 0 && list[i] && +list[i].words > 0) out.fraction = out.flat / +list[i].words;
+      out.lang = await records.langAt(out.wordId);
+    } catch (e) { /* the position stands without the meta */ }
+    return out;
+  }
+  // words of a paragraph, in order, off the chapter map (for the switch's
+  // proportional word): the map's sentence lists, filtered to the paragraph
+  async function paragraphWords(pid) {
+    const cid = String(pid).split(".")[0];
+    const idx = control && typeof control.chapterIndexOf === "function" ? control.chapterIndexOf(cid) : -1;
+    const map = idx >= 0 ? await chapterMap(idx) : null;
+    if (!map || !map.sentWords || typeof map.sentWords.forEach !== "function") return null;
+    const out = [];
+    map.sentWords.forEach((list, sid) => { if (String(sid).startsWith(pid + ".")) for (const w of list) out.push(w); });
+    return out.length ? out : null;
+  }
+  let bookLangsNow = [];
+  function refreshLangs() {
+    if (!records) return;
+    records.bookLangs().then((l) => { bookLangsNow = l || []; }).catch(() => {});
+  }
+  refreshLangs();
+  const history = [];
+  function remember(q, a) { history.push({ q, a }); while (history.length > 8) history.shift(); }
+  async function runCommand(parsed, text, quietAsked) {
+    const pos0 = await positionNow();
+    const langs = records ? await records.bookLangs().catch(() => []) : [];
+    const askLang = opts.lang || (pos0 && pos0.lang) || null;
+    const doors = {
+      lang: askLang, bridge, side: app.side(), position: () => Promise.resolve(pos0), records, pace: paceDoor(),
+      paragraphWords, bookLangs: langs,
+      handleUtterance: (t) => app.handleUtterance(t, { quiet: quietAsked }),
+    };
+    // a spoken answer over a running ground replay is two voices at once --
+    // the same interrupt a lookup takes
+    if (!quietAsked && app.interrupt && parsed.cmd !== "switch") await app.interrupt();
+    const result = await mods.commands.execute(parsed, doors);
+    result.quiet = quietAsked;
+    result.command = parsed.cmd;
+    if (result.type === "answer" && result.text) {
+      remember(text, result.text);
+      // PRESSED IS WRITTEN, SPOKEN IS SAID -- and the voice is 103's seam
+      if (!quietAsked && synth) await tts.speak(result.text, { synth });
+    }
+    return result;
+  }
+  // the packet: what an open question would be answered from
+  async function context() {
+    const pos = await positionNow();
+    const meta = records ? await records.meta().catch(() => null) : null;
+    const map = pos && typeof pos.chapterIndex === "number" && pos.chapterIndex >= 0 ? await chapterMap(pos.chapterIndex) : null;
+    const ids = map && map.sentWords ? [...map.sentWords.keys()] : [];
+    const sentences = {
+      words: (id) => (map && map.sentWords ? map.sentWords.get(id) : null) || (control && typeof control.getSentenceWords === "function" ? control.getSentenceWords(app.side(), id) : null),
+      prev: (id) => { const i = ids.indexOf(id); return i > 0 ? ids[i - 1] : (control && typeof control.getPreviousSentenceId === "function" ? control.getPreviousSentenceId(app.side(), id) : null); },
+      next: (id) => { const i = ids.indexOf(id); return i >= 0 && i + 1 < ids.length ? ids[i + 1] : null; },
+    };
+    let paired = null;
+    if (records && pos && pos.wordId) {
+      const st = await records.stitch().catch(() => null);
+      if (st && st.paragraphs) {
+        const pid = pos.wordId.split(".").slice(0, 2).join(".");
+        const row = st.paragraphs[pid];
+        const other = row && Array.isArray(row.pair) ? row.pair[0] : null;
+        if (other) {
+          const words = await paragraphWords(other);
+          if (words) paired = { lang: records.langOf(st.paragraphs[other] && st.paragraphs[other].from), text: words.map((w) => w.text).join(" ") };
+        }
+      }
+    }
+    const grammarDoor = records ? async (t) => mods.commands.grammarEntry(await records.grammarAt(pos && pos.wordId), t) : null;
+    const dictDoor = hooksReady ? (t) => control.getDictionaryEntry(app.side(), t) : null;
+    return mods.context.build({
+      book: meta ? { slug: records.slugNow(), title: meta.title, author: meta.author, lang: meta.lang, form: meta.form } : null,
+      chapter: pos ? { index: pos.chapterIndex, count: pos.chapterCount, title: pos.chapterTitle } : null,
+      position: pos, sentences, paired, dictionary: dictDoor, grammar: grammarDoor, history,
+    });
+  }
+  // the open question, as far as this lane goes: the prompt a model would be
+  // handed. No model is wired -- Stage 2.2 stops for Osca's pick.
+  async function ask(question) {
+    const packet = await context();
+    return { packet, bytes: mods.context.bytes(packet), prompt: mods.context.render(packet, question, opts.lang) };
+  }
+
   // ---- one utterance, end to end
   // `opts.quiet` says the command arrived by PRESS -- a key, a flick, the
   // ring, the headset -- and is the whole of what decides the medium of the
@@ -1277,8 +1457,19 @@ function boot(opts = {}) {
     const wasArmed = state !== "off" && state !== "unavailable";
     if (wasArmed) setState("busy");
     let result;
+    // THE ASSISTANT'S COMMANDS FIRST (commands.js). `define` is the lookup
+    // by another name and is handed on as one; a bare speed word goes to
+    // the pace store when the page has one and to the grammar's speed op
+    // when it has not (a bare bundle, a test); everything else is answered
+    // here from the records. "again, slower" and "what does X mean" never
+    // reach this: every phrase set is anchored to the whole utterance.
+    const parsed = mods.commands ? mods.commands.parse(text, { bookLangs: bookLangsNow }) : null;
+    if (parsed && parsed.cmd === "define") text = "what does this mean";
+    const viaCommand = parsed && parsed.cmd !== "define" && !((parsed.cmd === "slower" || parsed.cmd === "faster" || parsed.cmd === "normal") && !paceDoor());
     try {
-      if (!hooksReady && synth && parseLookupQuery(text)) {
+      if (viaCommand) {
+        result = await runCommand(parsed, text, quietAsked);
+      } else if (!hooksReady && synth && parseLookupQuery(text)) {
         const msg = "The dictionary isn't connected to the reader yet.";
         if (!quietAsked) await tts.speak(msg, { synth });
         result = { type: "answer", text: msg, unavailable: missingHooks, quiet: quietAsked };
@@ -1423,6 +1614,9 @@ function boot(opts = {}) {
     if (state === "off" || state === "unavailable") return;
     if (typingNow() || !isTriggerKey(e)) return;
     if (typeof e.preventDefault === "function") e.preventDefault();
+    // M while the window is open is the ring's third face (chat 106), not a
+    // second microphone: the mic closes and the arrows become the book's
+    if (trigger.isListening() || quietWindowOpen()) { flipToBook(); return; }
     listen();
   }
 
@@ -1438,12 +1632,23 @@ function boot(opts = {}) {
   function quietReady() {
     return state !== "off" && state !== "unavailable";
   }
+  let bookFace = false;   // the ring's third face, for one press or one window
   function quiet(direction) {
     if (!quietReady()) return null;
-    const cmd = quietCommand(direction, app.inGround());
+    const cmd = quietCommand(direction, app.inGround(), bookFace);
+    const face = quietFace(app.inGround(), bookFace);
+    bookFace = false;
     if (!cmd) return null;
-    log("quiet:", direction, "->", cmd, app.inGround() ? "(ground face)" : "");
+    log("quiet:", direction, "->", cmd, face !== "reading" ? "(" + face + " face)" : "");
     return handleUtterance(cmd, { quiet: true });
+  }
+  // the second press of the trigger inside the window: the book's face
+  function flipToBook() {
+    bookFace = true;
+    takeWindowForQuiet();
+    openQuietWindow();
+    if (ring) ringPaint(ring.picked);
+    log("quiet: book face");
   }
 
   /* ---- THE MAC: M, then an arrow, each arrow re-opening the window.
@@ -1465,11 +1670,12 @@ function boot(opts = {}) {
   function quietWindowOpen() { return quietTimer !== null; }
   function openQuietWindow() {
     if (quietTimer !== null && clearT) clearT(quietTimer);
-    quietTimer = setT ? setT(() => { quietTimer = null; }, listenWindowMs()) : null;
+    quietTimer = setT ? setT(() => { quietTimer = null; bookFace = false; }, listenWindowMs()) : null;
   }
   function closeQuietWindow() {
     if (quietTimer !== null && clearT) clearT(quietTimer);
     quietTimer = null;
+    bookFace = false;
   }
   // the first of {an arrow, an utterance} takes the window and closes it to
   // the other -- this is the arrow taking it.
@@ -1511,6 +1717,7 @@ function boot(opts = {}) {
    * this listens to what it threw. The thresholds are book-nav.js's own
    * TOUCH numbers so a hand does not learn two flicks. */
   const touchTarget = opts.touchTarget !== undefined ? opts.touchTarget : win;
+  const FLICK_TAP_PX = 12, FLICK_TAP_MS = 350;
   const flickOpts = opts.flick || undefined;
   let two = null;
   function sampleTwo(e) {
@@ -1541,6 +1748,11 @@ function boot(opts = {}) {
     if (e && e.type === "touchcancel") return;
     const dir = flickDirection(g.samples, flickOpts);
     if (dir) quiet(dir);
+    else if (g.samples.length && isTap(g.samples)) flipToBook();   // two fingers down and up, still: the book's face
+  }
+  function isTap(samples) {
+    const a = samples[0], b = samples[samples.length - 1];
+    return Math.abs(b.x - a.x) < FLICK_TAP_PX && Math.abs(b.y - a.y) < FLICK_TAP_PX && (b.t - a.t) < FLICK_TAP_MS;
   }
 
   /* ---- THE HEADSET: the triple-press, and nothing else.
@@ -1588,7 +1800,7 @@ function boot(opts = {}) {
   }
   function ringPaint(picked) {
     if (!ringEl) return;
-    const face = QUIET_RING[quietFace(app.inGround())];
+    const face = QUIET_RING[quietFace(app.inGround(), bookFace)];
     for (const d of QUIET_DIRECTIONS) {
       ringLabels[d].textContent = face[d];
       ringLabels[d].setAttribute("data-on", picked === d ? "1" : "0");
@@ -1763,8 +1975,16 @@ function boot(opts = {}) {
     // the second input, one door: a direction, the face the ring is on, and
     // the same command brain a heard utterance goes through
     quiet,
-    quietFace: () => quietFace(app.inGround()),
-    quietRing: () => QUIET_RING[quietFace(app.inGround())],
+    quietFace: () => quietFace(app.inGround(), bookFace),
+    quietRing: () => QUIET_RING[quietFace(app.inGround(), bookFace)],
+    bookFace: () => bookFace,
+    flipToBook,
+    // the assistant (chat 106): where the reader is, the packet, the prompt
+    position: positionNow,
+    context,
+    ask,
+    records,
+    history: () => history.slice(),
     quietWindowOpen,
     said: () => sayLine.text(),
     state: () => state,
@@ -1775,6 +1995,7 @@ function boot(opts = {}) {
     pocketState: () => pocket.state(),
     destroy() {
       disarm();
+      if (cursorTarget && typeof cursorTarget.removeEventListener === "function") cursorTarget.removeEventListener("ttstv:cursor", onCursor);
       sayLine.destroy();
       if (ringEl && ringEl.parentNode) ringEl.parentNode.removeChild(ringEl);
       if (stopPrefs) { try { stopPrefs(); } catch (e) { /* already gone */ } }

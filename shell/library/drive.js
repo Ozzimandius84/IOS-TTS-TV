@@ -798,6 +798,7 @@ function syncBookMeta(row, rels, now) {
   (row.files || []).forEach(function (f) { if (f && has(f.rel)) bytes += Number(f.bytes) || 0; });
   return {
     slug: row.slug, hash: row.hash, title: row.title || row.slug, author: row.author || null, lang: row.lang || null,
+    langs: Array.isArray(row.langs) && row.langs.length > 1 ? row.langs.slice() : undefined,   // a mixed book's (G-LANGMIX)
     chapters: typeof row.chapters === "number" ? row.chapters : Math.max(texted, timed),
     words: typeof row.words === "number" ? row.words : null, bytes: bytes,
     has_timings: timed > 0, has_audio: voiced > 0,

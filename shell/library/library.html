@@ -294,9 +294,19 @@ function sourceTitle(name) { return String(name || "").replace(/\.[a-z0-9]+$/i, 
 // chapters that are no longer sent (studio/bookinfo.py: shelf_of). The note
 // further down this file -- "93 KB of per-chapter cells the shelf does not
 // draw" -- is what that change answers; /state is ~8 KB for this library.
+// THE LANGUAGE ON A ROW IS THE BOOK'S LANGUAGES (G-LANGMIX, Osca 11 Sep: "a
+// mixed book lists BOTH languages"). A row carries `langs` only when there
+// is more than one (studio/bookinfo.py, studio/sync.py, library/store.py --
+// every writer of a row); `langLine` draws them as "en · fr", most words
+// first, and a row with one language draws exactly what it drew before.
+function langsOf(b) {
+  const l = b && Array.isArray(b.langs) && b.langs.length ? b.langs : (b && b.lang ? [b.lang] : []);
+  return l.map(x => String(x || "").trim()).filter(Boolean);
+}
+function langLine(b) { return langsOf(b).join(" \u00b7 "); }
 function booksFromState(st) {
   return (st.books || []).map(b => ({
-    slug: b.slug, title: b.title, author: b.author, lang: b.lang,
+    slug: b.slug, title: b.title, author: b.author, lang: b.lang, langs: b.langs || undefined,
     chapters: b.chapters_n,
     has_audio: b.voiced > 0,
     has_timings: b.aligned > 0,
@@ -789,7 +799,7 @@ function parsesPanelHTML(data, title) {
     if (row.chapters != null) bits.push(`${row.chapters} chapters`);
     if (row.words) bits.push(`${row.words} words`);
     if (row.bytes != null) bits.push(fmtBytes(row.bytes));
-    if (row.lang) bits.push(row.lang);
+    if (row.lang) bits.push(langLine(row));
     return bits.join(" · ");
   };
   const rowHTML = (row, label) =>
@@ -1145,7 +1155,7 @@ async function uploadFile(file) {
 // which is what the picture draws.
 function tileLine(b) {
   const bits = [b.author || "unknown"];
-  if (b.lang) bits.push(b.lang);
+  if (b.lang) bits.push(langLine(b));
   if (b.has_audio) bits.push("audio");
   return bits.join(" \u00b7 ");
 }
@@ -1450,16 +1460,30 @@ function coverUrl(slug) {
   return "../books/" + encodeURIComponent(slug) + "/cover.jpg";
 }
 
+/* THE TOP RUNG IS CHEAP (Osca, 14 Sep, chat 108: 16 across draws covers
+ * only). At `16` a cover is ~21px on the phone and the rung's CSS takes the
+ * title, the byline and the language away: the two strings the four rungs
+ * exist to fetch are drawn NOWHERE, so fetching them is a page of requests
+ * for nothing -- and rungs two, three and four of FOUR RUNGS are `book.json`,
+ * up to 2 MB a book, on a screen that is showing a grid of dots. So at `16`
+ * the sidecar answers or nobody does: `cover.json`, ~200 B, and never
+ * `book.json`. A slug the sidecar could not answer for is NOT memoised as
+ * asked, so stepping down to `8` asks properly, once. */
+function coverFactsSidecarOnly() { return phoneFlag() && shelfZoom() === "16"; }
+
 async function loadCoverFacts(slugs) {
   const want = (slugs || []).filter(s => s && !coverFacts.has(s));
   if (!want.length) return false;
   let got = false;
   const disk = bookWordsOnDisk();
+  const cheap = coverFactsSidecarOnly();
   await Promise.all(want.map(async slug => {
-    coverFacts.set(slug, {});       // asked: never ask twice, even if it 404s
+    const url = "../books/" + encodeURIComponent(slug) + "/book.json";
+    if (!cheap) coverFacts.set(slug, {});   // asked: never ask twice, even if it 404s
     try {
-      const facts = disk ? await coverFactsFromDisk(slug)
-        : await coverFactsFor("../books/" + encodeURIComponent(slug) + "/book.json");
+      const facts = cheap ? await coverFactsFromSidecar(url)
+        : disk ? await coverFactsFromDisk(slug)
+        : await coverFactsFor(url);
       if (facts && (facts.form || facts.first_words)) { coverFacts.set(slug, facts); got = true; }
     } catch (e) { /* a static host with no books/: the plain fallback stands */ }
   }));
@@ -1703,7 +1727,7 @@ function railRows(entries) {
     const spoken = b.has_audio;
     const timed = b.has_timings;
     const base = `<span class="railrow-title">${esc(b.title)}</span>
-      <span class="railrow-by">${esc(b.author || "unknown")} \u00b7 ${esc(b.lang)}</span>
+      <span class="railrow-by">${esc(b.author || "unknown")} \u00b7 ${esc(langLine(b) || b.lang)}</span>
       <span class="railrow-status">${total} ch${spoken ? " \u00b7 <b>audio</b>" : ""}${
         timed ? " \u00b7 <b>timed</b>" : ""}</span>`;
     // The wrapper, and only the wrapper: `base` above is byte-shared with
@@ -1863,6 +1887,7 @@ function deviceIsShelf() {
 }
 function deviceShelfRow(b) {
   return { slug: b.slug, title: b.title || b.slug, author: b.author || null, lang: b.lang || null,
+           langs: Array.isArray(b.langs) && b.langs.length > 1 ? b.langs.slice() : undefined,
            chapters: Number(b.chapters) || 0, has_audio: !!b.has_audio, has_timings: !!b.has_timings,
            voiced: Number(b.chapters_voiced) || 0, device: true, hash: b.hash || "",
            has_cover: typeof b.has_cover === "boolean" ? b.has_cover : null };
@@ -1904,7 +1929,7 @@ function deviceRowHTML(b) {
   return `<button class="railrow device" data-slug="${esc(b.slug)}" data-device="1" data-hash="${esc(b.hash || "")}"` +
     ` aria-selected="false" title="${esc(b.title)} — ${esc(b.slug)} @ ${esc(b.hash || "?")}">` +
     `<span class="railrow-title">${esc(b.title || b.slug)}</span>` +
-    `<span class="railrow-by">${esc(b.author || "unknown")} · ${esc(b.lang || "")}</span>` +
+    `<span class="railrow-by">${esc(b.author || "unknown")} · ${esc(langLine(b))}</span>` +
     `<span class="railrow-status">${deviceStatus(b)}</span>` +
     `<span class="rmbook" role="button" tabindex="0" data-remove="${esc(b.slug)}"` +
     ` aria-label="Remove ${esc(b.title || b.slug)} from this device" title="Remove from this device">✕</span></button>`;
@@ -2092,6 +2117,7 @@ function shelfCacheRead() {
     // the page whose whole job is to list books.
     const books = d.books.filter(b => b && typeof b.slug === "string" && b.slug).map(b => ({
       slug: b.slug, title: b.title || b.slug, author: b.author || null, lang: b.lang || null,
+      langs: Array.isArray(b.langs) && b.langs.length > 1 ? b.langs.slice() : undefined,
       chapters: Number(b.chapters) || 0,
       has_audio: !!b.has_audio, has_timings: !!b.has_timings, voiced: Number(b.voiced) || 0,
     }));
@@ -5547,47 +5573,153 @@ shelfEl.addEventListener("wheel", (e) => {
   shelfZoomStep(e.deltaY < 0 ? +1 : -1);
 }, { passive: false });
 
-/* ---- the zoom on the PHONE: two fingers on the shelf (G-COVERS, 11 Sep).
- * Osca's decision: "library zoom on the phone has the Mac's five rungs
- * 16/8/4/2/1 by pinch" -- the same ladder, `1t` the step between 2 and 1 as
- * on the Mac, the same `shelfZoomStep`, the same record. The listener above
- * is the Mac's and is not touched: a trackpad pinch arrives as ctrl+wheel,
- * a finger pinch as two touches, and this one answers only under the phone's
- * flag (`html[data-phone]`, set in <head>).
+/* ---- the zoom on the PHONE: two fingers on the shelf, and it is Photos'
+ * (Osca, 14 Sep, chat 108: "I can't get up to a 16-column view on the phone.
+ * We need them on the phone, like Photos has -- the native iOS app").
  *
- * THE NUMBERS. Fingers spreading to 1.25x the distance they started at is one
- * rung in (fewer, bigger books); closing to 1/1.25 (0.8x) is one rung out.
- * After a rung the distance NOW is the new start, so a long spread walks
- * several rungs and a short one exactly one, and no rung is taken twice for
- * one movement. No time gate: a step is a distance, and a finger that stops
- * takes nothing more. The two-finger touch is refused to the page (WebKit
- * would zoom the whole page: `gesturestart`/`gesturechange` too, the reader's
- * refusePinch shape) -- a ONE-finger touch is never touched, so the shelf
- * scrolls as it did. */
-const PHONE_PINCH_RATIO = 1.25;
-let phonePinch = null;                    // {base, steps} while two fingers are down
+ * THIS REPLACES THE RATIO STEPPER (G-COVERS, 11 Sep), which took a rung every
+ * time the fingers reached 1.25x the span they last stopped at: the ladder
+ * jumped a step at a time under a moving hand, drew nothing in between, and
+ * never showed a rung the phone's CSS did not name -- and the phone's CSS
+ * named FOUR across for `16` and THREE for `8`, which is Osca's complaint
+ * exactly. The CSS is fixed above its own comment (library.css, "16: sixteen
+ * across"); this is the gesture.
+ *
+ * PHOTOS' FEEL IS THREE THINGS.
+ *   1. LIVE. The grid follows the fingers while they are down -- `transform:
+ *      scale()` on `.shelfgrid` and nothing else, so no reflow, no re-render,
+ *      no JPEG, 60 Hz from the compositor. The tiles are already whole (THE
+ *      LADDER, library.css), so there is nothing to build.
+ *   2. SETTLED. On lift, the nearest rung, one short ease (PHONE_SETTLE_MS),
+ *      and ONE reflow at the end of it -- `setShelfZoom`, which is the record
+ *      and the attribute, as every other caller has it.
+ *   3. BOUNDED. A hand that keeps spreading past `1` does not run the grid off
+ *      the screen: the continuous rung is clamped to the ladder's two ends and
+ *      the scale DRAWN is that clamped rung, so the grid stops where the
+ *      ladder stops.
+ *
+ * THE LADDER IS GEOMETRIC, AND THAT IS THE WHOLE OF THE ARITHMETIC. One rung
+ * is one doubling -- 16 -> 8 -> 4 -> 2 -> 1 -- so the rung the fingers are on
+ * is `startIdx + log2(scale)`, a real number, and the rung they LEAVE them on
+ * is that number rounded. `1t` sits between `2` and `1` on `SHELF_ZOOMS` and
+ * is walked like any other index: on the phone it is one book with its words,
+ * which is exactly a half-step between two covers and one jacket. Nothing
+ * here knows a column count, so the CSS can change a rung's columns without
+ * touching a line of this.
+ *
+ * A TWO-FINGER TAP IS ONE RUNG OUT (more books, toward 16) -- two fingers
+ * down and up inside PHONE_TAP_MS having moved less than PHONE_TAP_SLOP, the
+ * gesture that never becomes a pinch. Photos' own two-finger tap steps out.
+ *
+ * TWO EVENT FAMILIES, ONE STATE. Chromium (the harness) sends touches only;
+ * WebKit sends BOTH touches and `gesturestart/change/end` with a ready-made
+ * `scale`. The gesture family wins where it exists (`phoneGesture`), because
+ * its scale is the web view's own and matches what a finger expects; the
+ * touch handlers then only hold the gesture open. The refusal below is
+ * unchanged and is still the reason a phone gets this far at all. */
+const PHONE_PINCH_RATIO = 1.25;    // retired as the stepper's gate; still exported
+const PHONE_SETTLE_MS = 140;       // the ease that lands the nearest rung
+const PHONE_TAP_MS = 320;          // two fingers down and up inside this is a tap
+const PHONE_TAP_SLOP = 0.06;       // ... having moved the span less than 6%
+let phonePinch = null;             // {startIdx, raw, origin} while two fingers are down
+let phoneGesture = false;          // WebKit's gesture family has the wheel
+let phoneTouchBase = 1, phoneTouchAt = 0, phoneTouchMoved = false;
 function pinchSpan(t) { return Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY); }
 function phoneFlag() { return document.documentElement.hasAttribute("data-phone"); }
+function shelfGridEl() { return document.querySelector("#shelf .shelfgrid"); }
+
+// the continuous rung under the fingers, clamped to the ladder's two ends
+function phonePinchIdx(k) {
+  const i = phonePinch.startIdx + Math.log2(Math.max(k, 0.001));
+  return Math.min(SHELF_ZOOMS.length - 1, Math.max(0, i));
+}
+
+function phonePinchStart(cx, cy) {
+  const g = shelfGridEl();
+  if (!g) return false;
+  const r = g.getBoundingClientRect();
+  let i = SHELF_ZOOMS.indexOf(shelfZoom());
+  if (i < 0) i = SHELF_ZOOMS.indexOf(SHELF_ZOOM_DEFAULT);
+  // the origin is where the fingers are, in the grid's own box, so the book
+  // between them stays between them (the pointer rule the Mac's zoom has)
+  phonePinch = { startIdx: i, raw: 1, origin: (cx - r.left) + "px " + (cy - r.top) + "px" };
+  return true;
+}
+
+// transform only: no layout is read and none is written
+function phonePinchDraw(k) {
+  const g = shelfGridEl();
+  if (!phonePinch || !g) return;
+  phonePinch.raw = k;
+  const s = Math.pow(2, phonePinchIdx(k) - phonePinch.startIdx);
+  g.style.transformOrigin = phonePinch.origin;
+  g.style.willChange = "transform";
+  g.style.transition = "none";
+  g.style.transform = "scale(" + s.toFixed(4) + ")";
+}
+
+function phonePinchClear(g) {
+  if (!g) return;
+  g.style.transition = ""; g.style.transform = "";
+  g.style.transformOrigin = ""; g.style.willChange = "";
+}
+
+// the settle: the nearest rung, one ease, then exactly one reflow
+function phonePinchSettle() {
+  if (!phonePinch) return;
+  const g = shelfGridEl();
+  const idx = Math.round(phonePinchIdx(phonePinch.raw));
+  const s = Math.pow(2, idx - phonePinch.startIdx), z = SHELF_ZOOMS[idx];
+  phonePinch = null;
+  if (!g) { setShelfZoom(z); return; }
+  if (Math.abs(s - 1) < 0.001 && z === shelfZoom()) { phonePinchClear(g); return; }
+  /* the draw above left `transition: none` on the element; setting the
+     transition and the transform in one frame would be no animation at all,
+     so the layout read between them is what makes the ease happen */
+  g.style.transition = "transform " + PHONE_SETTLE_MS + "ms cubic-bezier(.22,.61,.36,1)";
+  void g.offsetWidth;
+  g.style.transform = "scale(" + s.toFixed(4) + ")";
+  setTimeout(() => { phonePinchClear(g); setShelfZoom(z); }, PHONE_SETTLE_MS + 10);
+}
+
+// a two-finger tap: nothing was drawn, so nothing has to be undone
+function phonePinchTap() {
+  const g = shelfGridEl();
+  phonePinch = null;
+  phonePinchClear(g);
+  shelfZoomStep(-1);
+}
+
 shelfEl.addEventListener("touchstart", (e) => {
   const t = e.touches || [];
   if (!phoneFlag() || t.length !== 2) return;
   e.preventDefault();
-  phonePinch = { base: Math.max(1, pinchSpan(t)), steps: 0 };
+  phoneTouchBase = Math.max(1, pinchSpan(t));
+  phoneTouchAt = Date.now();
+  phoneTouchMoved = false;
+  if (!phonePinch) phonePinchStart((t[0].clientX + t[1].clientX) / 2, (t[0].clientY + t[1].clientY) / 2);
 }, { passive: false });
+
 shelfEl.addEventListener("touchmove", (e) => {
   const t = e.touches || [];
   if (!phonePinch || t.length !== 2) return;
   e.preventDefault();
-  const span = pinchSpan(t), r = span / phonePinch.base;
-  const dir = r >= PHONE_PINCH_RATIO ? +1 : r <= 1 / PHONE_PINCH_RATIO ? -1 : 0;
-  if (!dir) return;
-  phonePinch.base = Math.max(1, span);
-  phonePinch.steps += dir;
-  shelfZoomStep(dir);
+  const k = pinchSpan(t) / phoneTouchBase;
+  if (Math.abs(k - 1) > PHONE_TAP_SLOP) phoneTouchMoved = true;
+  if (phoneGesture) return;                 // WebKit's own scale has the wheel
+  phonePinchDraw(k);
 }, { passive: false });
-function phonePinchEnd(e) { if (!e.touches || e.touches.length < 2) phonePinch = null; }
+
+function phonePinchEnd(e) {
+  if (e && e.touches && e.touches.length >= 2) return;
+  if (phoneGesture || !phonePinch) return;  // gestureend settles WebKit's
+  if (!phoneTouchMoved && Date.now() - phoneTouchAt <= PHONE_TAP_MS
+      && e && e.type === "touchend") { phonePinchTap(); return; }
+  phonePinchSettle();
+}
 shelfEl.addEventListener("touchend", phonePinchEnd);
 shelfEl.addEventListener("touchcancel", phonePinchEnd);
+
 /* THE REFUSAL IS ON THE WINDOW, NOT ON THE SHELF (13 Sep). WebKit's
    `gesturestart`/`gesturechange` are dispatched on the DOCUMENT's path -- the
    reader refuses them exactly this way and has always worked on Osca's phone
@@ -5595,10 +5727,37 @@ shelfEl.addEventListener("touchcancel", phonePinchEnd);
    Bound to `shelfEl` the listener never fired, the web view kept its own
    pinch-to-zoom, and the moment it claimed the gesture the page was sent a
    `touchcancel` -- which is `phonePinchEnd`, which nulls `phonePinch`. So the
-   ladder walked in Chromium and stood still on the phone. */
-for (const g of ["gesturestart", "gesturechange", "gestureend"]) {
-  addEventListener(g, (e) => { if (phoneFlag() && e.preventDefault) e.preventDefault(); }, { passive: false });
+   ladder walked in Chromium and stood still on the phone.
+   SINCE 14 SEP THE REFUSAL ALSO DRIVES: `e.scale` on `gesturechange` is the
+   web view's own pinch factor, which is what the fingers mean, and it is read
+   only when the gesture began on the shelf (`phonePinch` is set, or the target
+   is inside it). Elsewhere on the page it is refused and nothing more. */
+function phoneGestureOnShelf(e) {
+  const n = e && e.target;
+  return !!(n && n.closest && (n.closest("#shelf") || n === shelfEl));
 }
+addEventListener("gesturestart", (e) => {
+  if (!phoneFlag()) return;
+  if (e.preventDefault) e.preventDefault();
+  if (!phoneGestureOnShelf(e)) return;
+  phoneGesture = true;
+  if (!phonePinch) phonePinchStart(e.clientX || 0, e.clientY || 0);
+}, { passive: false });
+addEventListener("gesturechange", (e) => {
+  if (!phoneFlag()) return;
+  if (e.preventDefault) e.preventDefault();
+  if (!phoneGesture || !phonePinch) return;
+  phonePinchDraw(e.scale || 1);
+}, { passive: false });
+addEventListener("gestureend", (e) => {
+  if (!phoneFlag()) return;
+  if (e.preventDefault) e.preventDefault();
+  if (!phoneGesture) return;
+  phoneGesture = false;
+  if (!phonePinch) return;
+  if (!phoneTouchMoved && Date.now() - phoneTouchAt <= PHONE_TAP_MS) { phonePinchTap(); return; }
+  phonePinchSettle();
+}, { passive: false });
 
 // ---- import: the button, the file input, and a bundle shared into the app
 const importInput = document.getElementById("importFile");
@@ -5762,7 +5921,7 @@ window.__LIBRARY_DEBUG__ = {
   // the shelf as cover tiles, and the cover (PROMPTS/reader-library-mock.md)
   tileHTML, tileRows, tileLine, tileCoverHTML, coverPairing, coverLayout, coverHash,
   assignPairings, pairingFor, coverPairings, COVER_PAIRINGS, COVER_LAYOUTS, coverInitial,
-  coverFacts, loadCoverFacts, bookFirstWords, coverUrl,
+  coverFacts, loadCoverFacts, coverFactsSidecarOnly, bookFirstWords, coverUrl,
   coverChoice, setCoverChoice, coverToggle, coverBands, COVER_LINES_MAX,
   // the shelf: selection, merges, shelves, memory (PROMPTS/library-shelf.md)
   get library() { return library; }, get selection() { return SEL; },
@@ -5774,6 +5933,7 @@ window.__LIBRARY_DEBUG__ = {
   shelfMenuItems, shelfEmptyMenuItems, pickerItems, shelfPickerItems, shelfActionItems, menuItems, renderShelf,
   // the six shelf zooms (design/reader/bench-library.html), and 1 ¶'s pane
   SHELF_ZOOMS, SHELF_ZOOM_DEFAULT, shelfZoom, setShelfZoom, shelfZoomStep, PHONE_PINCH_RATIO,
+  PHONE_SETTLE_MS, PHONE_TAP_MS, PHONE_TAP_SLOP, phonePinchIdx, phonePinchStart, phonePinchDraw, phonePinchSettle,
   get phonePinch() { return phonePinch; },
   deviceIsShelf, deviceShelfRow, placeDeviceBooks, bookOpening, bookWordsOnDisk, bookRecordFromDisk, coverFactsFromDisk,
   paintShelfZoom, shelfNearestTile,

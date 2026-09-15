@@ -1374,15 +1374,36 @@
      (a reader must stay zoomable); this narrows the refusal to the shelf. */
   html[data-phone] #shelf { touch-action: pan-y; }
 
-  /* ---- 16: four across, covers only */
-  html[data-phone] #shelf[data-zoom="16"] .shelfgrid { --cols: 4; --bookw: 100px; }
+  /* ---- 16: SIXTEEN across, covers only (Osca, 14 Sep, chat 108: "I can't
+     get up to a 16-column view on the phone"). It said `--cols: 4` here until
+     today, and `8` said three -- so the phone's top two rungs were a fourth
+     and a third of their own names, the ladder's whole top end was missing,
+     and a pinch that reached `16` drew four books. The rung is its name now.
+
+     A FIXED `--bookw` CANNOT DRAW THIS. Sixteen 100px columns want 1600px;
+     the shelf is 365 (393 less PHONE FIT's two 14px margins). So these two
+     rungs alone take `1fr` and the grid takes the shelf's width -- the
+     covers divide what there is, which is what "sixteen across" means on a
+     393px screen and is what Photos does with the same gesture. The gaps go
+     with them and are dialled where every other phone gap is (THE PHONE'S
+     SPACING, at the foot of this block): 2px at 16, 6px at 8.
+     `width: 100%` is not decoration -- `.shelfgrid`
+     is `width: fit-content`, and `fit-content` collapses `1fr` columns to
+     their min-content, which is 0. */
+  html[data-phone] #shelf[data-zoom="16"] .shelfgrid { --cols: 16; --bookw: 1fr; }
+  html[data-phone] #shelf[data-zoom="16"] .shelfgrid { width: 100%; }
   html[data-phone] #shelf[data-zoom="16"] .railrow.tile { grid-template-rows: auto; row-gap: 0; }
+  /* a 21px board with an 11px corner is a dot, not a book (the Mac's 16 makes
+     the same cut at 75px) */
+  html[data-phone] #shelf[data-zoom="16"] .tilecov { border-radius: 2px; }
   html[data-phone] #shelf[data-zoom="16"] .railrow.tile .railrow-title,
   html[data-phone] #shelf[data-zoom="16"] .railrow.tile .railrow-lang,
   html[data-phone] #shelf[data-zoom="16"] .railrow.tile .railrow-by { display: none; }
-  /* ---- 8: three across, covers only */
-  html[data-phone] #shelf[data-zoom="8"] .shelfgrid { --cols: 3; --bookw: 200px; }
+  /* ---- 8: EIGHT across, covers only */
+  html[data-phone] #shelf[data-zoom="8"] .shelfgrid { --cols: 8; --bookw: 1fr; }
+  html[data-phone] #shelf[data-zoom="8"] .shelfgrid { width: 100%; }
   html[data-phone] #shelf[data-zoom="8"] .railrow.tile { grid-template-rows: auto; row-gap: 0; }
+  html[data-phone] #shelf[data-zoom="8"] .tilecov { border-radius: 3px; }
   html[data-phone] #shelf[data-zoom="8"] .railrow.tile .railrow-title,
   html[data-phone] #shelf[data-zoom="8"] .railrow.tile .railrow-lang,
   html[data-phone] #shelf[data-zoom="8"] .railrow.tile .railrow-by { display: none; }
@@ -1430,9 +1451,13 @@
   /* THE PHONE'S SPACING, one block in ladder order as the Mac's is (THE
      SPACING, above: `gap: <row> <column>`, and no rung carries a gap of its
      own). 4 is PHONE FIT's --ph-gap and is not restated. Mine, measured at
-     393, one place to dial them. */
-  html[data-phone] #shelf[data-zoom="16"] .shelfgrid { gap: 10px 10px; }
-  html[data-phone] #shelf[data-zoom="8"]  .shelfgrid { gap: 14px 14px; }
+     393, one place to dial them. 16 and 8 were 10 and 14 until 14 Sep, when
+     those rungs became sixteen and eight columns instead of four and three
+     (chat 108): 10px between sixteen columns is 150 of the shelf's 365 spent
+     on nothing, so 2 and 6 -- the Mac's own ratio (0.90 / 1.90) carried down
+     to a phone. */
+  html[data-phone] #shelf[data-zoom="16"] .shelfgrid { gap: 2px 2px; }
+  html[data-phone] #shelf[data-zoom="8"]  .shelfgrid { gap: 6px 6px; }
   html[data-phone] #shelf[data-zoom="2"]  .shelfgrid { gap: 18px 14px; }
   html[data-phone] #shelf[data-zoom="1t"] .shelfgrid { gap: 0 0; }
   html[data-phone] #shelf[data-zoom="1"]  .shelfgrid { gap: 0 0; }

@@ -166,7 +166,37 @@ html[data-phone] .column h2{
    and the ceiling -- one definition of each number, which is tokens.css's own
    rule applied to a value that does not live in tokens.css because only this
    page spends it. --gutter-pc is the one a slider writes. */
-:root{ --gutter-min:1.05rem; --gutter-pc:7.5%; --gutter-max:3.25rem;
+/* THE GUTTER IS THE RAIL'S OWN BAND, PLUS ONE BREATH (Osca, 14 Sep:
+   *"Move the scroll bar to the right slightly and make the margins slightly
+   wider on the left side, and on the right. It's a relationship with the size
+   on the scrub bar."*)
+
+   ONE RELATIONSHIP, NOT TWO NUMBERS. The floor was `1.05rem` -- a number typed
+   beside the rail's own numbers and free to disagree with them, which is this
+   product's oldest failure mode. It is a function of the rail now:
+
+       --gutter-min = --sc-band + --gutter-breath
+       --sc-band    = (the rail's effective inset) + (its awake width)
+                      written by scrub.js::apply on :root, and by nothing else
+
+   so a wider rail, or one standing further in, widens the margin BY ITSELF and
+   there is nothing to re-type. `--gutter-breath` is the one thing left to
+   judge: the clear air between the prose and the rail, spent on BOTH sides so
+   the page stays a page and not a column shoved left. 20px at 393 puts the
+   floor at 20 + 3 + 20 = ... see below; it is a slider on bench-page.html.
+
+   The fallback inside `var(--sc-band, 23px)` is the dialled rail with no
+   script yet: inset 26 less the desk's 6px shift, plus 3px awake. A page that
+   never mounts a Scrub (bench-typo.html, probe.html) therefore lands on the
+   same number the app does rather than on a stale literal.
+
+   THE CEILING AND THE PROPORTION DID NOT MOVE. `--gutter-pc` is still the one
+   a slider writes and still 7.5%; at 1440 it is 108 and `--measure`'s 865
+   bites first, so the Mac's column is untouched by all of this -- as measured
+   below in this lane's report. */
+:root{ --gutter-breath:20px;
+       --gutter-min: calc(var(--sc-band, 23px) + var(--gutter-breath));
+       --gutter-pc:7.5%; --gutter-max:3.25rem;
        --gutter: clamp(var(--gutter-min), var(--gutter-pc), var(--gutter-max)); }
 .chapter{ width:min(var(--w, var(--measure)), var(--measure));
           max-width:calc(100% - var(--gutter) * 2);

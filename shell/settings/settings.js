@@ -1305,9 +1305,20 @@
   function buildLanguagesPanel(panel, ctx) {
     var doc = panel.ownerDocument;
     panel.appendChild(kEl(doc, "div", "set-head", "Languages"));
+    // THE FIELD IS HOW THE LONG TAIL IS REACHED (chat 101, from 93's table):
+    // the listing carries the rows that are about something, and the other
+    // ~4,500 that `dictionary/langindex.py` measured out of the dumps answer
+    // only to `GET /languages?q=<text>` (`settings/routes.py`, `&limit=`,
+    // 50 by default). Typing narrows the list to the route's `matches`;
+    // an emptied field asks for the listing again. Debounced, and a late
+    // answer to an older keystroke never paints over a newer one.
+    var find = doc.createElement("input");
+    find.type = "search"; find.className = "kag-in lang-find";  // the window's own field
+    find.placeholder = "Find a language by name or code";
+    find.setAttribute("aria-label", "Find a language by name or code");
     var list = kEl(doc, "div", "set-card lang-list");
     var note = kEl(doc, "div", "set-note lang-note", "");
-    panel.appendChild(list); panel.appendChild(note);
+    panel.appendChild(find); panel.appendChild(list); panel.appendChild(note);
 
     // The picture's sentence, and it is the note whenever there is a
     // catalogue to explain. The other two are the states the picture has no
@@ -1380,9 +1391,33 @@
      * the catalogue for 300 s (three interpreter starts to build it), so a
      * plain re-ask would draw the state from before the button was pressed. */
     function ask(force) {
+      var q = (find.value || "").trim();
+      if (q) return search(q);
       return ctx.getJSON(force ? LANGUAGES.GET + "?force=1" : LANGUAGES.GET)
         .then(function (d) { return paint(languageRows(d)); });
     }
+
+    /* `?q=` -- the route's `{q, count, matches, limit}`, and `matches` is
+     * drawn exactly as a listing is (a full row where the code has one, the
+     * thin `{code, name, state, why}` otherwise; `languageRows` reads both). */
+    var LANG_FIND_MS = 250, findSeq = 0, findTimer = null;
+    function search(q) {
+      var seq = ++findSeq;
+      return ctx.getJSON(LANGUAGES.GET + "?q=" + encodeURIComponent(q) + "&limit=50")
+        .then(function (d) {
+          if (seq !== findSeq) return null;
+          return paint(languageRows({ languages: (d && d.matches) || [],
+                                      error: d && d.error }));
+        });
+    }
+    find.addEventListener("input", function () {
+      if (findTimer) clearTimeout(findTimer);
+      findTimer = setTimeout(function () {
+        findTimer = null;
+        var q = (find.value || "").trim();
+        if (q) search(q); else { findSeq++; ask(); }
+      }, LANG_FIND_MS);
+    });
 
     function rightOf(code) {
       var row = list.querySelector('[data-lang="' + code + '"]');
@@ -1482,7 +1517,8 @@
     ask();
     return { paint: paint, ask: ask, say: say, bar: bar, watch: watch,
              rows: languageRows, answer: languageAnswer, job: languageJob,
-             line: languageLine, els: { list: list, note: note } };
+             line: languageLine, search: search,
+             els: { list: list, note: note, find: find } };
   }
 
   /* ================================ THE PHONE'S LANGUAGES (G-LANG, 11 Sep)
@@ -1530,6 +1566,16 @@
   function packHost(h) {
     h = h === undefined ? global.TTSTVHost : h;
     return h && h.dict && typeof h.dict.langs === "function" ? h : null;
+  }
+
+  /* Pure. The languages a book is in -- `langs` where the row carries them (a
+   * MIXED book, G-LANGMIX: "a book with two languages wants two packs"; the
+   * Penguin Book of French Poetry is `["en", "fr"]`), else its one `lang`.
+   * Every reader of a shelf row's language in this file goes through here, so
+   * a mixed book asks for BOTH its packs and its tile names the one missing. */
+  function bookLangs(b) {
+    var l = b && Array.isArray(b.langs) && b.langs.length ? b.langs : (b && typeof b.lang === "string" ? [b.lang] : []);
+    return l.map(function (c) { return String(c || "").trim(); }).filter(Boolean);
   }
 
   /* A language's name: the Mac catalogue's own when it lists the language,
@@ -1600,8 +1646,7 @@
     });
     cat.forEach(function (r) { if (!have[r.code]) rows.push(row(r.code, "addable", r)); });
     var seen = {};
-    (o.shelf || []).forEach(function (b) {
-      var code = b && typeof b.lang === "string" ? b.lang : "";
+    (o.shelf || []).forEach(function (b) { bookLangs(b).forEach(function (code) {
       if (!code || have[code] || offered[code] || seen[code]) return;
       seen[code] = true;
       var x = row(code, "unavailable", null);
@@ -1616,7 +1661,7 @@
             ? "no dictionary for it on the Mac"
             : "the Mac's list not read -- pair or sign in";
       rows.push(x);
-    });
+    }); });
     /* The same fact as the rows above, said once under the card -- and said
        as an INSTRUCTION, because a phone that has never reached the Mac can
        do something about it (Osca, 13 Sep: "make the note under the card say
@@ -1715,12 +1760,11 @@
   function packMissing(books, installed) {
     var have = {}, out = [], at = {};
     (installed || []).forEach(function (r) { if (r && r.code) have[r.code] = true; });
-    (books || []).forEach(function (b) {
-      var code = b && typeof b.lang === "string" ? b.lang : "";
+    (books || []).forEach(function (b) { bookLangs(b).forEach(function (code) {
       if (!code || have[code]) return;
       if (!(code in at)) { at[code] = out.length; out.push({ code: code, titles: [] }); }
       out[at[code]].titles.push(b.title || b.slug || "");
-    });
+    }); });
     return out;
   }
 
@@ -1765,12 +1809,21 @@
    * lands the lines already drawn are filled in place (no re-render). */
   var packShelf = { installed: null, asked: false, wired: false };
 
+  /* `lang` is one code, or a mixed book's codes joined by "," (the tile's
+   * `data-lang`, G-LANGMIX): the line names EVERY language of the book with
+   * no pack here, and offers Add when any of them is in the Mac's catalogue. */
   function packTileText(lang) {
     if (!lang || !packShelf.installed) return null;
-    if (packShelf.installed.some(function (r) { return r.code === lang; })) return null;
+    var codes = (Array.isArray(lang) ? lang : String(lang).split(",")).map(function (c) { return c.trim(); }).filter(Boolean);
+    var missing = codes.filter(function (c) {
+      return !packShelf.installed.some(function (r) { return r.code === c; });
+    });
+    if (!missing.length) return null;
     var cat = (syncRead(LANG_CATALOGUE_KEY) || {}).packs || [];
-    var offered = cat.some(function (r) { return r && r.code === lang; });
-    return { text: packName(lang, cat) + " dictionary not on this phone", add: offered };
+    var offered = missing.some(function (c) { return cat.some(function (r) { return r && r.code === c; }); });
+    var names = missing.map(function (c) { return packName(c, cat); });
+    return { text: names.join(" and ") + (missing.length > 1 ? " dictionaries" : " dictionary") + " not on this phone",
+             add: offered };
   }
 
   function packTileFill(el) {
@@ -1826,7 +1879,8 @@
       }, true);
     }
     if (!packShelf.asked) packShelfRefresh(doc);
-    var t = packTileText(b.lang);
+    var codes = bookLangs(b);
+    var t = packTileText(codes);
     var esc = function (s) { return String(s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); };
     var inner = t ? esc(t.text) + (t.add ? " · <b>Add</b>" : "") : "";
     /* ITS OWN ROW, NOT THE BYLINE'S (Osca, 13 Sep, the screenshot). This span
@@ -1836,7 +1890,7 @@
        PHONE") were placed in the same cell and drawn on top of each other.
        The class is `railrow-lang` now; library.css gives it the byline's
        type and a row of its own. */
-    return '<span class="railrow-lang tile-lang" data-lang="' + esc(b.lang) + '"' + (t ? "" : " hidden") + ">" + inner + "</span>";
+    return '<span class="railrow-lang tile-lang" data-lang="' + esc(codes.join(",")) + '"' + (t ? "" : " hidden") + ">" + inner + "</span>";
   }
 
   /* ---- THE TAB, on the phone. */
@@ -2013,7 +2067,7 @@
     CATALOGUE_KEY: LANG_CATALOGUE_KEY, NUDGE_KEY: LANG_NUDGE_KEY, EVENT: LANG_EVENT, KIND: LANG_PACK_KIND,
     name: packName, line: packLine, rows: packRows, job: packJob, missing: packMissing,
     catalogue: packCatalogueFetch, reach: packReach, nudge: packNudge, dot: packDot, nudgeSeen: packNudgeSeen,
-    tileLineHTML: tileLineHTML, openTab: packOpenTab,
+    tileLineHTML: tileLineHTML, openTab: packOpenTab, bookLangs: bookLangs,
     // the shelf's own state, for a test to reset between pages
     _shelf: packShelf,
   };
@@ -3340,6 +3394,57 @@
     return "Pairing open · scan the square or type the code";
   }
 
+  /* ======================= THE MAC'S TRANSFER ROW, IN SENTENCES (14 Sep)
+   *
+   * Osca's first screenshot of the wave-A build: the row was laid out ONE
+   * WORD PER LINE beside the square, it said *"zeroconf is not installed"*,
+   * and its three buttons -- Start again, Leave in Drive, Use -- explained
+   * nothing. The layout is the sheet's (`.tr-dest` is a grid now, and the
+   * sentence gets the width); these three functions are the words.
+   *
+   * ONE SENTENCE PER STATE, and the states are the three a person is ever in:
+   * a link is out, a phone is paired, or neither. **A LIVE OFFER WINS OVER A
+   * PAIRED PHONE**, which is the one place this departs from the order Osca
+   * wrote the three states down in: the press that just happened is the thing
+   * the person is waiting on an answer about, and a Mac that already has one
+   * phone and is pairing a second would otherwise answer the press with a
+   * sentence about the first phone -- which reads as "nothing happened".
+   *
+   * Pure, and no page: `settings/tests/test_transfer_row.py` reads all three
+   * the way `syncFoundLine`'s test reads that one. `now` is passed in rather
+   * than taken, so a minute count is a fixture and not a race. */
+  function transferStateLine(s, now) {
+    s = s || {};
+    var o = s.offer && s.offer.expires > now ? s.offer : null;
+    if (o) {
+      var m = Math.max(0, Math.round((o.expires - now) / 60000));
+      return syncOfferSent(o.road) + " \u00b7 " + m + (m === 1 ? " minute left" : " minutes left");
+    }
+    var n = s.paired || 0;
+    if (n) return "Paired with " + n + (n === 1 ? " phone" : " phones");
+    return "No phone paired yet";
+  }
+
+  /* THE ROAD THE NEXT PRESS WILL TAKE, before it is pressed (Osca, point 4).
+   * Two roads, and which one it is depends on one fact this page already
+   * holds: an account has an address to mail to, and no account has none.
+   * The two faults that stop any road at all are said here instead, because
+   * a road named while nothing can travel it is worse than no line. */
+  function transferRoadLine(signed, s) {
+    s = s || {};
+    if (!s.port) return "Studio is not listening yet \u00b7 nothing can pair";
+    if (s.depot === false) return "depot not found \u00b7 nothing can be merged";
+    return signed ? "will pair by mail" : "will pair over this Wi-Fi";
+  }
+
+  /* WHERE THE CODE IS TYPED, shown with the code and nowhere else. It was in
+   * the row's one sentence and is the reason that sentence was five facts. */
+  function transferWhereLine(s) {
+    s = s || {};
+    var where = s.address && s.port ? s.address + ":" + s.port : (s.port ? "port " + s.port : "");
+    return where ? "type these on the phone, with " + where : "type these on the phone";
+  }
+
   function syncPairedLine(name, road, via) {
     var who = name || "Studio";
     if (road !== "offer") return "Paired with " + who + " \u00b7 by the code you typed";
@@ -3802,7 +3907,7 @@
       var rc = kEl(doc, "div", "set-c kag-row");
       r.appendChild(rl); r.appendChild(rc);
       dests.appendChild(r);
-      return { row: r, name: name, why: why, c: rc };
+      return { row: r, l: rl, name: name, why: why, c: rc };
     }
     function pick(label, id, on) {
       var b = doc.createElement("button");
@@ -3826,6 +3931,14 @@
     // This network -- the no-account path, and the one that works today.
     var lanRow = destRow("lan", "This network", "", false);
     var codeEl = kEl(doc, "span", "kag-line kag-dim set-val tr-code", "");
+    /* THE ROAD, NAMED BEFORE THE PRESS (Osca, 14 Sep, point 4). A person
+     * about to press a button is entitled to know what it will do, and the
+     * answer here is not the same on two Macs: signed in to Google, the link
+     * goes to that address; signed in to nothing, there is no address and the
+     * only road is eyes on this screen. One short line, under the sentence,
+     * and it is the same on the phone's half (which road brought the offer). */
+    var lanRoad = kEl(doc, "small", "kag-why-here tr-road", "");
+    lanRow.l.appendChild(lanRoad);
     var lanPick = pick("Use", "lan", false);
     var studioSel = null, addrIn = null, codeIn = null;
     /* START PAIRING, and the square (G-PAIRMAIL, 14 Sep). The Mac's half of
@@ -3839,22 +3952,47 @@
      * markup: **no PNG enters this repo** (CLAUDE.md, Osca 5 Sep), and a
      * `<path>` in `currentColor` is right in light and dark with no second
      * drawing. */
-    var startBtn = null, driveBtn = null, qrBox = null;
+    var startBtn = null, codeBtn = null, qrBox = null, openBox = null, whereEl = null;
+    var showCode = false;
     if (isStudio) {
+      /* TWO VERBS, AND A STRANGER CAN READ BOTH (Osca, 14 Sep, on the first
+       * screenshot of the wave-A build: *"press a button, it sends you an
+       * email, you press something in the email, done"*).
+       *
+       * `Start again` / `Leave in Drive` / `Use` were three buttons that
+       * explained nothing: two of them named a mechanism (a road, a folder)
+       * and the third named a noun. These name what happens when they are
+       * pressed, and there are two because there are two things a person can
+       * want here -- send it to the phone, or put it on the screen. */
       startBtn = doc.createElement("button");
       startBtn.type = "button";
       startBtn.className = "kag-btn tr-startpair kag-primary";
-      startBtn.textContent = "Start pairing";
-      driveBtn = doc.createElement("button");
-      driveBtn.type = "button";
-      driveBtn.className = "kag-btn tr-drivepair";
-      driveBtn.textContent = "Leave in Drive";
+      startBtn.textContent = "Send pairing link";
+      codeBtn = doc.createElement("button");
+      codeBtn.type = "button";
+      codeBtn.className = "kag-btn tr-showcode";
+      codeBtn.textContent = "Show code";
+      /* THE THIRD VERB IS NOT DRAWN, and that is deliberate. Osca named
+       * *Forget this phone* as the third button; the Mac has no route that
+       * un-pairs one (`studio/sync.py` holds the tokens and is another lane's
+       * file today), so drawing it would be drawing a button that does
+       * nothing. The phone's own half of the row carries it -- `lanPick`
+       * below, whose verb is now those three words. The Mac's is a §6
+       * Request in this lane's report, not a lie on the screen. */
       qrBox = kEl(doc, "div", "tr-qr");
       qrBox.hidden = true;
-      lanRow.c.appendChild(codeEl);
+      /* THE CODE, AND WHERE TO TYPE IT, on a line of their own under the
+       * sentence -- not jammed into the controls column, which is what took
+       * the sentence's width away and laid it out one word per line. */
+      openBox = kEl(doc, "div", "tr-open");
+      whereEl = kEl(doc, "small", "kag-why-here tr-where", "");
+      openBox.appendChild(codeEl);
+      openBox.appendChild(whereEl);
+      openBox.hidden = true;
       lanRow.c.appendChild(startBtn);
-      lanRow.c.appendChild(driveBtn);
+      lanRow.c.appendChild(codeBtn);
       lanRow.c.appendChild(lanPick);
+      lanRow.row.appendChild(openBox);
       lanRow.row.appendChild(qrBox);
       lanPick.disabled = true;
     } else {
@@ -4051,6 +4189,10 @@
       return account;
     }
 
+    /* "is there an account to mail from", asked in one place because three
+       readers want it: the sentence, the road line and road 1b's fallback. */
+    function signedNow() { var a = acctNow(); return !!(a && a.kind !== "device" && a.who); }
+
     function paintLine(text) { stateLine.textContent = text; }
 
     function paint() {
@@ -4060,7 +4202,7 @@
       var chosen = firstRunChosen(a || account, pair);
       firstHead.hidden = chosen;
       first.hidden = chosen;
-      var signed = !!(a && a.kind !== "device" && a.who);
+      var signed = signedNow();
       who.textContent = signed ? syncWhoLine(a, null, false) : "Not signed in";
       who.classList.toggle("kag-on", signed);
       whoWhy.textContent = signed ? "Google · the account every device signs in to"
@@ -4088,26 +4230,24 @@
         var on = !!s.port;
         lanRow.name.classList.toggle("kag-on", on);
         codeEl.textContent = syncCodeText(s.code);
-        var where = s.address && s.port ? s.address + ":" + s.port : (s.port ? "port " + s.port : "");
-        var parts = ["Studio on this Mac · no account"];
-        if (where) parts.push(where);
-        if (s.paired) parts.push(s.paired + (s.paired === 1 ? " phone paired" : " phones paired"));
-        if (s.port && !s.bonjour && s.bonjour_why) parts.push(s.bonjour_why);
-        if (s.depot === false) parts.push("depot not found -- nothing can be merged");
-        // the offer in flight, in minutes, because "expires at 1789390461667"
-        // is not a thing to print at a person
-        if (s.offer && s.offer.expires) {
-          var mins = Math.max(0, Math.round((s.offer.expires - Date.now()) / 60000));
-          parts.push(syncOfferSent(s.offer.road) + " · " + mins + (mins === 1 ? " minute left" : " minutes left"));
-        }
-        lanRow.why.textContent = parts.join(" · ");
-        var liveOffer = !!(s.offer && s.offer.expires > Date.now());
-        startBtn.textContent = liveOffer ? "Start again" : "Start pairing";
+        /* ONE SENTENCE, AND THE REST WHERE IT BELONGS (Osca, 14 Sep, point 2).
+         * This line used to be five facts joined with dots -- the address, the
+         * port, the phones, `zeroconf is not installed`, the depot -- inside a
+         * label column the controls had squeezed to nothing, which is how a
+         * sentence comes out one word per line. The address is with the code
+         * it is typed beside; the venv's missing pin is `server.rs`'s to fix
+         * and not a sentence to print; what is left is the state. */
+        var nowMs = Date.now();
+        lanRow.why.textContent = transferStateLine(s, nowMs);
+        lanRoad.textContent = transferRoadLine(signed, s);
+        var liveOffer = !!(s.offer && s.offer.expires > nowMs);
         startBtn.disabled = !on;
-        // road 1b is the shared folder, so it needs the account -- and only
-        // the account: no mail scope, nothing to consent to
-        driveBtn.hidden = !signed;
-        driveBtn.disabled = !on;
+        codeBtn.disabled = !on;
+        codeBtn.textContent = showCode || liveOffer ? "Hide code" : "Show code";
+        codeBtn.setAttribute("aria-pressed", showCode || liveOffer ? "true" : "false");
+        var open = on && (showCode || liveOffer);
+        openBox.hidden = !open;
+        whereEl.textContent = open ? transferWhereLine(s) : "";
         qrBox.hidden = !liveOffer;
         var lanUsed = on && !useDrive;
         lanPick.textContent = lanUsed ? "In use" : "Use";
@@ -4520,6 +4660,12 @@
         // a mail Google refused: the offer is live all the same, and Mail.app
         // is the road that needs no scope at all -- opened, not sent
         if (!d.ok && d.mailto && global.open) { try { global.open(d.mailto); } catch (e) {} }
+        // ROAD 1b IS STILL HERE, as the fallback it always was rather than as
+        // the button called "Leave in Drive", which named a folder and told a
+        // stranger nothing. A mail that failed with no `mailto` to fall back
+        // on, on a Mac that has the Drive both devices share: leave it there
+        // and say so. One retry, never a loop -- `road` is "drive" by then.
+        if (!d.ok && !d.mailto && road === "mail" && signedNow()) return pairStart("drive");
         return ask().then(paint).then(paintQR);
       }, function (e) {
         say.textContent = String((e && e.message) || e);
@@ -4566,7 +4712,18 @@
     }
 
     if (startBtn) startBtn.addEventListener("click", function () { pairStart("mail"); });
-    if (driveBtn) driveBtn.addEventListener("click", function () { pairStart("drive"); });
+    /* SHOW CODE is road 2 and nothing is sent anywhere: the offer is minted
+     * so the square has something to draw (`/sync/pair/qr` is 404 without
+     * one), and the ten digits were on this Mac all along. A second press
+     * puts it away; the offer stays live until it expires, because hiding a
+     * square is not cancelling a pairing. */
+    if (codeBtn) codeBtn.addEventListener("click", function () {
+      var live = !!(studio && studio.offer && studio.offer.expires > Date.now());
+      if (live || showCode) { showCode = false; studio = studio || {}; }
+      else { showCode = true; }
+      if (!live && showCode) { pairStart("code"); return; }
+      paint(); paintQR();
+    });
 
     /* THE MAIL'S BUTTON, ARRIVING (road 1). The crate writes the offer into
      * `ttstv.sync.offer` and fires this when a `frank-pair://studio` link is
@@ -6001,6 +6158,8 @@
     syncWriteMarginalia: syncWriteMarginalia, syncWritePositions: syncWritePositions,
     syncCountMarks: syncCountMarks, runSync: runSync, syncPair: syncPair, syncDiscover: syncDiscover,
     syncDiscoverShape: syncDiscoverShape, syncFoundLine: syncFoundLine,
+    transferStateLine: transferStateLine, transferRoadLine: transferRoadLine,
+    transferWhereLine: transferWhereLine,
     // G-PAIRMAIL (14 Sep): the three roads' own vocabulary, pure, so the test
     // reads the sentences without a page
     syncPairedLine: syncPairedLine, syncOfferSent: syncOfferSent,

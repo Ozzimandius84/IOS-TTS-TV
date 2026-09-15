@@ -296,6 +296,61 @@
 }
 
 /* ==================================================================
+   THE TRANSFER ROW IS A GRID, NOT A SQUEEZE (14 Sep).
+
+   Osca's first screenshot of the wave-A build: *"the 'This network' row is
+   laid out ONE WORD PER LINE beside the QR"* -- the same disease the phone's
+   door card had on 13 Sep (the block above), on the Mac this time, and from
+   the same two rules: `.set-l { flex: 1 1 auto }` is shrinkable and
+   `.set-c { flex: 0 0 auto }` is not, so a right-hand side of a code, two
+   buttons and a picker takes its max-content width out of a 560 px window
+   and the sentence gets whatever is left -- which was 26 px wide.
+
+   A grid says the opposite in one line: the sentence's column is
+   `minmax(0, 1fr)` and takes the width; the controls are `auto` and take
+   what they need; the square is its own column at a FIXED size and never
+   competes with the words for room. The buttons wrap inside their own column
+   rather than pushing the sentence out of the row.
+
+   `.tr-open` -- the ten digits and the address to type them at -- spans the
+   whole row under both, because it is a line of text and not a control.
+   ================================================================== */
+body .ttstv-settings .set-row.tr-dest {
+  display: grid;
+  /* THE FLOOR IS THE POINT. `minmax(0, 1fr)` alone is not a fix: a 0 minimum
+     lets the controls take their max-content width again and the sentence
+     goes back to 31.3 px at 420 (measured). 10rem is the floor under the
+     words, and it is what makes the BUTTONS wrap -- an `auto` track shrinks
+     to its min-content, which is one button wide, the moment the track
+     beside it refuses to go below its own minimum. */
+  grid-template-columns: minmax(10rem, 1fr) auto auto;
+  align-items: center;
+  column-gap: var(--s-row-gap);
+}
+body .ttstv-settings .set-row.tr-dest > .set-l { grid-column: 1; grid-row: 1; }
+body .ttstv-settings .set-row.tr-dest > .set-c {
+  grid-column: 2; grid-row: 1;
+  flex-wrap: wrap; justify-content: flex-end; max-width: 100%;
+}
+body .ttstv-settings .set-row.tr-dest > .tr-open {
+  grid-column: 1 / -1; grid-row: 2;
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: 10px;
+  margin-top: 6px;
+}
+body .ttstv-settings .set-row.tr-dest > .tr-open[hidden] { display: none; }
+/* THE SQUARE AT A FIXED SIZE, in its own column beside the sentence: an
+   `<svg>` with no width of its own fills whatever box it is given, and the
+   box it was being given was "the rest of the row". */
+body .ttstv-settings .set-row.tr-dest > .tr-qr {
+  grid-column: 3; grid-row: 1 / span 2;
+  flex: 0 0 auto; width: 96px; height: 96px;
+}
+body .ttstv-settings .set-row.tr-dest > .tr-qr[hidden] { display: none; }
+body .ttstv-settings .tr-qr svg { display: block; width: 100%; height: 100%; }
+body .ttstv-settings .tr-road { display: block; }
+body .ttstv-settings .tr-code { font-variant-numeric: tabular-nums; }
+
+/* ==================================================================
    A ROW WITH FIELDS ON IT IS TWO LINES ON A PHONE (G-SETTINGS2, 13 Sep).
    Osca, T-SIM 20:35: *"the 'Your door' card renders one word per line"* --
    and it did, measured at 393 px in the container's Chromium:
@@ -348,4 +403,11 @@
   html[data-phone] body .ttstv-settings .set-row:has(.opts.set-seg) > .set-l { flex: 1 1 100%; }
   html[data-phone] body .ttstv-settings .set-row:has(.opts.set-seg) > .set-c { flex: 1 1 100%; }
   html[data-phone] body .ttstv-settings .set-row:has(.opts.set-seg) > .set-c { min-width: 0; }
+  /* AND THE TRANSFER ROW GOES BACK TO BEING ONE OF THEM (14 Sep). The grid
+     above is the MAC's answer -- a sentence column, a controls column and a
+     fixed square column, which is right in a 560 px window and wrong in a
+     363 px one, where three columns is the squeeze under another name. On a
+     phone with its fields open the row stacks like every other row here, by
+     the same `:has()` and the same four rules. */
+  html[data-phone] body .ttstv-settings .set-row.tr-dest:has(.kag-in:not([hidden])) { display: flex; }
 }

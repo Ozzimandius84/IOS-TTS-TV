@@ -287,15 +287,22 @@ function mount(o){
          this costs exactly nothing per paragraph until one does, and the
          attribute is written ONLY where it differs from the section's, which
          is what keeps a Shakespeare-sized page from growing a quarter of a
-         million identical attributes. Verse is not given one: verse is
-         ragged, never hyphenated, and `lang` on it would buy nothing. */
+         million identical attributes -- and the section's is the CHAPTER's
+         where the chapter has one (render() below), so the comparison is
+         against that, not the book's: an English paragraph inside a French
+         chapter of an English book needs its `lang="en"` written or it
+         inherits the section's `fr`. Since G-LANGMIX (14 Sep) verse carries
+         it too: hyphenation buys nothing on a ragged line, but the WORD does
+         -- lookup.js reads the nearest `[lang]` to pick the dictionary, and
+         7,718 of the Penguin book's paragraphs are French verse. */
       const verse = b.st !== undefined && b.st !== null;
+      const secLang = (ch && ch.lang) || LANG;
+      const lg = b.lg && b.lg !== secLang ? ' lang="'+esc(b.lg)+'"' : '';
       if(!verse){
-        const lg = b.lg && b.lg !== LANG ? ' lang="'+esc(b.lg)+'"' : '';
         h+='<p class="line para"'+lg+'>'+esc(b.t)+'</p>'; lastStanza=null; return;
       }
       const brk = lastStanza!==null && b.st!==lastStanza;
-      h+='<p class="line'+(brk?' stanza':'')+'">'+esc(b.t)+'</p>';
+      h+='<p class="line'+(brk?' stanza':'')+'"'+lg+'>'+esc(b.t)+'</p>';
       lastStanza = b.st;
     });
     if(open) h+='</div>';

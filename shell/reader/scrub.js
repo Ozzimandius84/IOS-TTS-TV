@@ -50,6 +50,18 @@
   const DEFAULTS = {
     // where it stands
     inset:      26,    // px in from the right edge
+    /* THE RAIL MOVED RIGHT, and it is a NAMED number, keyed by platform (Osca,
+       14 Sep: "Move the scroll bar to the right slightly... It's a relationship
+       with the size on the scrub bar"). `inset` is where the rail was dialled
+       on the bench and is left exactly as it was judged; `shift` is how far in
+       from THAT it comes back toward the edge, so the dialled value and the
+       correction stay two readable numbers instead of one silently re-typed
+       one. The effective inset is `inset - shift`, floored at 0 (apply()).
+       A phone's edge is nearer the thumb and its whole page is 393 wide, so it
+       takes a bigger shift than the desk does -- one number each, decided by
+       the same `phoneAt` test the label sizes already use. */
+    shift:       6,    // px the rail moves right, on the desk
+    shiftPhone: 10,    // px it moves right at or below `phoneAt`
     top:        10,    // vh of empty above the rail
     bottom:     10,    // vh below it
     // the capsules
@@ -620,7 +632,24 @@
        number and nothing here has to know a bench exists. */
     function apply(){
       const s = host.style;
-      s.setProperty("--sc-inset",  px(cfg.inset));
+      /* THE PHONE TEST COMES FIRST NOW -- the shift needs it (14 Sep). Decided
+         by the viewport, not by the host's box; see the note at the label
+         sizes below, which is where this test used to live. */
+      const phone = document.documentElement.hasAttribute("data-phone")
+                 || innerWidth <= cfg.phoneAt;
+      const shift = phone ? cfg.shiftPhone : cfg.shift;
+      const inset = Math.max(0, cfg.inset - shift);
+      s.setProperty("--sc-inset",  px(inset));
+      /* ---- AND THE PAGE'S MARGIN IS DERIVED FROM IT, which is the whole of
+         Osca's sentence: "It's a relationship with the size on the scrub bar."
+         `--sc-band` is the width the rail actually occupies off the right edge
+         -- how far in it stands PLUS how wide it is awake -- published on the
+         root because page.css's `--gutter-min` is that band plus one named
+         breathing space (page.css, "THE GUTTER IS THE RAIL'S OWN BAND"). It is
+         written HERE and nowhere else: a wider or a further-in rail widens the
+         margin by itself, and there is no second number to keep in step. */
+      document.documentElement.style
+        .setProperty("--sc-band", px(inset + cfg.awakeWidth));
       s.setProperty("--sc-top",    cfg.top + "vh");
       s.setProperty("--sc-bottom", cfg.bottom + "vh");
       s.setProperty("--sc-w",      px(cfg.width));
@@ -640,8 +669,6 @@
          the width decides, so the bench answers the same way at 402 as a phone
          does. Re-read on every `resize`, because a Mac window is dragged
          across `phoneAt` and a phone is not. */
-      const phone = document.documentElement.hasAttribute("data-phone")
-                 || innerWidth <= cfg.phoneAt;
       s.setProperty("--sc-lab",    px(phone ? cfg.labelSizePhone  : cfg.labelSize));
       s.setProperty("--sc-lab-w",  px(phone ? cfg.labelWidthPhone : cfg.labelWidth));
       s.setProperty("--sc-lab-gap",px(cfg.labelGap));

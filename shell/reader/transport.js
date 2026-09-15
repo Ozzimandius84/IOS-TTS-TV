@@ -393,7 +393,17 @@
   function turn() {
     var c = control();
     if (!c || turning || !ranOff(c)) return false;
-    var from = c.chapterIndex, to = from + 1;
+    var from = c.chapterIndex;
+    /* THE APPARATUS IS NOT READ ALOUD UNASKED (P6, 14 Sep). listen.js knows
+       which chapters the parser marked `speak: false` -- an index, the
+       notes, a title page -- and names the next chapter that is TEXT; the
+       voice running off the end of one chapter turns to that, and a book
+       whose last chapters are all apparatus is over when the text is. A
+       listen.js without the door (an older shell) turns to `from + 1`. */
+    var to = ask(function (k) {
+      return typeof k.nextChapterIndex === "function" ? k.nextChapterIndex(from) : from + 1;
+    }, from + 1);
+    if (!(to >= 0)) return false;                       /* the text is over */
     var cid = ask(function (k) { return k.chapterIdOf(to); }, null);
     if (!(from >= 0) || !cid) return false;             /* the last chapter: the book is over */
     turning = true;

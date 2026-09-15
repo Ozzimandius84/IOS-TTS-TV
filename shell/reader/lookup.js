@@ -95,8 +95,12 @@
    and the caller polls.
 
      Lookup.mount({ slug, book, control })
-       -> { entry, load, loaded, viaPack, failed, lang,
+       -> { entry, load, loaded, viaPack, failed, lang, bookLang, langs,
             open, close, showing, card, appleOffered }
+
+   `lang` is the language of the word on the view (its PARAGRAPH's, since
+   G-LANGMIX, 14 Sep), `bookLang` the book's, `langs` every language the book
+   has words in; `entry(text, lang?)` and `open(text, lang?)` take one.
 
    WHAT WENT ON 7 SEP AND HAS NOT COME BACK, so nobody has to diff to find
    out: the `#lookuppanel` element and its `place`/`el`/`render`/`header`/
@@ -273,8 +277,39 @@ function mount(o) {
   /* THE BOOK'S OWN LANGUAGE, kept because voiceui reads it to decide which
      language it is answering in -- it is core/bookdata.py's own field
      (`window.__LIB_BOOK.lang`), not the browser's. Since 13 Sep it is also
-     the ONE question Apple's side is ever asked, and it is asked once, here. */
-  const lang = String((o.book && o.book.lang) || "en").toLowerCase();
+     the ONE question Apple's side is ever asked, and it is asked once, here.
+
+     ...AND SINCE G-LANGMIX (Osca, 11 Sep: "a mixed book lists BOTH languages
+     and each paragraph carries its own") IT IS THE FALLBACK, NOT THE ANSWER.
+     The Penguin Book of French Poetry is two thirds English and one third
+     French, paragraph by paragraph; the word on the view came from one
+     paragraph, and THAT paragraph's language is the dictionary to ask. The
+     page already says it: page.js writes `lang` on the section and on every
+     paragraph that differs from it (core/bookdata.py's `lg`), and book-nav.js
+     copies the nearest one onto the view's own element as it puts the word
+     up. So `langOf(view)` is one attribute read, `lang` below is the language
+     of the word CURRENTLY on the view, and every question -- the pack, the
+     cache, Apple's side, the card's own header -- is asked in it. A view with
+     no `lang` (a book in one language, an old page) is the book's, as before.
+     `book.langs` (core/bookdata.py) is every language the book has words in,
+     so Apple's side can be asked once per LANGUAGE at mount and still never
+     per word. */
+  const bookLang = String((o.book && o.book.lang) || "en").toLowerCase();
+  const bookLangs = (o.book && Array.isArray(o.book.langs) && o.book.langs.length
+                     ? o.book.langs : [bookLang]).map(x => String(x || "").toLowerCase()).filter(Boolean);
+  if (bookLangs.indexOf(bookLang) < 0) bookLangs.unshift(bookLang);
+  let lang = bookLang;
+  function langOf(view) {
+    const v = view && (typeof view.lang === "string" ? view.lang
+              : (typeof view.getAttribute === "function" ? view.getAttribute("lang") : ""));
+    return String(v || "").trim().toLowerCase() || bookLang;
+  }
+  /* the language of the word on the view right now, or the book's when the
+     view is not the screen -- what voiceui's spoken look-up is asking about */
+  function langNow() {
+    const view = doc && doc.querySelector && doc.querySelector(".wordview");
+    return (view && view.classList && view.classList.contains("on")) ? langOf(view) : bookLang;
+  }
 
   let dict = null;            // the file, once it lands
   let asked = false;          // the fetch has been started
@@ -296,14 +331,16 @@ function mount(o) {
                 && typeof window.TTSTVHost.dict.lookup === "function") ? window.TTSTVHost.dict : null;
   let viaDoor = !!door;
   let doorAnswered = false;
-  const answered = new Map();  // bare word -> the entry, or null for a miss
+  const answered = new Map();  // language + bare word -> the entry, or null for a miss
   const waiting = new Set();   // asked of the door, not answered yet
+  const keyOf = (k, lg) => (lg || lang) + "\u0000" + k;   // one word, two packs, two answers
   function askDoor(k) {
-    waiting.add(k);
-    Promise.resolve(door.lookup(k, lang)).then(r => {
-      waiting.delete(k);
+    const lg = lang, key = keyOf(k, lg);
+    waiting.add(key);
+    Promise.resolve(door.lookup(k, lg)).then(r => {
+      waiting.delete(key);
       doorAnswered = true;
-      answered.set(k, (r && Array.isArray(r.entries) && r.entries[0]) || null);
+      answered.set(key, (r && Array.isArray(r.entries) && r.entries[0]) || null);
       /* THE CARD'S OWN CALLBACK, and it is not the re-render hook that went on
          7 Sep: it redraws THIS card if it is up and is about THIS word, and it
          is nobody else's. voiceui still polls (app.js:434) and is untouched.
@@ -312,7 +349,7 @@ function mount(o) {
       if (showing === k) draw();
     }, e => {
       // no pack for this language here (or one this app cannot read): the book's file
-      waiting.delete(k);
+      waiting.delete(key);
       failed = String((e && e.message) || e);
       viaDoor = false;
       load();
@@ -341,12 +378,16 @@ function mount(o) {
 
   /* SYNCHRONOUS, by contract. voiceui/app.js calls this straight out of a
      spoken command and cannot await; it polls instead. */
-  function entry(text) {
+  function entry(text, lg) {
+    /* the language is the caller's when it says (the card, which read it off
+       the view), else the word on the view's, else the book's */
+    lang = lg ? String(lg).toLowerCase() : langNow();
     if (viaDoor) {
       const k = bare(text);
       if (!k) return null;
-      if (answered.has(k)) return answered.get(k);
-      if (!waiting.has(k)) askDoor(k);
+      const key = keyOf(k, lang);
+      if (answered.has(key)) return answered.get(key);
+      if (!waiting.has(key)) askDoor(k);
       return null;
     }
     load();
@@ -361,7 +402,7 @@ function mount(o) {
   function settled(text) {
     const k = bare(text);
     if (!k) return true;
-    if (viaDoor) return answered.has(k);
+    if (viaDoor) return answered.has(keyOf(k, lang));
     return !!dict;
   }
 
@@ -381,17 +422,26 @@ function mount(o) {
   let appleWhy = null;         // why Apple's side said no, in its own words
   const host = (window.TTSTVHost && typeof window.TTSTVHost.lookupApple === "function")
     ? window.TTSTVHost : null;
-  let appleOK = host ? null : false;
-  if (host && typeof host.lookupAppleOffered === "function") {
+  /* per LANGUAGE, because a mixed book is two questions -- iOS defines French
+     and not Latin, and the Eclogues stitch is both -- asked once each at
+     mount, for every language the book has words in; a language the view
+     names that the book did not list is asked the first time it is seen,
+     and that is still once, never per word. */
+  const appleBy = {};          // language -> true | false | null (not answered yet)
+  function askApple_(lg) {
+    if (lg in appleBy) return;
+    if (!host) { appleBy[lg] = false; return; }
+    if (typeof host.lookupAppleOffered !== "function") { appleBy[lg] = false; return; }  // a Frank whose Rust is older than this door
+    appleBy[lg] = null;
     try {
-      Promise.resolve(host.lookupAppleOffered(lang)).then(
-        v => { appleOK = !!v; if (showing) draw(); },
-        e => { appleOK = false; appleWhy = String((e && e.message) || e); }
+      Promise.resolve(host.lookupAppleOffered(lg)).then(
+        v => { appleBy[lg] = !!v; if (showing) draw(); },
+        e => { appleBy[lg] = false; appleWhy = String((e && e.message) || e); }
       );
-    } catch (e) { appleOK = false; }
-  } else if (host) {
-    appleOK = false;            // a Frank whose Rust is older than this door
+    } catch (e) { appleBy[lg] = false; }
   }
+  bookLangs.forEach(askApple_);
+  function appleNow() { if (!(lang in appleBy)) askApple_(lang); return appleBy[lang]; }
 
   /* ======================================================== THE CARD ITSELF */
   const doc = (typeof document !== "undefined") ? document : null;
@@ -475,9 +525,10 @@ function mount(o) {
     build();
     const text = showing;
     drawWord(text);
-    const e = entry(text);
+    const e = entry(text, lang);
     const done = settled(text);
     const name = langName(lang);
+    const appleOK = appleNow();
     /* WHOSE IT IS, IN WORDS, AT THE TOP. Osca's "merged" complaint is
        answered by this line and by the named control at the foot; nothing in
        between them is ever Apple's. */
@@ -593,10 +644,11 @@ function mount(o) {
   }
 
   /* ---- open / close. Two clean states and the second one is "not there". */
-  function open(text) {
+  function open(text, lg) {
     const w = bare(text);
     if (!w) return null;
     build();
+    lang = lg ? String(lg).toLowerCase() : langNow();
     showing = w;
     card.hidden = false;
     draw();
@@ -630,7 +682,7 @@ function mount(o) {
     }
     const w = wordOf(view);
     if (showing) { close(); return; }   // the same finger, the same place
-    if (w) open(w);
+    if (w) open(w, langOf(view));       // in the PARAGRAPH's language, off the view
   }
 
   /* THE HOOK voiceui HAS BEEN WAITING FOR, and the reason this file was
@@ -653,7 +705,9 @@ function mount(o) {
     get lang() { return lang; },
     get showing() { return showing; },
     get card() { return card; },
-    get appleOffered() { return appleOK; },
+    get appleOffered() { return appleNow(); },
+    get bookLang() { return bookLang; },
+    get langs() { return bookLangs.slice(); },
   };
   current = handle;
   return handle;

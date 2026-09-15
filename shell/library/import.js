@@ -532,6 +532,7 @@ const TTSTVBundle = (() => {
     }
     const meta = {
       slug, hash, title: book.title, author: book.author || null, lang: book.lang,
+      langs: Array.isArray(book.langs) && book.langs.length > 1 ? book.langs.slice() : undefined,   // a mixed book's (G-LANGMIX)
       chapters: check.chapters, words: check.words, bytes,
       has_timings: chaptersTimed > 0, has_audio: chaptersVoiced > 0,
       chapters_timed: chaptersTimed, chapters_voiced: chaptersVoiced,

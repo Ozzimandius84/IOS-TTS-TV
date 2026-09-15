@@ -2815,6 +2815,24 @@ function mount(o){
                font: { family: cs.fontFamily, style: cs.fontStyle, weight: cs.fontWeight } };
     }catch(_){ return { px: 0, font: null }; }
   }
+  /* THE WORD'S LANGUAGE RIDES WITH IT. The view is one word with no page under
+     it, and a press on that word asks a dictionary (lookup.js) -- WHICH
+     dictionary is the paragraph's business, not the book's, since G-LANGMIX
+     (Osca, 11 Sep: "a mixed book lists BOTH languages and each paragraph
+     carries its own"). page.js writes `lang` on the section and, where a
+     paragraph differs, on the paragraph; this copies the nearest one onto the
+     view's own element as the same attribute, so lookup.js reads it off the
+     view exactly as the browser reads hyphenation off the page -- and learns
+     nothing about the cursor, which stays this file's. A page with no `lang`
+     anywhere leaves the view without one, and lookup.js falls back to the
+     book's. */
+  function wzMarkLang(){
+    if(!wordView || !wordView.el) return;
+    const w = wordDomIndex[wordIdx];
+    const src = w && w.p && w.p.closest ? w.p.closest("[lang]") : null;
+    const lg = src ? (src.getAttribute("lang") || "") : "";
+    if(lg) wordView.el.setAttribute("lang", lg); else wordView.el.removeAttribute("lang");
+  }
   /* THE PAGE'S WORD, AT REST -- measured with nothing on the page but the page.
      `off` means it is not on the screen, which is not a map: a zoom about a
      point outside the view is a zoom into nothing. */
@@ -2842,6 +2860,7 @@ function mount(o){
     if(!wordView || !o.readerBox) return null;
     const F = wordFontPx();
     wordView.set(pg.text, F, pg.font);
+    wzMarkLang();
     const tr = wordView.pivotRect ? wordView.pivotRect() : null;
     if(!tr || !(tr.width > 0)) return null;
     const s = pg.f > 0 ? F / pg.f : (tr.height / pg.Ph);
@@ -3074,7 +3093,7 @@ function mount(o){
       // the word you are reading, drawn at the one size, in its own face
       const w = wordDomIndex[wordIdx];
       const face = w && w.p ? wzFontOf(w.p).font : null;
-      if(wordView) wordView.set(wordTextAt(wordIdx) || "", wordFontPx(), face);
+      if(wordView){ wordView.set(wordTextAt(wordIdx) || "", wordFontPx(), face); wzMarkLang(); }
       paintWordSub(1);
       if(e >= 1 - WZ.eps && wz.hold !== "out"){ wz.keep = null; return; }
       /* LEAVING. The page goes back under the view first, at the word. */

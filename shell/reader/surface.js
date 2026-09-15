@@ -658,12 +658,14 @@
        `media`   the candidates that are RECORDINGS, kept apart from the texts
                  so the Video lane can open a SPECIFIC one and Add is never
                  offered on something Add cannot take.
-       `sources` `/search`'s own per-adapter report, drawn as itself. Without
+       `adapters` `/search`'s own per-adapter report, under the wire's own
+                 name (it was `sources`, a hair from `drive`, which is FILES
+                 on a disk -- Stage 2 renamed it), drawn as itself. Without
                  it every source that was DOWN read as a source that was
                  EMPTY -- the whole of Osca's 8 Sep complaint.
        `dropped` what the title/author filter took out, so "6 raw, 0 kept" is
                  a sentence the page can say rather than a mystery. */
-    media: [], sources: null, dropped: [],
+    media: [], adapters: null, dropped: [],
     searchedFor: "",    /* the query `sources` actually describes             */
     /* ----------------------------------------- G-SURF2, 10 Sep: THE WAIT, SEEN
        `asking`  null, or {q, t0, names} while a `/search` is out -- a STATE,
@@ -703,6 +705,11 @@
     ssd: null,          /* /state.ssd -- {mounted, root}                       */
     sample: null,       /* {phase, slug, chapter, numbers|err}                 */
     voiceErr: "", whereErr: "", engineErr: "", sampleErr: "", langErr: "",
+    /* the two probes that may not ride the /state poll (`/engines` shells
+       out to voice's python, `/kaggle` to the kaggle CLI) -- `probe()`'s
+       own shape: what it said, whether it is being asked, what went wrong */
+    engines: { value: null, asking: false, err: "" },
+    kaggle:  { value: null, asking: false, err: "" },
     /* the addendum's two: a multi-file candidate waiting on a person, and the
        clone this surface has just asked the importer for */
     choose: null, cloning: null,
@@ -723,7 +730,7 @@
        and on its own Refresh, never on the poll. null = never asked. */
     /* EVERY FILE ALREADY IN `TTS_DATA/sources/` -- `/state`'s own `sources`
        (`studio/bookinfo.py::sources`), which this surface has been polling
-       past for a week. NOT `S.sources`, which is the SEARCH adapters' report
+       past for a week. NOT `S.adapters`, which is the SEARCH adapters' report
        and a name this file already had: these are files on a disk. */
     drive: [],
     all: null,          /* {groups,pending,hold,job,ssd} as the route sends it */
@@ -836,7 +843,36 @@
     }
     S.inBook = openBookHere();
     bar();
+    /* THE DOOR ON THE URL (Stage 2). `?studio=<slug>&units=c003,c004` is
+       the query `tabs.rs::url_for(Kind::Studio)` has always put on
+       studio.html's URL. A page that mounts this surface answers the same
+       query by opening over itself on that book -- so the shell's front door
+       becomes ONE line, `clean/library/library.html?studio=…`, and Studio is
+       a state of the page you were on rather than a page of its own. The
+       book is selected once the shelf has answered, so the row is a real
+       row; `units` names the chapter the Sample spends its minutes on. */
+    var door = doorInUrl();
+    if (door) {
+      open("");
+      (S.live ? askState() : Promise.resolve()).then(function () {
+        if (!door.slug) return;
+        selectSlug(door.slug);
+        if (door.units.length) { S.unit = door.units[0]; S.unitSlug = door.slug; }
+        draw();
+      });
+    }
     return handle();
+  }
+  function doorInUrl() {
+    var q = "";
+    try { q = String(location.search || ""); } catch (e) { return null; }
+    var m = /[?&]studio=([^&]*)/.exec(q);
+    if (!m) return null;
+    var slug = "";
+    try { slug = decodeURIComponent(m[1]); } catch (e) { slug = m[1]; }
+    var u = /[?&]units=([^&]*)/.exec(q), units = [];
+    if (u) { try { units = decodeURIComponent(u[1]).split(",").filter(Boolean); } catch (e) { units = []; } }
+    return { slug: slug, units: units };
   }
 
   /* ============================================== THE TWO BARS, ONE SURFACE
@@ -956,6 +992,9 @@
     var n = b.chapters_n;
     if (n == null) n = (b.chapters && b.chapters.length) || b.n_chapters || 0;
     return { slug: b.slug, title: b.title, author: b.author, lang: b.lang,
+             /* a mixed book's languages, most words first (G-LANGMIX);
+                absent means one, and that is `lang` */
+             langs: Array.isArray(b.langs) && b.langs.length > 1 ? b.langs.slice() : undefined,
              chapters: n,
              parsed: b.parsed || 0, voiced: b.voiced || 0, aligned: b.aligned || 0,
              dict_ok: !!b.dict_ok, audio: !!b.has_audio, timed: !!b.has_timings,
@@ -972,25 +1011,155 @@
              source: b.source || null };
   }
 
-  var shelfAt = 0;
+  /* ------------------------------------------- ONE READER OF /state (Stage 2)
+     `/state` is ONE answer -- the shelf, the drive, the queue, the voices, the
+     settings -- and until Stage 2 this file fetched it down TWO paths that
+     each read a different half: `yours()` (every keystroke, throttled) took
+     the books and the drive and nothing else; `pollWorks()` (every few
+     seconds while open) took everything, and folded the running import into
+     a working row. So a poll that landed knew things a keystroke's answer did
+     not, and the two disagreed for up to four seconds on `stateErr`. Now
+     there is one fetch (`askState`), one reducer (`takeState`), and
+     `yours()` is only the THROTTLE in front of them: a keystroke asks at most
+     once in four seconds, and the poll asks on its own clock, but whichever
+     asked, the answer lands whole. An ask already in flight is shared, not
+     doubled. */
+  var shelfAt = 0, stateAsking = null;
   function yours() {
     if (S.shelf.length && Date.now() - shelfAt < 4000) return Promise.resolve();
-    var url = api("/state");
-    if (!url) { S.shelf = MOCK_SHELF.slice().map(shelfOf); shelfAt = Date.now(); return Promise.resolve(); }
-    return fetch(url, { cache: "no-store" })
-      .then(function (r) { return r.ok ? r.json() : null; })
-      .then(function (d) {
-        S.shelf = ((d && d.books) || []).map(shelfOf);
-        S.drive = (d && d.sources) || [];
-        S.stateErr = "";
-        shelfAt = Date.now();
-      })
+    if (!api("/state")) { S.shelf = MOCK_SHELF.slice().map(shelfOf); shelfAt = Date.now(); return Promise.resolve(); }
+    return askState();
+  }
+  function askState() {
+    if (stateAsking) return stateAsking;
+    stateAsking = getJSON("/state", 20000)
+      .then(takeState)
       .catch(function (e) {
         /* SAY WHAT HAPPENED, and never the mock's sentence: there IS a server
            behind this page, it did not answer, and those are different facts. */
-        S.stateErr = "studio did not answer /state — " + (e && e.message || e);
+        S.stateErr = why("/state", e);
         S.shelf = S.shelf || [];
+      })
+      .then(function () { stateAsking = null; });
+    return stateAsking;
+  }
+  /* THE ONE REDUCER. Every field `/state` carries lands here and nowhere
+     else, so a field studio adds is read in one place or not at all. */
+  function takeState(d) {
+    if (!d) { S.stateErr = "studio answered /state with nothing"; return; }
+    S.stateErr = "";
+    /* ONE REQUEST, NOT TWO: `/state` carries the shelf and the works in the
+       same answer, so whoever asked refreshes both. */
+    S.shelf = ((d.books) || []).map(shelfOf);
+    shelfAt = Date.now();
+    S.job = d.job || null; S.pending = d.pending || []; S.ingests = d.ingests || [];
+    /* THE RE-PARSE QUEUE, its two fields, exactly as the import queue's
+       two (studio/serve.py::_serve_state, 4 Sep): `reparsing` is running,
+       `reparses` is waiting, both `[]` and never absent -- so this reads
+       them straight and never has to guess that absent means empty. */
+    S.reparsing = d.reparsing || []; S.reparses = d.reparses || [];
+    /* the machine-wide hold, so `Hold all` / `Resume all` says which it
+       is rather than toggling blind */
+    S.hold = d.hold || null;
+    /* §4, 8 Sep -- THE STUDIO'S OWN FOUR FIELDS, off the SAME answer. The
+       voices and the settings are `/state`'s (there is no `GET /voices`);
+       the sample is the one job, folded, so a finished sample survives the
+       poll that follows it rather than vanishing. */
+    S.voices = d.voices || [];
+    /* ...and the FILES ALREADY ON THE DRIVE, which have ridden on this
+       same payload since 30 Aug and which this surface polled past
+       until Stage 1 (`studio/bookinfo.py::sources`, cached with the books
+       and the voices -- it costs nothing here). */
+    S.drive = d.sources || [];
+    /* THE CLONE'S OWN LINE GOES WHEN THE VOICE ARRIVES -- or when the job
+       it is waiting on says something, whichever comes first. A "cloning…"
+       that outlived its job would be the silent blank in the other
+       direction: a page saying work is happening when none is. */
+    if (S.cloning && (S.voices.some(function (v) { return v.name === S.cloning.name; })
+                      || (d.job && d.job.mode === "voice" && d.job.phase !== "running")))
+      S.cloning = null;
+    S.settings = d.settings || null;
+    S.ssd = d.ssd || null;
+    var sm = sampleFromJob(d);
+    if (sm) S.sample = sm;
+    /* THE PILL STARTS ON SOMETHING TRUE: the book's own voice when it has
+       one, else the first voice on the drive -- studio.html's own two
+       terms, in its order. Never overwritten once somebody has pressed a
+       pill, because that press is a decision and this is a poll. */
+    if (!S.voice) {
+      var sb = subject();
+      S.voice = (sb && sb.voice) || (S.voices[0] ? S.voices[0].name : null);
+    }
+    /* an import that studio is running is a working row, whether or not
+       this surface started it -- the strip's own rule (bar/lanes.js).
+       IT IS FOUND BY ITS SOURCE FIRST: a row this surface added already
+       knows the source `/stage_for_ingest` answered with, and matching on
+       it is what stops one Add becoming two rows. Only an import nobody
+       here started opens a new one. */
+    (d.importing || []).forEach(function (it) {
+      var name = it.source || it.name || it.slug;
+      var w = null;
+      Object.keys(S.work).forEach(function (k) {
+        var c = S.work[k];
+        if (!w && (c.source === name || c.slug === it.slug ||
+                   (c.title && norm(c.title) === norm(it.name || "")))) w = c;
       });
+      if (!w) { w = beginWork("i:" + (it.slug || name), { title: it.name || it.slug, author: "" });
+                w.source = name; holdAs(w.key, name); }
+      /* ITEM 3, AND THIS IS THE LINE THAT WAS COSTING THE COLOUR. The
+         moment an import learns its slug it has the name it will keep for
+         the rest of its life -- shelf row, step grid, every later search.
+         Alias it to the colour the row already has, rather than letting
+         `hue(slug)` mint a second one. */
+      if (it.slug && it.slug !== w.slug) holdAs(w.key, it.slug);
+      w.slug = it.slug || w.slug;
+      var i = STEPS.indexOf(it.step);
+      w.word = it.step || it.phase || "importing";
+      if (i >= 0) {
+        for (var j = 0; j < i; j++) w.cells[STEPS[j]] = "ok";
+        w.cells[STEPS[i]] = it.phase === "failed" ? "failed" : "running";
+        w.p = Math.max(w.p, (i + 0.5) / STEPS.length);
+      }
+    });
+    /* AND IT LEAVES WHEN IT ARRIVES. A working row whose book is now on
+       the shelf is the book: drop the working row and the shelf row is
+       already drawn in its place.
+       WHICH BOOK IT BECAME IS FOUND BY SLUG, THEN BY FILE (G-SURF2). It
+       was by TITLE, and a second edition of a title already on the shelf
+       "arrived" the instant it was pressed -- the row vanished before its
+       parse had begun, because the FIRST edition was already there. And
+       an import that FAILED is said, on its row, in studio's own words:
+       the finished ingest is parked on `/state`'s `job` once its lane is
+       free (`JobManager._finish_lane`), with its `err`. */
+    Object.keys(S.work).forEach(function (k) {
+      var c = S.work[k];
+      var here = (d.importing || []).some(function (it) {
+        return (c.source && it.source === c.source) || (c.slug && it.slug === c.slug) ||
+               (!c.source && norm(it.name || "") === norm(c.title || ""));
+      });
+      var fin = (!here && d.job && d.job.mode === "ingest" && c.source &&
+                 d.job.source === c.source) ? d.job : null;
+      if (fin && fin.phase === "failed" && !c.failed) {
+        c.failed = true; c.word = "Couldn't add";
+        c.err = String(fin.err || "the import failed");
+        STEPS.forEach(function (s2) { if (c.cells[s2] === "running") c.cells[s2] = "failed"; });
+      }
+      if (fin && fin.slug && !c.slug) { holdAs(c.key, fin.slug); c.slug = fin.slug; }
+      if (!here && !c.failed && landedBook(c)) {
+        if (c.slug) delete S.detail[c.slug];     /* its steps changed; ask again */
+        delete S.work[k];
+        /* AND ITS CHAPTERS APPEAR, HERE (8 Sep addendum: *"then parsed via
+           POST /ingest, and its chapters appear in the same panel"*). A
+           book that has just finished parsing is the thing you were
+           waiting for, so the works column opens it -- one `GET /book`,
+           the same grid every other selection draws. Only when nothing
+           else is selected: a person who moved on is not moved back. */
+        var landed = (landedBook(c) || {}).slug || c.slug;
+        /* the last name it takes, and the one the tile will carry */
+        if (landed) holdAs(c.key, landed);
+        if (landed && (!S.sel || !S.sel.slug)) selectSlug(landed);
+      }
+    });
   }
 
   /* ------------------------------------------------------------- ONE BOOK
@@ -1001,11 +1170,11 @@
      thing that is polled. */
   function loadBook(slug) {
     if (!slug || S.detail[slug]) return Promise.resolve(S.detail[slug]);
-    var url = api("/book?slug=" + encodeURIComponent(slug));
-    if (!url) return Promise.resolve(null);
+    if (!S.live) return Promise.resolve(null);
     S.detail[slug] = { loading: true, chapters: [] };
-    return fetch(url, { cache: "no-store" })
-      .then(function (r) { return r.ok ? r.json() : null; })
+    /* through the one GET, so a 404 is a sentence on the grid and never a
+       book that silently has no chapters */
+    return getJSON("/book?slug=" + encodeURIComponent(slug), 20000)
       .then(function (d) {
         S.detail[slug] = { loading: false,
                            chapters: (d && d.chapters) || [],
@@ -1071,19 +1240,8 @@
   function act(path, body, btn, word) {
     if (btn) { btn.disabled = true; if (word) { btn.dataset.was = btn.textContent; btn.textContent = word + "…"; } }
     S.acting = path; S.actErr = "";
-    var url = api(path);
-    if (!url) { S.acting = ""; S.actErr = path + " — no studio behind this page"; draw(); return Promise.resolve(null); }
-    return ask_(url, 30000, { method: "POST", cache: "no-store",
-                              headers: { "Content-Type": "application/json" },
-                              body: JSON.stringify(body || {}) })
-      .then(function (r) {
-        return r.text().then(function (t) {
-          var j = null;
-          try { j = JSON.parse(t); } catch (e) { j = { error: path + " answered " + r.status + " but not JSON" }; }
-          if (!r.ok && !(j && j.error)) j = { error: path + " answered " + r.status };
-          return j;
-        });
-      })
+    if (!S.live) { S.acting = ""; S.actErr = path + " — no studio behind this page"; draw(); return Promise.resolve(null); }
+    return postJSON(path, body || {})
       .then(function (j) {
         S.acting = "";
         if (j && j.error) S.actErr = path + " — " + j.error;
@@ -1207,7 +1365,7 @@
       return Promise.resolve();
     }
     beginAsking();
-    S.out = []; S.media = []; S.sources = null; S.outErr = ""; draw();
+    S.out = []; S.media = []; S.adapters = null; S.outErr = ""; draw();
     /* 40 s: `sources.SEARCH_BUDGET` is 25 s and the route answers inside it
        by construction, so past 40 s the route is not coming back. */
     return ask_(url, 40000, { cache: "no-store" })
@@ -1233,10 +1391,10 @@
         /* studio's own 500 shape: `{error: "Type: message"}` -- the search was
            REACHED and it broke, which is a different sentence again. */
         if (j && j.error) { S.outErr = "/search — " + String(j.error);
-                            S.out = []; S.media = []; S.sources = j.adapters || null;
+                            S.out = []; S.media = []; S.adapters = j.adapters || null;
                             draw(); return; }
         S.outErr = "";
-        S.sources = (j && j.adapters) || null;
+        S.adapters = (j && j.adapters) || null;
         S.dropped = ((j && j.dropped) || []).map(function (c) { return (c && c.candidate) || c; });
         /* `sources/library.py` SEARCHES YOUR OWN SHELF, with no network, so
            `/search` answers with your books as candidates too -- and this
@@ -1277,7 +1435,7 @@
      one both land here, so the two cannot answer differently. */
   function mockAnswer() {
     S.out = MOCK_OUT.slice(); S.media = MOCK_MEDIA.slice();
-    S.sources = MOCK_SOURCES; S.searchedFor = S.q;
+    S.adapters = MOCK_SOURCES; S.searchedFor = S.q;
     /* ITEM 9: the mock builds `S.pairs` THE SAME WAY the live answer does
        -- one pass over both lists, grouped by `linked_id` -- rather than
        being handed a ready-made map. A mock that took a shortcut here could
@@ -1415,11 +1573,11 @@
      "nothing could be asked" in one number, on the page */
   function sourceTally() {
     var t = { worked: 0, down: 0, off: 0, nothing: 0, failed: 0, n: 0 };
-    if (!S.sources) return t;
-    Object.keys(S.sources).forEach(function (k) {
+    if (!S.adapters) return t;
+    Object.keys(S.adapters).forEach(function (k) {
       if (k === "library") return;                 /* your own shelf is not "out there" */
       t.n++;
-      var w = sourceState(S.sources[k]).word;
+      var w = sourceState(S.adapters[k]).word;
       if (w === "down") t.down++;
       else if (w === "off") t.off++;
       else if (w === "failed") t.failed++;
@@ -1696,7 +1854,7 @@
        what each did once it has answered. Not a debug panel -- it is the
        difference between "nothing anywhere" and "the three places that
        would have it did not answer". */
-    var strip = S.q && (searching || S.sources) ? sourcesStrip() : null;
+    var strip = S.q && (searching || S.adapters) ? sourcesStrip() : null;
     if (CFG.mixed) {
       if (rows.length || strip) listEl.appendChild(head(S.q ? "Results" : "Your library"));
       if (strip) listEl.appendChild(strip);
@@ -1750,7 +1908,7 @@
   /* "Nothing on the shelves for that." WAS A LIE WHENEVER A SOURCE WAS DOWN.
      Now the sentence is made of what actually happened. */
   function nothingLine() {
-    if (!S.live || !S.sources) return "Nothing on the shelves for that.";
+    if (!S.live || !S.adapters) return "Nothing on the shelves for that.";
     var t = sourceTally();
     if (t.down + t.failed >= t.n && t.n)
       return "Nothing found — and not one source answered. " + t.down + " down of " + t.n + ".";
@@ -1792,7 +1950,7 @@
       paintAsking(box);
       return box;
     }
-    var names = Object.keys(S.sources).filter(function (k) { return k !== "library"; }).sort();
+    var names = Object.keys(S.adapters).filter(function (k) { return k !== "library"; }).sort();
     var t = sourceTally();
     var parts = [];
     if (t.worked) parts.push(t.worked + " found something");
@@ -1805,7 +1963,7 @@
       + (parts.length ? " — " + parts.join(" · ") : "");
     ck.textContent = S.askedMs ? (S.askedMs / 1000).toFixed(1) + " s" : "";
     names.forEach(function (k) {
-      var st = sourceState(S.sources[k]);
+      var st = sourceState(S.adapters[k]);
       var chip = el("span", "sf-chip s-" + (/^\d+$/.test(st.word) ? "n" : st.word));
       chip.appendChild(el("b", null, esc(SOURCE[k] || k)));
       chip.appendChild(el("i", null, esc(st.word)));
@@ -1852,9 +2010,8 @@
      one the reader underneath has open -- its own chapters are searched by
      the same query, in the same list, and each row carries the two verbs the
      workflow names: OPEN it, and VOICE it. */
-  function contextBook() { return attachTarget(); }
   function chapterRows() {
-    var b = contextBook();
+    var b = subject();
     if (!b || !b.slug || !S.q) return [];
     var d = S.detail[b.slug];
     if (!d && S.live) { loadBook(b.slug); return []; }
@@ -2221,7 +2378,7 @@
     r.querySelector(".spine").style.background = bh;
     r.querySelector(".t").textContent = b.title;
     r.querySelector(".s").textContent =
-      [b.author || "unknown author", b.lang, "on the shelf"].filter(Boolean).join(" · ");
+      [b.author || "unknown author", (b.langs || [b.lang]).filter(Boolean).join(" · "), "on the shelf"].filter(Boolean).join(" · ");
     /* WHAT A SHELF ROW CAN HONESTLY SAY, and it is the counters `/state`
        carries -- not a duration, which that payload has never had. */
     var pv = shelfProv(b);
@@ -2934,7 +3091,7 @@
         acts.appendChild(uv);
       }
     }
-    var to = attachTarget();
+    var to = subject();
     if (to && S.live && c.kind !== "text") {
       var at = el("button", "sf-verb ghost");
       at.type = "button";
@@ -2955,16 +3112,17 @@
      It posted to a RELATIVE path, which is right on studio's own origin and
      silently wrong the moment `?api=` points anywhere else -- the one thing
      §2.1 exists to make possible. Same call on studio, an honest one off it. */
+  /* THE ONE POST. Resolves with what studio said -- `{error}` when it
+     refused, whatever it sent when it did not -- and rejects only when
+     studio did not answer at all, which `why()` turns into words. `act()`
+     is this plus the button and the column's own bookkeeping. */
   function postJSON(path, body) {
     var url = api(path);
     if (!url) return Promise.resolve({ error: path + " — no studio behind this page" });
-    return fetch(url, { method: "POST", headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify(body) })
-      .then(function (r) { return r.text().then(function (t) {
-        var j; try { j = JSON.parse(t); } catch (e) { j = { error: path + " answered " + r.status + " but not JSON" }; }
-        if (!r.ok && !(j && j.error)) j = { error: path + " answered " + r.status };
-        return j;
-      }); });
+    return ask_(url, 30000, { method: "POST", cache: "no-store",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify(body) })
+      .then(function (r) { return jsonOf(r, path, false); });
   }
   function beginWork(key, c) {
     /* ENQUEUE IS WHERE THE COLOUR IS ASSIGNED (Round 2 item 3), and it is the
@@ -3575,62 +3733,67 @@
      A FETCH THAT FAILED IS REMEMBERED AS A FAILURE, never as "not asked yet"
      -- studio.html's own studio-simplify 0 bug, where a 404 put the cache
      back to its empty shape and the page re-asked for ever. */
-  var ENG = { value: null, asking: false, err: "" };
-  var KAG = { value: null, asking: false, err: "" };
+  /* ...and they live IN THE STORE (Stage 2): `S.engines` and `S.kaggle`,
+     one shape each, filled by the one `probe()` below. They were two
+     variables outside `S` with two copies of the same asking rule. */
 
+  /* THE ONE BODY READER (Stage 2). Every JSON route this file presses is
+     read here: a body that is not JSON, and a status that is not 2xx, are
+     turned into the same `{error}` sentence naming the route and the
+     status -- kept whole when studio's own refusal carries more than a
+     sentence (`held`, the push's own body). `strict` is the GET's rule:
+     a refusal is a rejection, so a probe's `.catch` is the one place its
+     failure lands. The POSTs resolve with it instead, because a refusal
+     is an answer the column prints on its row. */
+  function jsonOf(r, path, strict) {
+    return r.text().then(function (t) {
+      var j = null, broken = false;
+      try { j = JSON.parse(t); }
+      catch (e) { broken = true; j = { error: path + " answered " + r.status + " but not JSON" }; }
+      if (!r.ok && !(j && j.error)) j = { error: path + " answered " + r.status };
+      if (strict && (broken || !r.ok)) throw new Error(j.error);
+      return j;
+    });
+  }
+  /* THE ONE GET. `/state`, `/book`, `/engines`, `/kaggle` -- every JSON
+     read of studio, with the clock on it and the words from `jsonOf`. */
   function getJSON(path, ms) {
     var url = api(path);
     if (!url) return Promise.reject(new Error("no studio behind this page"));
-    return ask_(url, ms || 20000, { cache: "no-store" }).then(function (r) {
-      return r.text().then(function (t) {
-        var j = null;
-        try { j = JSON.parse(t); } catch (e) {
-          throw new Error(path + " answered " + r.status + " but not JSON");
-        }
-        if (!r.ok) throw new Error((j && j.error) || (path + " answered " + r.status));
-        return j;
-      });
-    });
+    return ask_(url, ms || 20000, { cache: "no-store" })
+      .then(function (r) { return jsonOf(r, path, true); });
   }
 
   /* A FAILURE IS REMEMBERED, and this line is the whole of why (measured
      8 Sep, and it is studio.html's studio-simplify 0 bug in a worse form).
-     `ENG.err` used not to count as "asked", so a draw re-fetched, the catch
+     `err` used not to count as "asked", so a draw re-fetched, the catch
      redrew, and the redraw re-fetched: an unbounded loop of 30 s requests
      against a studio that had answered once, honestly, that it could not. A
      probe that fails is remembered exactly like one that succeeds; `force` is
-     the only thing that asks again. */
+     the only thing that asks again. ONE FUNCTION for the two probes (Stage
+     2): `probe(name, path, mock)` fills `S[name]`, and on the bench answers
+     with the mock -- the bench has a studio too (§5.9). */
+  function probe(name, path, mock, force) {
+    if (S.bench) return mock;
+    var c = S[name];
+    if ((c.value || c.err) && !force) return c.value;
+    if (c.asking) return c.value;
+    c.asking = true; c.err = "";
+    getJSON(path, 30000)
+      .then(function (v) { S[name] = { value: v, asking: false, err: "" }; drawWorks(); })
+      .catch(function (e) {
+        S[name] = { value: null, asking: false, err: why(path.replace(/\?.*$/, ""), e) };
+        drawWorks();
+      });
+    return c.value;
+  }
   function askEngines(force) {
-    if (S.bench) return MOCK_ENGINES;      /* §5.9: the bench has a studio too */
-    if ((ENG.value || ENG.err) && !force) return ENG.value;
-    if (ENG.asking) return ENG.value;
-    ENG.asking = true; ENG.err = "";
-    getJSON("/engines" + (force ? "?refresh=1" : ""), 30000)
-      .then(function (v) { ENG = { value: v, asking: false, err: "" }; drawWorks(); })
-      .catch(function (e) {
-        ENG = { value: null, asking: false, err: why("/engines", e) };
-        drawWorks();
-      });
-    return ENG.value;
+    return probe("engines", "/engines" + (force ? "?refresh=1" : ""), MOCK_ENGINES, force);
+  }
+  function askKaggle(force) {
+    return probe("kaggle", "/kaggle" + (force ? "?force=1" : ""), MOCK_KAGGLE, force);
   }
 
-  function askKaggle(force) {          /* the same rule -- see askEngines */
-    if (S.bench) return MOCK_KAGGLE;       /* §5.9 */
-    if ((KAG.value || KAG.err) && !force) return KAG.value;
-    if (KAG.asking) return KAG.value;
-    KAG.asking = true; KAG.err = "";
-    getJSON("/kaggle" + (force ? "?force=1" : ""), 30000)
-      .then(function (v) { KAG = { value: v, asking: false, err: "" }; drawWorks(); })
-      .catch(function (e) {
-        KAG = { value: null, asking: false, err: why("/kaggle", e) };
-        drawWorks();
-      });
-    return KAG.value;
-  }
-
-  /* The book these choices are about: what is selected on the right, else the
-     book underneath -- `attachTarget()`'s own rule, and the same answer. */
-  function studioSubject() { return attachTarget(); }
 
   /* Where a render fired right now would go, as this column has drawn it --
      the server's `default` (which already answers "is there a choice", "did
@@ -3644,7 +3807,7 @@
     return (h ? h + " h " : "") + m + " min";
   }
   function whereNow() {
-    var d = (S.live ? KAG.value : MOCK_KAGGLE) && (S.live ? KAG.value : MOCK_KAGGLE).destinations;
+    var d = (S.live ? S.kaggle.value : MOCK_KAGGLE) && (S.live ? S.kaggle.value : MOCK_KAGGLE).destinations;
     if (d && d.default) return d.default;
     var st = S.settings && S.settings.render;
     return (st && st.where) || "local";
@@ -3653,7 +3816,7 @@
   /* THE ENGINE THIS BOOK WILL ACTUALLY RENDER WITH -- its own, or /engines'
      `default`. studio.html's `currentEngine`, same two terms and same order. */
   function currentEngine(b) {
-    var cat = S.live ? ENG.value : MOCK_ENGINES;      /* §5.9 -- the bench has one too */
+    var cat = S.live ? S.engines.value : MOCK_ENGINES;      /* §5.9 -- the bench has one too */
     return (b && b.engine) || (cat && cat["default"]) || null;
   }
 
@@ -3749,7 +3912,8 @@
       /* THE SHELF IS STALE THE MOMENT THIS LANDS, and the answer is studio's
          own row -- so the pill follows the book rather than the press. */
       b.lang = (j && j.lang) || code;
-      S.shelf.forEach(function (x) { if (x.slug === b.slug) x.lang = b.lang; });
+      b.langs = (j && Array.isArray(j.langs) && j.langs.length > 1) ? j.langs.slice() : undefined;   // plural since G-LANGMIX
+      S.shelf.forEach(function (x) { if (x.slug === b.slug) { x.lang = b.lang; x.langs = b.langs; } });
       draw();
     });
   }
@@ -3981,7 +4145,7 @@
   function pickVoice(name) {
     if (REF_PLAY !== name) silenceRef();
     S.voice = name;
-    var b = studioSubject();
+    var b = subject();
     drawWorks();
     if (b && b.slug && S.live) return act("/render", { slug: b.slug, voice: name }, null, null);
     return Promise.resolve(null);
@@ -3993,7 +4157,7 @@
      answer -- is there a CLI, is this Mac signed in, is a session free, is
      there a ~/.modal.toml -- rather than a book's. */
   function whereBlock() {
-    var k = (S.live ? KAG.value : MOCK_KAGGLE) || askKaggle(false);
+    var k = (S.live ? S.kaggle.value : MOCK_KAGGLE) || askKaggle(false);
     var box = pills();
     var line = el("div", "sf-vsub");
     /* A CHOICE THAT WILL NOT SURVIVE A RESTART SAYS SO, AND SAYS IT FIRST.
@@ -4015,8 +4179,8 @@
       line.appendChild(note("This choice will not survive a restart — "
         + (sp.save_error || "studio could not write its settings file")
         + (sp.path ? " (" + sp.path + ")" : "")));
-    if (S.live && KAG.err) { box.appendChild(offPill("no answer", KAG.err));
-                             line.appendChild(note(KAG.err));
+    if (S.live && S.kaggle.err) { box.appendChild(offPill("no answer", S.kaggle.err));
+                             line.appendChild(note(S.kaggle.err));
                              return prow("Where", box, line); }
     if (!k) { box.appendChild(offPill("asking…", "GET /kaggle")); return prow("Where", box, line); }
     var d = k.destinations || {};
@@ -4115,11 +4279,11 @@
      Kaggle one. The page computes none of it and can never show a second
      opinion of what the render will do. */
   function engineBlock(b) {
-    var cat = (S.live ? ENG.value : MOCK_ENGINES) || askEngines(false);
+    var cat = (S.live ? S.engines.value : MOCK_ENGINES) || askEngines(false);
     var box = pills();
     var line = el("div", "sf-vsub");
-    if (S.live && ENG.err) { box.appendChild(offPill("no engine list", ENG.err));
-                   line.appendChild(note(ENG.err)); return prow("Model", box, line); }
+    if (S.live && S.engines.err) { box.appendChild(offPill("no engine list", S.engines.err));
+                   line.appendChild(note(S.engines.err)); return prow("Model", box, line); }
     if (!cat) { box.appendChild(offPill("asking…", "GET /engines"));
                 return prow("Model", box, line); }
     if (cat.error) {
@@ -4331,7 +4495,7 @@
   /* The whole block, in studio.html's own order: the voice, where it runs,
      the model, then the thirty seconds that proves all three. */
   function studioBlock() {
-    var b = studioSubject();
+    var b = subject();
     if (!b) return null;
     var box = el("div", "sf-studio");
     box.appendChild(voiceBlock(b));
@@ -4347,137 +4511,13 @@
   function pollWorks() {
     clearTimeout(pollTimer);
     if (!opened || !S.live) return;
-    var url = api("/state");
-    fetch(url, { cache: "no-store" })
-      .then(function (r) { return r.ok ? r.json() : null; })
-      .then(function (d) {
-        if (!d) { S.stateErr = "studio answered /state with nothing"; draw(); return; }
-        S.stateErr = "";
-        S.job = d.job || null; S.pending = d.pending || []; S.ingests = d.ingests || [];
-        /* THE RE-PARSE QUEUE, its two fields, exactly as the import queue's
-           two (studio/serve.py::_serve_state, 4 Sep): `reparsing` is running,
-           `reparses` is waiting, both `[]` and never absent -- so this reads
-           them straight and never has to guess that absent means empty. */
-        S.reparsing = d.reparsing || []; S.reparses = d.reparses || [];
-        /* the machine-wide hold, so `Hold all` / `Resume all` says which it
-           is rather than toggling blind */
-        S.hold = d.hold || null;
-        /* §4, 8 Sep -- THE STUDIO'S OWN FOUR FIELDS, off the SAME answer. The
-           voices and the settings are `/state`'s (there is no `GET /voices`);
-           the sample is the one job, folded, so a finished sample survives the
-           poll that follows it rather than vanishing. */
-        S.voices = d.voices || [];
-        /* ...and the FILES ALREADY ON THE DRIVE, which have ridden on this
-           same payload since 30 Aug and which this surface has polled past
-           ever since (`studio/bookinfo.py::sources`, cached with the books
-           and the voices -- it costs nothing here). */
-        S.drive = d.sources || [];
-        /* THE CLONE'S OWN LINE GOES WHEN THE VOICE ARRIVES -- or when the job
-           it is waiting on says something, whichever comes first. A "cloning…"
-           that outlived its job would be the silent blank in the other
-           direction: a page saying work is happening when none is. */
-        if (S.cloning && (S.voices.some(function (v) { return v.name === S.cloning.name; })
-                          || (d.job && d.job.mode === "voice" && d.job.phase !== "running")))
-          S.cloning = null;
-        S.settings = d.settings || null;
-        S.ssd = d.ssd || null;
-        var sm = sampleFromJob(d);
-        if (sm) S.sample = sm;
-        /* THE PILL STARTS ON SOMETHING TRUE: the book's own voice when it has
-           one, else the first voice on the drive -- studio.html's own two
-           terms, in its order. Never overwritten once somebody has pressed a
-           pill, because that press is a decision and this is a poll. */
-        if (!S.voice) {
-          var sb = studioSubject();
-          S.voice = (sb && sb.voice) || (S.voices[0] ? S.voices[0].name : null);
-        }
-        /* ONE REQUEST, NOT TWO: `/state` carries the shelf and the works in
-           the same answer, so the poll refreshes both rather than asking
-           again a line later. */
-        if (d.books) {
-          S.shelf = d.books.map(shelfOf);
-          shelfAt = Date.now();
-        }
-        /* an import that studio is running is a working row, whether or not
-           this surface started it -- the strip's own rule (bar/lanes.js).
-           IT IS FOUND BY ITS SOURCE FIRST: a row this surface added already
-           knows the source `/stage_for_ingest` answered with, and matching on
-           it is what stops one Add becoming two rows. Only an import nobody
-           here started opens a new one. */
-        (d.importing || []).forEach(function (it) {
-          var name = it.source || it.name || it.slug;
-          var w = null;
-          Object.keys(S.work).forEach(function (k) {
-            var c = S.work[k];
-            if (!w && (c.source === name || c.slug === it.slug ||
-                       (c.title && norm(c.title) === norm(it.name || "")))) w = c;
-          });
-          if (!w) { w = beginWork("i:" + (it.slug || name), { title: it.name || it.slug, author: "" });
-                    w.source = name; holdAs(w.key, name); }
-          /* ITEM 3, AND THIS IS THE LINE THAT WAS COSTING THE COLOUR. The
-             moment an import learns its slug it has the name it will keep for
-             the rest of its life -- shelf row, step grid, every later search.
-             Alias it to the colour the row already has, rather than letting
-             `hue(slug)` mint a second one. */
-          if (it.slug && it.slug !== w.slug) holdAs(w.key, it.slug);
-          w.slug = it.slug || w.slug;
-          var i = STEPS.indexOf(it.step);
-          w.word = it.step || it.phase || "importing";
-          if (i >= 0) {
-            for (var j = 0; j < i; j++) w.cells[STEPS[j]] = "ok";
-            w.cells[STEPS[i]] = it.phase === "failed" ? "failed" : "running";
-            w.p = Math.max(w.p, (i + 0.5) / STEPS.length);
-          }
-        });
-        /* AND IT LEAVES WHEN IT ARRIVES. A working row whose book is now on
-           the shelf is the book: drop the working row and the shelf row is
-           already drawn in its place.
-           WHICH BOOK IT BECAME IS FOUND BY SLUG, THEN BY FILE (G-SURF2). It
-           was by TITLE, and a second edition of a title already on the shelf
-           "arrived" the instant it was pressed -- the row vanished before its
-           parse had begun, because the FIRST edition was already there. And
-           an import that FAILED is said, on its row, in studio's own words:
-           the finished ingest is parked on `/state`'s `job` once its lane is
-           free (`JobManager._finish_lane`), with its `err`. */
-        Object.keys(S.work).forEach(function (k) {
-          var c = S.work[k];
-          var here = (d.importing || []).some(function (it) {
-            return (c.source && it.source === c.source) || (c.slug && it.slug === c.slug) ||
-                   (!c.source && norm(it.name || "") === norm(c.title || ""));
-          });
-          var fin = (!here && d.job && d.job.mode === "ingest" && c.source &&
-                     d.job.source === c.source) ? d.job : null;
-          if (fin && fin.phase === "failed" && !c.failed) {
-            c.failed = true; c.word = "Couldn't add";
-            c.err = String(fin.err || "the import failed");
-            STEPS.forEach(function (s2) { if (c.cells[s2] === "running") c.cells[s2] = "failed"; });
-          }
-          if (fin && fin.slug && !c.slug) { holdAs(c.key, fin.slug); c.slug = fin.slug; }
-          if (!here && !c.failed && landedBook(c)) {
-            if (c.slug) delete S.detail[c.slug];     /* its steps changed; ask again */
-            delete S.work[k];
-            /* AND ITS CHAPTERS APPEAR, HERE (8 Sep addendum: *"then parsed via
-               POST /ingest, and its chapters appear in the same panel"*). A
-               book that has just finished parsing is the thing you were
-               waiting for, so the works column opens it -- one `GET /book`,
-               the same grid every other selection draws. Only when nothing
-               else is selected: a person who moved on is not moved back. */
-            var landed = (landedBook(c) || {}).slug || c.slug;
-            /* the last name it takes, and the one the tile will carry */
-            if (landed) holdAs(c.key, landed);
-            if (landed && (!S.sel || !S.sel.slug)) selectSlug(landed);
-          }
-        });
-        draw();
-      })
-      .catch(function (e) {
-        S.stateErr = "studio did not answer /state — " + (e && e.message || e);
-        draw();
-      })
-      .then(function () {
-        pollTimer = setTimeout(pollWorks,
-          (S.job || S.ingests.length || S.reparsing.length) ? 2000 : 5000);
-      });
+    /* the same `askState` a keystroke uses -- this is only the CLOCK on it:
+       two seconds while something is running, five while nothing is */
+    askState().then(function () {
+      draw();
+      pollTimer = setTimeout(pollWorks,
+        (S.job || S.ingests.length || S.reparsing.length) ? 2000 : 5000);
+    });
   }
 
   /* ====================================================== VIDEO, AND THE WEB
@@ -4625,7 +4665,7 @@
        second half of "add a new book / new audio / attach audio". It is only
        offered when there IS a book to attach to -- the one selected in the
        works column, or the one open underneath. */
-    var to = attachTarget();
+    var to = subject();
     if (to && S.live) {
       var said = S.attached[attachKey(c, to)];
       var at = el("button", "sf-verb ghost");
@@ -4702,7 +4742,7 @@
     var vs = videos();
     if (!vs.length) {
       var t = sourceTally();
-      var st = S.sources && sourceState(S.sources.youtube);
+      var st = S.adapters && sourceState(S.adapters.youtube);
       box.appendChild(queryRow(
         "Search YouTube for “" + S.q + "”",
         videoQueryUrl(),
@@ -4758,10 +4798,12 @@
     } catch (e) {}
     return null;
   }
-  /* the book a recording would attach to, and a chapter would be voiced in:
-     what is selected in the works column first, the book underneath second.
-     Never a guess -- if neither is there, the verb is not drawn. */
-  function attachTarget() {
+  /* THE SUBJECT: the book a recording would attach to, a chapter would be
+     voiced in, and the studio block's choices are about -- what is selected
+     in the works column first, the book underneath second. Never a guess:
+     if neither is there, the verb is not drawn. It had three names
+     (`attachTarget`, `contextBook`, `studioSubject`) for one answer. */
+  function subject() {
     if (S.sel && S.sel.slug) return S.sel;
     if (S.inBook) {
       var b = null;
@@ -4822,9 +4864,9 @@
       /* what each source said, folded to its word -- the whole of "a failed
          source must not read as an empty one", as data */
       sources: (function () {
-        if (!S.sources) return null;
+        if (!S.adapters) return null;
         var o = {};
-        Object.keys(S.sources).forEach(function (k) { o[k] = sourceState(S.sources[k]).word; });
+        Object.keys(S.adapters).forEach(function (k) { o[k] = sourceState(S.adapters[k]).word; });
         o.__tally = sourceTally();
         return o;
       })(),
@@ -4947,11 +4989,11 @@
             return b ? { text: b.textContent, disabled: !!b.disabled } : null;
           })(),
           chosenVoice: S.voice, where_now: whereNow(),
-          engine: currentEngine(studioSubject()),
-          unit: sampleUnit(studioSubject()),
+          engine: currentEngine(subject()),
+          unit: sampleUnit(subject()),
           errs: { voice: S.voiceErr, where: S.whereErr,
                   engine: S.engineErr, sample: S.sampleErr,
-                  engines: ENG.err, kaggle: KAG.err }
+                  engines: S.engines.err, kaggle: S.kaggle.err }
         };
       })(),
       chapters: listEl.querySelectorAll(".sf-ch").length,
@@ -4983,7 +5025,7 @@
                            needsAlign: needsAlign, nextStepFor: nextStepFor,
                            /* §4, 8 Sep -- the studio's own verbs, so the
                               driver presses the THING rather than a pixel */
-                           studioSubject: studioSubject, whereNow: whereNow,
+                           subject: subject, whereNow: whereNow,
                            currentEngine: currentEngine, sampleUnit: sampleUnit,
                            askEngines: askEngines, askKaggle: askKaggle,
                            pickVoice: pickVoice, pickWhere: pickWhere,
