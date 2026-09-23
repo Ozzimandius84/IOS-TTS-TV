@@ -3171,6 +3171,11 @@ pub fn run() {
                 WebviewUrl::CustomProtocol(shell_url(HOME_PAGE).parse()?),
             )
             .title("Frank")
+            // W2 PHONE-STUDIO: tell the shell this is a phone, before
+            // HOST_JS. library/host.js reads __TTSTV_HOST_KIND__ at
+            // load to set TTSTVHost.kind; without it, works.js's
+            // available() rejects the phone and the works door is inert.
+            .initialization_script(r#"window.__TTSTV_HOST_KIND__ = "phone";"#)
             .initialization_script(HOST_JS)
             // The book door (G-PULL): `TTSTVHost.books`, before any page
             // script, so `library/import.js` finds it when it loads and
@@ -3495,6 +3500,22 @@ mod tests {
         assert!(!is_document("/books/eclogues-virgil/book-data.js"));
         assert!(!is_document("/reader/reader.css"));
         assert!(!is_document(PROBE_PATH));
+    }
+
+    // ----------------------------------------------- host kind (W2 PHONE-STUDIO)
+
+    /// W2 PHONE-STUDIO: the bootstrap sets `__TTSTV_HOST_KIND__ = "phone"`
+    /// BEFORE HOST_JS. Without it, `host.js` falls back to inference and
+    /// `works.js::available()` rejects the phone.
+    #[test]
+    fn the_host_kind_is_phone_and_precedes_host_js() {
+        let lib = include_str!("lib.rs");
+        let run_fn = &lib[lib.find("pub fn run() {").unwrap()..lib.find("fn flush_google<").unwrap()];
+        let kind_line = r#"window.__TTSTV_HOST_KIND__ = "phone";"#;
+        assert!(run_fn.contains(kind_line), "run() must set __TTSTV_HOST_KIND__ to phone");
+        let at = |s: &str| run_fn.find(s).unwrap_or_else(|| panic!("run() has no {s}"));
+        assert!(at(kind_line) < at(".initialization_script(HOST_JS)"),
+                "__TTSTV_HOST_KIND__ must come BEFORE HOST_JS");
     }
 
     // ------------------------------------------------- Google (job 26b)
