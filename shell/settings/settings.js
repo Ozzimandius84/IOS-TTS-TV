@@ -450,8 +450,10 @@
    * about.
    *
    * Cloud GPU, Models and Languages are CONDITIONAL: all three are studio's
-   * data, so on a phone, in an exported bundle or over file:// there is
-   * nothing behind them and they are not drawn at all. Hotkeys is NOT
+   * data, so on a website ("web"), on a phone, in an exported bundle or over
+   * file:// there is nothing behind them and they are not drawn at all.
+   * The question is now asked of `TTSTVHost.kind` (W1 SHELL-WEB), not of
+   * `origin()`. Hotkeys is NOT
    * conditional -- the keys are the reader's own and work with no server
    * behind the page.
    *
@@ -1139,7 +1141,7 @@
         ? "Downloading a model lets you render on this Mac. Kaggle works without any of them."
         : (state.rows.length
             ? "This studio lists the voices but cannot install one yet, so there is nothing to download from here."
-            : "No studio behind this page, so there is nothing to ask about the voices.");
+            : TTSTVHost.WHY_STUDIO);
       state.rows.forEach(function (m) {
         var row = kEl(doc, "div", "set-row kag-model");
         row.dataset.model = m.id;
@@ -1404,7 +1406,7 @@
       list.innerHTML = "";
       note.textContent = state.error ? state.error
         : (state.fromServer ? NOTE
-           : "No studio behind this page, so there is nothing to ask about the languages.");
+           : TTSTVHost.WHY_STUDIO);
       state.rows.forEach(function (l) {
         var row = kEl(doc, "div", "set-row lang-row");
         row.dataset.lang = l.code;
@@ -3023,6 +3025,8 @@
   /* The one address a studio ask in this file goes to: this origin where
    * there is one, else the door this device is paired with, else nowhere.  */
   function askUrl(path) {
+    // W1 SHELL-WEB: on a website neither studio nor the door is reachable.
+    if (global.TTSTVHost && global.TTSTVHost.isWeb) return null;
     var o = origin();
     return o ? o + path : doorUrl(path);
   }
@@ -5742,9 +5746,9 @@
     var panels = {};
     var built = {};
     // A tab whose contents are another module's data is drawn only where that
-    // module is: `opts.studio` overrides for a test, `origin()` decides
-    // otherwise -- the same question `save()` asks before it tries the mirror.
-    var hasStudio = opts.studio === undefined ? !!origin() : !!opts.studio;
+    // module is: `opts.studio` overrides for a test; on "web" there is never
+    // a Studio (W1 SHELL-WEB); otherwise `origin()` decides.
+    var hasStudio = opts.studio === undefined ? (TTSTVHost.kind !== "web" && !!origin()) : !!opts.studio;
     var tabs = TABS.filter(function (t) { return !t.needsStudio || hasStudio; });
     /* THE PHONE'S OWN FOUR (Osca, 6 Sep, THE PHONE WHOLE: "Settings is one
      * column with the phone's own tabs (General, Reading, Sync, Voices --

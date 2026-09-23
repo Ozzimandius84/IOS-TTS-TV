@@ -212,18 +212,18 @@
   }
   var PAIRED = null;   /* the record `api()` puts the pass on, or null       */
 
-  /* Is this page inside Frank? `TTSTVHost` is injected into every page the
-     app opens -- `desktop/src/host.js` on the Mac, `lib.rs::HOST_JS` on the
-     phone -- and into no page a plain browser opens. It is the ONLY honest
-     way to tell "Frank, with no studio" from "the design bench", and it is
-     what `S.bench` is decided by (see `S.bench`). */
+  /* Is this page inside Frank? `TTSTVHost.kind` is the ONE predicate (W1
+     SHELL-WEB) -- `library/host.js` sets it. On a website the kind is "web"
+     and the host has no Studio API, so `hostHere()` is false. */
   function hostHere() {
-    try { return !!window.TTSTVHost; } catch (e) { return false; }
+    try { return !!window.TTSTVHost && !window.TTSTVHost.isWeb; } catch (e) { return false; }
   }
   /* THE SENTENCE, and there is one of it. A page with no studio says which
      of the two it is and, in Frank, what to do about it -- "Studio is not
      here" with no next step is the half-answer the phone was giving. */
   function noStudioLine() {
+    // W1 SHELL-WEB: on a website the sentence is D3's.
+    if (window.TTSTVHost && window.TTSTVHost.isWeb) return window.TTSTVHost.WHY_STUDIO;
     return S.bench
       ? "No server behind this page — these rows are the mock."
       : (PAIRED
@@ -242,7 +242,14 @@
     var tag = document.querySelector && document.querySelector('meta[name="ttstv-api"]');
     if (tag && tag.getAttribute("content"))
       return tag.getAttribute("content").replace(/\/+$/, "");
-    if (/^https?:$/.test(location.protocol)) return location.origin;
+    // W1 SHELL-WEB: the kind is the gate, not the protocol.
+    // Guarded: window.TTSTVHost may not exist when host.js failed to load
+    // (design pages, benches). Fall through to the protocol test below.
+    var _H = window.TTSTVHost || null;
+    if (_H && (_H.isStudio || _H.isPhone)) return location.origin;
+    if (_H && _H.isWeb) return "";
+    // No host.js: fall back to protocol (the pre-W1 gate for benches/design).
+    if (!_H && /^https?:$/.test(location.protocol)) return location.origin;
     /* G-STUDIOPHONE, 13 Sep: and when it is not http(s), THE PAIRING. See
        `pairedStudio` above -- this is the phone, and this line is the whole
        of "an origin the phone can have". */
@@ -266,6 +273,10 @@
      already returned at `location.origin` and `pairedStudio()` was never
      called. */
   function api(path) {
+    /* W2 PHONE-STUDIO: a phone with no Mac has a door of its own -- the four
+       routes in library/works.js, answered from this phone's own courier rows.
+       `handles()` is pure, and a page without works.js is unchanged. */
+    if (window.TTSTVWorks && window.TTSTVWorks.handles(path)) return "works://local" + path;
     if (!BASE) return null;
     if (!PAIRED) return BASE + path;
     return BASE + path + (path.indexOf("?") >= 0 ? "&" : "?")
@@ -315,9 +326,15 @@
   }
   /* diacritic-blind: this library is half in French, Latin and Greek, and a
      person typing "eclogues" means Eclogues too (askbar.js's own norm) */
+  /* ARTICLES stripped for the START-OF-TITLE score only (see score()); norm()
+     itself folds case, diacritics, apostrophes, quotes, and mid-word
+     punctuation so "dolls house" finds "Doll’s House" and "pensees" finds
+     "Pensées". */
+  var ARTICLES = /^(a|an|the|les|la|le|der|die|das|el|los|las|l)\s+/;
   function norm(s) {
     s = String(s == null ? "" : s).toLowerCase();
-    return s.normalize ? s.normalize("NFD").replace(/[̀-ͯ]/g, "") : s;
+    if (s.normalize) s = s.normalize("NFD").replace(/[̀-ͯ]/g, "");
+    return s.replace(/['\u2018\u2019\u2032\u0027]/g, "").replace(/[;:,]/g, " ");
   }
   function el(tag, cls, html) {
     var n = document.createElement(tag);
@@ -620,7 +637,14 @@
     job: null, pending: [], ingests: [],
     reparsing: [], reparses: [],   /* the re-parse queue, `/state`'s other two */
     detail: {},         /* slug -> GET /book's chapter rows, fetched once     */
-    sel: null,          /* the row whose grid the works column is showing     */
+    ticks: {},          /* slug -> the Chapters dropdown's ticked ids (G-RUN);
+                           absent = every chapter, and that is never stored   */
+    set: [],            /* G-SET: the studio is a SET of members. Each is
+                           {kind:"book"|"audio"|"voice"|"candidate", slug|url|name,
+                            title, lang, hue, state}. `subject()` returns set[0]
+                           when it is a book, so 138/139's blocks keep working. */
+    sel: null,          /* COMPAT: derived from set[0]; see setSelCompat()    */
+    selAuto: false,     /* true = the page pre-selected, false = a click     */
     live: false,        /* is there a server behind us                        */
     base: "",           /* ...and where it is (`?api=`, or this origin)       */
     /* ------------------------------------- TRUE OR ABSENT, NEVER BOTH (13 Sep)
@@ -735,6 +759,7 @@
     drive: [],
     all: null,          /* {groups,pending,hold,job,ssd} as the route sends it */
     allOpen: false, allAsking: false, allErr: "",
+    limitsOpen: false,   /* G-DROPDOWN: the model's cost note, shut by default */
     paired: ""           /* the Studio this device paired with, when it did  */
   };
   /* what the bench dials, and nothing else does */
@@ -801,7 +826,7 @@
       }
     });
     S.base = BASE;
-    S.live = !!BASE;
+    S.live = !!BASE || !!(window.TTSTVWorks && window.TTSTVWorks.available());
     S.paired = PAIRED ? (PAIRED.name || PAIRED.base) : "";
     /* the three states, decided once, at mount -- see `bench` in `S` above */
     S.bench = !S.live && !hostHere();
@@ -843,6 +868,11 @@
     }
     S.inBook = openBookHere();
     bar();
+    /* PRE-WARM THE SHELF AT MOUNT, so cmd-K from the reader has rows in memory
+       on its first open instead of waiting for the /state fetch that only
+       open() used to trigger. The library pre-fetches via its own refresh();
+       the reader never did, which was fault (c). */
+    if (S.live && !S.shelf.length) yours();
     /* THE DOOR ON THE URL (Stage 2). `?studio=<slug>&units=c003,c004` is
        the query `tabs.rs::url_for(Kind::Studio)` has always put on
        studio.html's URL. A page that mounts this surface answers the same
@@ -973,11 +1003,18 @@
   }
 
   /* ================================================================== asking
-     YOURS is answered off a shelf we already hold, so a keystroke costs
-     nothing. OUT THERE leaves this Mac, so it waits for a pause (or Enter). */
+     THE SHELF IS ANSWERED FROM MEMORY ON EVERY KEYSTROKE -- rank() + draw()
+     synchronously before yours() is even asked, so the shelf rows appear
+     at once and yours() only REFRESHES. OUT THERE leaves this Mac, so it
+     waits for a pause (or Enter). */
   var outTimer = null;
   function ask(q, now) {
     S.q = String(q || "").trim();
+    /* DRAW THE SHELF FIRST, SYNCHRONOUSLY, from whatever S.shelf already
+       holds. If it is empty (first open, no poll yet), nothing is drawn and
+       yours() fills it on the next tick -- but when the shelf IS in memory,
+       the rows appear before any fetch. */
+    if (S.shelf.length) draw();
     yours().then(function () { draw(); });
     clearTimeout(outTimer);
     /* AN EMPTIED FIELD CANCELS THE SEARCH THAT IS OUT. The token is what an
@@ -1036,12 +1073,19 @@
      asked, the answer lands whole. An ask already in flight is shared, not
      doubled. */
   var shelfAt = 0, stateAsking = null;
+  /* THE SHELF IS NEVER RE-FETCHED ON A KEYSTROKE. A keystroke draws from
+     memory (the synchronous draw in ask()); yours() only refreshes when
+     the shelf is EMPTY (first open) or when the poll's own cadence has
+     passed. The 10 s threshold matches the idle poll; the busy poll (2 s)
+     is driven by pollWorks and lands here through askState. */
   function yours() {
-    if (S.shelf.length && Date.now() - shelfAt < 4000) return Promise.resolve();
+    if (S.shelf.length && Date.now() - shelfAt < 10000) return Promise.resolve();
     if (!api("/state")) { S.shelf = MOCK_SHELF.slice().map(shelfOf); shelfAt = Date.now(); return Promise.resolve(); }
     return askState();
   }
   function askState() {
+    // W1 SHELL-WEB: belt-and-braces -- a website cannot reach askState.
+    if (window.TTSTVHost && window.TTSTVHost.isWeb) return Promise.resolve();
     if (stateAsking) return stateAsking;
     stateAsking = getJSON("/state", 20000)
       .then(takeState)
@@ -1252,7 +1296,7 @@
   function act(path, body, btn, word) {
     if (btn) { btn.disabled = true; if (word) { btn.dataset.was = btn.textContent; btn.textContent = word + "…"; } }
     S.acting = path; S.actErr = "";
-    if (!S.live) { S.acting = ""; S.actErr = path + " — no studio behind this page"; draw(); return Promise.resolve(null); }
+    if (!S.live) { S.acting = ""; var _h = window.TTSTVHost; S.actErr = (_h && _h.isWeb) ? _h.WHY_STUDIO : (path + " — no studio behind this page"); draw(); return Promise.resolve(null); }
     return postJSON(path, body || {})
       .then(function (j) {
         S.acting = "";
@@ -1277,7 +1321,10 @@
   function run(body, btn, word) {
     if (S.bench) {
       S.job = { mode: body.queue ? "push" : "single", phase: "running",
-                slug: body.slug, chapter: body.chapter || "the whole book",
+                slug: body.slug,
+                chapter: body.chapters ? (body.chapters.length === 1 ? body.chapters[0]
+                                          : body.chapters.length + " chapters")
+                       : body.chapter || "the whole book",
                 step: body.step || "speak", where: whereNow(),
                 elapsed: "0:02", queue_word: (word || "Running") + " (mock)" };
       draw();
@@ -1608,12 +1655,23 @@
   function score(text, q) {
     var t = norm(text), n = norm(q);
     if (!n) return 0.5;
-    if (t === n) return 3;
-    if (t.indexOf(n) === 0) return 2.2;
+    /* strip leading articles for the start-of-title comparison only: "The
+       Wind in the Willows" starts with "wind" for scoring purposes, so
+       "wind" scores 2.2 rather than 1.4. The original strings are kept for
+       the substring and every-word checks. */
+    var ta = t.replace(ARTICLES, ""), na = n.replace(ARTICLES, "");
+    if (ta === na || t === n) return 3;
+    if (ta.indexOf(na) === 0 || t.indexOf(n) === 0) return 2.2;
     if (t.indexOf(n) >= 0) return 1.4;
     /* every word of the query somewhere in the text */
     var ws = n.split(/\s+/).filter(Boolean);
     if (ws.length && ws.every(function (w) { return t.indexOf(w) >= 0; })) return 1.0;
+    if (ws.length > 1) {
+      var tw = t.split(/\s+/).filter(Boolean);
+      if (ws.every(function (w) {
+        return tw.some(function (x) { return x.indexOf(w) === 0; });
+      })) return 0.8;
+    }
     return 0;
   }
   /* THE TITLE IS WORTH MORE THAN THE AUTHOR, and the two together are worth
@@ -2404,27 +2462,11 @@
     said.textContent = (b.chapters ? b.chapters + " ch" : "")
       + (!b.chapters ? "" : b.voiced ? " · " + b.voiced + " voiced" : " · no audio");
     end.appendChild(said);
-    /* ====================================== THE ROW SELECTS (§5.8, 8 Sep)
-       Osca: *"clicking a result selects it (shows its detail/metadata, drives
-       THE WORKS for that item) ... ADD stays its own button inside the row;
-       the rest of the row is a click target with a real hover state."*
-
-       So the rule is ONE rule and it is the same for every row on the left:
-       THE BODY SELECTS, AND EVERY NAVIGATION IS A BUTTON. This row used to
-       be the DOOR -- a body click opened the reader and left the surface --
-       which made the shelf the only row you could not inspect without also
-       leaving, and made the door the thing you hit by accident. The door is
-       `Read` now, a control you can see, beside the counters it belongs
-       with. The chevron stays and does what the body does: it is the visible
-       affordance saying this row HAS a second question, and it is what
-       `reader/tests/test_surface.py::test_the_chevron_asks_for_the_book…`
-       presses. Two targets, one answer -- which is not two controls for one
-       thing, it is a control and the row it is drawn on. */
-    var read = el("button", "sf-verb");
-    read.type = "button"; read.textContent = "Read";
-    read.title = "open " + (b.title || b.slug) + " in the reader";
-    read.addEventListener("click", function (e) { e.stopPropagation(); openBook(b); });
-    end.appendChild(read);
+    /* ====================================== G-SET: READ IS REMOVED (Osca 16 Sep:
+       *"I can double click a book to open it in a reader."*). Double-click
+       opens the reader; single click toggles membership in the set. The ›
+       stays as the visible affordance for "this row HAS a second question"
+       and clicks like the body: toggle. */
     var peek = el("button", "sf-peek");
     peek.type = "button";
     peek.title = "its steps, in the works";
@@ -2436,6 +2478,26 @@
     });
     end.appendChild(peek);
     r.addEventListener("click", function () { select(r, b); });
+    /* DOUBLE-CLICK: opens the reader (what READ used to do), and does NOT
+       toggle membership — the click event fires first and toggles, then the
+       dblclick fires and we undo the toggle (the second click) so the net
+       effect is: the row is in the same membership state it was before the
+       double click, and the reader opens. */
+    r.addEventListener("dblclick", function (e) {
+      e.preventDefault();
+      /* undo the second click's toggle */
+      var inSet = S.set.some(function (m) { return m.slug === b.slug; });
+      var wasIn = !inSet;  /* the second click toggled: if it's in, it was out before */
+      if (wasIn) {
+        /* it was in before the two clicks: first click removed, second added.
+           Net: we want it IN the set and to open. It's already in, so just open. */
+      } else {
+        /* it was out before the two clicks: first click added, second removed.
+           Net: we want it OUT of the set and to open. It's already out. */
+      }
+      /* always open the reader */
+      openBook(b);
+    });
     return r;
   }
 
@@ -2508,17 +2570,19 @@
     }
 
     var end = r.querySelector(".end");
-    /* ITEM 7: AUDITION IT WITHOUT TAKING IT. `POST /peek` resolves a
-       streamable/readable url without fetching a byte to disk (its own
-       docstring: "no SSD write, no fetch.py cache entry, no parser"). It
-       answers for archive, librivox, youtube and any `direct_download`
-       candidate; a Gutenberg catalogue row it refuses in as many words --
-       pressed live, 8 Sep: HTTP 500 in 0.02 s, "no preview available yet for
-       source='gutenberg'". So the button is drawn only where the route can
-       actually answer, and the refusal is never dressed as a player. */
-    if (canPeek(c)) end.appendChild(rowBtn(st.kind === "text" ? "read" : "play",
-      "hear it or read it without adding it — /peek, no download",
-      function (b) { peek(c, r0, b); }));
+    /* G-SET: out rows carry Add and Sample ONLY (Osca 16 Sep). AUDITION,
+       OPEN and USE AS VOICE are gone. Sample = /peek for text (draw the
+       400 words in the column under the chip, not a modal) and the audition
+       for audio; never drawn on a shelf row. */
+    if (canPeek(c)) {
+      var samp = el("button", "sf-peek");
+      samp.type = "button"; samp.textContent = "Sample";
+      samp.title = st.kind === "text"
+        ? "read 400 words without adding it — /peek, no download"
+        : "hear it without adding it — /peek, no download";
+      samp.addEventListener("click", function (e) { e.stopPropagation(); peek(c, r0, samp); });
+      end.appendChild(samp);
+    }
     var verb = el("button", "sf-verb");
     verb.type = "button"; verb.textContent = "Add";
     verb.addEventListener("click", function (e) { e.stopPropagation(); add(r0, verb); });
@@ -2562,7 +2626,7 @@
      Three modes are not about one book: a `voice` clone is about a VOICE, a
      `pair` is about TWO books at once, and a `realign` is about a book's
      audio rather than its text. The other seven (single, queue, sample,
-     install, language, reparse, ingest) are either a render of one book or
+     install, language, reparse, ingest, push) are either a render of one book or
      are already carried by their own list, and they keep the lane they had.
      An unknown mode is a render: a mode studio adds tomorrow must not make a
      running job vanish from the works, which is what a whitelist would do. */
@@ -2573,11 +2637,29 @@
     if (job.mode === "realign") return "re-align";
     if (job.mode === "reparse") return "re-parse";
     if (job.mode === "ingest") return "import";
+    if (job.mode === "push") return "push";
+    /* G-WORKINGALL (141, 17 Sep): every mode studio can run, named.
+       `sample` is a 30 s audition; `language` adds a language pack;
+       `voice_lang` voices a book in a second language; `install` fetches
+       a model; `say`/`assistant` are voiceui glosses. Each gets its own
+       lane word so the WORKING row says WHAT is running, not just that
+       something is. An unknown mode still falls through to "render" so
+       a mode studio adds tomorrow never makes a running job vanish. */
+    if (job.mode === "sample") return "sample";
+    if (job.mode === "language") return "language";
+    if (job.mode === "voice_lang") return "voice";
+    if (job.mode === "install") return "install";
+    if (job.mode === "say" || job.mode === "assistant") return "voice";
     return "render";
   }
   /* ...and its name, for the modes that have one of their own. Null means
      "no name but the book's", and the caller then falls back to the book
      title exactly as it always did. */
+  /* A PUSH BATCH IS NOT A BOOK (G-RUNPUSH, 17 Sep): the Run that made it named
+     a destination and a ticked set, and the row says both. `job.chapters` is
+     the set (`studio/push.py::_drain`), `job.where` the group's own -- fall
+     back to the book's title when the batch is older than that field, so a
+     row from a `push.json` written before today still draws. */
   function jobName(job) {
     if (!job) return null;
     if (job.mode === "voice" && job.name)
@@ -2586,6 +2668,22 @@
       return job.left + " \u2194 " + job.right;
     if (job.mode === "realign" && job.slug)
       return "Re-aligning " + (bookTitle(job.slug) || job.slug);
+    if (job.mode === "push" && job.chapters && job.chapters.length)
+      return "Pushing " + job.chapters.length + (job.chapters.length === 1 ? " chapter" : " chapters")
+             + " to " + whereWord(job.where);
+    /* G-WORKINGALL (141, 17 Sep): names for the modes that were falling
+       through to the book's title alone. A `sample` is "Sampling c001";
+       a `language` is "Adding fr"; an `install` is "Installing qwen3";
+       a `voice_lang` is "Voicing fr"; `say`/`assistant` keep null (they
+       are about the book, and the title is the right name). */
+    if (job.mode === "sample" && job.chapter)
+      return "Sampling " + job.chapter;
+    if (job.mode === "language" && job.code)
+      return (job.action === "removing" ? "Removing " : "Adding ") + job.code;
+    if (job.mode === "install" && job.engine)
+      return "Installing " + job.engine;
+    if (job.mode === "voice_lang" && job.lang)
+      return "Voicing " + job.lang + (job.slug ? " for " + (bookTitle(job.slug) || job.slug) : "");
     return null;
   }
   function workingRows() {
@@ -2688,8 +2786,13 @@
         ? "queued · " + (row.unit || "the book") + (row.voice ? " · " + row.voice : "")
         : "queued · " + row.lane;
     var i = STEPS.indexOf(row.step);
+    /* A PUSH'S STEP IS NONE OF THE EIGHT (G-RUNPUSH, 17 Sep): the eight are
+       this Mac's steps and a batch leg's unit is being pushed, not stepped.
+       The tail below already appends the unit and the destination, so the
+       row reads `pushing · c001 · Kaggle`. */
     var n = i >= 0 ? "step " + (i + 1) + " of " + STEPS.length + " · " + row.step
-                   : (row.word || "running");
+                   : (row.job && row.job.mode === "push" && !row.step ? "pushing"
+                                                                     : (row.word || "running"));
     if (row.unit) n += " · " + row.unit;
     if (row.where) n += " · " + row.where;
     return n;
@@ -2991,19 +3094,41 @@
     return box;
   }
 
+  /* G-SET: keep S.sel in sync with the first book in the set, so 138/139's
+     blocks (`studioBlock`, `gridFor`, `voiceLangBlock`, `sampleBlock`) and
+     all the functions that read `S.sel` keep working unchanged. */
+  function setSelCompat() {
+    var book = S.set.filter(function (m) { return m.kind === "book"; })[0] || null;
+    S.sel = book;
+    return book;
+  }
+
   /* ----------------------------------------------------------- the second
      question about a row: not "open it" but "what has been done to it". The
      answer is the book's own chapter rows, so selecting one ASKS FOR THEM
-     (GET /book?slug=) and the grid draws what came back. */
+     (GET /book?slug=) and the grid draws what came back.
+
+     G-SET: a click TOGGLES membership in the set rather than replacing a
+     single `S.sel`. The row shows `.sel` when a member and no `.sel` when
+     removed. The column redraws to show chips + verbs for the combination. */
   function select(rowEl, subject) {
-    Array.prototype.forEach.call(listEl.querySelectorAll(".sf-row.sel"),
-      function (n) { n.classList.remove("sel"); });
-    rowEl.classList.add("sel");
-    S.sel = subject;
+    /* toggle: if already in the set, remove it; otherwise add it */
+    var idx = -1;
+    S.set.forEach(function (m, i) { if (m.slug === subject.slug) idx = i; });
+    if (idx >= 0) {
+      S.set.splice(idx, 1);
+      rowEl.classList.remove("sel");
+    } else {
+      S.set.push({ kind: "book", slug: subject.slug, title: subject.title,
+                   lang: subject.lang, hue: hueFor(subject.slug),
+                   author: subject.author, state: "ready" });
+      rowEl.classList.add("sel");
+    }
+    setSelCompat();
     S.selAuto = false;      /* a click outranks the page underneath */
     S.cand = null;          /* a book and a candidate are not both selected */
-    if (!subject || S.unitSlug !== subject.slug) { S.unit = null; S.unitSlug = null; }
-    if (S.live && subject && subject.slug) loadBook(subject.slug);
+    if (!S.unitSlug || !S.set.some(function (m) { return m.slug === S.unitSlug; })) { S.unit = null; S.unitSlug = null; }
+    if (S.live && S.sel && S.sel.slug) loadBook(S.sel.slug);
     if (S.live) { askEngines(false); askKaggle(false); }
     drawWorks();
   }
@@ -3095,27 +3220,10 @@
       a.addEventListener("click", function () { add(r0, a); });
       acts.appendChild(a);
     }
-    if (c.url) {
-      var o = el("button", "sf-verb ghost");
-      o.type = "button"; o.textContent = c.kind === "text" ? "Open" : "Play";
-      o.addEventListener("click", function () { openOut(c.url); });
-      acts.appendChild(o);
-      if (/^https?:/.test(c.url)) {
-        var uv = el("button", "sf-verb ghost");
-        uv.type = "button"; uv.textContent = "Use as voice";
-        uv.title = "clone a reference voice from this recording";
-        uv.addEventListener("click", function () { cloneVoiceFrom(c, uv); });
-        acts.appendChild(uv);
-      }
-    }
-    var to = subject();
-    if (to && S.live && c.kind !== "text") {
-      var at = el("button", "sf-verb ghost");
-      at.type = "button";
-      at.textContent = S.attached[attachKey(c, to)] || ("Attach to " + (to.title || to.slug));
-      at.addEventListener("click", function () { attach(c, to, at); });
-      acts.appendChild(at);
-    }
+    /* G-SET: AUDITION, OPEN and USE AS VOICE are removed from the candPane.
+       The only verb is Add (for text). Attach stays because it is a SET verb
+       ({book + audio} → Attach) and will be drawn when the combination calls
+       for it. For now, the candidate pane keeps Add only. */
     box.appendChild(acts);
     return box;
   }
@@ -3134,6 +3242,7 @@
      studio did not answer at all, which `why()` turns into words. `act()`
      is this plus the button and the column's own bookkeeping. */
   function postJSON(path, body) {
+    if (window.TTSTVWorks && window.TTSTVWorks.handles(path)) return window.TTSTVWorks.post(path, body);
     var url = api(path);
     if (!url) return Promise.resolve({ error: path + " — no studio behind this page" });
     return ask_(url, 30000, { method: "POST", cache: "no-store",
@@ -3312,9 +3421,18 @@
     var running = S.job || S.reparsing[0] || null;
     var busy = !!(running || S.pending.length || S.ingests.length ||
                   S.reparses.length || working.length);
-    worksEl.classList.toggle("empty", !busy && !S.sel);
+    worksEl.classList.toggle("empty", !busy && !S.set.length && !S.sel);
 
-    worksEl.appendChild(head("The works"));
+    /* THE COLUMN IS HEADED BY THE BOOK (G-DROPDOWN, Osca 16 Sep: "the works
+       is that book, however it still calls itself the works ... and shows
+       NOWHERE what book is selected"). `head("The works")` stood here, a
+       constant; now the first heading is `subject().title`, the author under
+       it in the book's own hue -- the spine colour the left list already uses
+       for that row -- and with nothing chosen the head SAYS to choose. Never
+       the word STUDIO or THE WORKS as a heading, by decision. */
+    var sh = subjectHead();
+    worksEl.appendChild(sh.head);
+    if (sh.who) worksEl.appendChild(sh.who);
     /* THE MIRROR IS GONE (Round 2 item 1). `jobCard(running, working[0])`
        stood here: it drew the running job a SECOND time -- the left WORKING
        band already had it -- and `working[0]` meant it could only ever draw
@@ -3330,10 +3448,95 @@
        is -- no studio, a studio that would not answer, or nothing chosen. */
     if (!S.live) worksEl.appendChild(note(noStudioLine()));
     else if (S.stateErr) worksEl.appendChild(note(S.stateErr));
-    else if (!S.sel && !S.cand && !S.choose)
+    else if (!S.set.length && !S.sel && !S.cand && !S.choose)
       worksEl.appendChild(note(working.length
         ? "Choose a book — " + working.length + " in the WORKING list, and its controls are on its own row."
         : "Choose a book to set its voice, where it renders, and its model."));
+
+    /* G-SET: draw the set as chips at the top of the column. Each chip has
+       a × that removes the member. Under the chips, for a SINGLE book
+       member, exactly 138/139's blocks. For other combinations, the verb
+       row says what can be done with this set. */
+    if (S.set.length) {
+      var chipBar = el("div", "sf-chips");
+      S.set.forEach(function (m) {
+        var chip = el("span", "sf-chip");
+        chip.textContent = m.title || m.slug || m.name || "";
+        chip.style.setProperty("--hue", m.hue || hueFor(m.slug || m.name || ""));
+        var x = el("button", "sf-chipx");
+        x.type = "button"; x.textContent = "×";
+        x.title = "remove " + (m.title || m.slug || "") + " from the set";
+        x.addEventListener("click", function (e) {
+          e.stopPropagation();
+          var i = S.set.indexOf(m);
+          if (i >= 0) S.set.splice(i, 1);
+          setSelCompat();
+          /* un-mark the row */
+          if (listEl && m.slug) {
+            var row = listEl.querySelector('.sf-row[data-key="b:' + m.slug + '"]');
+            if (row) row.classList.remove("sel");
+          }
+          drawWorks();
+        });
+        chip.appendChild(x);
+        chipBar.appendChild(chip);
+      });
+      worksEl.appendChild(chipBar);
+    }
+
+    /* G-SET: VERB ROW BY COMBINATION. For a single book member, 138/139's
+       blocks (studioBlock + gridFor) are drawn below. For OTHER combinations
+       the column draws a verb row that offers the verbs this combination
+       allows, and nothing else. */
+    var books = S.set.filter(function (m) { return m.kind === "book"; });
+    var audios = S.set.filter(function (m) { return m.kind === "audio"; });
+    if (S.set.length > 1 || (S.set.length === 1 && S.set[0].kind !== "book")) {
+      var verbRow = el("div", "sf-setverbs");
+      var drewVerb = false;
+      /* {book + audio} → Attach */
+      if (books.length === 1 && audios.length >= 1) {
+        audios.forEach(function (a) {
+          var ab = el("button", "sf-verb");
+          ab.type = "button"; ab.textContent = "Attach " + (a.title || a.name) + " to " + books[0].title;
+          ab.title = "POST /attach — align audio to text";
+          ab.addEventListener("click", function () {
+            act("/attach", { candidate: { url: a.url, title: a.title }, slug: books[0].slug }, ab, "Attaching");
+          });
+          verbRow.appendChild(ab);
+        });
+        drewVerb = true;
+      }
+      /* {audio} alone → Clone a voice */
+      if (books.length === 0 && audios.length >= 1) {
+        audios.forEach(function (a) {
+          var cb = el("button", "sf-verb");
+          cb.type = "button"; cb.textContent = "Clone voice from " + (a.title || a.name);
+          cb.title = "POST /voice — clone a reference voice from this recording";
+          cb.addEventListener("click", function () { cloneVoiceFrom({ url: a.url, title: a.title }, cb); });
+          verbRow.appendChild(cb);
+        });
+        drewVerb = true;
+      }
+      /* {book, book} different lang → Pair */
+      if (books.length === 2 && books[0].lang && books[1].lang && books[0].lang !== books[1].lang) {
+        var pb = el("button", "sf-verb");
+        pb.type = "button"; pb.textContent = "Pair " + books[0].title + " (" + books[0].lang + ") + " + books[1].title + " (" + books[1].lang + ")";
+        pb.title = "POST /pair — align sentences across languages";
+        pb.addEventListener("click", function () {
+          act("/pair", { left: books[0].slug, right: books[1].slug }, pb, "Pairing");
+        });
+        verbRow.appendChild(pb);
+        drewVerb = true;
+      }
+      /* {book, book} same lang → nothing, say why */
+      if (books.length === 2 && books[0].lang && books[1].lang && books[0].lang === books[1].lang) {
+        verbRow.appendChild(note("Both books are " + books[0].lang + " — same language, so there is nothing to pair."));
+      }
+      if (!drewVerb && books.length >= 2 && !(books.length === 2 && books[0].lang === books[1].lang)) {
+        verbRow.appendChild(note("This combination has no verb."));
+      }
+      worksEl.appendChild(verbRow);
+    }
 
     /* EVERY RENDER, ALL BOOKS -- the machine, above the book, and the one
        thing in this column that is not about what was clicked. `studio.html`
@@ -3351,10 +3554,14 @@
     /* THE FOUR CHOICES, above the steps -- studio.html's own order (voice,
        where, model, sample), and above the grid for its reason: they are what
        the steps will be run WITH. Only with a book in context; see the
-       section head on `studioBlock`. */
-    var st = studioBlock();
+       section head on `studioBlock`.
+       G-SET: only drawn for a SINGLE book member. With multiple members or
+       non-book members, the verb row above handles the combination. */
+    var singleBook = books.length === 1 && S.set.length === 1;
+    var st = singleBook ? studioBlock() : null;
     if (st) {
-      worksEl.appendChild(head("Studio"));
+      /* `head("Studio")` is gone (G-DROPDOWN): the column's one heading is
+         the book above, and the four rows carry their own labels. */
       /* §5.9: THE BENCH DRAWS IT TOO, and says which it is. A design surface
          that cannot show §4's four rows is not a bench -- and a bench that
          showed them without saying they were mocked would be worse. */
@@ -3377,9 +3584,9 @@
     /* G-SURF2: a shelf book's provenance, whole, above its steps -- where
        it came from is the first thing to know about a book you did not add
        five minutes ago */
-    if (S.sel && S.sel.slug && !S.sel.cells && "source" in S.sel)
+    if (S.sel && singleBook && S.sel.slug && !S.sel.cells && "source" in S.sel)
       worksEl.appendChild(provPane(S.sel));
-    if (S.sel) worksEl.appendChild(gridFor(S.sel));
+    if (S.sel && singleBook) worksEl.appendChild(gridFor(S.sel));
     /* the log is no longer drawn here: it belongs under its own WORKING row
        (item 2), which `draw()` appends immediately after that row */
     /* IN THE SAME TASK AS THE CLEAR. `worksEl.textContent = ""` above detaches
@@ -3389,23 +3596,60 @@
     mountPeekPlayer();     /* item 7, and for mountRefPlayer's exact reason */
   }
 
+  /* THE HEAD OF THE RIGHT COLUMN: what is selected, by name. `subject()` is
+     the clicked row or the book the page is in (G-AUTOSEL), and its title is
+     the first `.sf-h` in the column -- which is what the test reads. The
+     author is a second node, not part of the heading's text, coloured with
+     `hueFor(slug)` -- the same HELD colour the row's spine has, so the head
+     and the row read as one book. With no subject the head is an
+     instruction, not a name. */
+  function subjectHead() {
+    var b = subject();
+    var h = el("div", "sf-h sf-subj");
+    if (!b) { h.textContent = "Choose a book \u2014 click a row"; return { head: h, who: null }; }
+    h.textContent = b.title || b.slug || "";
+    var tint = hueFor(b.slug || b.key || "");
+    h.style.setProperty("--hue", tint);
+    var who = null, author = b.author;
+    if (!author) S.shelf.forEach(function (x) { if (x.slug === b.slug && x.author) author = x.author; });
+    if (author) {
+      who = el("div", "sf-subja");
+      who.textContent = author;
+      who.style.color = tint;
+    }
+    return { head: h, who: who };
+  }
+
   /* selecting by slug, from anywhere -- the queue on the right, a test, the
      host. It picks the shelf row when there is one so the grid gets a title
      and a hue, and asks studio for the chapters either way. */
   function selectSlug(slug) {
     var b = null;
     S.shelf.forEach(function (x) { if (x.slug === slug) b = x; });
-    S.sel = b || { slug: slug, title: slug };
+    /* G-SET: selectSlug adds to the set (replacing an auto-seeded member,
+       keeping a clicked one) rather than replacing the whole selection. */
+    var already = S.set.some(function (m) { return m.slug === slug; });
+    if (!already) {
+      /* if the last member was auto-seeded, replace it */
+      if (S.selAuto && S.set.length === 1) S.set.length = 0;
+      var member = { kind: "book", slug: slug, title: (b && b.title) || slug,
+                     lang: b && b.lang, hue: hueFor(slug),
+                     author: b && b.author, voice: b && b.voice,
+                     state: "ready" };
+      S.set.push(member);
+    }
+    setSelCompat();
     S.cand = null;
     if (listEl) {
+      /* mark .sel on rows that are in the set */
       Array.prototype.forEach.call(listEl.querySelectorAll(".sf-row.sel"),
         function (n) { n.classList.remove("sel"); });
-      var row = listEl.querySelector('.sf-row[data-key="b:' + slug + '"]');
-      if (row) row.classList.add("sel");
+      S.set.forEach(function (m) {
+        var row = listEl.querySelector('.sf-row[data-key="b:' + m.slug + '"]');
+        if (row) row.classList.add("sel");
+      });
     }
-    /* THE BOOK'S OWN VOICE WINS ON SELECTION -- what `render.json` says is
-       what go would use, so the pill starts there rather than on whatever the
-       last book was set to. A book with none keeps the current pill. */
+    /* THE BOOK'S OWN VOICE WINS ON SELECTION */
     if (S.sel && S.sel.voice) S.voice = S.sel.voice;
     /* a sample belongs to the book it was taken of */
     if (S.sample && S.sample.slug !== slug) S.sample = null;
@@ -3599,26 +3843,34 @@
     var rows = d ? d.chapters : benchChapters(subject);
     if (!rows.length) { box.appendChild(note("No chapters in that book yet.")); return box; }
 
-    /* THE WHOLE BOOK, IN ONE PRESS -- `POST /run {slug, queue:true}`, which
-       is studio's own "every remaining step of every chapter" (its handler's
-       own docstring). This is the "generate the audio (TTS)" end of Osca's
-       workflow when what you want is the book, not one chapter. */
+    /* ONE BUTTON, RUN (G-RUN, 16 Sep -- Osca: *"there should only be one
+       button, says Run. If your selections are correct ... then you just
+       select the chapters in the book, and Run."*). `Run what's left` and
+       `Voice the book` are gone. The Chapters dropdown above the rows is
+       the checkbox one (138's primitive, multi), all ticked by default, and
+       the ticked set scopes EVERYTHING under it: the rows drawn, the Sample,
+       and the one press -- `POST /run {slug, chapters:[ids], queue:true}`,
+       studio's queue over exactly those chapters (`serve.py::_handle_run`,
+       the third shape). The face SAYS what it will do before it is pressed,
+       computed from the ticked chapters' own cells and the four pickers
+       (`runFace`), and a Run that cannot act is disabled with the reason as
+       its title -- nothing ticked, nothing left, no voice, or the
+       destination's own refusal (`whereRefusal`, the same sentence Where's
+       greyed row carries). */
+    var ticked = subject.slug ? tickedFor(subject.slug, rows) : chapterIds(rows);
     if (subject.slug) {
-      var acts = el("div", "sf-acts");
-      var all = el("button", "sf-verb");
-      all.type = "button"; all.textContent = "Run what's left";
-      all.title = "every remaining step of every chapter — one at a time, studio's own queue";
+      box.appendChild(chaptersBlock(subject, rows));
+      var acts = el("div", "sf-acts sf-runrow");
+      var rf = runFace(subject, rows);
+      var all = el("button", "sf-verb sf-run");
+      all.type = "button"; all.textContent = rf.text;
+      all.title = rf.title;
+      all.disabled = rf.disabled;
       all.addEventListener("click", function () {
-        run({ slug: subject.slug, queue: true }, all, "Starting");
+        if (all.disabled) return;
+        run(rf.body, all, "Starting");
       });
       acts.appendChild(all);
-      var vo = el("button", "sf-verb ghost");
-      vo.type = "button"; vo.textContent = "Voice the book";
-      vo.title = "the speak step, every chapter";
-      vo.addEventListener("click", function () {
-        run({ slug: subject.slug, step: "speak", queue: true }, vo, "Starting");
-      });
-      acts.appendChild(vo);
 
       /* ---- PAIR CONTROL (15 Sep). Candidates are MEASURED, never typed:
          shelf books with a different `lang` from this book. studio.html's own
@@ -3647,7 +3899,9 @@
       box.appendChild(acts);
     }
 
-    rows.slice(0, 12).forEach(function (ch) {
+    /* ONLY THE TICKED ROWS, all of them: the dropdown is what scrolls, so
+       "N more chapters" is gone with the twelve-row cut. */
+    rows.filter(function (ch) { return ticked.indexOf(ch.id) >= 0; }).forEach(function (ch) {
       var row = el("div", "sf-gr");
       row.appendChild(el("span", "gid", ch.id || ""));
       row.appendChild(el("span", "gt", ch.title || ""));
@@ -3680,7 +3934,10 @@
         var next = nextStepFor(ch);
         var isRestitch = next === "restitch";
         var speakDone = (ch.state || {}).speak === "ok";
-        var b = el("button", "sf-verb");
+        /* THE SURGICAL DOOR STAYS -- one cell is `{slug, chapter, step}` --
+           but it draws as the cell's own small verb (`.sf-cell`), never as a
+           second bar beside Run. */
+        var b = el("button", "sf-verb ghost sf-cell");
         b.type = "button";
         b.textContent = next ? next : "done";
         if (isRestitch) {
@@ -3709,9 +3966,118 @@
       }
       box.appendChild(row);
     });
-    if (rows.length > 12) box.appendChild(note((rows.length - 12) + " more chapters."));
     if (S.actErr) box.appendChild(note(S.actErr));
     return box;
+  }
+
+  /* ------------------------------------------------ G-RUN: the ticked set
+     `S.ticks[slug]` is the Chapters dropdown's COMMITTED set. Absent means
+     every chapter -- the default, and never a stored list, so a book whose
+     chapters change under a re-parse is not left holding a stale tick. The
+     answer is always cut to the rows `GET /book` actually sent. */
+  function chapterIds(rows) {
+    return (rows || []).map(function (c) { return c && c.id; }).filter(Boolean);
+  }
+  function tickedFor(slug, rows) {
+    var ids = chapterIds(rows);
+    var t = slug ? S.ticks[slug] : null;
+    if (!t) return ids;
+    return ids.filter(function (id) { return t.indexOf(id) >= 0; });
+  }
+  /* WHAT RUN WILL DO: the union of the steps the ticked chapters still owe,
+     in STEPS order, and how many of them owe one. A cell is owed when it is
+     not `ok`/`n/a` -- `tasks.run_book`'s own skip rule -- and `align` is owed
+     again when the chapter has audio and no timings (`needsAlign`), which is
+     the one cell the row already refuses to call done. */
+  function runPlan(rows, ticked) {
+    var owed = {}, n = 0;
+    (rows || []).forEach(function (ch) {
+      if (!ch || ticked.indexOf(ch.id) < 0) return;
+      var cells = ch.state || {}, any = false;
+      STEPS.forEach(function (st) {
+        var m = cells[st];
+        if ((st === "align" && needsAlign(ch)) || (m !== "ok" && m !== "n/a")) { owed[st] = 1; any = true; }
+      });
+      if (any) n++;
+    });
+    return { steps: STEPS.filter(function (st) { return owed[st]; }), chapters: n };
+  }
+  /* the destination's own name and its own refusal -- the same `pill` and
+     `why` Where's dropdown draws, read off the same `/kaggle` payload, so
+     Run and Where never disagree about the lane */
+  function whereLabel() {
+    var k = S.live ? S.kaggle.value : MOCK_KAGGLE;
+    var id = whereNow(), o = k && k.destinations && k.destinations[id];
+    return (o && (o.pill || o.label)) || id;
+  }
+  function whereRefusal() {
+    if (S.live && S.kaggle.err) return S.kaggle.err;
+    var k = S.live ? S.kaggle.value : MOCK_KAGGLE;
+    var d = k && k.destinations;
+    if (!d) return null;                         /* not answered yet: not a refusal */
+    var id = whereNow(), o = d[id];
+    if (!o) return "this studio did not answer for " + id;
+    if (!o.ok) return o.why || o.short || (id + " is not available");
+    if (id === "modal" && !o.render_deployed) return "Deploy the render lane in Settings \u25B8 Modal first";
+    return null;
+  }
+  function runFace(b, rows) {
+    var ticked = tickedFor(b.slug, rows);
+    var plan = runPlan(rows, ticked);
+    var voice = S.voice || (b && b.voice) || null;
+    var out = { body: { slug: b.slug, chapters: ticked, queue: true }, plan: plan,
+                disabled: false, title: "", text: "Run" };
+    if (!ticked.length) {
+      out.disabled = true; out.text = "Run \u2014 nothing ticked";
+      out.title = "nothing ticked \u2014 open Chapters and tick at least one";
+      return out;
+    }
+    if (!plan.steps.length) {
+      out.disabled = true; out.text = "Run \u2014 nothing left";
+      out.title = "every step of the ticked chapters is done";
+      return out;
+    }
+    out.text = "Run \u2014 " + plan.steps.join(" \u00b7 ") + " on " + plan.chapters
+      + (plan.chapters === 1 ? " chapter" : " chapters")
+      + " \u00b7 " + (voice || "no voice") + " \u00b7 " + (currentEngine(b) || "no model")
+      + " \u00b7 " + whereLabel();
+    var refuse = whereRefusal();
+    if (!voice) { out.disabled = true; out.title = "no voice chosen yet"; }
+    else if (refuse) { out.disabled = true; out.title = refuse; }
+    else out.title = "POST /run {slug, chapters:[" + ticked.length + "], queue:true} \u2014 every "
+                   + "remaining step of the ticked chapters, one at a time, studio's own queue";
+    return out;
+  }
+  /* THE CHAPTERS DROPDOWN: 138's primitive, multi. "All" / "None" are the
+     two action rows at the top (they rewrite the pending set and post
+     nothing); Select commits the ticked set to `S.ticks[slug]` and the grid
+     redraws with only those rows. The face is the count -- "66 of 66
+     chapters" -- and the whole list scrolls, so no row is ever cut. */
+  function chaptersBlock(b, rows) {
+    var ids = chapterIds(rows);
+    var ticked = tickedFor(b.slug, rows);
+    var items = [
+      { id: "__all", text: "All", title: "tick every chapter",
+        action: function () { return ids.slice(); } },
+      { id: "__none", text: "None", title: "untick every chapter",
+        action: function () { return []; } } ];
+    rows.forEach(function (ch) {
+      if (!ch || !ch.id) return;
+      var left = nextStepFor(ch);
+      items.push({ id: ch.id, text: ch.id, sub: ch.title || "",
+                   title: left ? "next: " + left : "every step done" });
+    });
+    var n = ticked.length;
+    var dd = dropdown({
+      label: "Chapters", multi: true, items: items, values: ticked,
+      face: (n === 0 ? "none" : n) + " of " + ids.length + (ids.length === 1 ? " chapter" : " chapters"),
+      title: "the ticked chapters scope every verb below \u2014 Run, Sample and the rows",
+      onSelect: function (v) {
+        S.ticks[b.slug] = v.filter(function (id) { return id.charAt(0) !== "_"; });
+        drawWorks();
+      }
+    });
+    return prow("Chapters", dd, null);
   }
   /* the first step that is not done, in STEPS order. `null` when they all
      are -- which is what disables the button rather than running `export`
@@ -3843,6 +4209,7 @@
   /* THE ONE GET. `/state`, `/book`, `/engines`, `/kaggle` -- every JSON
      read of studio, with the clock on it and the words from `jsonOf`. */
   function getJSON(path, ms) {
+    if (window.TTSTVWorks && window.TTSTVWorks.handles(path)) return window.TTSTVWorks.get(path, ms);
     var url = api(path);
     if (!url) return Promise.reject(new Error("no studio behind this page"));
     return ask_(url, ms || 20000, { cache: "no-store" })
@@ -3933,6 +4300,250 @@
   }
   function sub(html) { var s = el("span", "sf-sub"); s.innerHTML = html; return s; }
 
+  /* ================================================================ DROPDOWN
+     ONE PRIMITIVE FOR THE FOUR PICKERS (G-DROPDOWN, Osca 16 Sep: "drop-downs
+     in the selectors ... let me scroll through them, if large ... Select in
+     the bottom right, then when selected, just show those on the studio
+     side"). Eight voices wrapped to four lines of pills and the engine row
+     carried a twenty-line note; a picker is a closed FACE that names the
+     current choice, and opens to a list.
+
+       dropdown({ label, items:[{id, text, face?, sub?, title?, off?, disabled?}],
+                  value | values, multi, onSelect, title?, empty? })
+
+     - the face shows the chosen item's `face` (or `text`); click opens;
+     - the list scrolls at ~9 rows (`.sf-ddlist` max-height in surface.css);
+     - radio (one `value`) or checkbox (`multi`, `values[]`) rows; a row with
+       `off` is a greyed <span> that cannot be picked and carries its reason
+       in its title -- the dashed pill's rule, kept;
+     - SELECT, bottom right, is the ONLY thing that commits: `onSelect(id)`
+       or `onSelect(ids[])` fires once, and only if the choice changed. Esc,
+       or a click outside, discards -- nothing is posted;
+     - keys inside the open list: up/down move, space ticks, Enter = Select;
+     - one open at a time: `DD.open` is a single label, so opening another
+       closes this one; the pending (unsent) choice lives in `DD.pend`, which
+       is what lets the column be redrawn by the 4 s poll while a list is
+       open without losing what was ticked or how far it was scrolled.
+
+     THE FACE IS NOT A LIBRARY and the list is not a <select>: a native
+     <select> cannot carry a greyed row with a sentence, a per-row sub, or a
+     Select button, and it looks different on each of the four platforms. */
+  var DD = { open: null, pend: null, idx: 0, scroll: 0, wired: false };
+  function ddDiscard(redraw) {
+    if (!DD.open) return;
+    DD.open = null; DD.pend = null;
+    if (redraw !== false) drawWorks();
+  }
+  function ddWire() {
+    if (DD.wired) return;
+    DD.wired = true;
+    /* A CLICK OUTSIDE DISCARDS. On the face of ANOTHER dropdown it discards
+       WITHOUT redrawing, so the click that follows the mousedown still lands
+       on that face (a redraw would replace the element under the pointer
+       and the browser would fire no click at all). */
+    document.addEventListener("mousedown", function (e) {
+      if (!DD.open) return;
+      var t = e.target;
+      var mine = t && t.closest ? t.closest(".sf-dd") : null;
+      if (mine && mine.getAttribute("data-dd") === DD.open) return;
+      ddDiscard(!(mine && t.closest(".sf-ddface")));
+    }, { capture: true });
+    /* ESC DISCARDS THE LIST, NOT THE SHEET. mount()'s window listener closes
+       the whole surface on Escape; this one runs first (capture) and stops
+       it while a list is open, so one Esc = one step back. */
+    addEventListener("keydown", function (e) {
+      if (!DD.open || e.key !== "Escape") return;
+      e.preventDefault();
+      if (e.stopImmediatePropagation) e.stopImmediatePropagation();
+      e.stopPropagation();
+      ddDiscard();
+    }, { capture: true });
+  }
+  function ddSame(a, b, multi) {
+    if (!multi) return a === b;
+    if (!a || !b || a.length !== b.length) return false;
+    var x = a.slice().sort(), y = b.slice().sort();
+    for (var i = 0; i < x.length; i++) if (x[i] !== y[i]) return false;
+    return true;
+  }
+  function dropdown(o) {
+    ddWire();
+    var items = o.items || [], multi = !!o.multi;
+    var cur = multi ? (o.values || []).slice() : (o.value == null ? null : o.value);
+    var isOpen = DD.open === o.label;
+    if (isOpen && DD.pend == null) DD.pend = multi ? cur.slice() : cur;
+    var box = el("div", "sf-dd");
+    box.setAttribute("data-dd", o.label);
+    if (o.title) box.title = o.title;
+    if (isOpen) box.classList.add("open");
+
+    function chosen() {
+      return items.filter(function (it) {
+        return multi ? cur.indexOf(it.id) >= 0 : it.id === cur; });
+    }
+    var face = el("button", "sf-ddface");
+    face.type = "button";
+    face.setAttribute("aria-haspopup", "listbox");
+    face.setAttribute("aria-expanded", isOpen ? "true" : "false");
+    var fx = el("span", "fx");
+    var on = chosen();
+    fx.textContent = o.face != null ? o.face
+      : on.length ? on.map(function (it) { return it.face || it.text; }).join(", ")
+      : (o.empty || "none");
+    face.appendChild(fx);
+    var cx = el("span", "cx"); cx.textContent = isOpen ? "\u25B4" : "\u25BE";
+    face.appendChild(cx);
+    if (!items.length) face.disabled = true;
+    face.addEventListener("click", function (e) {
+      e.stopPropagation();
+      if (isOpen) { ddDiscard(); return; }
+      DD.open = o.label;
+      DD.pend = multi ? cur.slice() : cur;
+      DD.scroll = 0;
+      var ids = items.map(function (it) { return it.id; });
+      DD.idx = Math.max(0, ids.indexOf(multi ? cur[0] : cur));
+      drawWorks();
+    });
+    box.appendChild(face);
+
+    var pop = el("div", "sf-ddpop");
+    pop.hidden = !isOpen;
+    var list = el("div", "sf-ddlist");
+    list.setAttribute("role", "listbox");
+    if (multi) list.setAttribute("aria-multiselectable", "true");
+    list.tabIndex = -1;
+    var opts = [], actOf = {};
+    function has(id) { return multi ? DD.pend.indexOf(id) >= 0 : DD.pend === id; }
+    function tick(id) {
+      /* G-RUN: an ACTION row (All / None) rewrites the pending set in place
+         of ticking; it is never a value and never lands in the answer */
+      if (actOf[id]) { if (multi) DD.pend = actOf[id](DD.pend.slice()); return; }
+      if (!multi) { DD.pend = id; return; }
+      var i = DD.pend.indexOf(id);
+      if (i >= 0) DD.pend.splice(i, 1); else DD.pend.push(id);
+    }
+    function paint() {
+      opts.forEach(function (r) {
+        if (r.tagName !== "BUTTON") return;
+        if (r.classList.contains("act")) {
+          r.classList.toggle("focus", isOpen && Number(r.getAttribute("data-i")) === DD.idx);
+          return;
+        }
+        var lit = isOpen ? has(r.getAttribute("data-id")) : r.classList.contains("cur");
+        r.setAttribute("aria-selected", lit ? "true" : "false");
+        var tk = r.querySelector(".tk");
+        if (tk) tk.textContent = multi ? (lit ? "\u2611" : "\u2610") : (lit ? "\u25CF" : "\u25CB");
+        r.classList.toggle("focus", isOpen && Number(r.getAttribute("data-i")) === DD.idx);
+      });
+    }
+    items.forEach(function (it, i) {
+      var r;
+      if (it.off) {
+        r = el("span", "sf-opt off");
+        r.textContent = it.text;
+        if (it.title) r.title = it.title;
+        r.setAttribute("data-id", it.id); r.setAttribute("data-i", i);
+        list.appendChild(r); opts.push(r);
+        return;
+      }
+      if (it.action && multi) {
+        actOf[it.id] = it.action;
+        r = el("button", "sf-opt act");
+        r.type = "button";
+        r.setAttribute("data-id", it.id); r.setAttribute("data-i", i);
+        var ax = el("span", "tx"); ax.textContent = it.text; r.appendChild(ax);
+        if (it.title) r.title = it.title;
+        r.addEventListener("click", function (e) {
+          e.stopPropagation();
+          if (!isOpen) return;
+          tick(it.id); DD.idx = i; paint();
+        });
+        list.appendChild(r); opts.push(r);
+        return;
+      }
+      r = el("button", "sf-opt");
+      r.type = "button";
+      r.setAttribute("role", "option");
+      r.setAttribute("data-id", it.id); r.setAttribute("data-i", i);
+      var tk = el("i", "tk"); r.appendChild(tk);
+      var tx = el("span", "tx"); tx.textContent = it.text; r.appendChild(tx);
+      if (it.sub) { var sx = el("span", "sx"); sx.textContent = it.sub; r.appendChild(sx); }
+      if (it.title) r.title = it.title;
+      if (it.disabled) r.disabled = true;
+      var isCur = multi ? cur.indexOf(it.id) >= 0 : it.id === cur;
+      if (isCur) r.classList.add("cur");
+      r.addEventListener("click", function (e) {
+        e.stopPropagation();
+        if (r.disabled || !isOpen) return;
+        tick(it.id); DD.idx = i; paint();
+      });
+      list.appendChild(r); opts.push(r);
+    });
+    paint();
+    list.addEventListener("scroll", function () { DD.scroll = list.scrollTop; });
+    pop.appendChild(list);
+
+    function commit() {
+      var v = multi ? DD.pend.slice() : DD.pend;
+      var changed = !ddSame(v, cur, multi);
+      DD.open = null; DD.pend = null;
+      if (changed && o.onSelect) o.onSelect(v); else drawWorks();
+    }
+    var foot = el("div", "sf-ddfoot");
+    var hx = el("span", "hx");
+    hx.textContent = multi ? "\u2191\u2193 move \u00b7 space ticks \u00b7 \u23ce selects \u00b7 esc discards"
+                           : "\u2191\u2193 move \u00b7 \u23ce selects \u00b7 esc discards";
+    foot.appendChild(hx);
+    var sel = el("button", "sf-verb sf-ddsel");
+    sel.type = "button"; sel.textContent = "Select";
+    sel.addEventListener("click", function (e) { e.stopPropagation(); commit(); });
+    foot.appendChild(sel);
+    pop.appendChild(foot);
+
+    pop.addEventListener("keydown", function (e) {
+      if (!isOpen) return;
+      var live = opts.filter(function (n) { return n.tagName === "BUTTON" && !n.disabled; });
+      if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); ddDiscard(); return; }
+      if (e.key === "Enter") { e.preventDefault(); e.stopPropagation(); commit(); return; }
+      if (!live.length) return;
+      var pos = 0;
+      live.forEach(function (n, k) { if (Number(n.getAttribute("data-i")) === DD.idx) pos = k; });
+      if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+        e.preventDefault(); e.stopPropagation();
+        pos = e.key === "ArrowDown" ? Math.min(live.length - 1, pos + 1) : Math.max(0, pos - 1);
+        DD.idx = Number(live[pos].getAttribute("data-i"));
+        paint();
+        if (live[pos].scrollIntoView) live[pos].scrollIntoView({ block: "nearest" });
+        if (live[pos].focus) live[pos].focus();
+      } else if (e.key === " " || e.key === "Spacebar") {
+        /* preventDefault: a focused <button> would otherwise fire click on
+           keyup and tick the same row twice */
+        e.preventDefault(); e.stopPropagation();
+        tick(live[pos].getAttribute("data-id")); paint();
+      }
+    });
+    box.appendChild(pop);
+
+    if (isOpen) {
+      /* the column was just rebuilt (open, or the 4 s poll): the scroll and
+         the focus go back where they were, after this task */
+      setTimeout(function () {
+        if (DD.open !== o.label || !worksEl) return;
+        var here = worksEl.querySelector('.sf-dd[data-dd="' + o.label + '"]');
+        if (!here) return;
+        var l = here.querySelector(".sf-ddlist");
+        if (l && DD.scroll) l.scrollTop = DD.scroll;
+        var pp = here.querySelector(".sf-ddpop");
+        var active = document.activeElement;
+        if (pp && !(active && pp.contains(active))) {
+          var f = pp.querySelector(".sf-opt.focus") || l || pp;
+          if (f && f.focus) f.focus();
+        }
+      }, 0);
+    }
+    return box;
+  }
+
   /* 1 · THE CLONED-VOICE PICKER. `/state`.voices[] rendered as cards, the
      chosen one persisted the way studio.html persists it (`POST /render
      {slug, voice}`), the reference played off `/voice-clip?name=` -- which is
@@ -3968,18 +4579,24 @@
     return out;
   }
   function langBlock(b) {
-    var box = pills();
     var line = el("div", "sf-vsub");
     var on = (b && b.lang) || "";
-    bookLangs(b).forEach(function (code) {
-      var p = onPill(code, code === on, false);
-      p.title = code === on ? "the language this book was parsed as"
-                            : "re-read it as " + code + " — POST /lang, then Re-parse";
-      p.addEventListener("click", function () { pickLang(b, code, p); });
-      box.appendChild(p);
+    /* G-DROPDOWN: the codes are the same list in the same order (`bookLangs`),
+       as rows of one dropdown; the "changing it rewrites..." sentence is the
+       dropdown's title now, not a paragraph under it. Select posts exactly
+       what the pill's click posted: `pickLang` -> POST /lang {slug, lang}. */
+    var box = dropdown({
+      label: "Language",
+      title: "set at parse time; changing it rewrites the book's language and "
+        + "nothing else \u2014 Re-parse is what applies it",
+      items: bookLangs(b).map(function (code) {
+        return { id: code, text: code,
+                 title: code === on ? "the language this book was parsed as"
+                                    : "re-read it as " + code + " \u2014 POST /lang, then Re-parse" };
+      }),
+      value: on || null, empty: "no language",
+      onSelect: function (code) { pickLang(b, code, null); }
     });
-    line.appendChild(sub("set at parse time; changing it rewrites the book's language and "
-      + "nothing else — Re-parse is what applies it"));
     /* RE-PARSE IS NAMED AND NOT DRAWN. `POST /reparse` is NOT one of the
        twenty-two, so on a paired phone this button would 404 -- and a
        control that cannot act is worse than no control (item 2's rule). It
@@ -4045,41 +4662,49 @@
   }
 
     function voiceBlock(b) {
-    var box = pills();
     var list = S.voices || [];
-    if (!list.length) {
-      box.appendChild(offPill("no voice yet", "TTS_DATA/voices/ is empty — import one"));
-    } else {
-      list.forEach(function (v) {
-        var p = onPill(v.name, v.name === S.voice, false);
-        /* THE PILL CARRIES ITS OWN PLAYBACK (studio.html, Osca 31 Aug): the
-           glyph is a child of the SELECTED pill and nothing else on the row
-           moves. Pressing it is not choosing a voice, so it stops the click
-           from reaching the pill. */
-        if (v.name === S.voice && v.clip) {
-          var g = el("i", "pp");
-          g.textContent = (REF_PLAY !== v.name || REF_PAUSED) ? "▸" : "❚❚";
-          g.title = (REF_PLAY !== v.name || REF_PAUSED) ? "Play this reference"
-                                                        : "Pause this reference";
-          g.addEventListener("click", function (e) { e.stopPropagation(); toggleRef(v.name); });
-          p.insertBefore(g, p.firstChild);
-        }
-        p.addEventListener("click", function () { pickVoice(v.name); });
-        box.appendChild(p);
-      });
-    }
-    /* IMPORT IS THE LAST PILL, DASHED -- studio.html's own shape. One file
-       picker, `POST /voice?name=&filename=` with the raw bytes, and the new
-       voice arrives as a pill on the next `/state`. */
-    var imp = el("button", "sf-pill imp");
-    imp.type = "button"; imp.textContent = "Import";
-    imp.title = "An mp3 or wav to clone — 15–30 s of clean speech";
-    imp.addEventListener("click", function () { pickVoiceFile(null, imp); });
-    box.appendChild(imp);
-
     var v = list.filter(function (x) { return x.name === S.voice; })[0] || null;
+    /* G-DROPDOWN: the voices are rows of one dropdown, in `/state`.voices'
+       own order, the face reading "name \u00b7 27 s". Select posts exactly what
+       the pill's click posted -- `pickVoice(name)` -> POST /render
+       {slug, voice}. With no voice the face says so and cannot open. */
+    function secs(x) { return x.seconds ? Math.round(x.seconds) + " s" : ""; }
+    var dd = dropdown({
+      label: "Voice",
+      items: list.map(function (x) {
+        return { id: x.name, text: x.name, sub: secs(x),
+                 face: x.name + (secs(x) ? " \u00b7 " + secs(x) : ""),
+                 title: x.blocked ? "refused by refguard \u2014 see the line under the row" : "" };
+      }),
+      value: S.voice || null,
+      empty: list.length ? "no voice chosen" : "no voice yet",
+      onSelect: function (name) { pickVoice(name); }
+    });
+    var box = el("div", "sf-ddrow");
+    box.appendChild(dd);
+    /* THE PLAY GLYPH STAYS ON THE ROW (studio.html, Osca 31 Aug): beside the
+       face, for the CHOSEN voice, and pressing it is not choosing a voice. */
+    if (v && v.clip) {
+      var g = el("button", "sf-pp");
+      g.type = "button";
+      g.textContent = (REF_PLAY !== v.name || REF_PAUSED) ? "\u25B8" : "\u275A\u275A";
+      g.title = (REF_PLAY !== v.name || REF_PAUSED) ? "Play this reference"
+                                                    : "Pause this reference";
+      g.addEventListener("click", function (e) { e.stopPropagation(); toggleRef(v.name); });
+      box.appendChild(g);
+    }
+
     var line = el("div", "sf-vsub");
     line.appendChild(sub(voiceWords(v, list.length)));
+    /* IMPORT IS A BUTTON UNDER THE ROW NOW, with Change reference -- one file
+       picker, `POST /voice?name=&filename=` with the raw bytes, and the new
+       voice arrives as a row of the dropdown on the next `/state`. */
+    var acts = el("div", "sf-acts");
+    var imp = el("button", "sf-verb ghost");
+    imp.type = "button"; imp.textContent = "Import";
+    imp.title = "An mp3 or wav to clone \u2014 15\u201330 s of clean speech";
+    imp.addEventListener("click", function () { pickVoiceFile(null, imp); });
+    acts.appendChild(imp);
     if (v) {
       /* "CHANGE REFERENCE" IS THE SAME ROUTE WITH THIS VOICE'S NAME.
          `voice.importvoice <file> --name <name>` finds the window, cuts it on
@@ -4087,7 +4712,6 @@
          transcript from exactly those bytes -- and `voice/refguard.py` measures
          the pair before anything reaches that folder. So this button is the
          whole of "change the reference", and the guard is what makes it safe. */
-      var acts = el("div", "sf-acts");
       var ch = el("button", "sf-verb ghost");
       ch.type = "button"; ch.textContent = "Change reference";
       ch.title = "a new clip for " + v.name + " — importvoice re-cuts it and refguard measures it";
@@ -4105,9 +4729,9 @@
         });
         acts.appendChild(ag);
       }
-      line.appendChild(acts);
-      line.appendChild(refSlot());
     }
+    line.appendChild(acts);
+    if (v) line.appendChild(refSlot());
     /* THE IMPORTER, WHILE IT RUNS AND WHEN IT REFUSES (8 Sep addendum).
        A voice import takes the one job slot like everything else, so it is on
        `/state`'s job with `mode:"voice"`. yt-dlp plus two whisper passes is
@@ -4240,7 +4864,7 @@
     if (!name) { S.voiceErr = "that file name has nothing to make a voice name out of"; drawWorks(); return; }
     var url = api("/voice?name=" + encodeURIComponent(name)
                   + "&filename=" + encodeURIComponent(f.name));
-    if (!url) { S.voiceErr = "/voice — no studio behind this page"; drawWorks(); return; }
+    if (!url) { var _h = window.TTSTVHost; S.voiceErr = (_h && _h.isWeb) ? _h.WHY_STUDIO : ("/voice — no studio behind this page"); drawWorks(); return; }
     if (btn) { btn.disabled = true; btn.dataset.was = btn.textContent; btn.textContent = "Importing…"; }
     /* AN IMPORTED VOICE IS THE CHOSEN ONE the moment the route takes it --
        studio.html's own rule, and it is what makes "the new voice appears as
@@ -4309,37 +4933,37 @@
     if (S.live && S.kaggle.err) { box.appendChild(offPill("no answer", S.kaggle.err));
                              line.appendChild(note(S.kaggle.err));
                              return prow("Where", box, line); }
-    if (!k) { box.appendChild(offPill("asking…", "GET /kaggle")); return prow("Where", box, line); }
+    if (!k) { box.appendChild(offPill("asking\u2026", "GET /kaggle")); return prow("Where", box, line); }
     var d = k.destinations || {};
     var on = whereNow();
     /* Kaggle first because that is the standard route and where the free GPU
        is (CLAUDE.md: "Kaggle is the standard route"), Fast second because it
-       is the other remote box, This Mac last -- `destinations()`' own order. */
+       is the other remote box, This Mac last -- `destinations()`' own order.
+       G-DROPDOWN: the same three, in the same order, as rows of one dropdown;
+       a lane that is not available is a greyed row carrying the server's own
+       `short` on its face and its `why` in the title -- never hidden. */
+    var items = [];
     ["kaggle", "modal", "local"].forEach(function (id) {
       var o = d[id];
-      if (!o) { box.appendChild(offPill(id + " — this studio did not answer for it")); return; }
+      if (!o) { items.push({ id: id, text: id + " \u2014 this studio did not answer for it", off: true }); return; }
       var label = o.pill || o.label || o.id;
       if (!o.ok) {
-        /* DASHED, WITH THE REASON, NEVER HIDDEN -- and the sentence is the
-           server's own `short`, falling back to its `why`. */
-        box.appendChild(offPill(label + " — " + (o.short || o.why || "not available"),
-                                o.why || ""));
+        items.push({ id: id, text: label + " \u2014 " + (o.short || o.why || "not available"),
+                     title: o.why || "", off: true });
         return;
       }
-      /* Modal connected but the render lane not deployed: the pill is drawn
-         disabled rather than dashed-off, because the connection IS there --
+      /* Modal connected but the render lane not deployed: the row is drawn
+         disabled rather than greyed-off, because the connection IS there --
          the person needs to press Deploy in Settings, not re-sign-in. */
       if (id === "modal" && !o.render_deployed) {
-        var dp = onPill(label, false, true);
-        dp.title = "Deploy the render lane in Settings ▸ Modal first";
-        box.appendChild(dp);
+        items.push({ id: id, text: label, disabled: true,
+                     title: "Deploy the render lane in Settings \u25B8 Modal first" });
         return;
       }
-      var p = onPill(label, id === on, false);
-      p.title = o.label || "";
-      p.addEventListener("click", function () { pickWhere(id, p); });
-      box.appendChild(p);
+      items.push({ id: id, text: label, title: o.label || "" });
     });
+    box = dropdown({ label: "Where", items: items, value: on, empty: "nowhere",
+                     onSelect: function (id) { pickWhere(id, null); } });
     if (d.default_reason) line.appendChild(sub(esc(d.default_reason)));
     /* WHAT THE FREE GPU HAS LEFT, AND WHAT IS ON IT -- rows 5 and 6 of the
        twelve (`PROMPTS/reasoning/phone-studio.md` §4: *"This week (GPU
@@ -4432,38 +5056,54 @@
     var where = whereNow();
     var rows = (cat.by_destination && cat.by_destination[where]) || [];
     var cur = currentEngine(b);
-    rows.forEach(function (e) {
-      if (!e.ok) {
-        /* A pill that cannot be picked is a span, not a button: the server
-           would refuse to write it (`state.set_engine` through
-           `remote.refuse_engine`), so it must not pretend to be a choice.
-           Four words on the face, the port's whole sentence in the title. */
-        box.appendChild(offPill(e.id + " — " + (e.why || "not available"), e.sentence || ""));
-        return;
-      }
-      var p = onPill(e.id, e.id === cur, false);
-      p.addEventListener("click", function () { pickEngine(b, e.id, p); });
-      box.appendChild(p);
+    /* G-DROPDOWN: the same rows in the same order, as one dropdown. A model
+       that cannot be picked (`!e.ok`) is a greyed row -- the server would
+       refuse to write it (`state.set_engine` through `remote.refuse_engine`),
+       so it must not pretend to be a choice -- with the port's whole
+       sentence as its title. Select posts what the pill posted:
+       `pickEngine` -> POST /render {slug, engine, where}. */
+    var items = rows.map(function (e) {
+      if (!e.ok) return { id: e.id, text: e.id + " \u2014 " + (e.why || "not available"),
+                          title: e.sentence || "", off: true };
+      return { id: e.id, text: e.id };
     });
-    /* The book's own engine when this destination cannot offer it -- shown,
-       because it is what render.json says and what go would try. */
+    /* The book's own engine when this destination cannot offer it -- shown
+       first, greyed, because it is what render.json says and what go would
+       try. */
     if (cur && !rows.some(function (e) { return e.id === cur; })) {
-      box.insertBefore(offPill(cur + " — " + (where === "local" ? "not on this Mac"
-                                                                : "not offered on " + where)),
-                       box.firstChild);
+      items.unshift({ id: cur, off: true,
+                      text: cur + " \u2014 " + (where === "local" ? "not on this Mac"
+                                                                 : "not offered on " + where) });
     }
-    if (!box.children.length) {
-      box.appendChild(offPill(where === "local" ? "no model installed here"
-                                                : "no model offered"));
+    if (!items.length) {
+      items.push({ id: "", off: true,
+                   text: where === "local" ? "no model installed here" : "no model offered" });
     }
+    box = dropdown({ label: "Model", items: items, value: cur || null, empty: "no model",
+                     onSelect: function (id) { pickEngine(b, id, null); } });
     /* THE SENTENCES SIT ABOVE THE GPU-MINUTES ON PURPOSE (studio.html):
        "Osca should read that before the GPU-minutes, not discover it in the
-       output." `limits` is `voice/port.py::limits()` verbatim. */
+       output." `limits` is `voice/port.py::limits()` verbatim -- every line
+       is in the DOM, and the note is SHUT to its first line with "more \u25B8"
+       opening it in place (a class, no redraw), because twenty lines under
+       a picker is what Osca asked to have folded away. */
     var row = (cat.engines || []).filter(function (e) { return e.id === cur; })[0];
     if (row && row.limits && row.limits.length) {
-      var lim = el("div", "sf-limits");
+      var lim = el("div", "sf-limits" + (S.limitsOpen ? "" : " shut"));
       lim.appendChild(el("b", null, "What " + esc(cur) + " costs, before the minutes:"));
-      row.limits.forEach(function (l) { lim.appendChild(el("span", null, "· " + esc(l))); });
+      row.limits.forEach(function (l) { lim.appendChild(el("span", null, "\u00b7 " + esc(l))); });
+      if (row.limits.length > 1) {
+        var more = el("button", "sf-more");
+        more.type = "button";
+        more.textContent = S.limitsOpen ? "less \u25B4" : "more \u25B8";
+        more.addEventListener("click", function (e) {
+          e.stopPropagation();
+          S.limitsOpen = !S.limitsOpen;
+          lim.classList.toggle("shut", !S.limitsOpen);
+          more.textContent = S.limitsOpen ? "less \u25B4" : "more \u25B8";
+        });
+        lim.appendChild(more);
+      }
       line.appendChild(lim);
     }
     if (S.engineErr) line.appendChild(note(S.engineErr));
@@ -4546,7 +5186,8 @@
       return prow("Sample", box, null);
     }
     /* WHY IT CANNOT, BEFORE IT IS PRESSED -- the same three the server checks. */
-    var blocked = !unit ? "no chapter to sample yet"
+    var blocked = !unit ? (S.ticks[b.slug] && !S.ticks[b.slug].length
+                             ? "no chapter ticked \u2014 open Chapters" : "no chapter to sample yet")
       : (S.ssd && S.ssd.mounted === false) ? "the SSD is unplugged — the model and the voice clip are on it"
       : !S.voice ? "no voice chosen yet" : null;
     box.appendChild(sampleActs(b, unit, "Sample 30 s of " + (unit || "…"), blocked));
@@ -4580,6 +5221,9 @@
        books. Otherwise the first row `GET /book` sent. */
     if (S.unit && S.unitSlug === b.slug
         && (rows || []).some(function (c) { return c.id === S.unit; })) return S.unit;
+    /* G-RUN: with a ticked set committed, the FIRST ticked chapter -- and
+       none ticked is no unit, which the Sample row then says. */
+    if (S.ticks[b.slug]) return tickedFor(b.slug, rows)[0] || null;
     return (rows && rows.length && rows[0].id) || null;
   }
   function sample(b, unit, btn) {
@@ -4936,13 +5580,11 @@
     } catch (e) {}
     return null;
   }
-  /* THE SUBJECT: the book a recording would attach to, a chapter would be
-     voiced in, and the studio block's choices are about -- what is selected
-     in the works column first, the book underneath second. Never a guess:
-     if neither is there, the verb is not drawn. It had three names
-     (`attachTarget`, `contextBook`, `studioSubject`) for one answer. */
+  /* THE SUBJECT: G-SET changes this to return set[0] when it is a book,
+     so 138/139's blocks keep working. The book underneath is second. */
   function subject() {
-    if (S.sel && S.sel.slug) return S.sel;
+    var book = S.set.filter(function (m) { return m.kind === "book"; })[0] || null;
+    if (book && book.slug) return book;
     if (S.inBook) {
       var b = null;
       S.shelf.forEach(function (x) { if (x.slug === S.inBook) b = x; });
@@ -5058,6 +5700,7 @@
         grid: worksEl ? worksEl.querySelectorAll(".sf-gr").length : 0,
         buttons: worksEl ? worksEl.querySelectorAll("button").length : 0,
         log: Object.keys(S.logs).length, sel: S.sel ? (S.sel.slug || S.sel.key || null) : null,
+        set: S.set.map(function (m) { return { kind: m.kind, slug: m.slug, title: m.title }; }),
         /* the addendum, as numbers: the file picker's rows, and what the
            voice importer is doing right now */
         choose: S.choose ? { files: S.choose.files.length,
@@ -5095,29 +5738,35 @@
         function counts(label) {
           var r = rowOf(label);
           if (!r) return null;
-          return { on: r.querySelectorAll(".sf-pill:not(.off)").length,
-                   off: r.querySelectorAll(".sf-pill.off").length,
-                   /* THE GLYPH IS A CONTROL, NOT PART OF THE NAME. The
-                      selected voice pill carries its own play/pause child, so
-                      its textContent starts with one; a label is what the pill
-                      SAYS. */
+          /* G-DROPDOWN: the rows are `.sf-opt`s of one dropdown (in the DOM
+             whether the list is open or shut), `on`/`off` count the pickable
+             and the greyed, `sel` is the COMMITTED choice (`.cur`), `face`
+             is what the shut face says, `open` whether this one is open. */
+          function label(n) { var t = n.querySelector(".tx"); return t ? t.textContent : nameOf(n); }
+          var f = r.querySelector(".sf-ddface .fx");
+          return { on: r.querySelectorAll(".sf-opt:not(.off)").length,
+                   off: r.querySelectorAll(".sf-opt.off").length,
                    sel: (function () {
-                     var s = r.querySelector('.sf-pill[aria-selected="true"]');
-                     return s ? nameOf(s) : null;
+                     var s = r.querySelector(".sf-opt.cur");
+                     return s ? label(s) : null;
                    })(),
-                   labels: Array.prototype.map.call(r.querySelectorAll(".sf-pill"), nameOf) };
+                   face: f ? f.textContent : null,
+                   open: !!r.querySelector(".sf-dd.open"),
+                   labels: Array.prototype.map.call(r.querySelectorAll(".sf-opt"), label) };
         }
         var wr = rowOf("Where");
         return {
           box: box(".sf-studio"),
           rows: st.querySelectorAll(".sf-prow").length,
+          /* the head above the studio: the book's title, or the instruction */
+          head: (function () { var h = worksEl.querySelector(".sf-h"); return h ? h.textContent : null; })(),
+          ddOpen: DD.open,
           voice: counts("Voice"),
           where: counts("Where"),
           model: counts("Model"),
           /* the three lanes, and whether each is drawn at all -- the whole of
              "never hidden", as a number rather than a description */
-          lanes: wr ? Array.prototype.map.call(wr.querySelectorAll(".sf-pill"),
-                        function (n) { return n.textContent; }).length : 0,
+          lanes: wr ? wr.querySelectorAll(".sf-opt").length : 0,
           limits: st.querySelectorAll(".sf-limits span").length,
           refslot: !!st.querySelector("#sfRefSlot"),
           refPlaying: !!(REF_AUDIO && REF_AUDIO.parentNode) && !REF_PAUSED,
@@ -5129,6 +5778,24 @@
           chosenVoice: S.voice, where_now: whereNow(),
           engine: currentEngine(subject()),
           unit: sampleUnit(subject()),
+          /* G-RUN: the one button and the Chapters dropdown, off the grid */
+          run: (function () {
+            var b = worksEl.querySelector(".sf-grid .sf-run");
+            return b ? { text: b.textContent, disabled: !!b.disabled, title: b.title } : null;
+          })(),
+          chapters: (function () {
+            var g = worksEl.querySelector(".sf-grid"), r = g && g.querySelector(".sf-prow");
+            if (!r) return null;
+            var f = r.querySelector(".sf-ddface .fx");
+            return { face: f ? f.textContent : null,
+                     opts: Array.prototype.filter.call(r.querySelectorAll(".sf-opt"),
+                             function (n) { return !n.classList.contains("act"); }).length,
+                     acts: Array.prototype.map.call(r.querySelectorAll(".sf-opt.act"),
+                             function (n) { return n.textContent; }),
+                     rows: g.querySelectorAll(".sf-gr").length,
+                     cellVerbs: g.querySelectorAll(".sf-gr .sf-cell").length,
+                     bars: g.querySelectorAll(".sf-runrow > .sf-verb").length };
+          })(),
           errs: { voice: S.voiceErr, where: S.whereErr,
                   engine: S.engineErr, sample: S.sampleErr,
                   engines: S.engines.err, kaggle: S.kaggle.err }
@@ -5160,10 +5827,15 @@
                            videoQueryUrl: videoQueryUrl, webHits: webHits,
                            sourceState: sourceState, sourceTally: sourceTally,
                            nextStep: nextStep, logQuery: logQuery, run: run,
+                           /* G-RUN: the face and the ticked set, as functions */
+                           runFace: runFace, runPlan: runPlan, tickedFor: tickedFor,
+                           whereRefusal: whereRefusal,
                            needsAlign: needsAlign, nextStepFor: nextStepFor,
                            /* §4, 8 Sep -- the studio's own verbs, so the
                               driver presses the THING rather than a pixel */
                            subject: subject, whereNow: whereNow,
+                           /* G-DROPDOWN: the primitive and its state, for the tests */
+                           dropdown: dropdown, dd: DD, subjectHead: subjectHead,
                            currentEngine: currentEngine, sampleUnit: sampleUnit,
                            askEngines: askEngines, askKaggle: askKaggle,
                            pickVoice: pickVoice, pickWhere: pickWhere,
@@ -5175,6 +5847,8 @@
                            add: add, cloneVoiceFrom: cloneVoiceFrom,
                            /* §5.8 -- the row target, pressable by name */
                            selectCandidate: selectCandidate, select: select,
+                           /* G-SET: the set and its compat layer */
+                           setSelCompat: setSelCompat,
                            /* Round 2 -- each one is a thing an acceptance
                               criterion names, so the driver presses the
                               function rather than guessing at pixels */

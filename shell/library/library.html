@@ -28,6 +28,7 @@
      "../reader/<name>"; its own parts (library.css, unzip.js, import.js)
      sit beside it and are named bare. The preferences store is a root of its
      own since Stage 4 (5 Sep) and is "../prefs/prefs.js", not reader's. -->
+<script src="host.js"></script>
 <script src="../reader/keys.js"></script>
 <script src="../prefs/prefs.js"></script>
 <!-- THE PHONE'S ONE FLAG (design/phone/, 6 Sep): `html[data-phone]`, set before
@@ -166,6 +167,8 @@
      askbar with an editor behind it, so askbar's `ask` must win -- and it
      only wins by loading after. Swap these two lines and the strip stops
      typing into the panel. -->
+<script src="transfer.js"></script>
+<script src="works.js"></script>
 <script src="../reader/surface.js"></script>
 <!-- THE BAR'S ANSWERS. The field is the shell's, in the title-bar strip; this
      is what answers it, out of this page's own shelf, find and /search. It
@@ -239,7 +242,9 @@ function studioUrl(slug, units) {
   return `/?${new URLSearchParams(q)}`;
 }
 function api(path) {
-  return /^https?:$/.test(location.protocol) ? location.origin + path : null;
+  // W1 SHELL-WEB: the kind is the gate, not the protocol.
+  if (TTSTVHost.isWeb) return null;
+  return location.origin + path;
 }
 
 // ---------------------------------------------------------------- data
@@ -452,6 +457,22 @@ async function postJSON(path, body) {
 }
 
 async function refresh() {
+  // W1 SHELL-WEB: a website has no Studio to poll -- but it MAY have a
+  // `library.json` beside the page (the drafter's L-3: "the website's own
+  // shelf source"). The early return skips only the `/state`+`/sources` pair
+  // that needs a running Python server.
+  if (TTSTVHost.isWeb) {
+    if (libraryBooks === null) {
+      try {
+        const res = await fetch("library.json");
+        if (res.ok) libraryBooks = await res.json();
+      } catch (e) { /* none published for this site */ }
+      if (libraryBooks === null) libraryBooks = [];
+    }
+    renderShelf();
+    renderPhoneShelf();
+    return false;
+  }
   // TOGETHER, NOT ONE AFTER THE OTHER. `/sources` does not read `/state`'s
   // answer -- `normaliseSources` takes both, and takes them at the end -- so
   // asking for the second only once the first has landed cost the sidebar the
@@ -1036,7 +1057,7 @@ function renderSources() {
       '<div class="src-empty">' +
       (api("/state") || (sourcesFolder && sourcesFolder.local)
         ? `No .epub or .pdf in ${esc(here)}` + (sourcesFolder ? "." : " — or the SSD is unplugged.")
-        : "Sources need studio (127.0.0.1).") + "</div>"}` +
+        : TTSTVHost.WHY_STUDIO) + "</div>"}` +
       `<div class="src-note">Double-click a file, or drop it on the shelf.</div>`;
     sourcesKey = key;
     sourcesFolderKey = folder;
@@ -1064,7 +1085,7 @@ function sourceByName(name) { return sources.find(s => s.name === name) || null;
 // dictionary failed) reads `filled`, so without this its Retry did nothing.
 // A double-click and a drag do not force: there the guard is the whole point.
 async function ingest(name, opts) {
-  if (!libraryContext().bench) { note("Ingesting needs studio on the Mac."); return null; }
+  if (!libraryContext().bench) { note(TTSTVHost.WHY_STUDIO); return null; }
   // A file from the browser's own folder picker has no path studio can read,
   // so it goes up the way a Finder drop does -- /upload lands it under
   // TTS_DATA/sources/ and /ingest follows on the copy that is now studio's.
@@ -1127,7 +1148,7 @@ async function uploadFile(file) {
   const kind = /\.epub$/i.test(file.name) ? "epub" : /\.pdf$/i.test(file.name) ? "pdf" : null;
   if (!kind) { note(`${file.name}: only .epub and .pdf can be dropped here.`); return null; }
   const url = api(`/upload?${new URLSearchParams({ name: file.name, kind })}`);
-  if (!url) { note("Dropping files needs studio (127.0.0.1)."); return null; }
+  if (!url) { note(TTSTVHost.WHY_STUDIO); return null; }
   note(`Uploading ${file.name}…`);
   try {
     const res = await fetch(url, { method: "POST", body: file });
@@ -1789,17 +1810,18 @@ function loadingRows(now) {
 // "0 books · 19.2 GB free" against the Mac's own disk, beside a shelf of nine
 // books that live on the SSD. The rule is one helper, `reader/context.js`,
 // shared with reader.html so the two pages can never disagree:
-//   bench   the desktop app injects window.TTSTVHost, or /state answered ->
-//           the Sources rail, ingest, drops and the phone shelf;
+//   bench   the desktop app or Studio's injector sets kind !== "web", or
+//           /state answered -> the Sources rail, ingest, drops and the phone shelf;
 //   device  neither of those, and this page could really keep a book (Cache
 //           + crypto.subtle + import.js) -> the "On this device" panel.
 // Neither is a screen width: a narrow window on the Mac is not a phone.
 function libraryContext() {
   if (window.TTSTVContext) return TTSTVContext.read();
-  // a shell published before context.js existed: the old rule, unchanged
-  const bench = !!window.TTSTVHost || studioLive;
-  return { app: !!window.TTSTVHost, phone: false, bench, device: CAN_IMPORT && !window.TTSTVHost && !studioLive,
-           kind: "static", benchReason: bench ? null : "no studio behind this page" };
+  // a shell published before context.js existed: the old rule, using host.js's kind
+  const app = TTSTVHost.kind !== "web";
+  const bench = app || studioLive;
+  return { app, phone: false, bench, device: CAN_IMPORT && !app && !studioLive,
+           kind: "static", benchReason: bench ? null : TTSTVHost.WHY_STUDIO };
 }
 
 // Everything that needs studio, shown or hidden in one place: the Sources
@@ -1985,8 +2007,8 @@ function deviceSection() {
     `<button id="importBtn" type="button"${importing ? " disabled" : ""}>` +
     `${importing ? "Importing…" : "Import bundle…"}</button></div>`;
   const body = rows || (onShelf
-    ? (deviceBooks.length || !deviceListed ? "" : `<div class="empty">No books on this phone yet. Sync, in Settings, brings them from the Mac.</div>`)
-    : `<div class="empty">No books here yet. AirDrop a bundle .zip to this phone, then Import bundle… and pick it out of Files.</div>`);
+    ? (deviceBooks.length || !deviceListed ? "" : `<div class="empty">${TTSTVHost.isWeb ? TTSTVHost.WHY_DRIVE : "No books on this phone yet. Sync, in Settings, brings them from the Mac."}</div>`)
+    : `<div class="empty">${TTSTVHost.isWeb ? "No books on this device yet — import a bundle .zip." : "No books here yet. AirDrop a bundle .zip to this phone, then Import bundle… and pick it out of Files."}</div>`);
   return head + importErrorHTML() + body + (onShelf ? "" : storageLine());
 }
 
@@ -2657,9 +2679,11 @@ function renderShelf() {
   const rows = collapsed ? "" : (bandHTML(fresh, openNow) +
     tileRows(entries.filter(b => !freshSet.has(b.slug)), loadingRows()));
   const n = entries.length;
-  const empty = api("/state") && !studioLive
-    ? "No books on this device yet. Books arrive as a bundle .zip from the bench (PROMPTS/phone-app.md)."
-    : "No ingested books yet. Double-click a source, or drag one here.";
+  const empty = TTSTVHost.isWeb
+    ? "No books on this device yet \u2014 import a bundle .zip, or " + TTSTVHost.WHY_DRIVE + "."
+    : (api("/state") && !studioLive
+      ? "No books on this device yet. Books arrive as a bundle .zip from the bench (PROMPTS/phone-app.md)."
+      : "No ingested books yet. Double-click a source, or drag one here.");
   // The bench's shelf is only worth a heading where there is a bench: on the
   // phone /state never answers and library.json is not published with the
   // shell, so an empty "Shelf" under the device's own books would be a
@@ -2667,13 +2691,18 @@ function renderShelf() {
   // collapse control with a count, like every named shelf above it -- Osca
   // named the count twice, so it shows open or closed.
   const devShelf = deviceIsShelf();
+  // F3 (W1 follow-up): suppress the shelf empty sentence when device books
+  // are visible in deviceSection() -- books are on the page, just not in the
+  // main shelf. `devShelf` is true only on the phone; on the web the device
+  // section renders its own book rows, so a "no books" line is a lie.
+  const hasDeviceBooks = !devShelf && deviceBooks.length > 0;
   const shelf = !hasNamed
     // no named shelves -> the books ARE the page; no "Shelf" heading over them
     // (and on the phone an empty one is the device section's to say)
-    ? (rows || (devShelf ? "" : `<div class="empty">${empty}</div>`))
+    ? (rows || (devShelf || hasDeviceBooks ? "" : `<div class="empty">${empty}</div>`))
     : (studioLive || n || !CAN_IMPORT)
     ? shelfHeadHTML(MAIN_SHELF, "Shelf", n, collapsed, "") +
-      (collapsed ? "" : (rows || `<div class="empty">${empty}</div>`))
+      (collapsed ? "" : (rows || (hasDeviceBooks ? "" : `<div class="empty">${empty}</div>`)))
     : rows;
   const line = (libraryContext().bench && libraryWhy)
     ? `<div class="libline">Shelves, pairs and reading positions are on this Mac only — not mirrored to TTS_DATA/reader/library.json: ${esc(libraryWhy)}.</div>`
@@ -4101,7 +4130,9 @@ function backToReader() {
 // sidebar icon = a Studio tab. In the app the host does it; in a browser
 // window.open does (a "popup" feature string is what makes a new window
 // rather than a tab in Safari and Chrome).
-function host() { return (typeof window !== "undefined" && window.TTSTVHost) || null; }
+// W1 SHELL-WEB: host() returns the host's API object, or null when there is
+// no host. On "web" TTSTVHost exists but has no host methods, so return null.
+function host() { return (typeof window !== "undefined" && window.TTSTVHost && !window.TTSTVHost.isWeb) ? window.TTSTVHost : null; }
 
 function openReader(slug, newWindow) {
   rememberBook(slug);
@@ -5516,8 +5547,8 @@ if ("serviceWorker" in navigator) {
        localStorage. His marginalia and every reading position live in
        localStorage, and clearing the app's data to fix a stale shell would
        have cost him those. This costs nothing. */
-    const inApp = !!(window.TTSTVHost || location.protocol === "tauri:"
-                     || /^(tauri|asset)$/.test((location.protocol||"").replace(":","")));
+    // W1 SHELL-WEB: the kind is the gate, not protocol strings.
+    const inApp = TTSTVHost.kind === "phone";
     if (inApp) {
       navigator.serviceWorker.getRegistrations()
         .then((rs) => Promise.all(rs.map((r) => r.unregister())))

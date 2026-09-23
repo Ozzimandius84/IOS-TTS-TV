@@ -44,7 +44,9 @@
   var at = null;                 // where the field is, as the strip measured it
 
   function api(path) {
-    return /^https?:$/.test(location.protocol) ? location.origin + path : null;
+    // W1 SHELL-WEB: the kind is the gate, not the protocol.
+    if (TTSTVHost.isWeb) return null;
+    return location.origin + path;
   }
   function esc(s) {
     return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {

@@ -29,6 +29,7 @@
      (prefs/prefs.js's own closing comment). It applies the theme, the
      interface font and the scrollbars by itself; the only thing this
      page asks it for is the hotkey grammar. -->
+<script src="../library/host.js"></script>
 <script src="keys.js"></script>
 <script src="../prefs/prefs.js"></script>
 <!-- THE PHONE'S ONE FLAG (design/phone/, 6 Sep): `html[data-phone]`, set before
@@ -848,6 +849,9 @@ function buildStampText(b) {
   new MutationObserver(fromShell).observe(document.documentElement,
     { attributes: true, attributeFilter: ["data-shell"] });
   addEventListener("DOMContentLoaded", function () {
+    // W1 SHELL-WEB: `/build-stamp` is a Studio route; skip on a website to
+    // avoid a 404.  The shell name (`data-shell`) is still painted if present.
+    if (window.TTSTVHost && TTSTVHost.isWeb) { fromShell(); return; }
     fetch("/build-stamp", { cache: "no-store" })
       .then(function (r) { return r.ok ? r.json() : null; })
       .then(function (b) { if (b) { fromServer = true; paint(buildStampText(b)); } else fromShell(); })
@@ -873,6 +877,13 @@ function buildStampText(b) {
      because the block that mounts it reads `nav`; it starts nothing on its
      own and speaks only when the play key reaches it. -->
 <script src="sysvoice.js"></script>
+<!-- THE DOOR'S ONE CLIENT (W2 PHONE-STUDIO): transfer.js is the one HTTP
+     client for the cloud door and the phone's works surface calls it. -->
+<script src="../library/transfer.js"></script>
+<!-- THE WORKS WITH NO MAC (W2 PHONE-STUDIO): the state a studio would have
+     answered, built from this phone's own Kaggle courier rows. Must come
+     BEFORE surface.js, which reads its presence at load. -->
+<script src="../library/works.js"></script>
 <!-- THE SEARCH SURFACE (design/reader/surface.js). It mounts itself over this
      page and opens on ⌘K, on the bar's ⏎, and on the phone bar's ⌕ -- the
      reader has no askbar, so surface.js's own `bar()` takes `TTSTVPage.ask`
@@ -1275,10 +1286,11 @@ try{ (function(){
    render, so there is no selection for studio to be told about; when a pick
    list comes back, `hostTargetModel` is the one line that changes.
 
-   GUARDED ON THE METHOD, never on the host. `TTSTVHost` is absent in a
-   browser and on the phone, and an older shell has the object without this
-   door -- `context.js` already reads it as a fact about the machine, and
-   this is the same fact asked a question. */
+   GUARDED ON THE METHOD, never on the host. `TTSTVHost` is now present in a
+   browser too (host.js creates it with `kind === "web"`), so the guard is on
+   the method -- an older shell has the object without this door, and a website
+   has neither. `context.js` already reads kind as a fact about the machine,
+   and this is the same fact asked a question. */
 let OPEN_BOOK = null;                    // the book nav actually opened
 function hostTakesTarget(){
   return !!(window.TTSTVHost && typeof window.TTSTVHost.setTarget === "function");
@@ -1502,6 +1514,14 @@ try{ (function(){
     return paras.length ? paras : null;
   }
 
+  /* ★ G-SYSSEEK (chat 136). While the system voice is speaking, a cursor move
+     by any hand OTHER than the voice itself seeks the voice there: cancel the
+     utterance in flight and speakFrom the new word. The loop guard is
+     lastSpoken: onWord sets it BEFORE nav.goTo, and the ttstv:cursor listener
+     ignores any cursor that matches it -- so the voice's own onWord -> goTo ->
+     cursor event is a no-op, and a click or a contents-strip tap is a seek. */
+  let lastSpoken = {ch:-1, wi:-1};
+
   const sys = SysVoice.create({
     synth,
     Utterance: picked.Utterance,
@@ -1509,7 +1529,7 @@ try{ (function(){
     chapterCount(){ try{ return (OPEN_BOOK && OPEN_BOOK.chapters && OPEN_BOOK.chapters.length) || 0; }
                     catch(e){ return 0; } },
     startAt(){ try{ const c = nav.cursor; return c && c.chapter >= 0 ? c : null; }catch(e){ return null; } },
-    onWord(ch, wi){ try{ nav.goTo(ch, wi); }catch(e){} },
+    onWord(ch, wi){ lastSpoken = {ch, wi}; try{ nav.goTo(ch, wi); }catch(e){} },
     lang(){ try{ return (OPEN_BOOK && OPEN_BOOK.lang) || "en"; }catch(e){ return "en"; } },
     wpm(){ try{ return S ? +S.read().wpm : 300; }catch(e){ return 300; } },
     /* FOLLOW'S OTHER CLOCK (13 Sep). This engine moves no `currentTime`, so
@@ -1523,6 +1543,24 @@ try{ (function(){
     onState(){ try{ if(window.Follow) Follow.tick(); }catch(e){} },
   });
   Transport.sysvoice(sys);
+
+  /* ★ THE SEEK: a cursor that landed somewhere the voice did not put it.
+     ttstv:cursor fires for EVERY setCursor -- a click, a contents tap, a
+     subscrub, a step, and the voice's own onWord -> goTo. The voice's own
+     move is filtered out by lastSpoken: onWord sets it BEFORE nav.goTo
+     dispatches, so by the time the event arrives lastSpoken already names
+     that word and the listener does nothing. Everything else is a seek.
+     Paused sysvoice: nothing to do -- play() already starts from the
+     cursor (startAt), so a click while paused moves the cursor and the
+     next play speaks from there. */
+  document.addEventListener("ttstv:cursor", function(e){
+    try{
+      var d = e.detail;
+      if(!d || !sys.speaking) return;
+      if(d.chapter === lastSpoken.ch && d.word === lastSpoken.wi) return;
+      sys.speakFrom(d.chapter, d.word);
+    }catch(ex){}
+  });
 
   /* the rate row, live. Only while it is actually speaking -- a change made
      with nothing playing is read at the next `speak()` and costs nothing. */

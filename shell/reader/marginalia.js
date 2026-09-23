@@ -470,6 +470,10 @@ function margWriteRec(slug, rec) {
    the server's own words for the times the write does not land, so the page
    can say in one sentence that this Mac is the only copy. */
 function margMirror(slug, rec) {
+  // W1 SHELL-WEB: a website is not a failure; MARG_WHY stays null.
+  if (TTSTVHost.isWeb) {
+    return Promise.resolve({ mirrored: false, why: null });
+  }
   if (!/^https?:$/.test(location.protocol)) {
     MARG_WHY = "no studio behind this page";
     return Promise.resolve({ mirrored: false, why: MARG_WHY });
@@ -1427,7 +1431,7 @@ function mount(o) {
      a book nobody has marked yet. */
   var pulling = false;
   function pull() {
-    if (!slug || pulling || !/^https?:$/.test(location.protocol)) return Promise.resolve(false);
+    if (!slug || pulling || TTSTVHost.isWeb) return Promise.resolve(false);
     pulling = true;
     return fetch(MARG_ROUTE + encodeURIComponent(slug), { method: "GET" })
       .then(function (res) { return res.ok ? res.json() : null; })

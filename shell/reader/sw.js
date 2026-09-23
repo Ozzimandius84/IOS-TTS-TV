@@ -30,7 +30,7 @@
 // that is not the current SHELL_CACHE, so changing this string IS the eviction
 // -- and changing it changes sw.js's own bytes, which is the only thing that
 // makes a browser run `install` and `activate` at all.
-const SHELL_CACHE = "ttstv-shell-v55";   // 13 Sep: sysvoice.js joins the shell -- a NEW name in
+const SHELL_CACHE = "ttstv-shell-v57";   // 23 Sep: works.js joins the shell (W2 PHONE-STUDIO) -- a NEW name in
                                          // SHELL_FILES is only fetched by an install, so the
                                          // string has to move or an installed app never caches
                                          // it (v37: the shell moved to clean/)
@@ -174,6 +174,17 @@ const SHELL_FILES = [
   "../library/import.js",
   "../library/transfer.js",   // the door's one client (8cd74ba, 6 Sep) -- the phone needs it offline, beside the two above
   "../library/drive.js",      // Google + the Drive folder (job 26b, 6 Sep): the phone's sign-in and its Sync-through-Drive
+  "../library/host.js",       // WHICH MACHINE THIS PAGE IS ON (W1 SHELL-WEB): the ONE predicate
+                              // every Studio-only control is gated by -- `TTSTVHost.kind`, one of
+                              // "studio"/"phone"/"web", set by Studio's Python server (an injected
+                              // line in this one file), by the Tauri shell's bootstrap, or defaulted
+                              // to "web" here. It CREATES `window.TTSTVHost` when nothing did, so
+                              // every `!!window.TTSTVHost` test in the shell was migrated to
+                              // `kind !== "web"` in the same commit -- read the file's own head.
+  "../library/works.js",      // THE WORKS WITH NO MAC (W2 PHONE-STUDIO): the state a
+                              // studio would have answered, built from this phone's own
+                              // Kaggle courier rows, so ?studio= has a source on a phone
+                              // with no Mac and no Studio.
   "../settings/settings.html",  // the Settings surface likewise (step 3; its page in step 4)
   "../settings/settings.css",
   "../settings/settings.js",   // and its FORM, cut out of reader/settings.js in Stage 4 (5 Sep) -- only settings.html loads it

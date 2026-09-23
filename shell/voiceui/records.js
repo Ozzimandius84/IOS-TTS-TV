@@ -41,7 +41,12 @@ function slugFromLocation(loc) {
   let m = /(?:^|[#&?])book=([^&]+)/.exec(loc.hash || "");
   if (!m) m = /(?:^|[?&])book=([^&]+)/.exec(loc.search || "");
   if (!m) return null;
-  try { return decodeURIComponent(m[1]); } catch (e) { return m[1]; }
+  let v;
+  try { v = decodeURIComponent(m[1]); } catch (e) { v = m[1]; }
+  // the library and the app hand `books/<slug>` -- strip the prefix so the
+  // base path (`../../books/`) is not doubled into `books/books%2F<slug>/`
+  if (v && v.indexOf("books/") === 0) v = v.slice(6);
+  return v || null;
 }
 
 function browserFetchJson(win) {

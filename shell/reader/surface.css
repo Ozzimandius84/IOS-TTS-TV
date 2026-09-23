@@ -598,6 +598,10 @@ html[data-theme="dark"], html[data-dark]{
 .sf-gr.pick{ cursor:pointer; }
 .sf-gr.pick:hover{ background:rgba(127,127,127,.07); }
 .sf-gr .sf-verb{ flex:0 0 auto; padding:1px 6px; font-size:9.5px; }
+/* G-RUN: the row's own small verb -- the surgical door, never a second bar */
+.sf-gr .sf-verb.sf-cell{ font-size:8.5px; letter-spacing:.06em; padding:2px 7px; }
+.sf-runrow{ padding:6px 0 4px; }
+.sf-runrow .sf-run{ max-width:100%; white-space:normal; text-align:left; line-height:1.35; }
 .sf-log{ border-top:1px solid var(--sf-rule); margin-top:8px; }
 .sf-logtext{ margin:0; padding:6px 0 10px; max-height:220px; overflow:auto;
              white-space:pre-wrap; word-break:break-word;
@@ -734,3 +738,106 @@ html[data-theme="dark"], html[data-dark]{
 .sf-row.r-drive .spine{ opacity:.6; }
 .sf-row.r-drive .t{ font-weight:500; }
 .sf-row.r-drive .sf-prov{ font:10px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; }
+
+
+/* ==========================================================================
+   G-DROPDOWN (16 Sep) — THE COLUMN IS HEADED BY THE BOOK; THE PICKERS ARE
+   DROPDOWNS. Osca: "drop-downs in the selectors ... let me scroll through
+   them, if large ... Select in the bottom right, then when selected, just
+   show those on the studio side." One primitive (`dropdown()` in surface.js)
+   draws Voice, Language, Where and Model: a shut FACE naming the choice, a
+   list that scrolls at nine rows, radio or checkbox rows, Select bottom
+   right. A greyed row is the dashed pill's rule kept: present, plainly not a
+   choice, carrying its reason.
+   ========================================================================== */
+/* the head: the selected book's title, the author under it in its hue */
+.sf-h.sf-subj{
+  text-transform:none; letter-spacing:-.02em;
+  font:600 15px/1.25 var(--sf-serif); color:var(--sf-ink);
+  padding:6px 0 0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+}
+.sf-subja{ display:block; padding:2px 0 8px; font:10.5px/1.3 var(--sf-ui);
+  color:var(--sf-dim); border-bottom:1px solid var(--sf-rule); }
+.sf-h.sf-subj + .sf-note{ padding-top:6px; }
+
+.sf-ddrow{ display:flex; align-items:center; gap:6px; min-width:0; }
+.sf-ddrow .sf-dd{ flex:1 1 auto; min-width:0; }
+/* the reference's play/pause, BESIDE the face, for the chosen voice only */
+.sf-pp{ flex:0 0 auto; font:11px/1 var(--sf-ui); color:var(--sf-ink);
+  background:transparent; border:1px solid var(--sf-rule); border-radius:999px;
+  width:22px; height:22px; cursor:pointer; padding:0; }
+.sf-pp:hover{ border-color:var(--sf-ink); }
+
+.sf-dd{ position:relative; display:block; min-width:0; }
+.sf-ddface{
+  display:flex; align-items:center; gap:8px; width:100%; min-width:0;
+  font:11px/1.25 var(--sf-ui); color:var(--sf-ink); text-align:left;
+  background:transparent; border:1px solid var(--sf-rule); border-radius:8px;
+  padding:5px 9px; cursor:pointer;
+}
+.sf-ddface:hover{ border-color:var(--sf-ink); }
+.sf-ddface[aria-expanded="true"]{ border-color:var(--sf-ink); }
+.sf-ddface[disabled]{ opacity:.55; cursor:default; }
+.sf-ddface .fx{ flex:1 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.sf-ddface .cx{ flex:0 0 auto; font-size:9px; color:var(--sf-dim); }
+
+/* the open list: over the column, not in its flow, so the rows below do not
+   jump when it opens; nine rows tall then it scrolls */
+.sf-ddpop{
+  position:absolute; left:0; right:0; top:calc(100% + 3px); z-index:5;
+  background:var(--sf-sheet, var(--sf-ground)); border:1px solid var(--sf-rule);
+  border-radius:8px; box-shadow:0 8px 24px rgba(0,0,0,.14);
+  overflow:hidden;
+}
+.sf-ddpop[hidden]{ display:none; }
+.sf-ddlist{ display:block; max-height:234px; overflow:auto; overscroll-behavior:contain;
+  padding:3px 0; outline:none; }
+.sf-opt{
+  display:flex; align-items:baseline; gap:8px; width:100%; min-width:0;
+  font:11px/1.3 var(--sf-ui); color:var(--sf-ink); text-align:left;
+  background:transparent; border:0; padding:5px 9px; cursor:pointer;
+}
+.sf-opt:hover, .sf-opt.focus{ background:hsl(var(--sf-ground-hsl) / .5); box-shadow:inset 3px 0 0 var(--sf-rule); }
+.sf-opt.focus{ box-shadow:inset 3px 0 0 var(--sf-ink); }
+.sf-opt .tk{ flex:0 0 12px; font-style:normal; font-size:10px; color:var(--sf-dim); }
+.sf-opt[aria-selected="true"] .tk{ color:var(--sf-ink); }
+.sf-opt[aria-selected="true"] .tx{ font-weight:600; }
+.sf-opt .tx{ flex:1 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.sf-opt .sx{ flex:0 0 auto; font-size:10px; color:var(--sf-dim); font-variant-numeric:tabular-nums; }
+.sf-opt[disabled]{ opacity:.45; cursor:default; }
+/* G-RUN: an action row (All / None) -- it rewrites the ticks, it is not one */
+.sf-opt.act{ padding-left:29px; color:var(--sf-dim); text-transform:uppercase;
+  font-size:9.5px; letter-spacing:.08em; }
+.sf-opt.act:hover, .sf-opt.act.focus{ color:var(--sf-ink); }
+/* the greyed row: not a choice, and it says why in its title */
+.sf-opt.off{ color:var(--sf-dim); cursor:default; white-space:normal; padding-left:29px; }
+.sf-ddfoot{ display:flex; align-items:center; justify-content:flex-end; gap:8px;
+  padding:5px 7px; border-top:1px solid var(--sf-rule); }
+.sf-ddfoot .hx{ flex:1 1 auto; font:9.5px/1.3 var(--sf-ui); color:var(--sf-dim); }
+.sf-ddfoot .sf-ddsel{ flex:0 0 auto; }
+
+/* the model's cost note: shut to its first line, "more ▸" opens it in place */
+.sf-limits{ position:relative; }
+.sf-limits.shut span:nth-of-type(n+2){ display:none; }
+.sf-more{ display:inline-block; margin-top:2px; padding:0; border:0; background:transparent;
+  font:10px/1.5 var(--sf-ui); color:var(--sf-dim); cursor:pointer; text-decoration:underline dotted; }
+.sf-more:hover{ color:var(--sf-ink); }
+
+/* the phone: the same dropdown, full width, the list in the flow so a thumb
+   can scroll it without the sheet scrolling underneath */
+@media (max-width:720px), (pointer:coarse){
+  .sf-ddpop{ position:static; box-shadow:none; margin-top:4px; }
+  .sf-ddlist{ max-height:min(234px, 40vh); }
+  .sf-opt{ padding:8px 10px; font-size:12px; }
+  .sf-ddface{ padding:8px 10px; font-size:12px; }
+}
+/* ===================================================== G-SET: chips + verb row */
+.sf-chips{ display:flex; flex-wrap:wrap; gap:6px; padding:4px 0 8px; }
+.sf-chips .sf-chip{ display:inline-flex; align-items:center; gap:4px;
+  padding:3px 8px; border-radius:4px; font-size:12px; cursor:default;
+  background:color-mix(in srgb, var(--hue, #888) 18%, transparent);
+  border:1px solid color-mix(in srgb, var(--hue, #888) 30%, transparent); }
+.sf-chipx{ all:unset; cursor:pointer; font-size:14px; line-height:1; opacity:.6;
+  padding:0 2px; }
+.sf-chipx:hover{ opacity:1; }
+.sf-setverbs{ padding:8px 0; display:flex; flex-wrap:wrap; gap:6px; }

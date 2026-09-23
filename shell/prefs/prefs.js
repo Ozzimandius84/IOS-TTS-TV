@@ -558,8 +558,10 @@
   }
 
   function origin() {
-    // studio serves the repo over http(s); a bundle or file:// has no server
-    // and no mirror -- localStorage is the whole story there.
+    // W1 SHELL-WEB: on a website the kind is "web" and there is no server
+    // to mirror to. The protocol test stays as a second half for the phone
+    // (frank:// has no server and no mirror either).
+    if (global.TTSTVHost && global.TTSTVHost.isWeb) return null;
     if (!global.location || !/^https?:$/.test(global.location.protocol)) return null;
     return global.location.origin;
   }

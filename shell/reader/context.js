@@ -15,11 +15,13 @@
  * **The three facts, and nothing else.** No user agent sniffing, no screen
  * width -- a narrow window on the Mac is not a phone:
  *
- *   hostInjected   `window.TTSTVHost` exists. The desktop app injects it as
- *                  an `initialization_script` (desktop/src/host.js), before
- *                  a line of page script runs, so this is true from the
- *                  first frame -- which is what makes the Mac's panel
- *                  disappear with no flash. Nothing else ever sets it.
+ *   hostInjected   `TTSTVHost.kind !== "web"` (W1 SHELL-WEB). `library/host.js`
+ *                  always creates `window.TTSTVHost` and sets `.kind`, so the
+ *                  old `!!window.TTSTVHost` test no longer means "an app
+ *                  injected an API" -- the kind is the question. On the Mac
+ *                  and the phone the host's bootstrap still runs before any
+ *                  page script; on a website host.js defaults to `"web"` and
+ *                  `hostInjected` is `false`.
  *   studioLive     `GET /state` has answered at least once. Both pages poll
  *                  it already; they hand the answer here (`observe`). False
  *                  on the phone forever (the published shell is static),
@@ -36,11 +38,11 @@
  *                  four verbs. Only Frank on the phone does.
  *
  * **The questions the pages ask:**
- *   bench   -- is there a studio behind this page? `(hostInjected &&
- *              !hostBooks) || studioLive` (G-COVERS: the phone is a host and
- *              not a bench -- `phone`, below). Gates the Sources rail, ingest, the phone shelf,
- *              and the Actions that push. In the app it is true immediately;
- *              in a plain browser at studio it turns true on the first poll.
+ *   bench   -- is there a studio behind this page? On "studio"
+ *              `(hostInjected && !phone)` is true immediately; on "web" only
+ *              `studioLive` can make it true (the B2 case: a plain browser
+ *              on Studio's own origin, where the injector has not spoken but
+ *              `/state` has answered).
  *   device  -- is this a device that holds its own books? `canHoldBooks &&
  *              !studioLive && (!hostInjected || hostBooks)`. Gates the "On
  *              this device" panel. Deliberately not "is it a phone": a laptop
@@ -95,10 +97,13 @@
       bench: bench,
       device: (!app || !!f.hostBooks) && !!f.canHoldBooks && !live,
       // one word for a data-attribute and a report, never for a decision
-      kind: phone ? "phone" : app ? "app" : (live ? "browser" : (f.canHoldBooks ? "shell" : "static")),
+      // W1 SHELL-WEB: emit host.js's own three words; "browser"/"shell"/"static"
+      // are sub-cases of "web" that paintContext still uses for the attribute.
+      kind: phone ? "phone" : app ? "studio" : (live ? "browser" : (f.canHoldBooks ? "shell" : "static")),
       benchReason: bench ? null
         : (app && !phone ? "studio isn't answering on this Mac yet"
-               : "no studio behind this page — this is the app on the phone"),
+               : (phone ? "no studio behind this page — this is the app on the phone"
+               : (global.TTSTVHost && global.TTSTVHost.WHY_STUDIO || "no studio behind this page"))),
     };
   }
 
@@ -113,8 +118,12 @@
   function detect(win) {
     win = win || global;
     var hostBooks = hostBookDoor(win);
+    /* W1 SHELL-WEB: `library/host.js` always creates `window.TTSTVHost` and
+     * sets `.kind`, so `!!win.TTSTVHost` is true on a website too. The
+     * question is the kind, not the presence. */
+    var hostKind = (win.TTSTVHost && win.TTSTVHost.kind) || "web";
     return {
-      hostInjected: !!win.TTSTVHost,
+      hostInjected: hostKind !== "web",
       hostBooks: hostBooks,
       canHoldBooks: (hostBooks || typeof win.caches !== "undefined")
         && typeof win.crypto !== "undefined" && !!(win.crypto && win.crypto.subtle)
