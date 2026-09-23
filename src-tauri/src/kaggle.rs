@@ -58,6 +58,7 @@
 
 use crate::pull::{Reply, Wire};
 use std::io::Read;
+use tauri::Manager;
 
 pub const API: &str = "https://www.kaggle.com/api/v1";
 /// The two kernels (K-D): a CPU one for the parse and the GPU one that already
@@ -108,6 +109,12 @@ impl Creds {
     }
     pub fn is_empty(&self) -> bool {
         self.username.is_empty() || self.key.is_empty()
+    }
+    /// The `kaggle.json` this credential is stored as: `{"username":"…","key":"…"}`,
+    /// one line, no pretty-printing, byte-for-byte the file Kaggle downloads
+    /// and `parse_pasted` reads back.
+    pub fn to_kaggle_json(&self) -> String {
+        serde_json::json!({"username": self.username, "key": self.key}).to_string()
     }
 }
 
@@ -659,6 +666,325 @@ impl Watch {
     }
 }
 
+// ---------------------------------------------------------- the commands
+//
+// W2 PHONE-STUDIO (23 Sep). Thin wrappers: read the credential, build
+// `pull::Net::new()`, call the existing verb, and map `Refusal` into a
+// serialisable `KaggleFault`. **No verb logic is rewritten** -- this
+// section is the surface (the window's IPC), and nothing here decides
+// anything the verb has not already decided.
+
+/// What every command in this section answers with when Kaggle said no.
+/// Serialisable because Tauri's `Err` payload crosses the IPC boundary as JSON.
+#[derive(Debug, Clone, PartialEq, serde::Serialize)]
+pub struct KaggleFault {
+    /// "auth" | "ambiguous" | "said" | "lost" | "no-key"
+    pub kind: String,
+    /// `Refusal::sentence()` (the words a person can act on), or, for
+    /// "no-key", the fixed sentence in §6.5. NEVER a credential.
+    pub why: String,
+}
+
+impl From<Refusal> for KaggleFault {
+    fn from(r: Refusal) -> Self {
+        let kind = match &r {
+            Refusal::Auth(_) => "auth",
+            Refusal::Ambiguous(_) => "ambiguous",
+            Refusal::Said(_) => "said",
+            Refusal::Lost(_) => "lost",
+        };
+        KaggleFault { kind: kind.to_string(), why: r.sentence() }
+    }
+}
+
+impl KaggleFault {
+    pub fn no_key() -> Self {
+        KaggleFault {
+            kind: "no-key".to_string(),
+            why: "no Kaggle key on this phone \u{2014} paste your kaggle.json in Settings \u{25B8} Kaggle"
+                .to_string(),
+        }
+    }
+}
+
+/// One file of the flat job, bound for the dataset. `b64` is standard base64
+/// WITH padding, this file's own alphabet (`kaggle.rs:118-130`), because
+/// Tauri's JSON IPC carries strings and not bytes.
+#[derive(Debug, Clone, PartialEq, serde::Deserialize)]
+pub struct KaggleFile {
+    pub name: String,
+    pub b64: String,
+}
+
+#[derive(Debug, Clone, PartialEq, serde::Serialize)]
+pub struct KaggleOutFile {
+    pub name: String,
+    pub url: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Default, serde::Serialize)]
+pub struct KaggleOutput {
+    pub files: Vec<KaggleOutFile>,
+    pub log: Option<String>,
+}
+
+/// The key store's answer. NO KEY, NO MASK OF THE KEY, no length.
+#[derive(Debug, Clone, PartialEq, serde::Serialize)]
+pub struct KaggleKeyState {
+    pub present: bool,
+    pub username: Option<String>,
+}
+
+/// Standard base64 back to bytes. Fifteen lines, the mirror of `b64`, for
+/// `b64`'s own reason: a dependency for one string in one file is a
+/// dependency to keep in step forever. `Err` names the position, never the
+/// content.
+pub fn unb64(s: &str) -> Result<Vec<u8>, String> {
+    fn val(c: u8) -> Result<u8, String> {
+        match c {
+            b'A'..=b'Z' => Ok(c - b'A'),
+            b'a'..=b'z' => Ok(c - b'a' + 26),
+            b'0'..=b'9' => Ok(c - b'0' + 52),
+            b'+' => Ok(62),
+            b'/' => Ok(63),
+            _ => Err(format!("not base64 at byte {c}")),
+        }
+    }
+    let s = s.trim();
+    if s.is_empty() {
+        return Ok(vec![]);
+    }
+    if s.len() % 4 != 0 {
+        return Err(format!("length {} is not a multiple of 4", s.len()));
+    }
+    let bytes = s.as_bytes();
+    let mut out = Vec::with_capacity(s.len() / 4 * 3);
+    for chunk in bytes.chunks(4) {
+        let pad = (chunk[2] == b'=') as usize + (chunk[3] == b'=') as usize;
+        let a = val(chunk[0])?;
+        let b = val(chunk[1])?;
+        let c = if pad >= 2 { 0 } else { val(chunk[2])? };
+        let d = if pad >= 1 { 0 } else { val(chunk[3])? };
+        let n = ((a as u32) << 18) | ((b as u32) << 12) | ((c as u32) << 6) | d as u32;
+        out.push((n >> 16) as u8);
+        if pad < 2 {
+            out.push((n >> 8) as u8);
+        }
+        if pad < 1 {
+            out.push(n as u8);
+        }
+    }
+    Ok(out)
+}
+
+// ------------------------------------------------------------ the key store
+//
+// D4(d): a 0600 file in `app_data_dir()`, written only by Rust. The key
+// is pasted once into the page, handed straight to Rust, and stored by
+// Rust; no command answers with it, no log line takes it, and nothing here
+// prints it. The one place the person's Kaggle account is kept on this
+// phone.
+
+pub const KAGGLE_KEY_FILE: &str = "kaggle.json";
+
+/// The one place the user's Kaggle account is kept on this phone.
+pub fn kaggle_key_path<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> std::path::PathBuf {
+    app.path().app_data_dir().expect("no app data dir").join(KAGGLE_KEY_FILE)
+}
+
+/// Read the key. `None` when the file is absent OR unreadable-as-a-kaggle.json
+/// -- the two are one answer to a caller, and `kaggle_key_set` is the fix for
+/// both. Never panics, never logs the contents.
+pub fn kaggle_key_read<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> Option<Creds> {
+    let text = std::fs::read_to_string(kaggle_key_path(app)).ok()?;
+    parse_pasted(&text).ok()
+}
+
+/// Write it, 0600, atomically. `Err` is a sentence about the FILE, never its
+/// contents and never the key.
+pub fn kaggle_key_write<R: tauri::Runtime>(
+    app: &tauri::AppHandle<R>,
+    c: &Creds,
+) -> Result<(), String> {
+    use std::fs;
+    #[cfg(unix)]
+    use std::os::unix::fs::OpenOptionsExt;
+    let path = kaggle_key_path(app);
+    let dir = path.parent().ok_or("no parent dir for kaggle.json")?;
+    fs::create_dir_all(dir).map_err(|e| format!("could not create {}: {e}", dir.display()))?;
+    let part = path.with_extension("json.part");
+    let content = c.to_kaggle_json();
+    {
+        let mut opts = fs::OpenOptions::new();
+        opts.write(true).create(true).truncate(true);
+        #[cfg(unix)]
+        {
+            opts.mode(0o600);
+        }
+        let mut f = opts
+            .open(&part)
+            .map_err(|e| format!("could not write {}: {e}", part.display()))?;
+        use std::io::Write;
+        f.write_all(content.as_bytes())
+            .map_err(|e| format!("could not write {}: {e}", part.display()))?;
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(&part, fs::Permissions::from_mode(0o600))
+            .map_err(|e| format!("could not set permissions on {}: {e}", part.display()))?;
+    }
+    fs::rename(&part, &path)
+        .map_err(|e| format!("could not rename {} to {}: {e}", part.display(), path.display()))?;
+    Ok(())
+}
+
+/// Take it off this phone. `Ok(false)` when there was none.
+pub fn kaggle_key_drop<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> Result<bool, String> {
+    let path = kaggle_key_path(app);
+    match std::fs::remove_file(&path) {
+        Ok(()) => Ok(true),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(false),
+        Err(e) => Err(format!("could not remove {}: {e}", path.display())),
+    }
+}
+
+#[tauri::command]
+pub fn kaggle_key_set<R: tauri::Runtime>(
+    app: tauri::AppHandle<R>,
+    pasted: String,
+) -> Result<KaggleKeyState, String> {
+    let c = parse_pasted(&pasted)?;
+    kaggle_key_write(&app, &c)?;
+    Ok(KaggleKeyState { present: true, username: Some(c.username) })
+}
+
+#[tauri::command]
+pub fn kaggle_key_state<R: tauri::Runtime>(
+    app: tauri::AppHandle<R>,
+) -> Result<KaggleKeyState, String> {
+    match kaggle_key_read(&app) {
+        Some(c) => Ok(KaggleKeyState { present: true, username: Some(c.username) }),
+        None => Ok(KaggleKeyState { present: false, username: None }),
+    }
+}
+
+// -------------------------------------------------------- the six verb commands
+
+/// Verb 1. The whole flat job up, as a new version of `<user>/ttstv-studio-job`.
+#[tauri::command]
+pub fn put_job<R: tauri::Runtime>(
+    app: tauri::AppHandle<R>,
+    slug: String,
+    notes: String,
+    files: Vec<KaggleFile>,
+) -> Result<(), KaggleFault> {
+    let creds = kaggle_key_read(&app).ok_or_else(KaggleFault::no_key)?;
+    let decoded: Vec<(String, Vec<u8>)> = files
+        .iter()
+        .map(|f| {
+            unb64(&f.b64)
+                .map(|bytes| (f.name.clone(), bytes))
+                .map_err(|e| KaggleFault {
+                    kind: "said".to_string(),
+                    why: format!("{}: {e}", f.name),
+                })
+        })
+        .collect::<Result<_, _>>()?;
+    let ups: Vec<Upload> = decoded
+        .iter()
+        .map(|(n, b)| Upload { name: n, bytes: b })
+        .collect();
+    let mut w = crate::pull::Net::new();
+    Courier::new(creds)
+        .put_job(&mut w, &slug, &ups, &notes)
+        .map_err(KaggleFault::from)
+}
+
+/// Verb 2. Poll `datasets status` until `ready`. Blocks up to
+/// `READY_TIMEOUT_MS` (300 s) and sleeps `READY_POLL_MS` (5 s) between asks.
+#[tauri::command]
+pub fn wait_ready<R: tauri::Runtime>(
+    app: tauri::AppHandle<R>,
+    slug: String,
+) -> Result<(), KaggleFault> {
+    let creds = kaggle_key_read(&app).ok_or_else(KaggleFault::no_key)?;
+    let mut w = crate::pull::Net::new();
+    Courier::new(creds)
+        .wait_ready(&mut w, &slug)
+        .map_err(KaggleFault::from)
+}
+
+/// Verb 3. The kernel script and its metadata up. Answers the version number.
+/// `datasets` are `owner/slug` strings; `gpu` is explicit for the reason
+/// `kaggle.rs:424-429` gives (the parse kernel is CPU: pass `false`).
+#[tauri::command]
+pub fn push_kernel<R: tauri::Runtime>(
+    app: tauri::AppHandle<R>,
+    slug: String,
+    script: String,
+    datasets: Vec<String>,
+    gpu: bool,
+) -> Result<u32, KaggleFault> {
+    let creds = kaggle_key_read(&app).ok_or_else(KaggleFault::no_key)?;
+    let mut w = crate::pull::Net::new();
+    Courier::new(creds)
+        .push_kernel(&mut w, &slug, &script, &datasets, gpu)
+        .map_err(KaggleFault::from)
+}
+
+/// Verb 4. The slug's newest version's status word, lowercased.
+#[tauri::command]
+pub fn status<R: tauri::Runtime>(
+    app: tauri::AppHandle<R>,
+    slug: String,
+) -> Result<String, KaggleFault> {
+    let creds = kaggle_key_read(&app).ok_or_else(KaggleFault::no_key)?;
+    let mut w = crate::pull::Net::new();
+    Courier::new(creds)
+        .status(&mut w, &slug)
+        .map_err(KaggleFault::from)
+}
+
+/// Verb 5. Every output file's name and its signed URL, and the log
+/// (`None` while the kernel runs — Kaggle does not serve it then).
+#[tauri::command]
+pub fn output<R: tauri::Runtime>(
+    app: tauri::AppHandle<R>,
+    slug: String,
+) -> Result<KaggleOutput, KaggleFault> {
+    let creds = kaggle_key_read(&app).ok_or_else(KaggleFault::no_key)?;
+    let mut w = crate::pull::Net::new();
+    let out = Courier::new(creds)
+        .output(&mut w, &slug)
+        .map_err(KaggleFault::from)?;
+    Ok(KaggleOutput {
+        files: out
+            .files
+            .into_iter()
+            .map(|f| KaggleOutFile { name: f.name, url: f.url })
+            .collect(),
+        log: out.log,
+    })
+}
+
+/// Verb 5b (W2-D1). One output file's BYTES, through the app — the storage
+/// host sends no `Access-Control-Allow-Origin`, so a `frank://` page cannot
+/// fetch the signed URL itself. Returns a RAW IPC body, not base64.
+#[tauri::command]
+pub fn fetch<R: tauri::Runtime>(
+    app: tauri::AppHandle<R>,
+    url: String,
+) -> Result<tauri::ipc::Response, KaggleFault> {
+    let creds = kaggle_key_read(&app).ok_or_else(KaggleFault::no_key)?;
+    let mut w = crate::pull::Net::new();
+    let file = OutFile { name: String::new(), url };
+    let bytes = Courier::new(creds)
+        .fetch(&mut w, &file)
+        .map_err(KaggleFault::from)?;
+    Ok(tauri::ipc::Response::new(bytes))
+}
+
 // ------------------------------------------------------------------- the tests
 
 #[cfg(test)]
@@ -977,5 +1303,48 @@ mod kaggle_tests {
         assert!(matches!(refusal_for(500, ""), Refusal::Said(_)));
         assert!(refusal_for(500, "").sentence().contains("500"));
         assert!(Refusal::Lost("reset".into()).sentence().contains("could not be reached"));
+    }
+
+    // ---------------------------------------------------- W2: unb64, types, key
+
+    #[test]
+    fn unb64_round_trips_b64_over_every_length() {
+        for input in [b"" as &[u8], b"f", b"fo", b"foo", b"foob", b"osca:k3y"] {
+            assert_eq!(unb64(&b64(input)).unwrap(), input, "round-trip of {input:?}");
+        }
+        // Rejects
+        assert!(unb64("a").is_err(), "length 1 is not a multiple of 4");
+        assert!(unb64("====").is_err(), "four pads is not valid");
+        assert!(unb64("!!!x").is_err(), "bad characters");
+    }
+
+    #[test]
+    fn kaggle_fault_maps_every_refusal_kind() {
+        let cases = [
+            (Refusal::Auth("x".into()), "auth"),
+            (Refusal::Ambiguous("x".into()), "ambiguous"),
+            (Refusal::Said("x".into()), "said"),
+            (Refusal::Lost("x".into()), "lost"),
+        ];
+        for (r, expected_kind) in cases {
+            let f = KaggleFault::from(r);
+            assert_eq!(f.kind, expected_kind);
+            assert!(!f.why.is_empty());
+        }
+        let nk = KaggleFault::no_key();
+        assert_eq!(nk.kind, "no-key");
+        assert!(nk.why.contains("kaggle.json"));
+    }
+
+    #[test]
+    fn to_kaggle_json_round_trips_through_parse_pasted() {
+        let c = Creds::new("osca", "k3y");
+        let json = c.to_kaggle_json();
+        let c2 = parse_pasted(&json).expect("round-trip");
+        assert_eq!(c2.username, "osca");
+        assert_eq!(c2.auth(), c.auth());
+        // The key never appears in Debug
+        let shown = format!("{:?}", c);
+        assert!(shown.contains("osca") && !shown.contains("k3y"), "{shown}");
     }
 }

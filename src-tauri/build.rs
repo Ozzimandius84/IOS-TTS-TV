@@ -141,6 +141,21 @@ fn main() {
                 "speech_pause",
                 "speech_resume",
                 "speech_speaking",
+                // the courier (W2 PHONE-STUDIO, 23 Sep): src/kaggle.rs. The five
+                // verbs the card names, plus `fetch` -- `output` answers names and
+                // signed URLs, and the storage host sends no CORS, so the bytes
+                // come through the app or they do not come at all.
+                "put_job",
+                "wait_ready",
+                "push_kernel",
+                "status",
+                "output",
+                "fetch",
+                // the key store (D4(d)): a 0600 file in app_data_dir(), written
+                // and read only by Rust. `kaggle_key_state` answers
+                // {present, username} and no key.
+                "kaggle_key_set",
+                "kaggle_key_state",
             ]),
         ),
     )

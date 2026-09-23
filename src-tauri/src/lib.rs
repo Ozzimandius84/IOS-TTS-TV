@@ -1752,6 +1752,44 @@ pub const BOOKS_JS: &str = r#"(function () {
 })();
 "#;
 
+/// `window.TTSTVHost.kaggle`, the courier on this phone: six Kaggle verbs
+/// and the two key-store commands. Injected on its own rather than inside
+/// [`HOST_JS`], whose tests pin that object to its two commands; guarded the
+/// same way -- a page that is not in Frank gets no door.
+pub const KAGGLE_JS: &str = r#"(function () {
+  "use strict";
+  var TAURI = window.__TAURI__ && window.__TAURI__.core;
+  if (!TAURI || typeof TAURI.invoke !== "function") return;
+  window.TTSTVHost = window.TTSTVHost || {};
+  /* THE COURIER ON THIS PHONE. Six verbs, and the key is not one of them:
+     kaggle_key_set writes the pasted kaggle.json to a 0600 file in the app's
+     own data dir, and every verb below reads it there. Nothing here ever
+     holds, passes or receives the key. */
+  window.TTSTVHost.kaggle = {
+    // putJob(slug: string, notes: string, files: {name: string, b64: string}[]) -> Promise<null>
+    putJob: function (slug, notes, files) {
+      return TAURI.invoke("put_job", { slug: slug, notes: notes, files: files || [] });
+    },
+    // waitReady(slug: string) -> Promise<null>   (up to 300 s; the page shows a stage)
+    waitReady: function (slug) { return TAURI.invoke("wait_ready", { slug: slug }); },
+    // pushKernel(slug: string, script: string, datasets: string[], gpu: boolean) -> Promise<number>
+    pushKernel: function (slug, script, datasets, gpu) {
+      return TAURI.invoke("push_kernel", { slug: slug, script: script,
+                                          datasets: datasets || [], gpu: !!gpu });
+    },
+    // status(slug: string) -> Promise<string>   ("complete" | "running" | "queued" | ...)
+    status: function (slug) { return TAURI.invoke("status", { slug: slug }); },
+    // output(slug: string) -> Promise<{files: {name,url}[], log: string|null}>
+    output: function (slug) { return TAURI.invoke("output", { slug: slug }); },
+    // fetch(url: string) -> Promise<ArrayBuffer>   (a RAW body, not base64)
+    fetch: function (url) { return TAURI.invoke("fetch", { url: url }); },
+    // keySet(pasted: string) -> Promise<{present: boolean, username: string|null}>
+    keySet: function (pasted) { return TAURI.invoke("kaggle_key_set", { pasted: pasted }); },
+    // keyState() -> Promise<{present: boolean, username: string|null}>
+    keyState: function () { return TAURI.invoke("kaggle_key_state"); }
+  };
+})();"#;
+
 // ------------------------------------------------------------- the pull
 //
 // G-SYNCBG (Osca, 11 Sep): *"the phone's pull is JavaScript inside the
@@ -2950,6 +2988,17 @@ pub fn run() {
             speech::speech_pause,
             speech::speech_resume,
             speech::speech_speaking,
+            // The courier (W2 PHONE-STUDIO, 23 Sep): `TTSTVHost.kaggle`, the
+            // six Kaggle verbs and the two key-store commands. `kaggle.rs`
+            // holds the wrappers; this is the registration.
+            kaggle::put_job,
+            kaggle::wait_ready,
+            kaggle::push_kernel,
+            kaggle::status,
+            kaggle::output,
+            kaggle::fetch,
+            kaggle::kaggle_key_set,
+            kaggle::kaggle_key_state,
         ])
         // The launch scheme (`frank-pair://`, NOT the asset scheme). The
         // plugin is what turns an OS open into an event on iOS, macOS and
@@ -3146,6 +3195,11 @@ pub fn run() {
             // page alone -- the row a shared PDF waits on. Above `#shelf`
             // and not in it, because the shelf rail is re-rendered.
             .initialization_script(INBOX_JS)
+            // The courier (W2 PHONE-STUDIO): `TTSTVHost.kaggle`, its own script
+            // like dict/lookup/speech/books and for the same reason -- HOST_JS's
+            // two `invoke`s are pinned by two tests. Guarded on `__TAURI__` the
+            // same way, so a page outside Frank gets no door.
+            .initialization_script(KAGGLE_JS)
             // Separate from HOST_JS, and unconditional -- see PAIR_JS's own
             // note. Both run before the document's own scripts, so a page that
             // reads the key at load reads a key a link has already written.
@@ -4222,5 +4276,46 @@ mod pull_door_tests {
         assert!(road.contains("group.com.ttstv.frank"), "it says what it would need");
         assert!(road.contains("- target: FrankShare"), "BLOCK A is whole");
         assert!(road.contains("type: app-extension"), "BLOCK B is whole");
+    }
+
+    /// W2 PHONE-STUDIO: the courier's door is eight commands, eight invokes,
+    /// guarded on __TAURI__, and the key never passes through the shim.
+    #[test]
+    fn the_kaggle_door_is_eight_commands_and_the_key_never_crosses_the_shim() {
+        let js = KAGGLE_JS;
+        assert_eq!(js.matches("invoke(").count(), 8, "eight commands, eight calls");
+        assert!(js.contains(r#"TAURI.invoke("kaggle_key_state")"#));
+        assert!(js.contains(r#"TAURI.invoke("kaggle_key_set", { pasted: pasted })"#));
+        assert!(js.contains(r#"TAURI.invoke("put_job","#));
+        assert!(js.contains(r#"TAURI.invoke("wait_ready","#));
+        assert!(js.contains(r#"TAURI.invoke("push_kernel","#));
+        assert!(js.contains(r#"TAURI.invoke("status","#));
+        assert!(js.contains(r#"TAURI.invoke("output","#));
+        assert!(js.contains(r#"TAURI.invoke("fetch","#));
+        assert!(js.contains("if (!TAURI"), "a page outside Frank gets no door");
+        assert!(js.contains("window.TTSTVHost.kaggle"));
+        // No parameter named "key" or "pass" other than "pasted"
+        assert!(!js.contains("key:") && !js.contains("pass:"), "no key-shaped param");
+
+        let build = include_str!("../build.rs");
+        let cap = include_str!("../capabilities/kaggle.json");
+        let lib = include_str!("lib.rs");
+        let run_fn = &lib[lib.find("pub fn run() {").unwrap()..lib.find("fn flush_google<").unwrap()];
+        for (cmd, perm) in [
+            ("put_job", "allow-put-job"),
+            ("wait_ready", "allow-wait-ready"),
+            ("push_kernel", "allow-push-kernel"),
+            ("status", "allow-status"),
+            ("output", "allow-output"),
+            ("fetch", "allow-fetch"),
+            ("kaggle_key_set", "allow-kaggle-key-set"),
+            ("kaggle_key_state", "allow-kaggle-key-state"),
+        ] {
+            assert!(build.contains(&format!("\"{cmd}\"")), "build.rs declares {cmd}");
+            assert!(cap.contains(&format!("\"{perm}\"")), "the capability grants {perm}");
+        }
+        let at = |s: &str| run_fn.find(s).unwrap_or_else(|| panic!("run() has no {s}"));
+        assert!(at(".initialization_script(INBOX_JS)") < at(".initialization_script(KAGGLE_JS)"));
+        assert!(at(".initialization_script(KAGGLE_JS)") < at(".initialization_script(PAIR_JS)"));
     }
 }
