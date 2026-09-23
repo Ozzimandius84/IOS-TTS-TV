@@ -1,0 +1,13 @@
+[
+ {
+  "slug": "poems",
+  "title": "Poems",
+  "author": "T.\u2009S.\u2009Eliot",
+  "lang": "en",
+  "chapters": 25,
+  "has_audio": true,
+  "has_timings": true,
+  "voiced": 25,
+  "sample": "samples/poems.zip"
+ }
+]

@@ -30,8 +30,8 @@
 // that is not the current SHELL_CACHE, so changing this string IS the eviction
 // -- and changing it changes sw.js's own bytes, which is the only thing that
 // makes a browser run `install` and `activate` at all.
-const SHELL_CACHE = "ttstv-shell-v57";   // 23 Sep: works.js joins the shell (W2 PHONE-STUDIO) -- a NEW name in
-                                         // SHELL_FILES is only fetched by an install, so the
+const SHELL_CACHE = "ttstv-shell-v59";   // 23 Sep: oauth.html joins the shell (W3 ACCOUNT) -- a NEW
+                                         // name in SHELL_FILES is only fetched by an install, so the
                                          // string has to move or an installed app never caches
                                          // it (v37: the shell moved to clean/)
 const BOOK_PREFIX = "ttstv-book-";        // kept in step with library/import.js
@@ -185,6 +185,22 @@ const SHELL_FILES = [
                               // studio would have answered, built from this phone's own
                               // Kaggle courier rows, so ?studio= has a source on a phone
                               // with no Mac and no Studio.
+  "../library/library.json",   // THE WEBSITE'S OWN SHELF SOURCE (F2, W1 follow-up):
+                              // a fresh website has no Studio to poll, no /state to
+                              // answer -- this static JSON is how a web host shows
+                              // ≥1 book card. The page fetches it in refresh() when
+                              // TTSTVHost.isWeb, and the service worker caches it
+                              // for offline. Beside it, the sample bundle it names.
+  "../library/samples/poems.zip", // THE SAMPLE BUNDLE: a public-domain book shipped
+                              // with the website so a fresh site has something on
+                              // the shelf without an import. library.json above
+                              // lists it; import.js takes it from here.
+  "../library/oauth.html",    // WHERE GOOGLE HANDS THE CODE BACK, ON THE WEB HOST
+                              // (W3 ACCOUNT, D5): the redirect URI the site's own OAuth client
+                              // registers. It writes the whole URL into ONE localStorage key
+                              // (`ttstv.sync.googleRedirect` -- `drive.js::GOOGLE_REDIRECT_KEY`)
+                              // and closes; the opener holds the PKCE verifier and does the
+                              // exchange. `library/drive.js::googleAwaitRedirect` is the reader.
   "../settings/settings.html",  // the Settings surface likewise (step 3; its page in step 4)
   "../settings/settings.css",
   "../settings/settings.js",   // and its FORM, cut out of reader/settings.js in Stage 4 (5 Sep) -- only settings.html loads it

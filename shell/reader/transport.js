@@ -374,6 +374,16 @@
   /* true: a master is there · false: every extension 404s · null: cannot tell */
   function masterIn(folder, cid) {
     if (!folder || !cid || typeof root.fetch !== "function") return Promise.resolve(null);
+    /* audioExt from render.json (listen.js exposes it on the control):
+       when known, one HEAD instead of five -- no probe 404s */
+    var c = control();
+    var ext = c && c.audioExt;
+    if (ext) {
+      var url = folder + encodeURIComponent(cid) + "." + ext;
+      return root.fetch(url, { method: "HEAD", cache: "no-store" }).then(function (r) {
+        return (r && r.ok) ? true : ((!r || r.status !== 404) ? null : false);
+      }, function () { return null; });
+    }
     var i = 0, unsure = false;
     function next() {
       if (i >= AUDIO_EXTS.length) return Promise.resolve(unsure ? null : false);

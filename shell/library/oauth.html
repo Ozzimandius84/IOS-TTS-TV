@@ -1,0 +1,27 @@
+<!doctype html>
+<!-- library/oauth.html -- WHERE GOOGLE HANDS THE CODE BACK, ON THE WEB HOST.
+     W3 ACCOUNT (D5). The web host has no loopback listener and no custom
+     scheme, so the redirect URI is this page -- the site's own, at
+     `<origin>/library/oauth.html`, registered on the OAuth client for the web
+     host kind (`TTSTVHost.GOOGLE.web`, library/host.js).
+
+     IT WRITES ONE KEY AND CLOSES. `localStorage["ttstv.sync.googleRedirect"]`
+     gets the WHOLE redirect URL -- `library/drive.js::googleAwaitRedirect`
+     polls that key (500 ms, five minutes), takes it as it reads it, and hands
+     it to `googleRedirectParams`, which needs `state` as well as `code`.
+     The opener holds the PKCE verifier and does the exchange; this page never
+     sees the verifier, never sees the client id, and makes no request at all.
+     It is the same hand-off `frank-pair://` uses: a URL into one key. -->
+<meta charset="utf-8">
+<title>Signing in…</title>
+<body style="font:14px system-ui;padding:2rem">
+Signing in… you can close this window.</body>
+<script>
+(function () {
+  "use strict";
+  try {
+    window.localStorage.setItem("ttstv.sync.googleRedirect", window.location.href);
+  } catch (e) { /* private mode: the opener times out and says so */ }
+  window.close();
+})();
+</script>

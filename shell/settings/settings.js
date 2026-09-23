@@ -3694,7 +3694,7 @@
 
   /* ================================================== FIRST RUN
    * Osca, 6 Sep: *"Google IS the account. First run (both apps): Sign in
-   * with Google · Use iCloud · Skip — this device only."* The picture is
+   * with Google · Skip — this device only."* The picture is
    * `design/reader/settings.html`'s FIRST RUN block (b452bcd): a lead row and
    * three rows, "drawn in the page's own rows so it can be lifted whole" --
    * and it is lifted whole, by ONE builder, into two places: the Transfer
@@ -3706,13 +3706,11 @@
    * gate is answered in the Library, and the gate never shows again once
    * the card has been answered in Settings.
    *
-   * Three choices and no fourth. Google and iCloud are not built -- their
-   * buttons are inert with the reason (this file's rule for a face the
-   * device lacks) -- so today the choice a person CAN make is Skip, which is
-   * a real answer and not a dismissal: the reader works entirely on this
-   * device, and the Sync row reads "This device only" from then on. */
-  var NOT_BUILT_GOOGLE = "not built yet -- needs the Google client ids (settings/STATUS.md §6, §8)";
-  var NOT_BUILT_ICLOUD = "not built yet -- the iCloud transport is after Google Drive (settings/STATUS.md §8)";
+   * Two choices (W3 ACCOUNT, D5 — iCloud removed, D9 out of scope). Google
+   * is the account, Drive is the depot. Skip is a real answer, not a
+   * dismissal: the reader works entirely on this device, and the Sync row
+   * reads "This device only" from then on. The Google button is live where a
+   * client exists and inert with a sentence where it is not. */
 
   /* Pure: has first run been answered? By a choice recorded in the store,
    * or by a phone that paired -- a choice made with the network rather than
@@ -3722,10 +3720,63 @@
     return !!account || !!(pair && pair.token);
   }
 
+  /* Pure: may the first-run Google button be pressed, and what does it say when
+   * it may not. The rule is "is there a client on THIS device" and it is asked
+   * of the host, never of a URL. Returns null (live) or a sentence (inert). */
+  function firstRunGoogleWhy(host, isStudio) {
+    if (isStudio) return null;                       // the Mac: studio/google.py holds the ids
+    var g = host && typeof host.google === "function" ? host.google() : (host && host.google);
+    if (g && g.clientId && g.redirect && typeof host.googleSignIn === "function") return null;
+    return "no Google client on this device yet \u2014 it is registered once, then this button works";
+  }
+
+  /* The Google press, for a page with no panel under it: the Library's gate.
+   * Resolves {who} | {why}, never throws. Reused by the Transfer panel's own
+   * `signIn()` so there is ONE Google press in the file. */
+  function firstRunGoogle(o) {
+    o = o || {};
+    var host = o.host !== undefined ? o.host : global.TTSTVHost;
+    var say = o.say || function () {};
+    var isStudio = o.studio !== undefined ? !!o.studio : !!origin();
+    if (isStudio) {
+      /* POST /account/google, then poll GET /account -- the panel's own two calls.
+       * The gate has no network context; use fetch through askUrl directly. */
+      var base = askUrl("");
+      if (!base) return Promise.resolve({ why: "no server to sign in through" });
+      say("Opening Google in your browser\u2026");
+      return global.fetch(base + ACCOUNT.GOOGLE, { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" })
+        .then(function (r) { return r.json(); })
+        .then(function (r) {
+          if (!r || !r.ok) return { why: (r && r.why) || "could not start the sign-in" };
+          return new Promise(function (resolve) {
+            function poll() {
+              global.fetch(base + ACCOUNT.GET).then(function (r) { return r.json(); }).then(function (d) {
+                if (!d) { resolve({ why: "lost the server" }); return; }
+                var si = d.signin || {};
+                if (si.live) { global.setTimeout(poll, ACCOUNT_POLL_MS); return; }
+                if (si.phase === "done") {
+                  say("Signed in as " + (si.who || (d.google && d.google.email) || ""));
+                  resolve({ who: si.who || (d.google && d.google.email) || null });
+                } else {
+                  resolve({ why: si.error || "the sign-in did not finish" });
+                }
+              });
+            }
+            poll();
+          });
+        }).catch(function (e) { return { why: String((e && e.message) || e) }; });
+    }
+    return googleSignInPhone(host, { say: say });        // web + phone, one path
+  }
+
   /* The card: a `set-head` and a `set-card tr-first` with the lead row and
-   * the three rows. `onSkip` is the one live verb. Returns the two elements
-   * and the three buttons by name. */
-  function buildFirstRunCard(doc, onSkip) {
+   * the two rows (W3 ACCOUNT: iCloud removed, D9 out of scope). `onGoogle`
+   * is the sign-in press, `onSkip` is Skip. Returns the two elements and
+   * the buttons by name. */
+  function buildFirstRunCard(doc, onSkip, onGoogle) {
+    var host = global.TTSTVHost;
+    var isStudio = host && host.isStudio;
+    var googleWhy = firstRunGoogleWhy(host, isStudio);
     var head = kEl(doc, "div", "set-head", "First run");
     var card = kEl(doc, "div", "set-card tr-first");
     var buttons = {};
@@ -3754,9 +3805,8 @@
     leadL.appendChild(kEl(doc, "div", "set-name", "Your books, wherever you read them"));
     leadL.appendChild(kEl(doc, "small", "kag-why-here", "The shelf, where you are in each book, and every mark you have made."));
     lead.appendChild(leadL); card.appendChild(lead);
-    row("google", "Sign in with Google", "The account — and the first place to sync through. Not built yet.", "Sign in", true, null, NOT_BUILT_GOOGLE);
-    row("icloud", "Use iCloud", "Apple devices, nothing to type. No account — this device stays signed out. Not built yet.", "Use iCloud", false, null, NOT_BUILT_ICLOUD);
-    row("device", "Skip — this device only", "Nothing leaves this device. You can sign in later, here.", "Skip", false, onSkip);
+    row("google", "Sign in with Google", "The account \u2014 and the first place to sync through.", "Sign in", true, onGoogle, googleWhy);
+    row("device", "Skip \u2014 this device only", "Nothing leaves this device. You can sign in later, here.", "Skip", false, onSkip);
     return { head: head, card: card, buttons: buttons };
   }
 
@@ -3844,7 +3894,38 @@
     gate.setAttribute("aria-label", "First run");
     var sheet = kEl(doc, "div", "fr-sheet");
     var handle = { el: gate, account: null, written: null };
-    var built = buildFirstRunCard(doc, function () { handle.choose("device"); });
+    var onGoogle = function () {
+      /* The Google press from the gate. On success: write the account, take
+       * the gate down, and run one Drive sync (the "initial sync" D5 asks for). */
+      var say = built.buttons.google.parentNode.parentNode.querySelector(".kag-why-here");
+      built.buttons.google.disabled = true;
+      firstRunGoogle({
+        say: function (line) { if (say) say.textContent = line; },
+      }).then(function (r) {
+        if (r.why) {
+          if (say) say.textContent = r.why;
+          built.buttons.google.disabled = false;
+          return;
+        }
+        handle.choose("google", r.who);
+        /* One Drive sync after a successful sign-in (N-5: press only, not
+         * periodic). `runDriveSync` is settings.js's own, loaded from drive.js. */
+        var D = driveModule();
+        if (D && D.runDriveSync) {
+          var store = D.syncDefaultStore ? D.syncDefaultStore() : null;
+          if (store) {
+            var tok = D ? syncRead(D.GOOGLE_TOKEN_KEY) : null;
+            if (tok && tok.refresh && tok.clientId) {
+              D.runDriveSync({ kind: "drive", token: function (force) { return D.googleAccessToken(global.fetch, force); } }, {
+                store: store, bundle: global.TTSTVBundle || null,
+                href: global.location && global.location.href,
+              });
+            }
+          }
+        }
+      });
+    };
+    var built = buildFirstRunCard(doc, function () { handle.choose("device"); }, onGoogle);
     sheet.appendChild(built.head); sheet.appendChild(built.card);
     gate.appendChild(sheet);
     handle.buttons = built.buttons;
@@ -3887,6 +3968,11 @@
     var firstBuilt = buildFirstRunCard(doc, function () {
       account = firstRunChoose("device");
       paint();
+    }, function () {
+      /* The Google press from the Transfer tab's card. Use `signIn()` -- the
+       * panel's own function -- which has `ctx` and handles both the Studio
+       * and phone/web paths already. */
+      signIn().then(function () { paint(); });
     });
     var firstHead = firstBuilt.head, first = firstBuilt.card;
     panel.appendChild(firstHead); panel.appendChild(first);
@@ -6249,14 +6335,15 @@
     syncPairedLine: syncPairedLine, syncOfferSent: syncOfferSent,
     syncOfferRead: syncOfferRead, SYNC_CODE_DIGITS: SYNC_CODE_DIGITS,
     // first run (6 Sep): the rule, the card, the write and the gate
-    firstRunChosen: firstRunChosen, buildFirstRunCard: buildFirstRunCard,
+    firstRunChosen: firstRunChosen, firstRunGoogleWhy: firstRunGoogleWhy,
+    firstRunGoogle: firstRunGoogle, buildFirstRunCard: buildFirstRunCard,
     firstRunChoose: firstRunChoose, firstRunWritten: firstRunWritten, firstRunNote: firstRunNote,
     FIRST_RUN_UNSAVED: FIRST_RUN_UNSAVED, firstRun: firstRun,
     // the door's pairing (23d): the key, the event, the record, the write
     TRANSFER_PAIR_KEY: TRANSFER_PAIR_KEY, TRANSFER_PAIR_EVENT: TRANSFER_PAIR_EVENT,
     pairFingerprint: pairFingerprint, pairRecord: pairRecord, pairUrlOf: pairUrlOf, pairLine: pairLine,
     pairRead: pairRead, pairWrite: pairWrite, pairForget: pairForget,
-    NOT_BUILT_GOOGLE: NOT_BUILT_GOOGLE, NOT_BUILT_ICLOUD: NOT_BUILT_ICLOUD,
+    NOT_BUILT_GOOGLE: null, // W3: removed (iCloud D9 out-of-scope; Google now live per host)
     // the account and Drive (26b): the page's half; the adapter is library/drive.js
     ACCOUNT: ACCOUNT, SYNC_THROUGH_KEY: SYNC_THROUGH_KEY, SYNC_DRIVE_LAST_KEY: SYNC_DRIVE_LAST_KEY, SYNC_SETTINGS_KEY: SYNC_SETTINGS_KEY,
     syncStore: syncStore, runDriveSync: runDriveSync, googleAccessToken: googleAccessToken,

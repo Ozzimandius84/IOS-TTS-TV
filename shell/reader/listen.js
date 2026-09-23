@@ -273,6 +273,16 @@ function mount(o) {
   let hiOK = !!(window.CSS && CSS.highlights && window.Highlight);
   let lastPara = null;
 
+  /* render.json's `audio_ext` (architect, 23 Sep): when a book's render.json
+     names the extension its masters use, loadAudio goes straight to it and the
+     probe chain's 404s never fire. The fetch runs once per mount; if the file
+     is absent or has no field, audioExt stays null and the chain is unchanged. */
+  let audioExt = null;
+  const renderPromise = fetch(base + "render.json")
+    .then(r => (r.ok ? r.json() : null))
+    .then(j => { if (j && j.audio_ext) audioExt = j.audio_ext; })
+    .catch(() => {});
+
   const chIndexById = new Map(((book && book.chapters) || []).map((c, i) => [c.id, i]));
   const apparatus = apparatusOf(book);   /* P6: what the voice skips unasked */
   let readApparatus = false;
@@ -517,7 +527,15 @@ function mount(o) {
     audio.pause();
     audio.removeAttribute("src");
     audio.load();
-    return new Promise(resolve => {
+    return renderPromise.then(() => new Promise(resolve => {
+      /* audioExt set: go straight to the named extension, no probe chain */
+      if (audioExt) {
+        audio.src = base + "audio/" + cid + "." + audioExt;
+        audio.load();
+        audio.onerror = () => { audio.onerror = null; audio.oncanplay = null; resolve(new VirtualClock()); };
+        audio.oncanplay = () => { audio.onerror = null; audio.oncanplay = null; resolve(audio); };
+        return;
+      }
       let i = 0;
       const tryNext = () => {
         if (i >= AUDIO_EXTS.length) {
@@ -531,7 +549,7 @@ function mount(o) {
       audio.onerror = tryNext;
       audio.oncanplay = () => { audio.onerror = null; audio.oncanplay = null; resolve(audio); };
       tryNext();
-    });
+    }));
   }
 
   function useClock(next) {
@@ -824,6 +842,7 @@ function mount(o) {
     get timings() { return cur ? cur.timings : null; },
     get map() { return cur ? cur.map : null; },
     get audioEl() { return audio; },
+    get audioExt() { return audioExt; },
   };
 
   return control;

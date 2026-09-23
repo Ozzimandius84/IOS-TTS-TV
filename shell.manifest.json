@@ -2,8 +2,8 @@
   "added_here": [
     "index.html"
   ],
-  "bytes": 2771472,
-  "count": 73,
+  "bytes": 5042310,
+  "count": 76,
   "files": {
     "bar/askbar.css": {
       "bytes": 12271,
@@ -30,8 +30,8 @@
       "sha256": "43a6b54585d7495c345d51fdd0e59b0e15a07ce3956ced3cee70c1a7a21a5687"
     },
     "library/host.js": {
-      "bytes": 5884,
-      "sha256": "8385de04a1fa2f06e02f57fd1ab6a2fd8a6bc36320668dbc185f679377df6127"
+      "bytes": 8247,
+      "sha256": "a4f5acad2836b85a164fed8f860a6a4b0953112136e58244001b3762abe56311"
     },
     "library/import.js": {
       "bytes": 44255,
@@ -45,6 +45,18 @@
       "bytes": 305314,
       "sha256": "b5f1a729051ea2b46b1c0c567a755788ed83c4228f4efb53901aceafc9f48db1"
     },
+    "library/library.json": {
+      "bytes": 212,
+      "sha256": "516e904fb41bcac5167ec64f0e42ce426f9c4932b70184ac76ab6b6bdf54896e"
+    },
+    "library/oauth.html": {
+      "bytes": 1300,
+      "sha256": "03f5eae3c1a8e0463f7b1f6cdacc63ffcb60dde42ff5cf8bb9eb049d774fcbad"
+    },
+    "library/samples/poems.zip": {
+      "bytes": 2252432,
+      "sha256": "0561f33981827f1133ef288bae0e896b30b2c55c56d5639ce2c97ba2e920b3c8"
+    },
     "library/transfer.js": {
       "bytes": 11069,
       "sha256": "1e478c64e120da8d8c627c0ddea1f264dfa183c1dd3b6ed79209a93e1030a345"
@@ -54,8 +66,8 @@
       "sha256": "da3d15f0ef120aac304c36f380d69325408aa1d1c6a10fafb2bd4bf90ecafba3"
     },
     "library/works.js": {
-      "bytes": 10818,
-      "sha256": "41d8238c0c2695076f4b1bb4a03767b0a908e1309b17c66a75f5878603c0f778"
+      "bytes": 18202,
+      "sha256": "a4c92ea2a0e0fc04e7c453f865801de926c9349281fc8da5f47eb645df2b50a7"
     },
     "prefs/prefs.js": {
       "bytes": 80389,
@@ -118,8 +130,8 @@
       "sha256": "31d97c6d8f53450d7f194ee49ac7a02cbc87f6abf94ba4fe276f78411f897e34"
     },
     "reader/listen.js": {
-      "bytes": 36018,
-      "sha256": "5008effb013b4407c9ced95e7728745c5f34ac8c24d2a567ce422270ccf7d2af"
+      "bytes": 37024,
+      "sha256": "920217b4f142d7a08e66805dd12fae78b2602b72171d722fd1d99bc4112fb4e3"
     },
     "reader/lookup.js": {
       "bytes": 36047,
@@ -194,8 +206,8 @@
       "sha256": "601bc969f0c198a328f3bdaf737d2be0b60e2828ed20dfc3365c8e53225ddc91"
     },
     "reader/sw.js": {
-      "bytes": 25947,
-      "sha256": "413c487a5655cfa0868322e4281c33faa3be9891da08d96121040b25c3bf3612"
+      "bytes": 27337,
+      "sha256": "2fce721341c0fd750bb270f2a9aa2b488de73e5c5c91d685b54fe99d03dae4b1"
     },
     "reader/sysvoice.js": {
       "bytes": 45964,
@@ -206,8 +218,8 @@
       "sha256": "d8d6c23d695bb3f6f43285bc90d425ab3cf5b4d66a889c1d145b738818150026"
     },
     "reader/transport.js": {
-      "bytes": 32844,
-      "sha256": "963c426ab8d2f730f8c7495ff9be89bbf0396f6608a3febb18fa710a78914ab4"
+      "bytes": 33324,
+      "sha256": "4800885644eef3b1bc458ea304ad3516cbc3aad3a5d8e8556179627939c797f4"
     },
     "reader/wheel.css": {
       "bytes": 3423,
@@ -246,8 +258,8 @@
       "sha256": "c58113ea8ab67105dee3b20259e8233bd66f9ec405de30cd9a63624f1fed2796"
     },
     "settings/settings.js": {
-      "bytes": 328406,
-      "sha256": "d3cdaa6f8d356f1ae107c5b34575881ded3318e9a4cb4712d24fb10c77b624b7"
+      "bytes": 332677,
+      "sha256": "3df759b2898468225a00c83b934217e88ec1c7fd71122725b1771b0e4d39c42d"
     },
     "voiceui/answers.js": {
       "bytes": 4253,
@@ -300,8 +312,8 @@
   },
   "home_page": "library/library.html",
   "source": {
-    "commit": "c1ee15f",
+    "commit": "02486d5",
     "repo": "/Users/oscarwilson-brown/Documents/RUNNERS/TTSTV/TTSTV",
-    "shell_cache": "ttstv-shell-v57"
+    "shell_cache": "ttstv-shell-v59"
   }
 }

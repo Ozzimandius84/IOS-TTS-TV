@@ -93,21 +93,60 @@
   H.WHY_STUDIO = "Studio needs the Mac app or Kaggle";
   H.WHY_DRIVE = "Connect Drive to sync";
 
-  /* THE GOOGLE CLIENTS, ONE PER HOST KIND (D5). The SHAPE is this file's --
-   * `drive.js::googleSignInPhone` already takes `host.google = {clientId,
-   * redirect}` and already refuses with a sentence when it is absent -- and
-   * the VALUES are W3's to fill. They are `null` here on purpose: a client id
-   * invented by a session is a client id that does not exist, and the two
-   * that do exist (the Mac's loopback client, the phone's reverse-id client)
-   * are `studio/google.py`'s and `lib.rs`'s, not this file's to restate.
+  /* THE GOOGLE CLIENTS, ONE PER HOST KIND (D5, W3 ACCOUNT). The SHAPE is this
+   * file's and the VALUES are per kind, because a client id may live in
+   * exactly one place and that place is different on each host:
    *
-   *   studio  studio/google.py's loopback client (the Mac signs in through
-   *           the Python server; this file is not in that path)
-   *   phone   the iOS reverse-id client, redirect `<reverse-id>:/oauth2redirect`
-   *   web     THE SITE'S OWN CLIENT -- redirect `<origin>/library/oauth.html`,
-   *           the page §4 specs. PKCE in JS, no secret.
-   */
-  H.GOOGLE = { studio: null, phone: null, web: null };
+   *   studio  studio/google.py's loopback client. NOT HERE. The Mac signs in
+   *           through the Python server (`POST /account/google`) and this
+   *           file is not in that path -- the id is in account.json, at mode
+   *           0600, and a page never sees it. Left null on purpose.
+   *   phone   lib.rs's iOS client, carried in src-tauri/google.json and
+   *           INJECTED onto the page by `google_js()`. NOT HERE EITHER: the
+   *           phone repo's own test proves no second file carries the id.
+   *           `injectedGoogle` below is how this file reaches it.
+   *   web     THE SITE'S OWN CLIENT, and the one row a session fills in: a
+   *           NEW Google OAuth client of type *Web application*, redirect
+   *           `<origin>/library/oauth.html` -- the page `library/oauth.html`
+   *           is. PKCE in JS, no secret. See `spec-w3-account.md` §3.
+   *
+   * WHAT THE HOST INJECTED WINS. `lib.rs:3209` runs AFTER HOST_JS and sets
+   * `TTSTVHost.google` before any page script; on the phone the injected
+   * object is the only place the id exists, and a file that overwrote it
+   * would take sign-in off the phone. Measured: before this rule,
+   * `H.google()` answered `null` on a phone whose `TTSTVHost.google` carried
+   * a real client id, and `drive.js::googleSignInPhone` refused with "no
+   * Google client on this device". */
+  var injectedGoogle = H.google;      // lib.rs's {clientId, redirect}, or undefined
+  H.GOOGLE = {
+    studio: null,                     // studio/google.py's, and not this file's
+    phone: null,                      // lib.rs's, injected -- see injectedGoogle
+    web: null,                        // OSCA REGISTERS THIS (spec-w3-account.md §3):
+                                      // {clientId: "<digits>-<hash>.apps.googleusercontent.com",
+                                      //  redirect: "<origin>/library/oauth.html"}
+  };
+  H.google = function () {
+    var given = injectedGoogle;
+    if (typeof given === "function") { try { given = given(); } catch (e) { given = null; } }
+    if (given && given.clientId && given.redirect) return given;
+    return H.GOOGLE[kind] || null;
+  };
 
-  H.google = function () { return H.GOOGLE[kind] || null; };
+  /* AND THE PAGE'S OWN WAY OUT, for the one host that has no host object to
+   * ask: the web. `drive.js::googleSignInPhone` requires a
+   * `host.googleSignIn(url)` -- on the phone it is Rust's
+   * `google_sign_in`, which opens the SYSTEM browser because Google refuses
+   * its consent page inside a web view (RFC 8252 §8.12). A website has no
+   * app to do that, so it opens a POP-UP OF ITS OWN ORIGIN -- and that is
+   * load-bearing, not a convenience: `oauth.html` in a same-origin popup
+   * writes the SAME `localStorage` the opener is polling, so the verifier
+   * never has to leave the window that made it. A same-tab navigation would
+   * destroy the opener and with it the verifier. */
+  if (kind === WEB && typeof H.googleSignIn !== "function") {
+    H.googleSignIn = function (url) {
+      var w = global.open(url, "frank-google", "width=520,height=680");
+      if (!w) throw new Error("allow pop-ups for this site, then press Sign in again");
+      return w;
+    };
+  }
 })(typeof window !== "undefined" ? window : globalThis);
