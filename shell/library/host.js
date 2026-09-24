@@ -110,27 +110,40 @@
    *           `<origin>/library/oauth.html` -- the page `library/oauth.html`
    *           is. PKCE in JS, no secret. See `spec-w3-account.md` §3.
    *
-   * WHAT THE HOST INJECTED WINS. `lib.rs:3209` runs AFTER HOST_JS and sets
-   * `TTSTVHost.google` before any page script; on the phone the injected
-   * object is the only place the id exists, and a file that overwrote it
-   * would take sign-in off the phone. Measured: before this rule,
-   * `H.google()` answered `null` on a phone whose `TTSTVHost.google` carried
-   * a real client id, and `drive.js::googleSignInPhone` refused with "no
-   * Google client on this device". */
-  var injectedGoogle = H.google;      // lib.rs's {clientId, redirect}, or undefined
-  H.GOOGLE = {
-    studio: null,                     // studio/google.py's, and not this file's
-    phone: null,                      // lib.rs's, injected -- see injectedGoogle
-    web: null,                        // OSCA REGISTERS THIS (spec-w3-account.md §3):
-                                      // {clientId: "<digits>-<hash>.apps.googleusercontent.com",
-                                      //  redirect: "<origin>/library/oauth.html"}
-  };
-  H.google = function () {
-    var given = injectedGoogle;
-    if (typeof given === "function") { try { given = given(); } catch (e) { given = null; } }
-    if (given && given.clientId && given.redirect) return given;
-    return H.GOOGLE[kind] || null;
-  };
+   /* WHAT THE HOST INJECTED WINS. `lib.rs:3209` runs AFTER HOST_JS and sets
+    * `TTSTVHost.google` before any page script; on the phone the injected
+    * object is the only place the id exists, and a file that overwrote it
+    * would take sign-in off the phone. Measured: before this rule,
+    * `H.google` answered `null` on a phone whose `TTSTVHost.google` carried
+    * a real client id, and `drive.js::googleSignInPhone` refused with "no
+    * Google client on this device".
+    *
+    * THE SHAPE IS AN OBJECT, not a function. `drive.js::googleSignInPhone`
+    * reads `host.google.clientId` directly -- every consumer expects
+    * `{clientId, redirect}` or null, and a function that must be called
+    * first is a shape mismatch that makes the sign-in refuse.  A getter
+    * keeps resolution dynamic (late-filled `GOOGLE.web` is picked up), and
+    * the setter lets lib.rs inject `TTSTVHost.google = {clientId, redirect}`
+    * AFTER this file runs on the phone. */
+   var injectedGoogle = H.google;      // lib.rs's {clientId, redirect}, or undefined
+   H.GOOGLE = {
+     studio: null,                     // studio/google.py's, and not this file's
+     phone: null,                      // lib.rs's, injected -- see injectedGoogle
+     web: null,                        // OSCA REGISTERS THIS (spec-w3-account.md §3):
+                                       // {clientId: "<digits>-<hash>.apps.googleusercontent.com",
+                                       //  redirect: "<origin>/library/oauth.html"}
+   };
+   Object.defineProperty(H, 'google', {
+     get: function () {
+       var given = injectedGoogle;
+       if (typeof given === "function") { try { given = given(); } catch (e) { given = null; } }
+       if (given && given.clientId && given.redirect) return given;
+       return H.GOOGLE[kind] || null;
+     },
+     set: function (v) { injectedGoogle = v; },
+     configurable: true,
+     enumerable: true
+   });
 
   /* AND THE PAGE'S OWN WAY OUT, for the one host that has no host object to
    * ask: the web. `drive.js::googleSignInPhone` requires a

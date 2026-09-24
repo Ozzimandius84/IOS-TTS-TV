@@ -175,6 +175,12 @@
   // Percentages of whatever size the layout is already using.
   var SIZES = [85, 92, 100, 115, 130, 150];
 
+  /* THE GUTTER -- the proportion of the viewport's width given to each margin.
+   * `--gutter-pc` in page.css, clamped between a floor and a ceiling. 7.5% is
+   * the as-shipped value, so 0 means leave the layout's own `--gutter-pc`
+   * alone (apply nothing, the way 100 does for size and 0 does for line). */
+  var GUTTERS = [0, 5, 6, 7.5, 9, 11, 14];
+
   /* THE FIVE PAPERS. Warmth is one number and it moves ground and ink
    * TOGETHER -- paper and ink never drift apart in temperature, which is the
    * rule `reader/design/tokens.css` set when the bench first had a warmth
@@ -319,6 +325,7 @@
    * Per-book reading fonts are untouched by all of this: General's `family`
    * is what a book uses when it has no preference of its own.               */
   var DEFAULTS = { family: "serif", uiFamily: "system", size: 100, line: 0,
+                   gutter: 0,
                    theme: "system", view: "page", wpm: 300, gap: 0, context: true,
                    /* HOW WARM THE PAPER IS (Osca, 5 Sep). An INDEX into
                     * `WARMTHS`, not a colour and not a percentage: the five
@@ -370,6 +377,8 @@
     var uf = familyById(s.uiFamily) ? s.uiFamily : DEFAULTS.uiFamily;
     var size = Number(s.size);
     if (!isFinite(size) || SIZES.indexOf(size) < 0) size = DEFAULTS.size;
+    var gutter = Number(s.gutter);
+    if (GUTTERS.indexOf(gutter) < 0) gutter = DEFAULTS.gutter;
     var line = Number(s.line);
     var known = false;
     for (var i = 0; i < LINES.length; i++) if (LINES[i].value === line) known = true;
@@ -386,7 +395,8 @@
     var warmth = Number(s.warmth);
     if (!isFinite(warmth) || warmth < 0 || warmth >= WARMTHS.length
         || warmth !== Math.round(warmth)) warmth = DEFAULTS.warmth;
-    return { family: f, uiFamily: uf, size: size, line: line, view: view, theme: theme,
+    return { family: f, uiFamily: uf, size: size, line: line, gutter: gutter,
+             view: view, theme: theme,
              warmth: warmth,
              // the hands-free four. `micDevice` is kept verbatim even when
              // this device has no such input: see the block above.
@@ -423,6 +433,7 @@
     s = normalise(s);
     return s.family === DEFAULTS.family && s.uiFamily === DEFAULTS.uiFamily
       && s.size === DEFAULTS.size && s.line === DEFAULTS.line
+      && s.gutter === DEFAULTS.gutter
       && s.view === DEFAULTS.view && s.theme === DEFAULTS.theme && s.wpm === DEFAULTS.wpm
       && s.gap === DEFAULTS.gap && s.context === DEFAULTS.context
       && s.resume === DEFAULTS.resume && s.sidebar === DEFAULTS.sidebar
@@ -445,6 +456,11 @@
       "--ui-font": s.uiFamily === DEFAULTS.uiFamily ? null : ui.stack,
       "--read-scale": s.size === DEFAULTS.size ? null : String(s.size / 100),
       "--read-line": s.line === DEFAULTS.line ? null : String(s.line),
+      /* THE GUTTER. 0 is the default and means leave page.css's own
+       * `--gutter-pc: 7.5%` alone. Any other stop writes the percentage
+       * directly, with the trailing `%`, because that is what page.css's
+       * `clamp()` already spends. */
+      "--gutter-pc": s.gutter === DEFAULTS.gutter ? null : s.gutter + "%",
       /* THE SCALE IS tokens.css'S, AND THIS IS THE ONE PLACE THAT KNOWS IT
        * (6 Sep). It used to be `warmth / (WARMTHS.length - 1)` -- 0..1, "a
        * straight percentage" -- and the only consumer of `--warm` in this
@@ -1454,7 +1470,7 @@
   function resetHotkeys() { return patch({ keys: {} }); }
   global.TTSTVSettings = {
     KEY: KEY, VERSION: VERSION, ROUTE: ROUTE, CHANNEL: CHANNEL,
-    FAMILIES: FAMILIES, SIZES: SIZES, LINES: LINES, VIEWS: VIEWS, THEMES: THEMES,
+    FAMILIES: FAMILIES, SIZES: SIZES, GUTTERS: GUTTERS, LINES: LINES, VIEWS: VIEWS, THEMES: THEMES,
     SIDEBARS: SIDEBARS, WARMTHS: WARMTHS,
     // the hands-free four (5 Sep): the stops the window offers, and the one
     // conversion from the seconds a person picks to the milliseconds a timer

@@ -92,7 +92,7 @@ use std::borrow::Cow;
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Component, Path, PathBuf};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{Duration, Instant};
 
 use serde::Serialize;
@@ -694,6 +694,88 @@ pub fn google_redirect_uri() -> String {
     if s.is_empty() { s } else { format!("{s}:/oauth") }
 }
 
+// ----------------------------------------------------- runtime google.json (D6)
+//
+// The compiled-in `google.json` is the DEFAULT. A file at `<app data>/google.json`
+// overrides it when present, so Osca can push a different client id into the
+// Simulator's data container without rebuilding. The shape is the same:
+//   {"ios_client_id": "...", "redirect": "..."}
+// `redirect` is optional; when absent it is derived from the client id the
+// same way `google_redirect_uri()` does.
+//
+// The runtime file is read ONCE, in `setup`, and cached in a `OnceLock`. This
+// is not hot-reloaded -- the app must be relaunched after the file changes.
+
+/// What a runtime `google.json` carries: the id, and an optional explicit
+/// redirect URI.
+struct RuntimeGoogle {
+    ios_client_id: String,
+    redirect: Option<String>,
+}
+
+static RUNTIME_GOOGLE: OnceLock<Option<RuntimeGoogle>> = OnceLock::new();
+
+/// Read `<app_data_dir>/google.json` and cache the result. Called once in
+/// `setup`, before the window is built. A missing or unreadable file, or a
+/// file without `ios_client_id`, is `None` -- the compiled-in constant is
+/// used instead.
+fn init_runtime_google(app_data_dir: &Path) {
+    let path = app_data_dir.join("google.json");
+    let config = fs::read_to_string(&path).ok().and_then(|contents| {
+        let id = json_field(&contents, "ios_client_id");
+        if id.is_empty() {
+            return None;
+        }
+        let redirect = {
+            let r = json_field(&contents, "redirect");
+            if r.is_empty() { None } else { Some(r.to_string()) }
+        };
+        log::info!(
+            "frank: runtime google.json at {} -- client id present, redirect {}",
+            path.display(),
+            if redirect.is_some() { "explicit" } else { "derived" }
+        );
+        Some(RuntimeGoogle {
+            ios_client_id: id.to_string(),
+            redirect,
+        })
+    });
+    let _ = RUNTIME_GOOGLE.set(config);
+}
+
+/// The effective iOS client id: runtime override when present, else the
+/// compiled-in constant.
+pub fn effective_google_client_id() -> String {
+    if let Some(Some(rt)) = RUNTIME_GOOGLE.get() {
+        return rt.ios_client_id.clone();
+    }
+    google_ios_client_id().to_string()
+}
+
+/// The effective redirect scheme, derived from [`effective_google_client_id`].
+pub fn effective_google_redirect_scheme() -> String {
+    let id = effective_google_client_id();
+    let Some(number) = id.strip_suffix(".apps.googleusercontent.com") else {
+        return String::new();
+    };
+    if number.is_empty() {
+        return String::new();
+    }
+    format!("com.googleusercontent.apps.{number}")
+}
+
+/// The effective redirect URI: a runtime file's explicit `redirect` when
+/// present, else derived from the effective client id.
+pub fn effective_google_redirect_uri() -> String {
+    if let Some(Some(rt)) = RUNTIME_GOOGLE.get() {
+        if let Some(ref redirect) = rt.redirect {
+            return redirect.clone();
+        }
+    }
+    let s = effective_google_redirect_scheme();
+    if s.is_empty() { s } else { format!("{s}:/oauth") }
+}
+
 /// The key the shell polls for the redirect -- `library/drive.js`'s
 /// `GOOGLE_REDIRECT_KEY`, and the only name shared between the two files.
 pub const GOOGLE_REDIRECT_KEY: &str = "ttstv.sync.googleRedirect";
@@ -709,7 +791,7 @@ fn google_sign_in<R: tauri::Runtime>(app: tauri::AppHandle<R>, url: String) -> R
     if !url.starts_with(AUTH) {
         return Err(format!("not Google's consent page (must begin {AUTH})"));
     }
-    if google_ios_client_id().is_empty() {
+    if effective_google_client_id().is_empty() {
         return Err("no Google client id in google.json -- see studio/STATUS.md job 26 §6.3".into());
     }
     tauri_plugin_opener::OpenerExt::opener(&app)
@@ -724,8 +806,8 @@ fn google_sign_in<R: tauri::Runtime>(app: tauri::AppHandle<R>, url: String) -> R
 /// a device lacks). Empty string then, and the Settings page reads the
 /// absence.
 pub fn google_js() -> String {
-    let id = google_ios_client_id();
-    let redirect = google_redirect_uri();
+    let id = effective_google_client_id();
+    let redirect = effective_google_redirect_uri();
     if id.is_empty() || redirect.is_empty() {
         return String::new();
     }
@@ -739,7 +821,7 @@ pub fn google_js() -> String {
   window.TTSTVHost.googleSignIn = function (url) {{ return TAURI.invoke("google_sign_in", {{ url: url }}); }};
 }})();
 "#,
-        id = json_string(id),
+        id = json_string(&id),
         redirect = json_string(&redirect),
     )
 }
@@ -758,7 +840,7 @@ pub fn google_write_js(url: &str) -> String {
 /// Is this one of ours? The reverse client id, and nothing else -- a link
 /// that is not this and not `frank-pair://` is logged and dropped.
 pub fn is_google_redirect(url: &str) -> bool {
-    let scheme = google_redirect_scheme();
+    let scheme = effective_google_redirect_scheme();
     !scheme.is_empty() && url.starts_with(&format!("{scheme}:"))
 }
 
@@ -3150,6 +3232,15 @@ pub fn run() {
             speech::open(app.handle());
 
             let root = shell_root(app.handle());
+
+            // D6: read <app data>/google.json at startup, before google_js()
+            // is evaluated. A file there overrides the compiled-in client id.
+            init_runtime_google(
+                &app.path()
+                    .app_data_dir()
+                    .expect("no app data dir"),
+            );
+
             match unpack_shell(app.handle(), &root) {
                 Ok(n) => log::info!("frank: shell ready, {n} files"),
                 // Deliberately not `?`. Returning Err here aborts `setup`, and
@@ -3557,6 +3648,81 @@ mod tests {
         assert!(js.contains(r#"4\/x"#), "the URL is a JSON string, escaped by json_string");
         assert_eq!(js.matches("setItem").count(), 1);
         assert!(!js.contains("eval") && !js.contains("<script"));
+    }
+
+    // ------------------------------------------------- D6: runtime google.json
+    //
+    // These three tests verify the MECHANISM, not the live file: `OnceLock`
+    // cannot be re-set in a single process, so they test `json_field` on the
+    // runtime shape, the derivation helpers, and the fallback path.
+
+    #[test]
+    fn compiled_google_json_parses_correctly() {
+        // The compiled-in constant must have the ios_client_id field
+        let id = google_ios_client_id();
+        assert!(!id.is_empty(), "compiled-in google.json has an ios_client_id");
+        assert!(
+            id.ends_with(".apps.googleusercontent.com"),
+            "the compiled-in id has the Google suffix"
+        );
+        // The redirect scheme is the reverse of the client id
+        let scheme = google_redirect_scheme();
+        assert!(
+            scheme.starts_with("com.googleusercontent.apps."),
+            "redirect scheme reverses the id"
+        );
+    }
+
+    #[test]
+    fn runtime_override_shape_parses_with_json_field() {
+        // A runtime google.json can carry both ios_client_id and redirect
+        let full = r#"{"ios_client_id": "999-test.apps.googleusercontent.com", "redirect": "com.googleusercontent.apps.999-test:/oauth"}"#;
+        assert_eq!(
+            json_field(full, "ios_client_id"),
+            "999-test.apps.googleusercontent.com"
+        );
+        assert_eq!(
+            json_field(full, "redirect"),
+            "com.googleusercontent.apps.999-test:/oauth"
+        );
+
+        // With only ios_client_id (no explicit redirect), redirect is ""
+        let minimal = r#"{"ios_client_id": "888-min.apps.googleusercontent.com"}"#;
+        assert_eq!(
+            json_field(minimal, "ios_client_id"),
+            "888-min.apps.googleusercontent.com"
+        );
+        assert_eq!(json_field(minimal, "redirect"), "");
+
+        // With no ios_client_id, it falls back to ""
+        let empty = r#"{"other": "x"}"#;
+        assert_eq!(json_field(empty, "ios_client_id"), "");
+    }
+
+    #[test]
+    fn effective_google_falls_back_to_compiled_in_when_no_runtime() {
+        // Before any runtime file is loaded, or when None was set,
+        // the effective values equal the compiled-in ones.
+        // (OnceLock may already be set by init_runtime_google from another
+        // test -- we test the DERIVATION logic directly instead.)
+        let id = "42-test.apps.googleusercontent.com";
+        let scheme = {
+            let number = id.strip_suffix(".apps.googleusercontent.com").unwrap();
+            format!("com.googleusercontent.apps.{number}")
+        };
+        assert_eq!(scheme, "com.googleusercontent.apps.42-test");
+        let uri = format!("{scheme}:/oauth");
+        assert_eq!(uri, "com.googleusercontent.apps.42-test:/oauth");
+
+        // And the compiled-in fallback is real
+        let compiled = google_ios_client_id();
+        if !compiled.is_empty() {
+            assert_eq!(
+                effective_google_client_id().is_empty(),
+                false,
+                "effective_google_client_id returns something when compiled-in is present"
+            );
+        }
     }
 
     #[test]

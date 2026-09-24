@@ -20,7 +20,7 @@
 // not there. `.opus` is served through a Range-aware path because a media
 // element asks for bytes, not for files.
 // v37, 7 Sep: THE SHELL MOVED HOUSE, so the old cache has to be evicted and not
-// merely out-voted. Frank loads `clean/` now (`tabs::SHELL`), and on any origin
+// merely out-voted. Frank loads `shell/` now (`tabs::SHELL`), and on any origin
 // that survives a restart -- the PWA, a static host, the bundle -- the worker
 // registered at the OLD scope is still installed with `ttstv-shell-v36` full of
 // module-tree bytes. Network-first hides that while the network is quick and
@@ -33,7 +33,7 @@
 const SHELL_CACHE = "ttstv-shell-v59";   // 23 Sep: oauth.html joins the shell (W3 ACCOUNT) -- a NEW
                                          // name in SHELL_FILES is only fetched by an install, so the
                                          // string has to move or an installed app never caches
-                                         // it (v37: the shell moved to clean/)
+                                         // it (v37: the shell moved to shell/)
 const BOOK_PREFIX = "ttstv-book-";        // kept in step with library/import.js
 const SHARE_CACHE = "ttstv-share";
 const SHARE_KEY = "share-bundle";         // one entry, replaced each share

@@ -85,6 +85,11 @@
      the Library's one reach into settings/, the mirror of settings.html's
      `../library/import.js`; settings.js is already in the shell
      (reader/sw.js SHELL_FILES), so the phone has it offline. -->
+<!-- Google + Drive (job 26b): `TTSTVDrive`, loaded before settings.js so
+     `driveModule()` finds it when the first-run gate's Google press fires.
+     drive.js IS in reader/sw.js SHELL_FILES for offline; the tag alone was
+     missing from this page (settings.html had it, this page did not). -->
+<script src="drive.js"></script>
 <script src="../settings/settings.js"></script>
 <script>window.TTSTVSettings.firstRun(document);</script>
 <!-- No <h1>. The picture (PROMPTS/mock/library.html) has no title on the page:

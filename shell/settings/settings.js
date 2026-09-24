@@ -44,7 +44,8 @@
   }
 
   // the vocabulary the fields are made of
-  var DEFAULTS = ROOT.DEFAULTS, SIZES = ROOT.SIZES, LINES = ROOT.LINES,
+  var DEFAULTS = ROOT.DEFAULTS, SIZES = ROOT.SIZES, GUTTERS = ROOT.GUTTERS,
+      LINES = ROOT.LINES,
       VIEWS = ROOT.VIEWS, SIDEBARS = ROOT.SIDEBARS, WARMTHS = ROOT.WARMTHS,
       WPM = ROOT.WPM, facesNow = ROOT.facesNow,
       // the hands-free four (5 Sep): the stops the window slider offers.
@@ -709,6 +710,7 @@
         { head: "Size & spacing", rows: [
           { field: "size", label: "Size", control: "slider" },
           { field: "line", label: "Line height", control: "slider" },
+          { field: "gutter", label: "Gutter", control: "slider" },
         ] },
         /* THE PAPER, AND THE LIGHT IT IS READ BY (Osca, 5 Sep: *"another
          * dropdown ... for warmth and toggle light/dark? Or in the settings
@@ -3725,7 +3727,7 @@
    * of the host, never of a URL. Returns null (live) or a sentence (inert). */
   function firstRunGoogleWhy(host, isStudio) {
     if (isStudio) return null;                       // the Mac: studio/google.py holds the ids
-    var g = host && typeof host.google === "function" ? host.google() : (host && host.google);
+    var g = host && host.google;
     if (g && g.clientId && g.redirect && typeof host.googleSignIn === "function") return null;
     return "no Google client on this device yet \u2014 it is registered once, then this button works";
   }
@@ -3869,9 +3871,12 @@
     '  position: fixed; inset: 0; z-index: 60; overflow: auto;',
     '  background: var(--bg); color: var(--fg);',
     '  display: flex; justify-content: center; align-items: flex-start;',
-    '  padding: max(24px, 8vh) 16px 24px; box-sizing: border-box;',
+    '  padding: calc(env(safe-area-inset-top, 0px) + 16px) 16px 24px; box-sizing: border-box;',
     '}',
     '.ttstv-settings.fr-gate .fr-sheet { width: 100%; max-width: 560px; }',
+    '/* D2: hide the phone bar while the first-run gate is up (pbar.js creates',
+    '   the element after firstRun, so CSS is the only reliable path). */',
+    '.fr-gate ~ .pbar { display: none !important; }',
   ].join("\n");
   function injectGateStyle(doc) {
     if (!doc || !doc.head || doc.getElementById(GATE_STYLE_ID)) return;
@@ -3947,9 +3952,15 @@
     };
     handle.remove = function () {
       if (gate.parentNode) gate.parentNode.removeChild(gate);
+      /* D2: restore the phone bar when the gate comes down */
+      var pb = doc.getElementById("pbar");
+      if (pb) pb.style.display = "";
     };
     if (doc.body.firstChild) doc.body.insertBefore(gate, doc.body.firstChild);
     else doc.body.appendChild(gate);
+    /* D2: hide the phone bar while the first-run gate is up */
+    var pbarHide = doc.getElementById("pbar");
+    if (pbarHide) pbarHide.style.display = "none";
     if (built.buttons.device.focus) { try { built.buttons.device.focus(); } catch (e) { /* no focus in a harness */ } }
     return handle;
   }
@@ -5570,6 +5581,10 @@
       if (field === "size") return SIZES.map(function (n) {
         return { value: n, label: n + "%", sub: n === DEFAULTS.size ? "default" : "" };
       });
+      if (field === "gutter") return GUTTERS.map(function (n) {
+        return { value: n, label: n === 0 ? "Default" : n + "%",
+                 sub: n === DEFAULTS.gutter ? "7.5%" : "" };
+      });
       if (field === "warmth") return WARMTHS.map(function (w) { return w; });
       if (field === "view") return VIEWS.map(function (v) {
         return { value: v.value, label: v.label, sub: v.sub };
@@ -5615,6 +5630,7 @@
 
     function valueWord(field, value) {
       if (field === "size") return value + "%";
+      if (field === "gutter") return value === 0 ? "7.5%" : value + "%";
       if (field === "listenWindow") return secondsWord(value);
       if (field === "line") return value ? String(value) : "1.75";
       if (field === "wpm") return value + " wpm";
