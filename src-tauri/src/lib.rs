@@ -776,6 +776,15 @@ pub fn effective_google_redirect_uri() -> String {
     if s.is_empty() { s } else { format!("{s}:/oauth") }
 }
 
+/// `window.__TTSTV_KAGGLE_KERNEL_SCRIPT__`, the Python text KAGGLE_JS's
+/// getter reads. Generated at run time so `json_string` properly escapes it.
+pub fn kaggle_kernel_js() -> String {
+    format!(
+        "window.__TTSTV_KAGGLE_KERNEL_SCRIPT__ = {};",
+        json_string(kaggle::STUDIO_KERNEL_SCRIPT)
+    )
+}
+
 /// The key the shell polls for the redirect -- `library/drive.js`'s
 /// `GOOGLE_REDIRECT_KEY`, and the only name shared between the two files.
 pub const GOOGLE_REDIRECT_KEY: &str = "ttstv.sync.googleRedirect";
@@ -1868,8 +1877,17 @@ pub const KAGGLE_JS: &str = r#"(function () {
     // keySet(pasted: string) -> Promise<{present: boolean, username: string|null}>
     keySet: function (pasted) { return TAURI.invoke("kaggle_key_set", { pasted: pasted }); },
     // keyState() -> Promise<{present: boolean, username: string|null}>
-    keyState: function () { return TAURI.invoke("kaggle_key_state"); }
+    keyState: function () { return TAURI.invoke("kaggle_key_state"); },
+    // The ttstv-studio kernel script, embedded in the binary at compile time.
+    // works.js reads this to push it to Kaggle without a second network fetch.
+    kernelScript: TAURI.convertFileSrc ? null : null
   };
+  /* The kernel script is a const in Rust; expose it as a lazy-loaded string
+     to avoid bloating the init script. The page reads it through kaggle.kernelScript. */
+  Object.defineProperty(window.TTSTVHost.kaggle, 'kernelScript', {
+    get: function () { return window.__TTSTV_KAGGLE_KERNEL_SCRIPT__ || null; },
+    configurable: true, enumerable: true
+  });
 })();"#;
 
 // ------------------------------------------------------------- the pull
@@ -3296,6 +3314,11 @@ pub fn run() {
             // two `invoke`s are pinned by two tests. Guarded on `__TAURI__` the
             // same way, so a page outside Frank gets no door.
             .initialization_script(KAGGLE_JS)
+            // The ttstv-studio kernel script, as a global for KAGGLE_JS's
+            // lazy getter. A separate init script because the script is ~15 KB
+            // and embedding it in KAGGLE_JS's own string would make the const
+            // harder to audit.
+            .initialization_script(&kaggle_kernel_js())
             // Separate from HOST_JS, and unconditional -- see PAIR_JS's own
             // note. Both run before the document's own scripts, so a page that
             // reads the key at load reads a key a link has already written.

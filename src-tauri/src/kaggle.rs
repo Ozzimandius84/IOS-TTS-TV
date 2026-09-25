@@ -985,7 +985,18 @@ pub fn fetch<R: tauri::Runtime>(
     Ok(tauri::ipc::Response::new(bytes))
 }
 
-// ------------------------------------------------------------------- the tests
+// --------------------------------------------------------- the kernel script
+//
+// 85 Stage 2, §2. The Python script the phone pushes to Kaggle as
+// `ttstv-studio`'s kernel. It is the SAME file as `voice/remote/
+// kaggle_studio.py` in the main TTSTV repo -- `include_str!` embeds it in
+// the binary at compile time. The phone never runs Python; it pushes this
+// text to Kaggle's `kernels push` endpoint, and Kaggle runs it.
+
+/// The `ttstv-studio` kernel script, embedded at compile time.
+pub const STUDIO_KERNEL_SCRIPT: &str = include_str!("../kaggle_studio.py");
+
+// --------------------------------------------------------- the tests
 
 #[cfg(test)]
 mod kaggle_tests {
@@ -1346,5 +1357,29 @@ mod kaggle_tests {
         // The key never appears in Debug
         let shown = format!("{:?}", c);
         assert!(shown.contains("osca") && !shown.contains("k3y"), "{shown}");
+    }
+
+    // ------------------------------------------------------ the kernel script
+
+    #[test]
+    fn the_studio_kernel_script_is_embedded_and_is_the_right_one() {
+        assert!(!STUDIO_KERNEL_SCRIPT.is_empty(), "the script is embedded");
+        assert!(
+            STUDIO_KERNEL_SCRIPT.contains("ttstv-studio"),
+            "the script is the studio kernel"
+        );
+        assert!(
+            STUDIO_KERNEL_SCRIPT.contains("parser.cli"),
+            "it runs the parser"
+        );
+        assert!(
+            STUDIO_KERNEL_SCRIPT.contains("def main()"),
+            "it has a main function"
+        );
+        assert!(
+            STUDIO_KERNEL_SCRIPT.contains("\"enableGpu\": false")
+                || !STUDIO_KERNEL_SCRIPT.contains("enableGpu"),
+            "the studio kernel is CPU — it never enables a GPU"
+        );
     }
 }
