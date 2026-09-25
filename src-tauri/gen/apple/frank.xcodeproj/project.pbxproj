@@ -18,7 +18,6 @@
 		A2A99B9E5EDC0D4632C7B6FA /* AVFoundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 0C12A6B894BC6ADDBE724451 /* AVFoundation.framework */; };
 		B493A5FB637960EC011FF476 /* main.mm in Sources */ = {isa = PBXBuildFile; fileRef = 3A816F28391F2E91EAC6BD30 /* main.mm */; };
 		C500F5CB2225D8044F3EC87D /* MetalKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 7833E0CA4351903EC745FCAC /* MetalKit.framework */; };
-		D4F074DC660C43619BF55F16 /* libapp.a in Resources */ = {isa = PBXBuildFile; fileRef = FB1905908705C9449CB18187 /* libapp.a */; };
 		D9A22963651B609D6C0A1C96 /* UIKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 69B5EFEA1E823B2A414D7E86 /* UIKit.framework */; };
 		DA949EEB3C2165999BF64201 /* libapp.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 2D4A2FA21DC3D5D04E31883A /* libapp.a */; };
 		E287D3A2D3A6CC71CC86BF09 /* CoreGraphics.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 0212ABFDBC4D11D109B8410D /* CoreGraphics.framework */; };
@@ -36,6 +35,7 @@
 		4FB7A4676CD913BA4DE13EE4 /* inbox.rs */ = {isa = PBXFileReference; path = inbox.rs; sourceTree = "<group>"; };
 		50479E9876539E1B7B2881C9 /* assets */ = {isa = PBXFileReference; lastKnownFileType = folder; path = assets; sourceTree = SOURCE_ROOT; };
 		50A67DF6A7CB7AD195755F40 /* WebKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WebKit.framework; path = System/Library/Frameworks/WebKit.framework; sourceTree = SDKROOT; };
+		5A5ECF5C493A0BECDFE48848 /* kaggle.rs */ = {isa = PBXFileReference; path = kaggle.rs; sourceTree = "<group>"; };
 		5E1EB6040519FC8B48691D35 /* dict.rs */ = {isa = PBXFileReference; path = dict.rs; sourceTree = "<group>"; };
 		602F1C9DABE3D9581BF783ED /* main.rs */ = {isa = PBXFileReference; path = main.rs; sourceTree = "<group>"; };
 		61C3E47422911C9EF21790ED /* Metal.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Metal.framework; path = System/Library/Frameworks/Metal.framework; sourceTree = SDKROOT; };
@@ -52,7 +52,6 @@
 		F2B2A40651C73CC1F0D23729 /* speech.rs */ = {isa = PBXFileReference; path = speech.rs; sourceTree = "<group>"; };
 		F83C0421DFA94CE5FB4842FC /* Security.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Security.framework; path = System/Library/Frameworks/Security.framework; sourceTree = SDKROOT; };
 		FA75CA6244BF961E70D733CB /* pull.rs */ = {isa = PBXFileReference; path = pull.rs; sourceTree = "<group>"; };
-		FB1905908705C9449CB18187 /* libapp.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; path = libapp.a; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -76,14 +75,6 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
-		158EB290FA03C01BC77CAE0B /* arm64 */ = {
-			isa = PBXGroup;
-			children = (
-				4E3338EF32D576EBFCD5F5BE /* debug */,
-			);
-			path = arm64;
-			sourceTree = "<group>";
-		};
 		22265B3C3D3A0CC7CAB49F00 /* frank_iOS */ = {
 			isa = PBXGroup;
 			children = (
@@ -107,6 +98,7 @@
 			children = (
 				5E1EB6040519FC8B48691D35 /* dict.rs */,
 				4FB7A4676CD913BA4DE13EE4 /* inbox.rs */,
+				5A5ECF5C493A0BECDFE48848 /* kaggle.rs */,
 				4842EC4A4EA72D9517EB090E /* lib.rs */,
 				8CB9DB43A91A93F6FFCA52D4 /* lookup.rs */,
 				602F1C9DABE3D9581BF783ED /* main.rs */,
@@ -126,21 +118,12 @@
 			path = Sources;
 			sourceTree = "<group>";
 		};
-		4E3338EF32D576EBFCD5F5BE /* debug */ = {
-			isa = PBXGroup;
-			children = (
-				FB1905908705C9449CB18187 /* libapp.a */,
-			);
-			path = debug;
-			sourceTree = "<group>";
-		};
 		830B0E1968D8F40C55AFC670 = {
 			isa = PBXGroup;
 			children = (
 				50479E9876539E1B7B2881C9 /* assets */,
 				C031E208F61D570AC3B0E44C /* Assets.xcassets */,
 				D47BB6E32D6AA02A4CF4FCB0 /* LaunchScreen.storyboard */,
-				A93904C9FDAA1637B05060A7 /* Externals */,
 				22265B3C3D3A0CC7CAB49F00 /* frank_iOS */,
 				4DA882112910BB24A371A402 /* Sources */,
 				4ABA65BEDB8E8AD347EC4F3D /* src */,
@@ -175,27 +158,12 @@
 			name = Frameworks;
 			sourceTree = "<group>";
 		};
-		A93904C9FDAA1637B05060A7 /* Externals */ = {
-			isa = PBXGroup;
-			children = (
-				158EB290FA03C01BC77CAE0B /* arm64 */,
-			);
-			path = Externals;
-			sourceTree = "<group>";
-		};
 		E2A2997237D0E5C86C012134 /* bindings */ = {
 			isa = PBXGroup;
 			children = (
 				CC6735C7B69E5BF23B54241A /* bindings.h */,
 			);
 			path = bindings;
-			sourceTree = "<group>";
-		};
-		"TEMP_AC845559-CDBC-44EA-A3D0-42C7EBDD3ED4" /* x86_64 */ = {
-			isa = PBXGroup;
-			children = (
-			);
-			path = x86_64;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -263,7 +231,6 @@
 				42A6F02218CB17305B4819C3 /* Assets.xcassets in Resources */,
 				96F527420263EED288374F35 /* LaunchScreen.storyboard in Resources */,
 				375DF7E6E3429A74DE31BBF1 /* assets in Resources */,
-				D4F074DC660C43619BF55F16 /* libapp.a in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

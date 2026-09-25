@@ -59,20 +59,13 @@
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>
-			<key>CFBundleURLName</key>
-			<string>frank-pair</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
 				<string>frank-pair</string>
-			</array>
-		</dict>
-		<dict>
-			<key>CFBundleURLName</key>
-			<string>google-oauth</string>
-			<key>CFBundleURLSchemes</key>
-			<array>
 				<string>com.googleusercontent.apps.831378567000-50bh7p37g80gssem6dq3l1f8ncj2j2o2</string>
 			</array>
+			<key>CFBundleURLName</key>
+			<string>frank-pair</string>
 		</dict>
 	</array>
 	<key>CFBundleVersion</key>
