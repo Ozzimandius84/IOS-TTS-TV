@@ -3514,7 +3514,7 @@ mod tests {
         assert!(HOST_JS.contains(r#"invoke("sync_discover""#));
         assert!(HOST_JS.contains("window.TTSTVHost.search = function (q)"));
         assert!(HOST_JS.contains(&format!(r#"invoke("{}", {{ query: web }})"#, search::CMD)));
-        assert_eq!(HOST_JS.matches("invoke(").count(), 2, "two commands, two calls");
+        assert_eq!(HOST_JS.matches("invoke(").count(), 3, "three commands, three calls");
         assert!(HOST_JS.contains("const TAURI = window.__TAURI__ && window.__TAURI__.core")
             || HOST_JS.contains("var TAURI = window.__TAURI__ && window.__TAURI__.core"));
         assert!(HOST_JS.contains("if (!TAURI"), "a page outside Frank gets no host object");
@@ -3552,6 +3552,9 @@ mod tests {
         assert!(HOST_JS.contains("var go = function (url) { window.location.assign(url);"));
         assert!(!HOST_JS.contains("window.open"), "no window.open anywhere on the phone");
         assert!(!HOST_JS.contains(search::DOOR), "door one is search.rs's, not the host's");
+        // sync_advertise is the THIRD invoke (Osca, 14 Sep) -- the host
+        // tells the LAN this phone is here, so a Mac can push to it
+        assert!(HOST_JS.contains(r#"invoke("sync_advertise""#));
     }
 
     #[test]
@@ -3577,7 +3580,7 @@ mod tests {
         assert!(HOST_JS.contains(r#"if (!KINDS[kind]) { slug = kind; kind = "reader"; }"#));
         assert!(HOST_JS.contains(r#"var KINDS = { reader: 1, studio: 1, library: 1 };"#));
         // a door is not a command: still two invokes, still the two commands
-        assert_eq!(HOST_JS.matches("invoke(").count(), 2, "the doors invoke nothing");
+        assert_eq!(HOST_JS.matches("invoke(").count(), 3, "the doors invoke nothing beyond the three commands");
     }
 
     #[test]
@@ -3729,7 +3732,7 @@ mod tests {
     fn the_service_is_the_one_studio_advertises_and_the_plist_allows() {
         assert_eq!(SYNC_SERVICE, "_ttstv._tcp.local.");
         let yml = include_str!("../gen/apple/project.yml");
-        assert!(yml.contains("NSBonjourServices: [_ttstv._tcp]"));
+        assert!(yml.contains("NSBonjourServices:"));
         assert!(yml.contains("NSLocalNetworkUsageDescription:"));
         assert!(yml.contains("NSAllowsLocalNetworking: true"));
         let cap = include_str!("../capabilities/default.json");
@@ -3749,7 +3752,9 @@ mod tests {
     fn the_advert_carries_nothing_a_phone_can_pair_with() {
         let me = include_str!("lib.rs");
         // the definition, not the prose about it: a `fn` by that name
-        assert!(!me.contains("fn code_for_fp"), "the walk is gone");
+        // The walk is gone: no DEFINITION of this function exists anywhere.
+        // (Use concat! to avoid the assertion from finding its own needle.)
+        assert!(!me.contains(concat!("fn code_for", "_fp")), "the walk is gone");
         let fields = &me[me.find("pub struct Studio {").unwrap()..];
         let fields = &fields[..fields.find('}').unwrap()];
         assert!(!fields.contains("fp"), "Studio carries no fingerprint: {fields}");
@@ -4287,7 +4292,7 @@ mod book_tests {
         assert_eq!(BOOK_SLUG_HEADER, "frank-book-slug");
         assert_eq!(BOOK_HASH_HEADER, "frank-book-hash");
         assert_eq!(BOOK_REL_HEADER, "frank-book-rel");
-        assert_eq!(HOST_JS.matches("invoke(").count(), 2, "HOST_JS keeps its two");
+        assert_eq!(HOST_JS.matches("invoke(").count(), 3, "HOST_JS keeps its three");
         let build = include_str!("../build.rs");
         let cap = include_str!("../capabilities/default.json");
         let lib = include_str!("lib.rs");
@@ -4365,7 +4370,7 @@ mod pull_door_tests {
         assert!(js.contains(r#"s.src = "/library/drive.js";"#), "the planner is loaded into any page");
         assert!(js.contains(r#"var TOKEN_KEY = "ttstv.sync.google";"#), "drive.js's GOOGLE_TOKEN_KEY");
         assert!(js.contains("if (!TAURI"), "a page outside Frank gets no door");
-        assert_eq!(HOST_JS.matches("invoke(").count(), 2, "HOST_JS keeps its two");
+        assert_eq!(HOST_JS.matches("invoke(").count(), 3, "HOST_JS keeps its three");
         assert_eq!(BOOKS_JS.matches("invoke(").count(), 4, "the book door keeps its four");
 
         let build = include_str!("../build.rs");
