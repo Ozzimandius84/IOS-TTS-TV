@@ -459,8 +459,15 @@
       /* THE GUTTER. 0 is the default and means leave page.css's own
        * `--gutter-pc: 7.5%` alone. Any other stop writes the percentage
        * directly, with the trailing `%`, because that is what page.css's
-       * `clamp()` already spends. */
+       * `clamp()` already spends.
+       *
+       * F3c: prefs.js writes BOTH `--gutter-pc` AND `--gutter-n` from the
+       * one stop. `--gutter-n` is the unitless twin (7.5 beside 7.5%),
+       * which page.css spends in `calc(var(--gutter-n) / 100 * var(--measure))`.
+       * The old `tan(atan2())` auto-derivation evaluated to 0 in the app's
+       * WKWebView, so every writer must now set both. */
       "--gutter-pc": s.gutter === DEFAULTS.gutter ? null : s.gutter + "%",
+      "--gutter-n": s.gutter === DEFAULTS.gutter ? null : String(s.gutter),
       /* THE SCALE IS tokens.css'S, AND THIS IS THE ONE PLACE THAT KNOWS IT
        * (6 Sep). It used to be `warmth / (WARMTHS.length - 1)` -- 0..1, "a
        * straight percentage" -- and the only consumer of `--warm` in this
@@ -577,7 +584,7 @@
     // W1 SHELL-WEB: on a website the kind is "web" and there is no server
     // to mirror to. The protocol test stays as a second half for the phone
     // (frank:// has no server and no mirror either).
-    if (global.TTSTVHost && global.TTSTVHost.isWeb) return null;
+    if (!global.TTSTVHost || global.TTSTVHost.isWeb) return null;
     if (!global.location || !/^https?:$/.test(global.location.protocol)) return null;
     return global.location.origin;
   }

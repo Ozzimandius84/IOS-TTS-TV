@@ -206,13 +206,37 @@ function mount(o){
     const slug = book && book.slug;
     return slug ? "../books/" + encodeURIComponent(slug) + "/" : "";
   }
+  /* A CHAPTER'S LAST PAGE NUMBER, from its blocks.  Used to seed the dedup
+     so a page that spans a chapter boundary emits exactly one marker (F6). */
+  function lastPgOf(ch){
+    if(!ch) return 0;
+    const bs = ch.blocks || [];
+    for(let i=bs.length-1; i>=0; i--) if(bs[i].pg) return bs[i].pg;
+    return 0;
+  }
+
   /* ONE CHAPTER'S HTML. Lifted out of render()'s loop unchanged -- it is what
      a section gets when it mounts, which is now not always at render. */
-  function chapterHTML(ch, BASE){
+  function chapterHTML(ch, BASE, prevLastPg){
     let h='<div class="opener"><snap></snap><h1>'
          +(ch.n?'<small>'+esc(ch.n)+'</small>':'')+esc(ch.t||"")+'</h1></div>';
-    let open=false, lastStanza=null;
+    let open=false, lastStanza=null, lastPage=prevLastPg||0;
     (ch.blocks||[]).forEach(b=>{
+      /* PAGE MARKER (J2p, 25 Sep 2026).  `b.pg` is the 1-based page number
+         the bake assigned to this block.  When it differs from the previous
+         block's, a marker is emitted — a `<mark>` the reader paints as a
+         marginal page number.  The bake decides where pages break (D1);
+         the reader paints and nothing else.  The marker sits OUTSIDE the
+         current `.unit` div so it is a direct child of the section and
+         page.css can position it in the margin without fighting the unit's
+         own padding.  The count of markers equals `pages.count` (D3).
+         F6: `prevLastPg` seeds the dedup from the previous chapter's last
+         page, so a page spanning a chapter boundary emits one marker. */
+      if(b.pg && b.pg !== lastPage){
+        if(open){ h+='</div>'; open=false; }
+        h+='<mark class="pg" data-pg="'+b.pg+'">'+b.pg+'</mark>';
+        lastPage=b.pg;
+      }
       /* A PICTURE IS A SLIDE, WHERE THE BOOK PRINTED IT. Osca: "if a
          picture APPEARS within a chapter, in the source, make a slide for it
          there, inside the chapter... The top/bottom slides NOT the side
@@ -247,11 +271,11 @@ function mount(o){
       }
       if(b.r==="sp"){                     /* a speaker turn is a sub-chapter */
         if(open) h+='</div>';
-        h+='<div class="unit"><snap></snap><p class="sp">'+esc(b.t)+'</p>';
+        h+='<div class="unit" data-role="speaker"><snap></snap><p class="sp">'+esc(b.t)+'</p>';
         open=true; lastStanza=null; return;
       }
       if(!open){ h+='<div class="unit"><snap></snap>'; open=true; }
-      if(b.r==="dir"){ h+='<p class="dir">'+esc(b.t)+'</p>'; lastStanza=null; return; }
+      if(b.r==="dir"){ h+='<p class="dir" data-role="direction">'+esc(b.t)+'</p>'; lastStanza=null; return; }
       /* A PROSE PARAGRAPH IS NOT A LINE OF VERSE, and this loop used to set
          them as the same thing. Everything that was not a speaker cue, a
          stage direction or a picture came out as `<p class="line">`, and
@@ -298,11 +322,20 @@ function mount(o){
       const verse = b.st !== undefined && b.st !== null;
       const secLang = (ch && ch.lang) || LANG;
       const lg = b.lg && b.lg !== secLang ? ' lang="'+esc(b.lg)+'"' : '';
+      /* DATA-KIND: the parser's own kind, or inferred from the block's shape.
+         `b.k` is the parser's `Paragraph.kind` when book.js carries it;
+         without it, verse/prose is told from `st` (stanza) and everything
+         else from `r`. quote and note only arrive when the bake carries `k`,
+         so pages running on an older book-data.js see them as body -- which
+         is the default, not a lie, and bench-typo.html loads from book.json
+         where every kind is present. */
+      const kind = b.k || (verse ? 'verse' : 'body');
+      const dk = ' data-kind="'+kind+'"';
       if(!verse){
-        h+='<p class="line para"'+lg+'>'+esc(b.t)+'</p>'; lastStanza=null; return;
+        h+='<p class="line para"'+dk+lg+'>'+esc(b.t)+'</p>'; lastStanza=null; return;
       }
       const brk = lastStanza!==null && b.st!==lastStanza;
-      h+='<p class="line'+(brk?' stanza':'')+'"'+lg+'>'+esc(b.t)+'</p>';
+      h+='<p class="line'+(brk?' stanza':'')+'"'+dk+lg+'>'+esc(b.t)+'</p>';
       lastStanza = b.st;
     });
     if(open) h+='</div>';
@@ -332,7 +365,10 @@ function mount(o){
   function mountOne(ci, BASE){
     if(MOUNTED.has(ci)) return false;
     const sec = SECS[ci]; if(!sec) return false;
-    sec.innerHTML = chapterHTML(CUR.chapters[ci], BASE);
+    /* F6: seed the page-marker dedup from the previous chapter so a page
+       that spans a boundary emits exactly one marker, not two. */
+    const prevPg = ci > 0 ? lastPgOf(CUR.chapters[ci-1]) : 0;
+    sec.innerHTML = chapterHTML(CUR.chapters[ci], BASE, prevPg);
     sec.classList.remove("stub");
     sec.style.minHeight = "";
     tintOpener(sec.querySelector(".opener"), (CUR.title?1:0)+ci, CUR.palette);

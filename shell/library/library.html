@@ -462,17 +462,39 @@ async function postJSON(path, body) {
 }
 
 async function refresh() {
-  // W1 SHELL-WEB: a website has no Studio to poll -- but it MAY have a
-  // `library.json` beside the page (the drafter's L-3: "the website's own
-  // shelf source"). The early return skips only the `/state`+`/sources` pair
-  // that needs a running Python server.
+  // W-WEB: a website has no Studio to poll. THE SHELF IS THE PERSON'S OWN
+  // FOLDER (Osca, 25 Sep): nothing ships with the site. Three roads, tried
+  // in this order:
+  //   1. `../../books/index.json` -- when the page is served alongside a
+  //      parsed books/ tree (the repo, or a folder the person is hosting).
+  //   2. Google Drive -- `drive.js`, the Frank/ folder, once the web OAuth
+  //      client is registered (W3, NOT YET: `host.js H.GOOGLE.web = null`).
+  //   3. File System Access API -- `showDirectoryPicker` on browsers that
+  //      have it (Chromium; WebKit does not). NOT YET.
+  // The early return skips only the `/state`+`/sources` pair that needs a
+  // running Python server.
   if (TTSTVHost.isWeb) {
     if (libraryBooks === null) {
+      // road 1: a books/ tree beside the page
       try {
-        const res = await fetch("library.json");
-        if (res.ok) libraryBooks = await res.json();
-      } catch (e) { /* none published for this site */ }
+        const res = await fetch("../books/index.json");
+        if (res.ok) {
+          const idx = await res.json();
+          // same guard as the static branch below: a shelf somebody filled
+          // during this await is not replaced by the file
+          if (Array.isArray(idx) && idx.length && libraryBooks === null) {
+            libraryBooks = idx.filter(b => b && b.slug).map(b => ({
+              slug: b.slug, title: b.title || b.slug, author: b.author || null,
+              lang: b.lang || null,
+              langs: Array.isArray(b.langs) && b.langs.length > 1 ? b.langs.slice() : undefined,
+              chapters: Number(b.chapters) || 0,
+              has_audio: false, has_timings: false, voiced: 0,
+            }));
+          }
+        }
+      } catch (e) { /* no books tree beside this page */ }
       if (libraryBooks === null) libraryBooks = [];
+      if (libraryBooks.length) shelfCacheWrite(libraryBooks);
     }
     renderShelf();
     renderPhoneShelf();
@@ -511,11 +533,22 @@ async function refresh() {
     await syncPending();
     await syncReparse();
   } else if (libraryBooks === null) {
+    // THE PHONE'S 0-OF-40 (B-phone, wave 8, 26 Sep). This branch is entered
+    // the moment `/state` fails -- on frank:// that is at once -- and then
+    // AWAITS `library.json`. `refreshDevice()` is racing it: its `book_list`
+    // answers during that await and `placeDeviceBooks()` puts the installed
+    // books into `libraryBooks`. The old `if (res.ok) libraryBooks = ...`
+    // then threw them away for the dev shelf's one sample row (or, with no
+    // library.json in the bundle, the `[]` below kept only because it
+    // re-checked null). Measured: 40 device books -> 40 tiles at t=229 ms
+    // -> 1 tile at t=258 ms. So the answer is taken only if NOBODY filled
+    // the shelf while we were away: the device's books beat a static file.
+    let fromFile = null;
     try {
       const res = await fetch("library.json");
-      if (res.ok) libraryBooks = await res.json();
+      if (res.ok) fromFile = await res.json();
     } catch (e) { /* none written for this instance */ }
-    if (libraryBooks === null) libraryBooks = [];
+    if (libraryBooks === null) libraryBooks = Array.isArray(fromFile) ? fromFile : [];
   }
   if (!st && window.TTSTVContext) TTSTVContext.observe({ studioLive: studioLive });
   paintContext();
@@ -2685,7 +2718,7 @@ function renderShelf() {
     tileRows(entries.filter(b => !freshSet.has(b.slug)), loadingRows()));
   const n = entries.length;
   const empty = TTSTVHost.isWeb
-    ? "No books on this device yet \u2014 import a bundle .zip, or " + TTSTVHost.WHY_DRIVE + "."
+    ? "No books yet \u2014 serve this page alongside a parsed books/ folder, or " + TTSTVHost.WHY_DRIVE + ". Parsing needs Studio or Kaggle."
     : (api("/state") && !studioLive
       ? "No books on this device yet. Books arrive as a bundle .zip from the bench (PROMPTS/phone-app.md)."
       : "No ingested books yet. Double-click a source, or drag one here.");

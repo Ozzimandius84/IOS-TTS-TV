@@ -1,8 +1,8 @@
 /* ENGINE · THE FLOAT'S DOOR, the READER's half  ·  design: design/reader/FLOAT.md §4
    · mounted by: reader/reader.html, one <script src>, after listen.js and the
      transport, beside cursor.js
-   · the other half is reader/float.js, in the panel's own webview
-   · node test: reader/tests/test_float.py
+   · the other half is design/reader/float.js, in the panel's own webview
+   · node test: design/reader/test-float-scroll.js
 
    TWO WEBVIEWS CANNOT SHARE A VARIABLE, AND THIS IS WHERE A FLOAT GOES WRONG.
    The rule from 6 September holds and is the reason there is a door at all:
@@ -125,6 +125,51 @@
   function host() {
     var H = typeof window !== "undefined" ? window.TTSTVHost : null;
     return H && typeof H.floatFeed === "function" ? H : null;
+  }
+
+  /* ------------------------------------------------------------- scroll payload
+     D7b (24 Sep). AN UNRENDERED BOOK HAS NO TIMINGS AND NO MAP, so
+     `chapterPayload` produces nothing and the float is empty. But the reader
+     still has its word index and its cursor, and `book-nav.js`'s
+     `ttstv:cursor` already fires on every cursor move. So: build a chapter
+     payload from the book's OWN text, the same way `wordsOf()` in
+     book-nav.js does, and send the cursor word as a `tick` with `word`.
+
+     SENTENCE BOUNDARIES come from the block structure. Each block whose role
+     is `l` (a line / prose paragraph) is one or more sentences joined by
+     space -- `core/bookdata.py::_text_of`. We do not re-cut sentences here
+     (that would be a second cut); each block IS a sentence boundary, which
+     is what `sentEnds` carries. The caption in the panel then shows the text
+     around the cursor word, exactly as it does for a rendered chapter.
+
+     NO PER-WORD TRAFFIC. The cursor is already in `lastCursor`, written by
+     the `ttstv:cursor` listener; the 4 Hz timer reads it and sends one
+     `tick` when it has changed. The constraint holds. */
+  function scrollChapterPayload(o) {
+    o = o || {};
+    var blocks = o.blocks || [];
+    var words = [], sentEnds = [];
+    for (var i = 0; i < blocks.length; i++) {
+      var b = blocks[i];
+      if (b.r === "sp" || b.r === "dir" || b.r === "fig") continue;
+      var text = b.t || "";
+      var toks = text.split(/\s+/).filter(function (w) { return w !== ""; });
+      for (var j = 0; j < toks.length; j++) words.push(toks[j]);
+      if (words.length && (!sentEnds.length || sentEnds[sentEnds.length - 1] !== words.length)) {
+        sentEnds.push(words.length);
+      }
+    }
+    return {
+      payload: {
+        label: o.label || "float",
+        kind: "chapter",
+        slug: o.slug || "",
+        chapter: o.chapterId || "",
+        words: words,
+        starts: [],          /* no timing -- the panel runs off `word`, not `t` */
+        sentEnds: sentEnds,
+      },
+    };
   }
 
   /* ------------------------------------------------------------- the payload
@@ -258,6 +303,12 @@
        reader's cursor as `{chapter, word}` where `word` is the index into the
        chapter's own DOM word index (`book-nav.js`'s `ttstv:cursor`). */
     var cursorIn = o.cursor || null;
+    /* ★ D7b: THE BOOK'S OWN DATA, for unrendered chapters. Asked for, never
+       held: the book changes when the shelf changes, and a held handle would
+       hold the old one. The shape is `book-data.js`'s -- `chapters[i].blocks`,
+       where each block is `{r, t}` -- and it is the same shape `wordsOf()` in
+       `book-nav.js` walks. */
+    var bookIn = o.book || null;
     var slug = o.slug || "";
     var doors = o.doors || {};
     var setT = o.setIntervalFn || setInterval;
@@ -267,6 +318,11 @@
     /* the last chapter payload's id list, and the id -> index map built off
        it. Rebuilt with the chapter and never guessed at. */
     var sentIds = null, byId = null;
+    /* ★ D7b: true when the last chapter payload was built from the book's own
+       text (scrollChapterPayload) rather than from timings. In scroll mode the
+       cursor's flat index IS the panel's index and no clock arithmetic is
+       needed. */
+    var scrollMode = false;
 
     function feed(payload) {
       return H.floatFeed(payload).then(function (ok) {
@@ -281,11 +337,27 @@
 
     function chapterNow() {
       var control = pick(controlIn);
-      if (!control) return null;
-      var built = chapterPayload({
-        timings: control.timings, map: control.map, slug: slug, label: "float",
+      if (control) {
+        var built = chapterPayload({
+          timings: control.timings, map: control.map, slug: slug, label: "float",
+        });
+        if (built.payload.words.length) return built;
+      }
+      /* ★ D7b: NO TIMINGS, SO NO chapterPayload. Fall back to the book's own
+         text, the same walk `wordsOf()` does, and the cursor is the reader's
+         flat index into the same chapter. The chapter id comes from the cursor
+         (which chapter the reader is standing in). When the cursor has never
+         fired (first open, no scroll yet), default to chapter 0 word 0. */
+      var at = pick(cursorIn) || { chapter: 0, word: 0 };
+      var bk = pick(bookIn);
+      if (!at || !bk || !bk.chapters) return null;
+      var ch = bk.chapters[at.chapter];
+      if (!ch) return null;
+      var sb = scrollChapterPayload({
+        blocks: ch.blocks, slug: slug, label: "float",
+        chapterId: ch.id || ("c" + at.chapter),
       });
-      return built.payload.words.length ? built : null;
+      return sb.payload.words.length ? sb : null;
     }
 
     function pushChapter(force) {
@@ -293,8 +365,12 @@
       if (!built) return false;
       if (!force && built.payload.chapter === sentChapter) return false;
       sentChapter = built.payload.chapter;
-      sentIds = built.ids;
+      sentIds = built.ids || null;
       byId = null;
+      /* ★ D7b: a scroll payload has no starts and no ids — the cursor's flat
+         index IS the panel's index, and no clock-based interpolation can work.
+         The flag tells tick() to use the cursor directly. */
+      scrollMode = built.payload.starts && built.payload.starts.length === 0;
       feed(built.payload);
       return true;
     }
@@ -325,6 +401,15 @@
     function tick() {
       if (!open) return;
       pushChapter(false);
+      /* ★ D7b: SCROLL MODE — an unrendered chapter whose payload was built from
+         the book's text. The cursor's flat index IS the panel's index (the same
+         walk, `wordsOf`). No clock, no interpolation: one read, at ≤4 Hz. */
+      if (scrollMode) {
+        var at = pick(cursorIn);
+        var w = (at && at.word != null) ? at.word : 0;
+        if (w !== lastWord) { lastWord = w; feed(tickPayload({ word: w, playing: false })); }
+        return;
+      }
       /* THE SYSTEM VOICE'S PATH IS THE CHEAPER ONE and is taken first: it
          already knows the word, so there is nothing to interpolate and nothing
          to correct. Only a rendered master needs a clock. */
@@ -337,7 +422,18 @@
         }
       }
       var control = pick(controlIn);
-      if (!control || !control.clock) return;
+      if (!control || !control.clock) {
+        /* ★ D7b: NO CLOCK -- an unrendered chapter, or no control at all.
+           The cursor is the reader's flat word index, which IS the panel's
+           index when the payload was built from `scrollChapterPayload` (the
+           walk is the same walk, `wordsOf`). So the cursor's word is sent
+           directly as `{word}`, and the panel paints it. */
+        var at = pick(cursorIn);
+        if (at && at.word != null) {
+          if (at.word !== lastWord) { lastWord = at.word; feed(tickPayload({ word: at.word, playing: false })); }
+        }
+        return;
+      }
       /* ★ PAUSED, THE READING IS WHERE THE READER IS (14 Sep, G-FLOATAXIS).
          The float is opened from the one-word view now -- a scroll past the
          view's end -- and in that view a stopped voice does not fix the word:
@@ -362,7 +458,7 @@
       timer = setT(tick, TICK_MS);
     }
     function stop() {
-      open = false;
+      open = false; scrollMode = false;
       if (timer) { clearT(timer); timer = null; }
       sentChapter = null; lastWord = null; sentIds = null; byId = null;
     }
@@ -405,7 +501,15 @@
       toggle: function () {
         return H.float().then(function (isOpen) {
           open = !!isOpen;
-          if (open) { sentChapter = null; lastWord = null; pushChapter(true); tick(); start(); }
+          if (open) {
+            sentChapter = null; lastWord = null; pushChapter(true); tick(); start();
+            /* ★ THE PANEL'S JS LOADS AFTER THE WINDOW OPENS, so the first
+               chapter payload may arrive before the listener is registered.
+               Re-push once after a short delay to cover the race. The timer
+               is the same 250 ms tick, so this is at most one extra message
+               and it is idempotent (same chapter id, same words). */
+            setTimeout(function () { if (open) { sentChapter = null; lastWord = null; pushChapter(true); tick(); } }, 1000);
+          }
           else stop();
           return open;
         });
@@ -422,6 +526,7 @@
   return {
     mount: mount,
     chapterPayload: chapterPayload,
+    scrollChapterPayload: scrollChapterPayload,
     tickPayload: tickPayload,
     sayPayload: sayPayload,
     route: route,

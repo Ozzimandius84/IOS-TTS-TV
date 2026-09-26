@@ -1313,7 +1313,25 @@
     else if (sp.phonemes) parts.push("via phonemes");
     else if (sp.dub_route) parts.push("dubbed");
     if (l.state === "addable" && l.size_bytes) parts.push(bytesWord(l.size_bytes));
+    /* J4: the pack's size and date, when one has been built. The phone tab
+     * has its own line (`packLine`); THIS is the Mac tab's, where the size
+     * is the raw SQLite and the date is when `dictionary/pack.py` built it.
+     * An added language with no pack yet says nothing rather than lying. */
+    var pk = l.pack || {};
+    if (pk.built && pk.bytes) parts.push("pack " + bytesWord(pk.bytes));
+    if (pk.built && pk.built_at) parts.push(packDate(pk.built_at));
     return parts.join(" · ");
+  }
+
+  /* Pure. A pack's `built_at` ISO string -> the short date the Languages
+   * row prints: "11 Sep 2026". No time, because the tab is a list and a
+   * timestamp in every row is noise. */
+  function packDate(iso) {
+    if (!iso) return "";
+    var MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+    var d = new Date(iso);
+    if (isNaN(d.getTime())) return "";
+    return d.getUTCDate() + " " + MONTHS[d.getUTCMonth()] + " " + d.getUTCFullYear();
   }
 
   /* Pure. `GET /languages`'s answer -> the rows the panel draws.
@@ -1345,7 +1363,8 @@
                state: state, added: state === "added",
                line: languageLine({ dump: l.dump, grammar: l.grammar,
                                     speech: l.speech, state: state,
-                                    size_bytes: l.size_bytes }),
+                                    size_bytes: l.size_bytes,
+                                    pack: l.pack }),
                size: l.size_bytes ? bytesWord(l.size_bytes) : "",
                why: l.why || "", at: i };
     });
@@ -5196,6 +5215,7 @@
     // tracks start at one x rather than each at the end of its own word
     '.ttstv-settings .set-row[data-field="size"] .set-l,',
     '.ttstv-settings .set-row[data-field="line"] .set-l,',
+    '.ttstv-settings .set-row[data-field="gutter"] .set-l,',
     /* WARMTH WAS NEVER IN THIS LIST, and that is what the comment below
        predicted: measured in the bench on 7 September, its rail was **2 px**
        wide where Size's and Line's are 350, with all five ticks stacked
@@ -5222,6 +5242,7 @@
     // thing on the right; a ruler is the one control that is a LENGTH.
     '.ttstv-settings .set-row[data-field="size"] .set-c,',
     '.ttstv-settings .set-row[data-field="line"] .set-c,',
+    '.ttstv-settings .set-row[data-field="gutter"] .set-c,',
     '.ttstv-settings .set-row[data-field="warmth"] .set-c,',
     '.ttstv-settings .set-row[data-field="listenWindow"] .set-c,',
     '.ttstv-settings .set-row[data-field="wpm"] .set-c { flex: 1 1 auto; }',
@@ -6367,7 +6388,7 @@
     syncThrough: syncThrough, driveStateLine: driveStateLine, driveProgressLine: driveProgressLine,
     LANGUAGES: LANGUAGES,
     languageRows: languageRows, languageAnswer: languageAnswer,
-    languageLine: languageLine, languageJob: languageJob,
+    languageLine: languageLine, languageJob: languageJob, packDate: packDate,
     kaggleLines: kaggleLines, modalLines: modalLines,
     // the two lines that say what each lane IS, exported for the one test
     // that asserts the page carries them rather than re-typing them

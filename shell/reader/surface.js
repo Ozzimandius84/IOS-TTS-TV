@@ -225,10 +225,10 @@
     // W1 SHELL-WEB: on a website the sentence is D3's.
     if (window.TTSTVHost && window.TTSTVHost.isWeb) return window.TTSTVHost.WHY_STUDIO;
     return S.bench
-      ? "No server behind this page — these rows are the mock."
+      ? "Search needs Studio on this Mac — open Frank"
       : (PAIRED
           ? "Can't reach Studio at " + PAIRED.base + " — same Wi-Fi?"
-          : "Not paired with a Studio — pair in Settings ▸ Transfer, then this fills in.");
+          : "Search needs Studio on this Mac — open Frank");
   }
 
   var BASE = (function () {
@@ -244,12 +244,33 @@
       return tag.getAttribute("content").replace(/\/+$/, "");
     // W1 SHELL-WEB: the kind is the gate, not the protocol.
     // Guarded: window.TTSTVHost may not exist when host.js failed to load
-    // (design pages, benches). Fall through to the protocol test below.
+    // (design pages, benches). Fall through to the hello probe below.
     var _H = window.TTSTVHost || null;
     if (_H && (_H.isStudio || _H.isPhone)) return location.origin;
     if (_H && _H.isWeb) return "";
-    // No host.js: fall back to protocol (the pre-W1 gate for benches/design).
-    if (!_H && /^https?:$/.test(location.protocol)) return location.origin;
+    // F6: No host.js — probe /sync/hello to decide.  Studio answers 200 with
+    // a JSON `{name}` (studio/serve.py::SyncHandler); a plain http.server
+    // answers 404 or times out.  Synchronous XHR: host.js documents the kind
+    // as decided before any page script runs, and surface.js's own `S.live`
+    // is read off BASE synchronously at mount — an async probe would leave
+    // `S.live` false for the first frame and fire fetches only on a later
+    // tick, which is the "true or absent, never both" fault the pairing lane
+    // exists to end.  The request goes to the SAME origin with a 2-second
+    // timeout, so it cannot block the page on a missing server for more than
+    // that, and Studio's hello is a plain dict with no IO.
+    if (!_H && /^https?:$/.test(location.protocol)) {
+      try {
+        var xhr = new XMLHttpRequest();
+        xhr.open("GET", "/sync/hello", false);  // synchronous
+        xhr.timeout = 2000;
+        xhr.send();
+        if (xhr.status === 200) {
+          var j = JSON.parse(xhr.responseText);
+          if (j && j.name) return location.origin;   // studio answers
+        }
+      } catch (e) { /* not studio */ }
+      return "";   // plain http.server — no studio
+    }
     /* G-STUDIOPHONE, 13 Sep: and when it is not http(s), THE PAIRING. See
        `pairedStudio` above -- this is the phone, and this line is the whole
        of "an origin the phone can have". */
@@ -377,85 +398,10 @@
                 path: "/Volumes/Ex_Repo/github/TTS_APP/TTS_APP/tts_data/sources/epubs/ficciones.epub",
                 origin: { url: "https://example.org/ficciones", from: "file" } } }
   ];
-  /* ITEM 9, AND ITEMS 4-6 ARE WHY. These rows carry the fields a real
-     `Candidate` carries (`tools/search/candidate.py`) and the old mock did
-     not -- `word_count`, `chapters`, `size_bytes`, `popularity`, `format`,
-     `language`, `license`/`license_status`/`license_jurisdiction`, `note`,
-     `linked_id`. Without them the bench drew four bare rows and none of item
-     4's metadata, item 5's source-vs-author truncation or item 6's three
-     states could be looked at at all.
-
-     THE FOUR ROWS ARE FOUR CASES, on purpose:
-       1  the ordinary Gutenberg text -- TEXT ONLY, and a `pg:` token whose
-          partner IS in `MOCK_MEDIA`, so it draws TEXT + AUDIO
-       2  a text with a deliberately ENORMOUS author string, which is item 5's
-          whole test: the source must still be on the row
-       3  a big archive scan -- size, downloads, a jurisdiction on the licence
-       4  a text with a long `note`, which is item 4's "don't drop data
-          because it's long" */
-  var MOCK_OUT = [
-    { title: "Ethics", author: "Benedictus de Spinoza", source: "gutenberg",
-      url: "https://www.gutenberg.org/ebooks/3800.epub3.images", kind: "text",
-      source_id: "3800", language: "en", format: "epub", direct_download: true,
-      word_count: 121400, chapters: 5, size_bytes: 612000, popularity: 4120,
-      license: "Public domain in the USA.", license_status: "clear",
-      license_jurisdiction: "US", linked_id: "pg:3800",
-      note: "from Project Gutenberg's own catalogue (offline)" },
-    { title: "On the Improvement of the Understanding",
-      author: "Benedictus de Spinoza, translated from the Latin by R. H. M. Elwes, with an introduction",
-      source: "gutenberg", url: "https://www.gutenberg.org/ebooks/1016.epub3.images",
-      kind: "text", source_id: "1016", language: "en", format: "epub",
-      direct_download: true, word_count: 24800, size_bytes: 180000, popularity: 900,
-      license_status: "clear", license_jurisdiction: "US" },
-    { title: "The Ethics of Benedict de Spinoza", author: "Benedictus de Spinoza",
-      source: "archive", url: "https://archive.org/details/ethicsofbenedict00spin",
-      kind: "text", source_id: "ethicsofbenedict00spin", language: "en",
-      size_bytes: 21000000, popularity: 3300, chapters: 5,
-      license: "Public Domain Mark 1.0", license_status: "clear",
-      license_jurisdiction: "US" },
-    { title: "Ethic, demonstrated in geometrical order", author: "Benedictus de Spinoza",
-      source: "archive", url: "https://archive.org/details/ethicdemonstrate00spin",
-      kind: "text", source_id: "ethicdemonstrate00spin", size_bytes: 34000000,
-      note: "a 1883 scan in five parts; the OCR is uneven in Part III and the "
-          + "plates between pages 88 and 89 are bound out of order, which the "
-          + "parser will read as two short chapters rather than one long one",
-      /* the OTHER half of the guessed pair in MOCK_MEDIA. `pair.py`'s
-         `suggest_pairs` puts the token on BOTH halves, so a bench that put it
-         on one would be showing a pairing the real grouping never makes. */
-      linked_id: "guess:ethica-latin-reading" }
-  ];
-  /* RECORDINGS, in the same shape a real candidate has -- a url that is a
-     PARTICULAR item and never a query, because that is the thing the Video
-     lane is for and a mock that cheated here would teach the wrong design. */
-  var MOCK_MEDIA = [
-    /* one video that IS both halves (`yt:`), one recording the source itself
-       paired to a Gutenberg text (`pg:3800`, whose partner is MOCK_OUT[0]),
-       and one recording paired only by a GUESS -- so all three strengths of
-       item 6's "text + audio" can be told apart on the bench */
-    { title: "The Ethics (Part I) — full audiobook", author: "LibriVox", source: "youtube",
-      url: "https://www.youtube.com/watch?v=MOCKvideoid1", kind: "audio",
-      duration_s: 9240, source_id: "MOCKvideoid1", linked_id: "yt:MOCKvideoid1",
-      transcript: "Concerning God. Definitions. I. By that which is self-caused, "
-                + "I mean that of which the essence involves existence, or that of "
-                + "which the nature is only conceivable as existent." },
-    { title: "Spinoza's Ethics, Part I", author: "LibriVox", source: "librivox",
-      url: "https://librivox.org/the-ethics-by-baruch-spinoza/", kind: "audio",
-      duration_s: 33000, chapters: 5, size_bytes: 240000000,
-      linked_id: "pg:3800", reads_text: "https://www.gutenberg.org/ebooks/3800",
-      license_status: "clear", license_jurisdiction: "US" },
-    { title: "Ethica ordine geometrico demonstrata (read in Latin)", author: "anonymous",
-      source: "archive", url: "https://archive.org/details/ethica-latin-reading",
-      kind: "audio", duration_s: 27600, linked_id: "guess:ethica-latin-reading" },
-    /* THE THIRD STATE, and the bench had no way to show it: every other
-       recording here is paired, so `audio only` never rendered. Item 9's rule
-       is that the bench is brought UP to the surface -- a state the surface
-       can draw and the bench cannot is the bench being the ceiling, which is
-       the one thing it must never be. An unpaired recording, which is what
-       most of them are. */
-    { title: "Spinoza — a lecture", author: "unattributed", source: "youtube",
-      url: "https://www.youtube.com/watch?v=MOCKlecture", kind: "audio",
-      duration_s: 3120, source_id: "MOCKlecture" }
-  ];
+  /* F5 (25 Sep): MOCK_OUT, MOCK_MEDIA and MOCK_SOURCES deleted -- search with
+     no studio shows ONE sentence and disabled Add, never fabricated rows.
+     The bench's working-queue mocks (MOCK_JOB, MOCK_VOICES, ...) stay: they
+     are not search results and their consumer is `mount`, not `elsewhere`. */
 
   /* ------------------------------------------------ THE MOCK'S OWN STUDIO
      §5.9, Osca 8 Sep: *"design/reader/bench-surface.html must be updated with
@@ -543,17 +489,6 @@
               { id: 93, slug: "ethics-spinoza", unit: "c001", voice: "merrill-intro" }] }
   ];
 
-  /* and a report with one of each state in it, so the bench can be looked at
-     with a source down, a source off and a source that simply had nothing */
-  var MOCK_SOURCES = {
-    gutenberg: { count: 2, error: null, log: [], failures: [] },
-    archive:   { count: 2, error: null, log: [], failures: [] },
-    librivox:  { count: 1, error: null, log: [], failures: [] },
-    youtube:   { count: 1, error: null, log: [], failures: [] },
-    fadedpage: { count: 0, error: null, log: [], failures: [] },
-    dokumen:   { count: 0, error: null, failures: [],
-                 log: ["search.dokumen: not offered — the site was confirmed down"] }
-  };
 
   /* ------------------------------------------- THE MOCK'S OWN WORKING QUEUE
      Round 2 item 9: *"wire the mock report to exercise every new state (four
@@ -763,14 +698,7 @@
     paired: ""           /* the Studio this device paired with, when it did  */
   };
   /* what the bench dials, and nothing else does */
-  var CFG = { mixed: true, bias: 1.0, coarse: false,
-              /* G-SURF2: how long the MOCK takes to answer, so the searching
-                 state can be looked at on the bench (`?mockdelay=1500`). 0 in
-                 the app, where the wait is studio's and real. */
-              mockDelay: (function () {
-                try { var m = /[?&]mockdelay=(\d+)/.exec(location.search || "");
-                      return m ? +m[1] : 0; } catch (e) { return 0; }
-              })() };
+  var CFG = { mixed: true, bias: 1.0, coarse: false };
 
   var root = null, scrim = null, sheet = null, input = null,
       listEl = null, worksEl = null, videoBox = null, opened = false;
@@ -822,7 +750,22 @@
       if ((e.metaKey || e.ctrlKey) && !e.altKey && (e.key === "k" || e.key === "K")) {
         e.preventDefault(); opened ? close() : open(S.q);
       } else if (e.key === "Escape" && opened) {
-        e.preventDefault(); close();
+        /* D6 ESCAPE (AMENDMENT 1, Osca 24 Sep): three-state sequence.
+           Escape #1 while the caret is in the search input → BLUR the
+           input; input keeps its text, surface stays open.
+           Escape #2 (or #1 when the caret is NOT in the input) → CLOSE
+           the whole surface.
+           Escape NEVER closes the reader tab from inside the surface —
+           `stopImmediatePropagation` is the whole of that (plain
+           `stopPropagation` would not help: host.js's own keydown is on
+           the same window target, so it fires regardless). */
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        if (document.activeElement === input) {
+          input.blur();
+        } else {
+          close();
+        }
       }
     });
     S.base = BASE;
@@ -1405,22 +1348,12 @@
     var my = ++token;
     var url = api("/search?title=" + encodeURIComponent(S.q));
     if (!url) {
-      /* THE BENCH CAN SEE THE WAIT (G-SURF2). With `?mockdelay=` the mock
-         answers late, through the SAME `asking` state the live wait uses --
-         so the strip the bench shows during is the strip the app shows
-         during, drawn by the same code. Without it the mock answers at once,
-         as it always did. */
-      if (CFG.mockDelay > 0) {
-        beginAsking();
-        draw();
-        setTimeout(function () {
-          if (my !== token) return;              /* a newer search owns it */
-          endAsking(MOCK_SOURCES);
-          mockAnswer();
-        }, CFG.mockDelay);
-        return Promise.resolve();
-      }
-      mockAnswer();
+      /* F5 (25 Sep): no Studio behind this page -- show one sentence and
+         empty results with no fabricated rows.  Add stays in the DOM but is
+         disabled per `outRow`'s own `!S.live` gate (line ≈1766). */
+      S.searchedFor = S.q;
+      S.out = []; S.media = []; S.adapters = null; S.pairs = {};
+      draw();
       return Promise.resolve();
     }
     beginAsking();
@@ -1490,24 +1423,6 @@
       });
   }
 
-  /* THE MOCK'S ANSWER, in one place -- the immediate bench and the delayed
-     one both land here, so the two cannot answer differently. */
-  function mockAnswer() {
-    S.out = MOCK_OUT.slice(); S.media = MOCK_MEDIA.slice();
-    S.adapters = MOCK_SOURCES; S.searchedFor = S.q;
-    /* ITEM 9: the mock builds `S.pairs` THE SAME WAY the live answer does
-       -- one pass over both lists, grouped by `linked_id` -- rather than
-       being handed a ready-made map. A mock that took a shortcut here could
-       show a pairing the real grouping would not, which is the one thing a
-       bench must never do. */
-    S.pairs = {};
-    S.out.concat(S.media).forEach(function (c) {
-      if (!c.linked_id) return;
-      var k = String(c.linked_id);
-      (S.pairs[k] = S.pairs[k] || []).push(c);
-    });
-    draw();
-  }
 
   /* ==================================================== THE WAIT, IN THE OPEN
      G-SURF2, Osca 10 Sep: *"Searching is unmistakable ... visible at the top
@@ -1888,6 +1803,37 @@
     })[0] || null;
   }
 
+  /* ========================================= D5: LOCAL SHELF SEARCH (24 Sep)
+     Before the nine external sources: query the local shelf with token match
+     on title+author (≥2 tokens, case-folded). Hits render at the top under
+     "ON THIS SHELF" with the shelf row; external sources follow.
+
+     `norm()` already folds case, diacritics and apostrophes, so "the mermaid
+     Ibsen" matches "A Doll's House : a play" by Ibsen through the `ibsen`
+     token. `shelfSearch()` returns books scored by how many query tokens hit;
+     the query must have ≥2 tokens (to avoid single-letter noise like "a"),
+     and a book qualifies when at least one token matches. */
+  function shelfTokens(q) {
+    return norm(q).split(/\s+/).filter(function (w) { return w.length > 0; });
+  }
+  function shelfSearch(q) {
+    var toks = shelfTokens(q);
+    if (toks.length < 2) return [];
+    var hits = [];
+    S.shelf.forEach(function (b) {
+      var text = norm((b.title || "") + " " + (b.author || ""));
+      var matched = 0;
+      toks.forEach(function (t) { if (text.indexOf(t) >= 0) matched++; });
+      if (matched >= 1) hits.push({ book: b, matched: matched });
+    });
+    /* most matched tokens first, then alphabetical by title for ties */
+    hits.sort(function (a, b) {
+      if (b.matched !== a.matched) return b.matched - a.matched;
+      return (a.book.title || "").localeCompare(b.book.title || "");
+    });
+    return hits.map(function (h) { return h.book; });
+  }
+
   /* ================================================================ drawing */
   function draw() {
     if (!listEl) return;
@@ -1929,6 +1875,20 @@
        difference between "nothing anywhere" and "the three places that
        would have it did not answer". */
     var strip = S.q && (searching || S.adapters) ? sourcesStrip() : null;
+    /* D5: LOCAL SHELF FIRST. Before the nine external sources, shelf hits
+       with ≥2 token matches render under "ON THIS SHELF". The heading and
+       rows are drawn before the Results / Your library section so the local
+       match is always at the top of the list. Each row carries
+       `data-shelf-result` for frankprobe acceptance. */
+    var shelfHits = S.q ? shelfSearch(S.q) : [];
+    if (shelfHits.length) {
+      listEl.appendChild(head("On this shelf"));
+      shelfHits.forEach(function (b) {
+        var row = shelfRow(b);
+        row.setAttribute("data-shelf-result", b.slug);
+        listEl.appendChild(row);
+      });
+    }
     if (CFG.mixed) {
       if (rows.length || strip) listEl.appendChild(head(S.q ? "Results" : "Your library"));
       if (strip) listEl.appendChild(strip);
@@ -5804,7 +5764,7 @@
       chapters: listEl.querySelectorAll(".sf-ch").length,
       inBook: S.inBook,
       live: S.live, base: S.base, bench: S.bench, paired: S.paired || "",
-      mockShown: !!(listEl.textContent || "").match(/these rows are the mock/),
+      noStudio: !!(listEl.textContent || "").match(/Search needs Studio/),
       steps: (function () {
         var s = sheet.querySelector(".sf-steps");
         return s ? { cells: s.children.length, box: box(s) } : null;
@@ -5820,6 +5780,8 @@
                            state: S, STEPS: STEPS, hue: hue, webQuery: webQuery,
                            openBook: openBook, readerHref: readerHref, bar: bar,
                            feed: feed,
+                           /* D5 shelf search (24 Sep): token-match the shelf */
+                           shelfSearch: shelfSearch, shelfTokens: shelfTokens,
                            /* 8 Sep -- the driver and the bench press these
                               rather than clicking pixels, and each one is a
                               thing the acceptance criteria name */

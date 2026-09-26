@@ -266,7 +266,40 @@ function arm(doc) {
     if (current && current.press) current.press(ev);
   }, false);
   doc.addEventListener("keydown", (ev) => {
-    if (ev && ev.key === "Escape" && current && current.close) current.close();
+    if (!ev || !current) return;
+    /* ESCAPE: with a card open, close it and STOP — book-nav.js on the same
+       document listens for Escape to close the book, and one press must not
+       do both. With no card open, the key passes through unchanged. */
+    if (ev.key === "Escape") {
+      if (current.showing) {
+        current.close();
+        ev.stopPropagation();
+        ev.preventDefault();
+      }
+      return;
+    }
+    /* THE D HOTKEY, VIA PREFS (never a literal 'D'). hotkeyIs checks the
+       binding table so a remap takes effect on the next keystroke with nothing
+       reloaded. Dead while the caret is in a field: the same rule
+       reader/keys.js enforces for every bare key — input, textarea,
+       contenteditable are left alone. The word and the path are the same ones
+       doors.define() reaches through the float's ring (floatdoor.js:267). */
+    var S = (typeof window !== "undefined") && window.TTSTVSettings;
+    if (!S || !S.hotkeyIs(ev, "lookup")) return;
+    var ae = doc.activeElement;
+    if (ae) {
+      var tag = (ae.tagName || "").toUpperCase();
+      if (tag === "INPUT" || tag === "TEXTAREA" || ae.isContentEditable) return;
+    }
+    var view = doc.querySelector && doc.querySelector(".wordview");
+    if (!view || !view.classList.contains("on")) return;
+    var wEl = view.querySelector(".wordview-word");
+    var w = bare((wEl && wEl.textContent) || "");
+    if (!w) return;
+    if (current.showing) { current.close(); ev.stopPropagation(); ev.preventDefault(); return; }
+    current.open(w);
+    ev.stopPropagation();
+    ev.preventDefault();
   }, false);
 }
 

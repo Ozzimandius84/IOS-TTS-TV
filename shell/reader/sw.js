@@ -30,7 +30,7 @@
 // that is not the current SHELL_CACHE, so changing this string IS the eviction
 // -- and changing it changes sw.js's own bytes, which is the only thing that
 // makes a browser run `install` and `activate` at all.
-const SHELL_CACHE = "ttstv-shell-v59";   // 23 Sep: oauth.html joins the shell (W3 ACCOUNT) -- a NEW
+const SHELL_CACHE = "ttstv-shell-v60";   // 24 Sep: D2-D7 rebuild (v0.2.0) -- rename, apply-state,
                                          // name in SHELL_FILES is only fetched by an install, so the
                                          // string has to move or an installed app never caches
                                          // it (v37: the shell moved to shell/)
@@ -185,16 +185,7 @@ const SHELL_FILES = [
                               // studio would have answered, built from this phone's own
                               // Kaggle courier rows, so ?studio= has a source on a phone
                               // with no Mac and no Studio.
-  "../library/library.json",   // THE WEBSITE'S OWN SHELF SOURCE (F2, W1 follow-up):
-                              // a fresh website has no Studio to poll, no /state to
-                              // answer -- this static JSON is how a web host shows
-                              // ≥1 book card. The page fetches it in refresh() when
-                              // TTSTVHost.isWeb, and the service worker caches it
-                              // for offline. Beside it, the sample bundle it names.
-  "../library/samples/poems.zip", // THE SAMPLE BUNDLE: a public-domain book shipped
-                              // with the website so a fresh site has something on
-                              // the shelf without an import. library.json above
-                              // lists it; import.js takes it from here.
+
   "../library/oauth.html",    // WHERE GOOGLE HANDS THE CODE BACK, ON THE WEB HOST
                               // (W3 ACCOUNT, D5): the redirect URI the site's own OAuth client
                               // registers. It writes the whole URL into ONE localStorage key
@@ -213,7 +204,7 @@ const SHELL_FILES = [
   "./icon-192.png",            // restored in this commit -- 3e64b7e deleted both
   "./icon-512.png",            // while manifest.webmanifest still named them
   // ========================== HANDS FREE ==================================
-  // reader.html loads all twelve and boots them once a book is open.
+  // reader.html loads all thirteen and boots them once a book is open.
   "../voiceui/app.js",
   "../voiceui/reader-bridge.js",
   "../voiceui/grammar.js",
@@ -226,6 +217,9 @@ const SHELL_FILES = [
   "../voiceui/commands.js",
   "../voiceui/context.js",
   "../voiceui/records.js",
+  "../voiceui/catalogue.js",  // THE LANGUAGE CATALOGUE (E5): reader.html loads it
+                              // and the shell must carry it, or the installed app
+                              // 404s on the catalogue offline.
 ];
 
 // WHAT LEFT THE SHELL IN JOB 15, AND WHY IT IS A SUBTRACTION AND NOT A LOSS.

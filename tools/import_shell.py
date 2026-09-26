@@ -234,11 +234,17 @@ def import_shell(ttstv: Path, out: Path = SHELL, bump: bool = False) -> dict:
     # it does it AFTER clearing the output directory, and clearing this repo's
     # shell on the strength of a TTSTV tree that cannot fill it again is the
     # one outcome worth an extra ten lines.
-    missing = [rel for rel in ps.SHELL_FILES if not (root / rel).is_file()]
+    # A shell file's MASTER may be `design/<rel>` and nothing in the module
+    # (ship.py's design tier: float.js, floatdoor.js, wordclock.js on 26 Sep
+    # exist only under design/reader/). Checking `root/rel` alone refused a
+    # tree that ship.py builds without complaint -- B-phone, wave 8.
+    missing = [rel for rel in ps.SHELL_FILES
+               if not (root / rel).is_file() and not (root / "design" / rel).is_file()]
     if missing:
         raise SystemExit(
             "TTSTV cannot produce the shell yet -- reader/sw.js names "
-            f"{len(ps.SHELL_FILES)} files and {len(missing)} of them are not on disk:\n  "
+            f"{len(ps.SHELL_FILES)} files and {len(missing)} of them are not on disk "
+            "(neither the module file nor a design/ master):\n  "
             + "\n  ".join(missing)
             + "\n\nNothing was written here; shell/ is untouched. This is a TTSTV state, "
               "not a fault in this repo."

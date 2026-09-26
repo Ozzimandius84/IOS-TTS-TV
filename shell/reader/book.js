@@ -83,7 +83,7 @@ function normalise(raw, name, cap){
       const role=p.role||"line";
       if(role==="speaker"||p.kind==="speaker") blocks.push({r:"sp",t:s.replace(/\.$/,"")});
       else if(role==="direction")               blocks.push({r:"dir",t:s});
-      else                                      blocks.push({r:"l",t:s,st:p.stanza});
+      else                                      blocks.push({r:"l",t:s,st:p.stanza,k:p.kind||undefined});
     });
     const ti=(ch.title||"").trim(), m=ti.match(NUMBERED);
     let n="", nm="";

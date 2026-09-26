@@ -46,6 +46,166 @@
   --box-verse: 28rem;      /* ~60ch  pentameter, hexameter, a speech line   */
                            /* the third box is --measure itself, ~73ch      */
 
+  /* --- the chrome -- every surface's own palette (O22, 25 Sep) ----------- */
+  /* These are the colours the Library, Settings, the bar and voiceui share.
+     tokens.css is the ONLY home for colour: no shell .css outside this file
+     may contain a #hex, rgb() or hsl() literal (test-token-gate.js asserts
+     it). The reader's own page colours are --ground/--ink/--dim/--rule above;
+     these are the CHROME around it -- the window, the controls, the panels.
+     Dark variants follow the same [data-theme] / @media pattern as the
+     reader's own colours above. */
+  --chrome-bg: #fcfcfb;
+  --chrome-fg: #0b0b0b;
+  --chrome-fg-dim: #52514f;
+  --chrome-accent: #832f2b;
+  --chrome-border: #e4e3e0;
+  --chrome-panel-bg: #ffffff;
+  --chrome-link: #832f2b;
+  --chrome-control-bg: #f5f5f3;
+  --chrome-ok: #3f7a45;
+  --chrome-bad: #a03328;
+  --chrome-warn: #b4622a;
+  --chrome-ui-font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI Variable Text",
+             "Segoe UI", Inter, system-ui, "Helvetica Neue", Arial, sans-serif;
+
+  /* warmth: the library/settings can warm the paper the same way the reader
+     does, so these warm-endpoint colours are shared */
+  --chrome-paper-warm: #f4e6cb;
+  --chrome-ink-warm: #2a2016;
+
+  /* the bar's own chrome colours */
+  --bar-ground: #fcfcfb;
+  --bar-ink: #17150f;
+  --bar-dim: #9c988c;
+  --bar-accent: #b3382c;
+  --bar-tab-ink: #4a473f;
+  --bar-title-bg: rgba(252,252,251,.86);
+  --bar-title-bg-solid: rgba(252,252,251,.98);
+  --bar-shadow: rgba(0,0,0,.07);
+
+  /* the bar's traffic lights (Mac only, design/reader/bar.css) */
+  --bar-close: #FF5F57;
+  --bar-close-active: #E0443E;
+  --bar-minimise: #FEBC2E;
+  --bar-minimise-active: #DEA123;
+  --bar-zoom: #28C840;
+  --bar-zoom-active: #1AAD2B;
+  --bar-dot-off: #D6D6D6;
+  --bar-dot-off-active: #BEBEBE;
+
+  /* pbar: the phone bottom bar (design/reader/pbar.css) */
+  --pbar-fg: #0b0b0b;
+  --pbar-bg: #fcfcfb;
+  --pbar-border: #e4e3e0;
+  --pbar-dim: #7a776d;
+  --pbar-mic: #e0603a;
+
+  /* listen (design/reader/listen.css) */
+  --listen-ink: #17150f;
+  --listen-ground: #fbfaf7;
+  --listen-dim: #7a776d;
+  --listen-rule: #dedcd4;
+
+  /* chrome.css: the separator rules */
+  --chrome-sep: rgba(11, 11, 11, 0.15);
+  --chrome-sep-fg: #0b0b0b;
+  --chrome-sep-strong: rgba(11, 11, 11, 0.30);
+
+  /* scrub colours (design/reader/scrub.css) */
+  --scrub-accent: #0a84ff;
+  --scrub-track: #d9d6d0;
+  --scrub-thumb: #ffffff;
+
+  /* marginalia speaker colours (design/reader/marginalia.css) */
+  --mg-green: #4a8f3c;
+  --mg-gold: #d8b431;
+  --mg-red: #c0453a;
+  --mg-pink: #c9558f;
+
+  /* wordview colours (design/reader/wordview.css) */
+  --wv-accent: #c02c46;
+  --wv-accent-light: #e0526a;
+
+  /* surface colours (design/reader/surface.css) */
+  --sf-ok: #3f7a4a;
+  --sf-warn: #a8532a;
+  --sf-hover-light: rgba(127,127,127,.07);
+  --sf-hover-mid: rgba(127,127,127,.10);
+  --sf-hover-strong: rgba(127,127,127,.12);
+  --sf-scrim-light: rgba(0,0,0,.28);
+  --sf-scrim-faint: rgba(0,0,0,.10);
+  --sf-muted: #888;
+
+  /* page (design/reader/page.css) */
+  --page-muted: #999;
+
+  /* lanes strip (bar/lanes.css) */
+  --lane-default: #8c2f2f;
+  --lane-failed: #b3382c;
+  --lane-stripe-light: rgba(255, 255, 255, .45);
+  --lane-bg: rgba(128, 128, 128, .16);
+
+  /* shadow tokens: the shadows that appear across surfaces */
+  --shadow-light: rgba(0,0,0,.06);
+  --shadow-sm: rgba(0,0,0,.07);
+  --shadow-md: rgba(0,0,0,.14);
+  --shadow-lg: rgba(0,0,0,.25);
+  --shadow-xl: rgba(0,0,0,.3);
+  --shadow-xxl: rgba(0,0,0,.35);
+  --shadow-bench: rgba(0,0,0,.10);
+
+  /* askbar-specific tokens */
+  --ask-bg: var(--bar-ground);
+  --ask-ink: var(--bar-ink);
+  --ask-dim: var(--bar-dim);
+  --ask-accent: var(--bar-accent);
+  --ask-border: rgba(0, 0, 0, .09);
+  --ask-shadow-lg: rgba(0, 0, 0, .17);
+  --ask-shadow-sm: rgba(0, 0, 0, .07);
+  --ask-hover: rgba(128, 128, 128, .16);
+  --ask-rule: rgba(128, 128, 128, .18);
+  --ask-control-border: rgba(128, 128, 128, .3);
+  --ask-track-bg: rgba(128, 128, 128, .25);
+  --ask-band-bg: rgba(128, 128, 128, .18);
+  --ask-match-bg: rgba(40, 140, 70, .18);
+  --ask-nomatch-bg: rgba(179, 56, 44, .18);
+  --ask-nomatch-fg: #b3382c;
+
+  /* askbar dark */
+  --ask-dark-bad: #e0736a;
+  --ask-dark-bg: #17171a;
+  --ask-dark-fg: #e8e7e6;
+  --ask-dark-border: #2a2a2e;
+  --ask-dark-shadow-lg: rgba(0, 0, 0, .5);
+  --ask-dark-shadow-sm: rgba(0, 0, 0, .35);
+  --ask-dark-control-bg: rgba(255,255,255,.05);
+  --ask-dark-control-border: #33333a;
+
+  /* cursor highlight */
+  --cursor-bg: rgba(168, 82, 42, var(--wt-a, .18));
+
+  /* cover pairings: 20 paper/ink pairs for the library covers */
+  --cov-p1-paper: #efe7d6;  --cov-p1-ink: #2a2521;
+  --cov-p2-paper: #2f3a45;  --cov-p2-ink: #e9e4d8;
+  --cov-p3-paper: #7b2d26;  --cov-p3-ink: #f2e8dc;
+  --cov-p4-paper: #4f6152;  --cov-p4-ink: #eef0e6;
+  --cov-p5-paper: #c9a44a;  --cov-p5-ink: #2b2418;
+  --cov-p6-paper: #1e1e1c;  --cov-p6-ink: #e6e1d6;
+  --cov-p7-paper: #243f6b;  --cov-p7-ink: #e9ecf3;
+  --cov-p8-paper: #5a3557;  --cov-p8-ink: #f1e8f0;
+  --cov-p9-paper: #b84a3a;  --cov-p9-ink: #fbeee6;
+  --cov-p10-paper: #2f5d5a; --cov-p10-ink: #e6f0ee;
+  --cov-p11-paper: #8a6f3c; --cov-p11-ink: #f6efe0;
+  --cov-p12-paper: #d9c7a3; --cov-p12-ink: #2b2418;
+  --cov-p13-paper: #3b3b6b; --cov-p13-ink: #ecebf5;
+  --cov-p14-paper: #6b7b3b; --cov-p14-ink: #f1f3e4;
+  --cov-p15-paper: #a3564e; --cov-p15-ink: #f7ebe8;
+  --cov-p16-paper: #1f3a2e; --cov-p16-ink: #e4efe8;
+  --cov-p17-paper: #e3d5c0; --cov-p17-ink: #3a2f24;
+  --cov-p18-paper: #4a4a4a; --cov-p18-ink: #f0ede8;
+  --cov-p19-paper: #c76b3b; --cov-p19-ink: #fdf1e6;
+  --cov-p20-paper: #6a5a8c; --cov-p20-ink: #f1eef7;
+
   /* --- the UI furniture, and it is spent by every surface ---------------- */
   /* 14 Sep, fix lane 96. 92's LIST 2: 53 distinct px/ms literals across 13
      reader stylesheets against 16 tokens, and marginalia.css the worst ratio
@@ -125,11 +285,29 @@ html[data-theme="dark"], html[data-dark]{
   --ground: hsl(calc(240 - var(--warm) * 10.667) calc(7.3% + var(--warm) * 1.8%) calc(8.04% + var(--warm) * 0.28%));
   --ink:    hsl(30 calc(4.17% + var(--warm) * 2.2%) calc(90.59% - var(--warm) * 0.25%));
   --dim:#8c8a83; --rule:#2e2e33;
+
+  /* chrome dark */
+  --chrome-bg: #131316; --chrome-fg: #e8e7e6; --chrome-fg-dim: #98979b;
+  --chrome-accent: #c9c4bb; --chrome-border: #2c2c32; --chrome-panel-bg: #1a1a1f;
+  --chrome-link: #c9c4bb; --chrome-control-bg: #1a1a1f;
+  --chrome-ok: #7fc08a; --chrome-bad: #d98a7a;
+  --chrome-paper-warm: #1b1610; --chrome-ink-warm: #efe6d5;
+  --ask-dark-bad: #e0736a;
+  --ask-dark-bg: #17171a; --ask-dark-fg: #e8e7e6; --ask-dark-border: #2a2a2e;
 }
 @media (prefers-color-scheme: dark){
   html:not([data-theme="light"]){
     --ground: hsl(calc(240 - var(--warm) * 10.667) calc(7.3% + var(--warm) * 1.8%) calc(8.04% + var(--warm) * 0.28%));
     --ink:    hsl(30 calc(4.17% + var(--warm) * 2.2%) calc(90.59% - var(--warm) * 0.25%));
     --dim:#8c8a83; --rule:#2e2e33;
+
+    /* chrome dark */
+    --chrome-bg: #131316; --chrome-fg: #e8e7e6; --chrome-fg-dim: #98979b;
+    --chrome-accent: #c9c4bb; --chrome-border: #2c2c32; --chrome-panel-bg: #1a1a1f;
+    --chrome-link: #c9c4bb; --chrome-control-bg: #1a1a1f;
+    --chrome-ok: #7fc08a; --chrome-bad: #d98a7a;
+    --chrome-paper-warm: #1b1610; --chrome-ink-warm: #efe6d5;
+    --ask-dark-bad: #e0736a;
+    --ask-dark-bg: #17171a; --ask-dark-fg: #e8e7e6; --ask-dark-border: #2a2a2e;
   }
 }

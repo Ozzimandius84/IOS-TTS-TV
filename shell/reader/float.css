@@ -1,122 +1,66 @@
-/* THE FLOAT'S CARD — and it is four rules, because everything that makes it
-   look like the reader is already somewhere else.
+/* THE FLOAT — FLOAT.md §8 + §9 (Osca, 24–25 Sep)
+   §8: "the float should ONLY be one word, and ONLY the word, NOT the box.
+    NO box, JUST one word."
+   §9: "The float, essentially, is a HUD." Click-through, never focused,
+   above everything on every Space, ⌥-drag to move.
 
-   design/reader/FLOAT.md §3. The word is `wordview.css`'s `.wordview-word`
-   (its type, its red pivot letter, its "no box, no highlight, nothing moves"),
-   the caption is `wordpane.css`'s `.wordsub` UNCHANGED -- same `--sub-w`,
-   `--sub-lines`, `--sub-size`, so the sentence around the word reads in the
-   float exactly as it reads in the one-word view, and a quiet answer lands at
-   the same rect (QUIET.md §4). ONE ELEMENT, EVERY SURFACE. What is left for
-   this file is the CARD, the STRIP and the ✕ — the three things a float has
-   and a reading page does not.
+   The float is the word, painted, on nothing:
+     - No card: no background, no border, no border-radius, no box-shadow.
+     - No second line: no caption / .wordsub.
+     - No chrome: no ✕, no capsule, no strip.
+     - Size is the word's: fit-content of one <span>, padding 0.
+     - No -webkit-app-region (⌥-drag via start_dragging, not CSS drag).
+     - Long words scale down to fit a max of 40 ch.
 
-   THE DIAL IS `--float-em` AND THE WINDOW IS SIZED FROM IT, not the other way
-   round (`desktop/src-tauri/src/floatwin.rs::panel_size`, the same three
-   numbers):
-
-     --float-em   the word's em, default 40px
-     16ch at that em is the measure — the corpus's p99.9 word, 3,729 chapters
-     and 5,210,789 words, so 99.9% of the book fits at full size
-     width  = 16ch + 2 × 16px gutter   (320px at the default)
-     height = 3.3 × --float-em         (132px)
-
-   A LONGER WORD IS NEVER SHRUNK. `reader/book-nav.js`'s WORD block, 10 Sep:
-   *"there IS no variation in height, of words, only length, in the one word
-   view"* — `fill`/`fillH` were deleted because fitting each word to its frame
-   made height a function of word LENGTH. The float inherits the rule and not
-   the number: the 0.1% too long are tracked in by one step and then
-   ellipsised, and the type size never moves. */
+   The window is transparent (Tauri: transparent:true, decorations:false,
+   shadow:false). ignore_cursor_events(true) by default; the word span
+   toggles it on mouse-enter/leave (floatwin.rs host_float_cursor). */
 :root{
   --float-em:40px;
-  --float-gutter:16px;
-  /* how long the strip stands after a press, re-armed by any other */
-  --float-hold:4000;
 }
 
-html, body{ height:100%; }
-body{
-  margin:0; overflow:hidden;
-  background:var(--ground); color:var(--ink);
-  font-family:var(--ui);
-  /* THE WHOLE CARD DRAGS; there is no title bar to grab. The strip's buttons
-     and the ✕ take it back below — and that is why they are real elements and
-     not a canvas (FLOAT.md §3, "The drag"). */
-  -webkit-app-region:drag;
-  -webkit-user-select:none; user-select:none;
+html, body{
+  height:100%;
+  margin:0;
+  overflow:hidden;
+  background:transparent;
+  -webkit-user-select:none;
+  user-select:none;
   cursor:default;
 }
-.floatcard{
-  position:fixed; inset:0;
-  border-radius:14px;
-  border:1px solid var(--rule);
-  box-sizing:border-box;
-  overflow:hidden;
+
+/* THE CARD — fit-content of the word, nothing else. No background, no
+   border, no border-radius, no box-shadow, no --ground fill. */
+#card{
+  display:inline-flex;
+  padding:0;
+  background:transparent;
+  border:none;
+  border-radius:0;
+  box-shadow:none;
 }
 
-/* THE WORD. `.wordview` is fixed to the viewport at inset:0 and the viewport
-   here IS the card, so the view needs nothing said to it but the gutter the
-   measure is quoted with. */
-.floatcard .wordview{ z-index:1; }
-.floatcard .wordview-word{
-  /* CENTRED, and this is the one place the float differs from the one-word
-     view on purpose: that view places the word by its PIVOT column so the red
-     letter stands still across a whole chapter (wordview.js measures every
-     word). At 320px there is no column to stand on — a pivot at 42% of 288px
-     puts a seven-letter word off the left edge — so the float centres and the
-     red letter travels. Said here rather than left to look like an oversight. */
-  position:absolute; left:var(--float-gutter); right:var(--float-gutter);
-  top:0; height:calc(2.1 * var(--float-em));
-  display:flex; align-items:center; justify-content:center;
+/* THE WORD — one <span>, the reader's display size, centred in the window.
+   Long words (> 40 ch) scale down with a CSS clamp so no word overflows
+   without shrinking the dial for every other word. The type is the
+   reader's own serif at --float-em; no wordview.css, no wordpane.css —
+   the word here is one element and nothing else. */
+#word{
+  display:inline-block;
+  font-family:var(--serif);
+  font-weight:normal;
+  line-height:1;
   font-size:var(--float-em);
-  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  color:var(--ink);
+  white-space:nowrap;
+  padding:0;
+  max-width:40ch;
+  overflow:hidden;
+  text-overflow:ellipsis;
 }
+
 /* THE ONE STEP OF TRACKING, and then the ellipsis. Never a smaller type. */
-.floatcard .wordview-word[data-long="1"]{ letter-spacing:-.03em; }
+#word[data-long="1"]{ letter-spacing:-.03em; }
 
-/* THE CAPTION keeps `wordpane.css` whole and is only told where the bottom of
-   a 132px card is; `--sub-bottom`'s 4.5vh would be six pixels. */
-.floatcard .wordsub{
-  --sub-bottom:10px;
-  --sub-size:11px;
-  --sub-w:46ch;
-  opacity:1;
-}
-
-/* THE STRIP, over the caption, for `--float-hold` after a tap on the word.
-   Four questions above, three transport below — QUIET.md's ring drawn instead
-   of flicked, and the transport under it because on a float there is no
-   transport to be a copy of. */
-.floatstrip{
-  position:absolute; left:0; right:0; bottom:0;
-  z-index:20;
-  display:flex; flex-direction:column; align-items:center; gap:2px;
-  padding:4px 0 6px;
-  background:var(--ground);
-  border-top:1px solid var(--rule);
-  -webkit-app-region:no-drag;
-}
-.floatstrip[hidden]{ display:none; }
-.floatrow{ display:flex; align-items:center; justify-content:center; gap:2px; }
-.floatb{
-  -webkit-app-region:no-drag;
-  border:0; background:none; padding:2px 7px;
-  font:11px/1.5 var(--ui); color:var(--ink); opacity:.75;
-  border-radius:7px; cursor:default;
-}
-.floatb:hover{ opacity:1; background:var(--rule); }
-.floatb svg{ display:block; width:16px; height:16px; }
-.floatrow.transport .floatb{ padding:2px 6px; }
-
-/* DISMISS. The card's own ✕, top right, revealed with the strip and on hover.
-   It closes the WINDOW and does not stop the audio — Osca's *"tap outside
-   leaves it playing"* is about focus; dismissing is about the window. What
-   stops the audio is the transport, in the float or in the reader. */
-.floatx{
-  position:absolute; top:4px; right:6px; z-index:30;
-  -webkit-app-region:no-drag;
-  border:0; background:none; padding:2px 5px;
-  font:13px/1 var(--ui); color:var(--dim); cursor:default;
-  opacity:0; transition:opacity .14s ease;
-}
-.floatcard:hover .floatx, .floatx[data-shown="on"]{ opacity:.8; }
-.floatx:hover{ opacity:1; color:var(--ink); }
+/* THE RED LETTER — same pivot token as wordview.css, same colour. */
+#word .pv{ color:var(--pivot); }

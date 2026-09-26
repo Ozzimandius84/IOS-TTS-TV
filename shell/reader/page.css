@@ -190,16 +190,129 @@ html[data-phone] .column h2{
    never mounts a Scrub (bench-typo.html, probe.html) therefore lands on the
    same number the app does rather than on a stale literal.
 
-   THE CEILING AND THE PROPORTION DID NOT MOVE. `--gutter-pc` is still the one
-   a slider writes and still 7.5%; at 1440 it is 108 and `--measure`'s 865
-   bites first, so the Mac's column is untouched by all of this -- as measured
-   below in this lane's report. */
+   THE GUTTER IS A PROPORTION OF THE MEASURE, NOT THE VIEWPORT (F3, 25 Sep).
+   `--gutter-pc` was a CSS percentage that resolved against the containing
+   block (the viewport) when used directly in `clamp()`. At 1440 it was 108px,
+   but `--measure`'s 865 bites inside `min()` first, so the slider never
+   moved the column -- W865 at every stop 0..14%. Now `--gutter-pc` is turned
+   into a unitless number and multiplied by `--measure / 100`:
+   7.5% × 865 = 64.875px, subtracted in the `width` rule. 5% and 14% produce
+   visibly different columns at 1440 AND at 402. The variable stays a CSS
+   percentage so prefs/prefs.js can keep writing `--gutter-pc: 9%` and the
+   value flows through unchanged.
+
+   NO `/ 100%` ANYWHERE (F3b, 25 Sep). The original `calc(--gutter-pc / 100%
+   * --measure)` divides a <percentage> by 100%, which Blink silently accepts
+   and WebKit (the app's actual engine, WKWebView) REJECTS -- the declaration
+   is invalid, --gutter falls back, and the column is 201.8 px at every stop.
+   `--gutter-n` is the unitless twin of `--gutter-pc` (7.5 beside 7.5%);
+   page.css spends the unitless one in calc.
+
+   NO TRIG, NO UNIT-STRIPPING IN CSS (F3c, 25 Sep). F3b derived `--gutter-n`
+   from `--gutter-pc` via `tan(atan2(var(--gutter-pc), 1%))`. That evaluates
+   correctly in Playwright WebKit 26.6 but returns 0 in the app's own
+   WKWebView (Frank.app 0.2.0), so --gutter clamps to its 43 px floor and
+   the column is 779 px at every stop. Third gutter fix; this one uses
+   NOTHING newer than calc(). `--gutter-n` defaults to 7.5 here, and every
+   writer (prefs.js, bench-typo.html) writes BOTH `--gutter-pc` AND
+   `--gutter-n` from the one stop. Every consumer that reads `--gutter-pc`
+   keeps working.
+
+   The floor (`--gutter-min`) is unchanged: the rail's band + one breath,
+   in px. It now lives in `max-width` (the phone's own cap, percentage-based
+   so the zoom argument still holds) rather than inside the same `clamp` as
+   the fraction. The ceiling is 40% of the measure. */
 :root{ --gutter-breath:20px;
        --gutter-min: calc(var(--sc-band, 23px) + var(--gutter-breath));
-       --gutter-pc:7.5%; --gutter-max:3.25rem;
-       --gutter: clamp(var(--gutter-min), var(--gutter-pc), var(--gutter-max)); }
-.chapter{ width:min(var(--w, var(--measure)), var(--measure));
-          max-width:calc(100% - var(--gutter) * 2);
+       --gutter-pc:7.5%; --gutter-n:7.5; --gutter-max-frac:0.4;
+       --gutter: clamp(var(--gutter-min), calc(var(--gutter-n) / 100 * var(--measure)), calc(var(--measure) * var(--gutter-max-frac))); }
+
+/* ====================== PER-BLOCK GUTTER RULES (J1) ========================
+   R3: "the setting is one proportion; the reader turns it into a per-BLOCK
+   rule." R4: "shape is per block, decided by the parser."
+
+   `--gutter-pc` is the one number a slider writes. Each block kind derives
+   its OWN indent and measure from that proportion, so verse is narrower than
+   prose, speech is wider, a quote is indented, and a note sits further in --
+   all moving together when the user drags the gutter.
+
+   The multipliers are tuned to the six shape books of D6 on bench-typo.html;
+   a block that carries no data-kind falls through to the chapter's own
+   `--gutter` (the prose default), which is the rule that stood here before
+   J1 and has not changed.
+
+   VERSE gets a tighter gutter (0.7x), so a line whose right edge the poet
+   chose is not pushed further in than the prose it sits beside.
+   SPEECH (data-role=speech on the .unit) opens wider (0.85x) — a play is
+   a column of speech with names beside it, and the text should breathe.
+   SPEAKER cue keeps its own margin (page.css .sp rule), no gutter change.
+   DIRECTION sits in further (1.2x) — the italic stage direction is an aside.
+   QUOTE indents (1.3x) — a quoted passage sits inside the prose margin.
+   NOTE sits furthest in (1.6x) — a note is a footnote, not running text.
+   BODY (prose) stays at 1x — the chapter's own `--gutter`.
+
+   SPECIFICITY (F3, 25 Sep): verse inside speech takes the VERSE multiplier,
+   not speech's. A speech turn that contains verse lines (`data-role="speaker"`
+   wrapping `data-kind="verse"`) should set the verse's own tighter proportion,
+   because a poet's line is a poet's line wherever the play puts it. The verse
+   rule uses a higher-specificity selector (both attributes) to win over
+   speech's own rule below it. */
+.chapter [data-kind="verse"]{ --gutter-n-block: calc(var(--gutter-n) * 0.7); }
+.chapter [data-role="speaker"] .sp,
+.chapter [data-role="speaker"] p.line{ --gutter-n-block: calc(var(--gutter-n) * 0.85); }
+.chapter [data-role="speaker"] p.line[data-kind="verse"]{ --gutter-n-block: calc(var(--gutter-n) * 0.7); }
+.chapter [data-role="direction"]{ --gutter-n-block: calc(var(--gutter-n) * 1.2); }
+.chapter [data-kind="quote"]{ --gutter-n-block: calc(var(--gutter-n) * 1.3); }
+.chapter [data-kind="note"]{ --gutter-n-block: calc(var(--gutter-n) * 1.6); }
+/* blocks with their own gutter apply it as extra padding; the chapter's
+   width rule still governs the outer column, and the per-block rule adjusts
+   the TEXT within that column rather than moving the column itself — so the
+   axis stays centred and every kind's adjustment is relative to the user's
+   chosen proportion. The padding is `--gutter-n-block / 100 × --measure`,
+   same arithmetic as the chapter's own gutter (F3b: no `/ 100%` anywhere —
+   percentage division is rejected by WebKit). */
+.chapter [data-kind="verse"],
+.chapter [data-kind="quote"],
+.chapter [data-kind="note"],
+.chapter [data-role="direction"]{ padding-inline: calc(var(--gutter-n-block, 0) / 100 * var(--measure)); }
+.chapter [data-role="speaker"] p.line{ padding-inline: calc(var(--gutter-n-block, 0) / 100 * var(--measure)); }
+
+/* =================== PAGE MARKERS (J2p, 25 Sep 2026) =====================
+   A `<mark class="pg">` is emitted by page.js at every page boundary the
+   bake decided.  It sits in the left margin, outside the text column,
+   styled to look like a printed book's marginal page number: small, grey,
+   unobtrusive.  It is NOT part of the word index and does not affect the
+   text flow or selection.
+
+   `mark.pg` is a direct child of `section.chapter`, outside any `.unit`,
+   because a unit's own padding would push it into the text.  `position:
+   absolute` takes it out of flow entirely; the chapter's `position:relative`
+   is its containing block.  Left of the text, vertically at its own place
+   in the document — `position:relative` would work too, but `mark.pg` is
+   already outside the flow (it is between units), so `relative` would leave
+   a gap.  We use a lightweight approach: the mark is `display:block` and
+   sits in the normal flow between units, with negative left margin to push
+   it into the gutter. */
+mark.pg{
+  display:block; position:relative;
+  /* Sit in the left gutter, aligned with the text's left edge */
+  width:0; height:0; overflow:visible;
+  font-size:0.65rem; line-height:1; color:var(--c-dim, #999);
+  pointer-events:none; user-select:none; -webkit-user-select:none;
+  text-align:right; white-space:nowrap;
+  /* Pull the number into the left margin */
+  margin-left: calc(-1 * var(--gutter) - 0.3rem);
+  margin-top: -0.1em; margin-bottom: 0;
+  /* The number itself sits as a pseudo-positioned child of this zero-sized box */
+}
+/* On narrow screens the gutter is too small for a marginal number;
+   hide them below the phone breakpoint (the rail's own threshold). */
+@media (max-width: 600px){ mark.pg{ display:none; } }
+/* In the zoom the mark must not interfere with the zoomed layout */
+.column.zoomed mark.pg{ display:none; }
+
+.chapter{ width:min(var(--w, var(--measure)), calc(var(--measure) - var(--gutter) * 2));
+          max-width:calc(100% - var(--gutter-min) * 2);
           margin-inline:auto; position:relative;
           padding-bottom:22vh; }
 

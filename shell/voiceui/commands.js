@@ -205,12 +205,13 @@ function parse(text, { bookLangs = [] } = {}) {
 }
 
 // ------------------------------------------------------- the templates
-// Three answer languages. `T(lang)` picks the table by the language the
-// person asked in (the recogniser's, which is the book's); anything else
-// answers in English. Every template is ONE sentence, spoken and written.
+// Seven answer languages (en fr de la el es it). `T(lang)` picks the table by
+// the language the person asked in (the recogniser's, which is the book's);
+// `grc` answers in the `el` table; anything else answers in English. Every template is ONE sentence, spoken and written.
 const T = {
   en: {
     switched: (name) => `Now in ${name}.`,
+    switchedNear: (name) => `Now in ${name}, at the nearest paired sentence.`,
     alreadyIn: (name) => `You are already in ${name}.`,
     noOther: () => "This book has only one language.",
     noPair: (name) => `There is no ${name} paired with this passage.`,
@@ -239,6 +240,7 @@ const T = {
   },
   fr: {
     switched: (name) => `Maintenant en ${name}.`,
+    switchedNear: (name) => `Maintenant en ${name}, à la phrase appariée la plus proche.`,
     alreadyIn: (name) => `Vous êtes déjà en ${name}.`,
     noOther: () => "Ce livre n'a qu'une seule langue.",
     noPair: (name) => `Il n'y a pas de ${name} apparié à ce passage.`,
@@ -267,6 +269,7 @@ const T = {
   },
   de: {
     switched: (name) => `Jetzt auf ${name}.`,
+    switchedNear: (name) => `Jetzt auf ${name}, beim nächsten gepaarten Satz.`,
     alreadyIn: (name) => `Sie sind schon auf ${name}.`,
     noOther: () => "Dieses Buch hat nur eine Sprache.",
     noPair: (name) => `Zu dieser Stelle gibt es kein ${name}.`,
@@ -293,10 +296,131 @@ const T = {
     words: (n) => `${n.toLocaleString("de")} Wörter`,
     langName: { en: "Englisch", fr: "Französisch", de: "Deutsch", la: "Latein", grc: "Altgriechisch", el: "Griechisch", sa: "Sanskrit", zh: "Chinesisch", it: "Italienisch", es: "Spanisch" },
   },
+  // THE SHELF'S OTHER LANGUAGES (wave 8, 26 Sep: "templates beyond
+  // en/fr/de"). books/index.json counts la ×4 and el ×1 today; es and it
+  // are the two the voice picker names next. Latin answers a Latin book in
+  // Latin because the assistant IS the book (chat 106); numerals stay
+  // Arabic. `grc` (Homer's Greek) answers in modern Greek, the recogniser's.
+  la: {
+    switched: (name) => `Nunc ${name}.`,
+    switchedNear: (name) => `Nunc ${name}, proxima sententia.`,
+    alreadyIn: (name) => `Iam ${name} legis.`,
+    noOther: () => "Hic liber unam tantum linguam habet.",
+    noPair: (name) => `Nihil ${name} huic loco iunctum est.`,
+    cannotMove: (name) => `Nondum ${name} in hoc libro transire possum.`,
+    noPosition: () => "Nihil adhuc sonat.",
+    pace: (wpm) => `${wpm} verba in minuto.`,
+    paceFloor: (wpm) => `Iam lentissime, ${wpm} verba in minuto.`,
+    paceCeiling: (wpm) => `Iam celerrime, ${wpm} verba in minuto.`,
+    noPace: () => "Hic liber celeritatem mutandam non habet.",
+    noGrammar: (w) => `Grammaticam verbi ${w} non habeo.`,
+    grammarOff: () => "Hic liber tabulam grammaticam non habet.",
+    noWord: () => "Nescio quo in verbo sis.",
+    about1: (title, author) => (author ? `${title}, auctore ${author}.` : `${title}; tabula auctorem non nominat.`),
+    aboutWhen: (when) => (when ? `Anno ${when} datum.` : "Nescio quando scriptum sit."),
+    aboutWhat: (parts) => parts.join(", ") + ".",
+    aboutSubjects: (subs) => `Sub his positum: ${subs.join("; ")}.`,
+    aboutCast: (names) => `Inter loquentes sunt ${names.join(", ")}.`,
+    noAbout: () => "Nullam tabulam huius libri habeo.",
+    where: (n, N, title, far) => `Caput ${n} ex ${N}${title ? ", " + title : ""}${far ? ", " + far : ""}.`,
+    far: (f) => (f < 0.08 ? "in initio" : f < 0.3 ? "circa quartam partem" : f < 0.42 ? "circa tertiam partem" : f < 0.58 ? "circa medium" : f < 0.72 ? "circa duas tertias" : f < 0.92 ? "prope finem" : "in fine"),
+    form: { verse: "versus", prose: "prosa", drama: "fabula", fragments: "fragmenta", letters: "epistulae", dialogue: "dialogus" },
+    inLang: (name) => `${name}`,
+    chapters: (n) => `${n} ${n === 1 ? "caput" : "capita"}`,
+    words: (n) => `${n.toLocaleString("en")} verba`,
+    langName: { en: "Anglice", fr: "Gallice", de: "Germanice", la: "Latine", grc: "Graece antique", el: "Graece", sa: "Sanscritice", zh: "Sinice", it: "Italice", es: "Hispanice" },
+  },
+  el: {
+    switched: (name) => `Τώρα στα ${name}.`,
+    switchedNear: (name) => `Τώρα στα ${name}, στην πλησιέστερη πρόταση.`,
+    alreadyIn: (name) => `Είστε ήδη στα ${name}.`,
+    noOther: () => "Αυτό το βιβλίο έχει μόνο μία γλώσσα.",
+    noPair: (name) => `Δεν υπάρχουν ${name} αντιστοιχισμένα με αυτό το χωρίο.`,
+    cannotMove: (name) => `Δεν μπορώ ακόμη να περάσω στα ${name} σε αυτό το βιβλίο.`,
+    noPosition: () => "Δεν παίζει τίποτα ακόμη.",
+    pace: (wpm) => `${wpm} λέξεις το λεπτό.`,
+    paceFloor: (wpm) => `Ήδη στο πιο αργό, ${wpm} λέξεις το λεπτό.`,
+    paceCeiling: (wpm) => `Ήδη στο πιο γρήγορο, ${wpm} λέξεις το λεπτό.`,
+    noPace: () => "Αυτό το βιβλίο δεν έχει ρυθμό για αλλαγή.",
+    noGrammar: (w) => `Δεν έχω γραμματική για το ${w}.`,
+    grammarOff: () => "Αυτό το βιβλίο δεν έχει αρχείο γραμματικής.",
+    noWord: () => "Δεν ξέρω σε ποια λέξη βρίσκεστε.",
+    about1: (title, author) => (author ? `${title}, του ${author}.` : `${title}· το αρχείο δεν αναφέρει συγγραφέα.`),
+    aboutWhen: (when) => (when ? `Χρονολογείται ${when}.` : "Δεν ξέρω πότε γράφτηκε."),
+    aboutWhat: (parts) => parts.join(", ") + ".",
+    aboutSubjects: (subs) => `Ταξινομείται υπό ${subs.join("· ")}.`,
+    aboutCast: (names) => `Στους ομιλητές είναι οι ${names.join(", ")}.`,
+    noAbout: () => "Δεν έχω αρχείο για αυτό το βιβλίο.",
+    where: (n, N, title, far) => `Κεφάλαιο ${n} από ${N}${title ? ", " + title : ""}${far ? ", " + far : ""}.`,
+    far: (f) => (f < 0.08 ? "στην αρχή" : f < 0.3 ? "περίπου στο ένα τέταρτο" : f < 0.42 ? "περίπου στο ένα τρίτο" : f < 0.58 ? "περίπου στη μέση" : f < 0.72 ? "περίπου στα δύο τρίτα" : f < 0.92 ? "κοντά στο τέλος" : "στο τέλος"),
+    form: { verse: "ποίηση", prose: "πεζογραφία", drama: "θεατρικό έργο", fragments: "αποσπάσματα", letters: "επιστολές", dialogue: "διάλογος" },
+    inLang: (name) => `στα ${name}`,
+    chapters: (n) => `${n} ${n === 1 ? "κεφάλαιο" : "κεφάλαια"}`,
+    words: (n) => `${n.toLocaleString("el")} λέξεις`,
+    langName: { en: "αγγλικά", fr: "γαλλικά", de: "γερμανικά", la: "λατινικά", grc: "αρχαία ελληνικά", el: "ελληνικά", sa: "σανσκριτικά", zh: "κινεζικά", it: "ιταλικά", es: "ισπανικά" },
+  },
+  es: {
+    switched: (name) => `Ahora en ${name}.`,
+    switchedNear: (name) => `Ahora en ${name}, en la frase más cercana.`,
+    alreadyIn: (name) => `Ya está en ${name}.`,
+    noOther: () => "Este libro tiene una sola lengua.",
+    noPair: (name) => `No hay ${name} emparejado con este pasaje.`,
+    cannotMove: (name) => `Todavía no puedo pasar al ${name} en este libro.`,
+    noPosition: () => "Todavía no suena nada.",
+    pace: (wpm) => `${wpm} palabras por minuto.`,
+    paceFloor: (wpm) => `Ya en lo más lento, ${wpm} palabras por minuto.`,
+    paceCeiling: (wpm) => `Ya en lo más rápido, ${wpm} palabras por minuto.`,
+    noPace: () => "Este libro no tiene ritmo que cambiar.",
+    noGrammar: (w) => `No tengo gramática para ${w}.`,
+    grammarOff: () => "Este libro no tiene ficha de gramática.",
+    noWord: () => "No sé en qué palabra está.",
+    about1: (title, author) => (author ? `${title}, de ${author}.` : `${title}; la ficha no nombra autor.`),
+    aboutWhen: (when) => (when ? `Fechado en ${when}.` : "No sé cuándo se escribió."),
+    aboutWhat: (parts) => parts.join(", ") + ".",
+    aboutSubjects: (subs) => `Clasificado bajo ${subs.join("; ")}.`,
+    aboutCast: (names) => `Entre los personajes están ${names.join(", ")}.`,
+    noAbout: () => "No tengo ficha de este libro.",
+    where: (n, N, title, far) => `Capítulo ${n} de ${N}${title ? ", " + title : ""}${far ? ", " + far : ""}.`,
+    far: (f) => (f < 0.08 ? "al principio" : f < 0.3 ? "hacia el primer cuarto" : f < 0.42 ? "hacia el primer tercio" : f < 0.58 ? "hacia la mitad" : f < 0.72 ? "hacia los dos tercios" : f < 0.92 ? "cerca del final" : "al final"),
+    form: { verse: "verso", prose: "prosa", drama: "una obra de teatro", fragments: "fragmentos", letters: "cartas", dialogue: "un diálogo" },
+    inLang: (name) => `en ${name}`,
+    chapters: (n) => `${n} capítulo${n === 1 ? "" : "s"}`,
+    words: (n) => `${n.toLocaleString("es")} palabras`,
+    langName: { en: "inglés", fr: "francés", de: "alemán", la: "latín", grc: "griego antiguo", el: "griego", sa: "sánscrito", zh: "chino", it: "italiano", es: "español" },
+  },
+  it: {
+    switched: (name) => `Ora in ${name}.`,
+    switchedNear: (name) => `Ora in ${name}, alla frase più vicina.`,
+    alreadyIn: (name) => `È già in ${name}.`,
+    noOther: () => "Questo libro ha una sola lingua.",
+    noPair: (name) => `Non c'è ${name} accoppiato a questo passo.`,
+    cannotMove: (name) => `Non posso ancora passare al ${name} in questo libro.`,
+    noPosition: () => "Non suona ancora nulla.",
+    pace: (wpm) => `${wpm} parole al minuto.`,
+    paceFloor: (wpm) => `Già al più lento, ${wpm} parole al minuto.`,
+    paceCeiling: (wpm) => `Già al più veloce, ${wpm} parole al minuto.`,
+    noPace: () => "Questo libro non ha un ritmo da cambiare.",
+    noGrammar: (w) => `Non ho grammatica per ${w}.`,
+    grammarOff: () => "Questo libro non ha una scheda di grammatica.",
+    noWord: () => "Non so su quale parola sia.",
+    about1: (title, author) => (author ? `${title}, di ${author}.` : `${title}; la scheda non nomina un autore.`),
+    aboutWhen: (when) => (when ? `Datato ${when}.` : "Non so quando sia stato scritto."),
+    aboutWhat: (parts) => parts.join(", ") + ".",
+    aboutSubjects: (subs) => `Classificato sotto ${subs.join("; ")}.`,
+    aboutCast: (names) => `Tra i personaggi ci sono ${names.join(", ")}.`,
+    noAbout: () => "Non ho una scheda di questo libro.",
+    where: (n, N, title, far) => `Capitolo ${n} di ${N}${title ? ", " + title : ""}${far ? ", " + far : ""}.`,
+    far: (f) => (f < 0.08 ? "all'inizio" : f < 0.3 ? "verso il primo quarto" : f < 0.42 ? "verso il primo terzo" : f < 0.58 ? "verso la metà" : f < 0.72 ? "verso i due terzi" : f < 0.92 ? "vicino alla fine" : "alla fine"),
+    form: { verse: "versi", prose: "prosa", drama: "un dramma", fragments: "frammenti", letters: "lettere", dialogue: "un dialogo" },
+    inLang: (name) => `in ${name}`,
+    chapters: (n) => `${n} capitol${n === 1 ? "o" : "i"}`,
+    words: (n) => `${n.toLocaleString("it")} parole`,
+    langName: { en: "inglese", fr: "francese", de: "tedesco", la: "latino", grc: "greco antico", el: "greco", sa: "sanscrito", zh: "cinese", it: "italiano", es: "spagnolo" },
+  },
 };
 function tableFor(lang) {
   const l = String(lang || "en").toLowerCase().split(/[-_]/)[0];
-  return T[l] || T.en;
+  return T[l] || (l === "grc" ? T.el : T.en);
 }
 function languageName(code, lang) {
   const t = tableFor(lang);
@@ -463,6 +587,129 @@ function pairedTarget({ stitch, langOf, wordId, wantLang, sentenceWordsOf }) {
   return { paragraphId: other, lang: toLang, fromLang: hereLang, wordId: targetWordId };
 }
 
+// ------------------------------------------------------- switch -> the other BOOK
+// Osca's test (wave 8, 26 Sep): "two books, two separate voice gens, moving
+// between them". Two books on the shelf, each with its own render, paired by
+// `books/<target>/align.json` ({target sentence id: [ground sentence ids]},
+// align/sentences.py). Nothing here is a word alignment: the landing is the
+// aligned SENTENCE's first word, and when the sentence itself was never
+// paired the nearest paired sentence before it in the same chapter stands in
+// (the reader's own nearestIndex rule for a follower pane), and the answer
+// says so (`exact: false`).
+//
+// partnerOf(slug, R) -> {slug, other, alignIn} | null
+//   Who the other book is, from the records alone, cheapest first:
+//   1. `align.sentences.json` beside align.json (sentences.py writes it,
+//      naming target and ground) -- 1 KB;
+//   2. the shelf's own index: a `<a>+<b>` row (a stitched book) names both
+//      halves, and whichever half holds align.json is the target;
+//   3. `align-words.json`'s own `target`/`ground` (200 KB; last).
+//   `alignIn` is the slug whose align.json carries the map.
+async function partnerOf(slug, R) {
+  if (!slug || !R || typeof R.load !== "function") return null;
+  const side = await R.load(slug, "align.sentences.json");
+  if (side && side.target && side.ground) {
+    if (side.target === slug) return { slug, other: side.ground, alignIn: slug, via: "align.sentences.json" };
+    if (side.ground === slug) return { slug, other: side.target, alignIn: side.target, via: "align.sentences.json" };
+  }
+  const rows = typeof R.index === "function" ? await R.index() : null;
+  for (const row of rows || []) {
+    const s = row && row.slug ? String(row.slug) : "";
+    if (s.indexOf("+") < 0) continue;
+    const halves = s.split("+");
+    if (halves.length !== 2 || !halves.includes(slug)) continue;
+    const other = halves[0] === slug ? halves[1] : halves[0];
+    if (await R.load(slug, "align.json")) return { slug, other, alignIn: slug, via: "index.json " + s };
+    if (await R.load(other, "align.json")) return { slug, other, alignIn: other, via: "index.json " + s };
+  }
+  const words = await R.load(slug, "align-words.json");
+  if (words && words.target && words.ground) {
+    if (words.target === slug) return { slug, other: words.ground, alignIn: slug, via: "align-words.json" };
+    if (words.ground === slug) return { slug, other: words.target, alignIn: words.target, via: "align-words.json" };
+  }
+  return null;
+}
+
+// invert {a: [b...]} -> {b: [a...]}, first writer wins the order
+function invertAlign(map) {
+  const out = {};
+  for (const k of Object.keys(map || {})) {
+    for (const v of (Array.isArray(map[k]) ? map[k] : [map[k]])) {
+      if (!v) continue;
+      (out[v] = out[v] || []).push(k);
+    }
+  }
+  return out;
+}
+
+// alignedIn(map, sid) -> {id, exact, via} | null
+//   the sentence `sid` maps to; a miss takes the nearest key BEFORE it in
+//   the same chapter (ids are zero-padded, so string order is reading
+//   order), else the nearest after; null when the chapter has no key at all
+function alignedIn(map, sid) {
+  if (!map || !sid) return null;
+  if (Array.isArray(map[sid]) && map[sid].length) return { id: map[sid][0], exact: true, via: sid };
+  const cid = String(sid).split(".")[0] + ".";
+  let before = null, after = null;
+  for (const k of Object.keys(map)) {
+    if (k.indexOf(cid) !== 0 || !Array.isArray(map[k]) || !map[k].length) continue;
+    if (k < sid) { if (before === null || k > before) before = k; }
+    else if (after === null || k < after) after = k;
+  }
+  const via = before !== null ? before : after;
+  return via === null ? null : { id: map[via][0], exact: false, via };
+}
+
+// the reader's flat word numbering (reader/listen.js buildMap + book-nav.js
+// buildWordDomIndex): every `p.line` split on whitespace, numbered in chapter
+// order, `p.sp`/`p.dir` skipped. A block of book-data.js is one paragraph
+// (`r` "l" is a line), so the count is taken here without the DOM.
+function wordsOfBlock(t) { return String(t || "").split(/\s+/).filter(Boolean).length; }
+
+// landingOf(sid, bookData, timingsOfChapter) -> {chapterId, ch, wi, note} | null
+//   where the other book's cursor must sit for sentence `sid`: `ch` is the
+//   chapter's index, `wi` the flat index of the sentence's first word --
+//   the words of every line before its paragraph, plus the words of the
+//   earlier sentences in that paragraph (from the book's timings, when it
+//   has them; 0 with a note when it has not)
+function landingOf(sid, data, tim) {
+  const m = /^(c\d+)\.p(\d+)\.s(\d+)$/.exec(String(sid || ""));
+  if (!m || !data || !Array.isArray(data.chapters)) return null;
+  const cid = m[1], p = parseInt(m[2], 10), sn = parseInt(m[3], 10);
+  const ch = data.chapters.findIndex((c) => c && c.id === cid);
+  if (ch < 0) return null;
+  const blocks = Array.isArray(data.chapters[ch].blocks) ? data.chapters[ch].blocks : [];
+  if (p < 1 || p > blocks.length) return null;
+  let wi = 0;
+  for (let i = 0; i < p - 1; i++) if (blocks[i] && blocks[i].r === "l") wi += wordsOfBlock(blocks[i].t);
+  let note = null;
+  if (sn > 1) {
+    const pid = cid + ".p" + m[2] + ".";
+    const earlier = (tim || []).filter((s) => s && String(s.id).indexOf(pid) === 0 && parseInt(String(s.id).split(".s")[1], 10) < sn);
+    if (earlier.length) wi += earlier.reduce((n, s) => n + (Array.isArray(s.words) ? s.words.length : 0), 0);
+    else note = "sentence " + sn + " of its paragraph, no timings to count the earlier ones: landing on the paragraph";
+  }
+  return { chapterId: cid, ch, wi, note, line: blocks[p - 1] && blocks[p - 1].r === "l" };
+}
+
+// pairedBook({slug, sentenceId, wantLang}, R) -> the whole move, planned:
+//   {slug, other, lang, sentenceId, exact, via, landing} | {refused}
+async function pairedBook({ slug, sentenceId, wantLang }, R) {
+  const pair = await partnerOf(slug, R);
+  if (!pair) return { refused: "no pair" };
+  const lang = typeof R.learnLang === "function" ? await R.learnLang(pair.other) : null;
+  if (wantLang && lang && lang !== wantLang) return { refused: "other is " + lang, other: pair.other, lang };
+  const align = await R.load(pair.alignIn, "align.json");
+  if (!align) return { refused: "no align.json in " + pair.alignIn, other: pair.other, lang };
+  const map = pair.alignIn === slug ? align : invertAlign(align);
+  const hit = alignedIn(map, sentenceId);
+  if (!hit) return { refused: "chapter unpaired", other: pair.other, lang, keys: Object.keys(map).length };
+  const [data, tim] = await Promise.all([R.bookData(pair.other), R.timings(hit.id.split(".")[0], pair.other)]);
+  const landing = landingOf(hit.id, data, tim);
+  if (!landing) return { refused: data ? "sentence " + hit.id + " is not in " + pair.other + "'s text" : "no book-data.js for " + pair.other, other: pair.other, lang };
+  return { slug, other: pair.other, lang, sentenceId: hit.id, exact: hit.exact, via: hit.via, pairVia: pair.via, landing, keys: Object.keys(map).length };
+}
+
 // ------------------------------------------------------- execute
 // doors:
 //   lang               the language the person asked in (answers' table)
@@ -476,6 +723,10 @@ function pairedTarget({ stitch, langOf, wordId, wantLang, sentenceWordsOf }) {
 //   paragraphWords(pid)-> [{id,text}] | null   (for the switch proportion)
 //   bookLangs          the languages of the book being read
 //   handleUtterance    the grammar path, for a reader-aligned pair
+//   pair               {open(plan) -> Promise<bool>, wait?} -- the door to
+//                      the OTHER BOOK of a pair (two books, two renders):
+//                      commands plans the move with pairedBook(), the door
+//                      seats the other book's cursor and opens it
 // Every branch returns {type:"answer", text, cmd, ...} -- the medium (spoken
 // or written) is app.js's decision, never this file's.
 async function execute(parsed, doors) {
@@ -522,7 +773,6 @@ async function execute(parsed, doors) {
   if (cmd === "switch") {
     const langs = doors.bookLangs || [];
     const want = parsed.lang || null;
-    if (want && langs.length && !langs.includes(want)) return { type: "answer", cmd, text: t.noPair(languageName(want, lang)), want };
     if (!pos) return { type: "answer", cmd, text: t.noPosition() };
     // a pair the reader itself aligns: the grammar's own pane ops
     const aligned = doors.bridge && typeof doors.bridge.getAlignedSentenceId === "function" && pos.sentenceId
@@ -534,7 +784,28 @@ async function execute(parsed, doors) {
       return Object.assign({ cmd, viaGrammar: toRole, text: t.switched(name) }, r, { type: "answer" });
     }
     const stitch = doors.records && doors.records.stitch ? await doors.records.stitch() : null;
+    // TWO BOOKS, TWO RENDERS: a book that is not stitched but has a partner
+    // on the shelf. The move is planned from the records and made by the
+    // door app.js hands in (the other book's cursor, then the host). It is
+    // asked BEFORE the book's own languages are consulted, because the
+    // partner is another book: "English" on the Latin Eclogues names it.
+    if (!stitch && doors.pair && doors.records && typeof doors.records.slugNow === "function") {
+      const plan = await pairedBook({ slug: doors.records.slugNow(), sentenceId: pos.sentenceId, wantLang: want }, doors.records);
+      if (plan && !plan.refused) {
+        const name = languageName(plan.lang || want || "?", lang);
+        let opened = false;
+        try { opened = !!(await doors.pair.open(plan)); } catch (e) { opened = false; }
+        if (!opened) return { type: "answer", cmd, text: t.cannotMove(name), plan, moved: false };
+        return { type: "answer", cmd, text: plan.exact ? t.switched(name) : t.switchedNear(name), plan, moved: true, book: plan.other };
+      }
+      if (plan && plan.refused && plan.other) {
+        return { type: "answer", cmd, text: t.noPair(languageName(want || plan.lang || "?", lang)), plan, moved: false };
+      }
+    }
+    if (want && langs.length && !langs.includes(want)) return { type: "answer", cmd, text: t.noPair(languageName(want, lang)), want };
     if (!stitch) return { type: "answer", cmd, text: langs.length > 1 ? t.cannotMove(languageName(want || langs.find((l) => l !== pos.lang) || "?", lang)) : t.noOther(), unavailable: ["stitch.json"] };
+    // the halves' languages, learned before langOf (a sync cache) is asked
+    if (typeof doors.records.learnLang === "function") await Promise.all([stitch.a, stitch.b].filter(Boolean).map((h) => doors.records.learnLang(h)));
     const langOf = doors.records.langOf || ((slug) => null);
     const target = pairedTarget({ stitch, langOf, wordId: pos.wordId, wantLang: want, sentenceWordsOf: doors.paragraphWords });
     if (!target) {
@@ -557,5 +828,6 @@ async function execute(parsed, doors) {
 }
 
   return { COMMANDS, PHRASES, LANGUAGE_NAMES, SWITCH_TO, PACES, T, parse, languageCodeOf, languageName, tableFor,
-           grammarEntry, formatGrammar, formatAbout, formatWhere, castOf, stepPace, nearestStop, pairedTarget, execute, fold };
+           grammarEntry, formatGrammar, formatAbout, formatWhere, castOf, stepPace, nearestStop, pairedTarget,
+           partnerOf, invertAlign, alignedIn, landingOf, wordsOfBlock, pairedBook, execute, fold };
 });

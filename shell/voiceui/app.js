@@ -542,7 +542,7 @@ async function runOps(ops, ctx) {
   return { side: currentSide, stoppedAt, aborted: !!ctx.aborted, note };
 }
 
-function createVoiceUI({ bridge, getSentenceWords, getPreviousSentenceId, getDictionaryEntry, synth, schedule, wait, settleMs, dictWaitMs, clarifyRate, startAtSentences, assistant }) {
+function createVoiceUI({ bridge, getSentenceWords, getPreviousSentenceId, getDictionaryEntry, synth, schedule, wait, settleMs, dictWaitMs, clarifyRate, startAtSentences, assistant, cursorPosition }) {
   const detour = new DetourStack();
   let side = "target";
   let inflight = null; // { ctx, promise } for the utterance currently executing
@@ -615,24 +615,41 @@ function createVoiceUI({ bridge, getSentenceWords, getPreviousSentenceId, getDic
   }
 
   async function answerLookup(query, ctx, quiet) {
-    const pos = bridge.getPosition(side);
+    let pos = bridge.getPosition(side);
+    // DEFINE WITHOUT PLAYBACK (wave 8, 26 Sep). 37 of 41 books have no
+    // audio, so the clock's position is null on most of the shelf -- but
+    // the book still has a cursor (K24: the word the reader is on, announced
+    // by `ttstv:cursor`). `cursorPosition` is that cursor with its sentence's
+    // words already read off the chapter map, so nothing here needs the
+    // audio chapter open.
+    let atCursor = null;
+    if (!pos && typeof cursorPosition === "function") {
+      try { atCursor = await cursorPosition(); } catch (e) { atCursor = null; }
+      if (atCursor && atCursor.wordId) pos = atCursor;
+    }
     if (!pos) return { type: "answer", text: "Nothing is playing yet.", quiet: !!quiet };
+    const wordsOf = (id) => {
+      if (atCursor && id === atCursor.sentenceId && Array.isArray(atCursor.words)) return atCursor.words;
+      if (atCursor && id && id === atCursor.prevId && Array.isArray(atCursor.prevWords)) return atCursor.prevWords;
+      return getSentenceWords(side, id) || [];
+    };
+    const prevOf = (id) => (atCursor && id === atCursor.sentenceId ? atCursor.prevId || null : getPreviousSentenceId(side, id));
 
     let wordId = pos.wordId;
     let surfaceText = null;
 
     if (query.word) {
-      const current = getSentenceWords(side, pos.sentenceId) || [];
-      const prevId = getPreviousSentenceId(side, pos.sentenceId);
-      const previous = prevId ? getSentenceWords(side, prevId) || [] : [];
+      const current = wordsOf(pos.sentenceId);
+      const prevId = prevOf(pos.sentenceId);
+      const previous = prevId ? wordsOf(prevId) : [];
       const match = resolve.resolveWord(query.word, current, previous);
       if (!match) return clarify(pos, ctx, quiet);
       wordId = match.id;
       surfaceText = match.text;
     } else {
-      const current = getSentenceWords(side, pos.sentenceId) || [];
+      const current = wordsOf(pos.sentenceId);
       const w = current.find((x) => x.id === wordId);
-      surfaceText = w ? w.text : null;
+      surfaceText = w ? w.text : (atCursor && atCursor.text) || null;
     }
 
     if (!surfaceText) return clarify(pos, ctx, quiet);
@@ -640,7 +657,7 @@ function createVoiceUI({ bridge, getSentenceWords, getPreviousSentenceId, getDic
     const entry = await lookupEntry(side, surfaceText);
     const text = answers.formatAnswer(entry, surfaceText);
     if (!quiet) await sayOut(text);
-    return { type: "answer", text, wordId, word: surfaceText, quiet: !!quiet };
+    return { type: "answer", text, wordId, word: surfaceText, quiet: !!quiet, atCursor: !!atCursor };
   }
 
   // Interrupt whatever segment is still playing from the previous
@@ -803,6 +820,15 @@ const PILL_CSS =
 // names a `reader/` class; it is CSS, not a call, it is scoped to an
 // attribute only this module ever sets, and `reader/` is asked in the module
 // README §6 for a `--sub-hide` door so it can stop being a foreign selector.
+const PROPOSAL_CSS =
+  ".voiceui-proposal{display:flex;flex-wrap:wrap;gap:4px 8px;align-items:center;max-width:46ch;" +
+  "font:11px/1.3 system-ui,sans-serif;opacity:.85}" +
+  ".voiceui-proposal[hidden]{display:none}" +
+  ".voiceui-proposal .voiceui-proposal-text{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:30ch}" +
+  ".voiceui-proposal button{font:inherit;border:0;cursor:pointer;background:transparent;color:inherit;" +
+  "text-decoration:underline;text-underline-offset:2px;padding:0}" +
+  ".voiceui-proposal .voiceui-proposal-why{display:none;flex-basis:100%;margin:0;white-space:pre-wrap;font:inherit;opacity:.8}" +
+  ".voiceui-proposal.open .voiceui-proposal-why{display:block}";
 const SAY_CSS =
   ".voiceui-say{position:fixed;left:50%;transform:translateX(-50%);" +
   "bottom:var(--sub-bottom, 4.5vh);width:min(var(--sub-w, 104ch), 92vw);" +
@@ -1130,6 +1156,7 @@ function boot(opts = {}) {
     {
       trigger: root && root.trigger,
       asr: root && root.asr,
+      sttNative: root && root.sttNative,   // stt-native.js, when the page loaded it
       readerBridge: root && root.readerBridge,
     },
     opts.modules || {}
@@ -1140,6 +1167,7 @@ function boot(opts = {}) {
   if (typeof module === "object" && module.exports) {
     mods.trigger = mods.trigger || require("./trigger");
     mods.asr = mods.asr || require("./asr");
+    mods.sttNative = mods.sttNative || require("./stt-native");
     mods.readerBridge = mods.readerBridge || require("./reader-bridge");
     mods.commands = mods.commands || require("./commands");
     mods.records = mods.records || require("./records");
@@ -1191,12 +1219,50 @@ function boot(opts = {}) {
         }
       : null);
 
+  /* THE NATIVE DOOR FIRST (D-hands, 26 Sep). Inside Frank `window.__TAURI__`
+   * is on the page and stt.rs's four commands stand behind it -- Apple's
+   * on-device recogniser, no network, the shape that works in a tunnel.
+   * `voiceui/stt-native.js` has `asr.createSpeechInput`'s shape, so the only
+   * question at window-open is which one to build; Web Speech stays the
+   * fallback on every page without the bridge (Safari, the phone bundle, a
+   * bench). `opts.native: false` turns the door off (tests use it to pin the
+   * Web Speech road); `opts.native` with the module's shape substitutes a
+   * fake. Its `authorized` is read once, on the first arm (`nativeReady`):
+   * 0 = notDetermined is the ONE time macOS shows its Speech Recognition
+   * dialog, and stt_start refuses until it is answered. */
+  const native = opts.native === false ? null
+    : (opts.native && typeof opts.native === "object") ? opts.native
+    : (mods.sttNative && typeof mods.sttNative.hasTauri === "function" && mods.sttNative.hasTauri(win) ? mods.sttNative : null);
+  let nativeInfo = null;      // the last stt_check answer, for state()/the pill tooltip
+  let nativeAsked = false;    // authorize() pressed this page
+  async function nativeReady() {
+    if (!native) return null;
+    try {
+      nativeInfo = await native.check(win);
+      if (nativeInfo && nativeInfo.authorized === 0 && !nativeAsked) {
+        nativeAsked = true;
+        showLast("macOS is asking for Speech Recognition -- answer the dialog once");
+        nativeInfo = (await native.authorize(win)) || nativeInfo;
+      }
+      if (nativeInfo && nativeInfo.available === false) log("native recogniser unavailable:", nativeInfo);
+      if (nativeInfo && nativeInfo.authorized === 1) showLast("Speech Recognition denied -- System Settings > Privacy & Security > Speech Recognition");
+    } catch (e) { log("stt_check failed:", e); }
+    return nativeInfo;
+  }
+  // One door for the window: the native recogniser when Frank offers it,
+  // Web Speech otherwise. Both answer { start, stop }.
+  function openSpeechInput(handlers) {
+    if (native) return native.createNativeSpeechInput(Object.assign({ win }, handlers));
+    recognizer = recognizerFactory();
+    return mods.asr.createSpeechInput(Object.assign({ recognizer }, handlers));
+  }
+
   // ---- pill (the visible on/off affordance)
   let pill = null, toggleBtn = null, listenBtn = null, pocketBtn = null, lastEl = null;
   if (doc && typeof doc.createElement === "function") {
     if (!opts.noStyle) {
       const style = doc.createElement("style");
-      style.textContent = PILL_CSS;
+      style.textContent = PILL_CSS + PROPOSAL_CSS;
       (doc.head || doc.body).appendChild(style);
     }
     pill = doc.createElement("div");
@@ -1274,6 +1340,19 @@ function boot(opts = {}) {
     getSentenceWords: hooksReady ? (side, id) => control.getSentenceWords(side, id) : () => [],
     getPreviousSentenceId: hooksReady ? (side, id) => control.getPreviousSentenceId(side, id) : () => null,
     getDictionaryEntry: hooksReady ? (side, text) => control.getDictionaryEntry(side, text) : () => null,
+    // the cursor, for a lookup with nothing playing (wave 8); the sentence's
+    // words come off the chapter map, which needs no audio chapter open
+    cursorPosition: async () => {
+      const p = await positionNow();
+      if (!p || !p.wordId) return null;
+      const map = typeof p.chapterIndex === "number" && p.chapterIndex >= 0 ? await chapterMap(p.chapterIndex) : null;
+      const sw = map && map.sentWords && typeof map.sentWords.get === "function" ? map.sentWords : null;
+      const ids = sw ? [...sw.keys()] : [];
+      const i = ids.indexOf(p.sentenceId);
+      return { wordId: p.wordId, sentenceId: p.sentenceId, chapterId: p.chapterId, text: p.text || "",
+               words: sw ? sw.get(p.sentenceId) || null : null,
+               prevId: i > 0 ? ids[i - 1] : null, prevWords: i > 0 && sw ? sw.get(ids[i - 1]) || null : null, atCursor: true };
+    },
   });
   if (!hooksReady) log("boot: ReaderControl lacks", missingHooks.join(", "), "-- spoken dictionary answers are off until reader/ adds them");
 
@@ -1305,13 +1384,14 @@ function boot(opts = {}) {
     slug: opts.slug || (mods.records.slugFromLocation && win && win.location ? mods.records.slugFromLocation(win.location) : null),
     win,
     fetchJson: opts.fetchJson,
+    fetchText: opts.fetchText,
   }) : null);
   let lastCursor = null;   // {chapter, word, text, slug} from ttstv:cursor
   function onCursor(e) {
     const d = e && e.detail;
     if (!d) return;
     lastCursor = { chapter: d.chapter | 0, word: d.word | 0, text: d.text || "", slug: d.slug || null };
-    if (d.slug && records && records.setSlug(d.slug) === d.slug) refreshLangs();
+    if (d.slug && records && records.slugNow() !== d.slug && records.setSlug(d.slug) === d.slug) { refreshLangs(); if (typeof drawProposal === "function") drawProposal().catch(() => null); }
   }
   const cursorTarget = opts.cursorTarget !== undefined ? opts.cursorTarget : doc;
   if (cursorTarget && typeof cursorTarget.addEventListener === "function") cursorTarget.addEventListener("ttstv:cursor", onCursor);
@@ -1387,6 +1467,33 @@ function boot(opts = {}) {
     map.sentWords.forEach((list, sid) => { if (String(sid).startsWith(pid + ".")) for (const w of list) out.push(w); });
     return out.length ? out : null;
   }
+  // THE DOOR TO THE OTHER BOOK (wave 8, 26 Sep -- two books, two renders,
+  // `switch` between them). commands.js plans the move (pairedBook: the
+  // partner off the records, the aligned sentence, its flat word index in the
+  // other book); this door makes it, with what the shell already has and
+  // nothing new: the other book's OWN reader memory (`wordcursor:<slug>`,
+  // K24 -- book-nav.js loadCursor reads it on open), then the host's
+  // openReader (a new tab in Frank) or the page's own `#book=` hash (the
+  // hashchange opens a book in place). cursor.js coalesces wordcursor writes
+  // at a 500 ms floor while paused, so the pane is paused first and the open
+  // waits CURSOR_FLUSH_MS -- a tab that loaded before the flush would sit at
+  // the book's OLD place. The tab that spoke stays where it was.
+  const CURSOR_FLUSH_MS = 600;
+  const pairDoor = opts.pair !== undefined ? opts.pair : {
+    async open(plan) {
+      const L = plan && plan.landing;
+      const st = win && win.localStorage;
+      if (!L || !st || !plan.other) return false;
+      try { bridge.pause(app.side()); } catch (e) { /* no clock */ }
+      try { st.setItem("wordcursor:" + plan.other, JSON.stringify({ ch: L.ch, wi: L.wi })); } catch (e) { return false; }
+      const sleep = (ms) => new Promise((r) => ((win && win.setTimeout) || setTimeout)(r, ms));
+      await sleep(CURSOR_FLUSH_MS);
+      const host = win && win.TTSTVHost;
+      if (host && typeof host.openReader === "function") { host.openReader(plan.other); return true; }
+      if (win && win.location) { win.location.hash = "#book=books/" + encodeURIComponent(plan.other); return true; }
+      return false;
+    },
+  };
   let bookLangsNow = [];
   function refreshLangs() {
     if (!records) return;
@@ -1401,7 +1508,7 @@ function boot(opts = {}) {
     const askLang = opts.lang || (pos0 && pos0.lang) || null;
     const doors = {
       lang: askLang, bridge, side: app.side(), position: () => Promise.resolve(pos0), records, pace: paceDoor(),
-      paragraphWords, bookLangs: langs,
+      paragraphWords, bookLangs: langs, pair: pairDoor,
       handleUtterance: (t) => app.handleUtterance(t, { quiet: quietAsked }),
     };
     // a spoken answer over a running ground replay is two voices at once --
@@ -1454,6 +1561,90 @@ function boot(opts = {}) {
   async function ask(question) {
     const packet = await context();
     return { packet, bytes: mods.context.bytes(packet), prompt: mods.context.render(packet, question, opts.lang) };
+  }
+
+  // ---- THE VOICE PROPOSAL, DRAWN (wave 8, 26 Sep). `GET /book?slug=` has
+  // served `proposal` since G-VOICEPICK (core/voicepick.propose: narrator,
+  // cast, why, refused, uncast, chosen) and no page drew it. It is drawn
+  // here, under the pill, because the pill is the one element this module
+  // owns on the page: one line -- the narrator the book proposes, or the
+  // sentence that refuses one -- with the cast and the reasons in the
+  // tooltip and behind a press, and two presses: ACCEPT (the studio's own
+  // route, `POST /render {slug, voice, cast}`, the body serve.py names for
+  // "accepting a proposal") and USE FOR THE ASSISTANT (tts.useForAssistant).
+  // Off a studio origin (file://, a bundle) the fetch fails and nothing is
+  // drawn: an absent proposal is an answer, not an error.
+  let proposalEl = null, proposalLast = null;
+  const fetchBook = opts.fetchBook !== undefined ? opts.fetchBook : (slug) => {
+    if (!win || typeof win.fetch !== "function") return Promise.resolve(null);
+    return win.fetch("/book?slug=" + encodeURIComponent(slug)).then((r) => (r && r.ok ? r.json() : null)).catch(() => null);
+  };
+  const postRender = opts.postRender !== undefined ? opts.postRender : (body) => {
+    if (!win || typeof win.fetch !== "function") return Promise.resolve(false);
+    return win.fetch("/render", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) })
+      .then((r) => !!(r && r.ok)).catch(() => false);
+  };
+  function proposalLine(p) {
+    if (!p) return null;
+    const cast = p.cast && typeof p.cast === "object" ? Object.keys(p.cast) : [];
+    if (!p.narrator) return { text: "No voice proposed" + (p.refused && p.refused.length ? ": " + p.refused[0] : "."), detail: (p.why || []).join("\n"), cast, accept: false };
+    const text = (p.chosen ? "Voice: " : "Proposes: ") + p.narrator + (cast.length ? " · cast " + cast.length : "");
+    const detail = cast.map((k) => k + " → " + p.cast[k]).concat(p.uncast && p.uncast.length ? ["(narrator) " + p.uncast.join(", ")] : [], p.why || []).join("\n");
+    return { text, detail, cast, accept: !p.chosen };
+  }
+  function paintProposal(p) {
+    proposalLast = p || null;
+    if (!proposalEl) return;
+    const line = proposalLine(p);
+    proposalEl.textContent = "";
+    proposalEl.hidden = !line;
+    if (!line) return;
+    const span = doc.createElement("span");
+    span.className = "voiceui-proposal-text";
+    span.textContent = line.text;
+    span.title = line.detail;
+    proposalEl.appendChild(span);
+    if (line.detail) {
+      const more = doc.createElement("button"); more.type = "button"; more.className = "voiceui-proposal-more"; more.textContent = "why";
+      more.title = line.detail;
+      more.addEventListener("click", () => { proposalEl.classList.toggle("open"); });
+      proposalEl.appendChild(more);
+      const pre = doc.createElement("pre"); pre.className = "voiceui-proposal-why"; pre.textContent = line.detail;
+      proposalEl.appendChild(pre);
+    }
+    if (p && p.narrator) {
+      const use = doc.createElement("button"); use.type = "button"; use.className = "voiceui-proposal-use"; use.textContent = "Use for the assistant";
+      use.addEventListener("click", () => { try { assistant.useForAssistant(p.narrator); } catch (e) { /* no store */ } showLast("assistant → " + p.narrator); });
+      proposalEl.appendChild(use);
+    }
+    if (line.accept) {
+      const ok = doc.createElement("button"); ok.type = "button"; ok.className = "voiceui-proposal-accept"; ok.textContent = "Accept";
+      ok.addEventListener("click", () => { acceptProposal().then((done) => showLast(done ? "voice → " + p.narrator : "the studio refused the voice")); });
+      proposalEl.appendChild(ok);
+    }
+  }
+  async function drawProposal() {
+    const slug = records ? records.slugNow() : null;
+    if (!slug) { paintProposal(null); return null; }
+    const book = await fetchBook(slug);
+    const p = book && book.proposal && typeof book.proposal === "object" ? book.proposal : null;
+    if (records && records.slugNow() !== slug) return proposalLast;  // the book changed under the fetch
+    paintProposal(p);
+    return p;
+  }
+  async function acceptProposal() {
+    const p = proposalLast, slug = records ? records.slugNow() : null;
+    if (!p || !p.narrator || !slug) return false;
+    const ok = await postRender({ slug, voice: p.narrator, cast: p.cast || {} });
+    if (ok) await drawProposal();
+    return !!ok;
+  }
+  if (pill && doc) {
+    proposalEl = doc.createElement("div");
+    proposalEl.className = "voiceui-proposal";
+    proposalEl.hidden = true;
+    pill.appendChild(proposalEl);
+    drawProposal().catch(() => null);
   }
 
   // ---- one utterance, end to end
@@ -1530,14 +1721,12 @@ function boot(opts = {}) {
     onListenStart() {
       heard = false;
       setState("listening");
-      if (!recognizerFactory) {
+      if (!recognizerFactory && !native) {
         showLast("no SpeechRecognition in this browser — window will close as silence");
         return;
       }
       try {
-        recognizer = recognizerFactory();
-        speech = mods.asr.createSpeechInput({
-          recognizer,
+        speech = openSpeechInput({
           onTranscript(text) {
             heard = true;
             trigger.noteUtteranceReceived();
@@ -1895,6 +2084,7 @@ function boot(opts = {}) {
   function arm() {
     if (state === "unavailable" || state !== "off") return;
     trigger.attach();
+    if (native) nativeReady();   // the Speech dialog, once, on the first arm -- never at load
     if (keyTarget && typeof keyTarget.addEventListener === "function") keyTarget.addEventListener("keydown", onKeyDown);
     attachQuiet(true);
     tellReader(true);
@@ -1995,10 +2185,18 @@ function boot(opts = {}) {
     context,
     ask,
     records,
+    // the voice proposal /book serves, drawn under the pill (wave 8)
+    proposal: () => proposalLast,
+    drawProposal,
+    acceptProposal,
+    pair: pairDoor,
     history: () => history.slice(),
     quietWindowOpen,
     said: () => sayLine.text(),
     state: () => state,
+    // the speech-in road this page will take, and what stt_check last said
+    speechIn: () => ({ road: native ? "native" : (recognizerFactory ? "webspeech" : "none"), info: nativeInfo }),
+    nativeReady,
     isArmed: () => state !== "off" && state !== "unavailable",
     missingHooks,
     pocket: () => pocket.enter(),

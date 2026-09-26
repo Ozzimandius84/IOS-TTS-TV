@@ -234,9 +234,12 @@
   header.set-titlebar .set-tab { white-space: nowrap; }
   header.set-titlebar .set-tab { font-size: 11px; }
   /* and no 80px reserved for traffic lights the phone has not got: the row
-     takes the width, in landscape too (the 480px rule below 640 never did) */
-  header { padding-left: calc(10px + var(--safe-left, 0px)); }
-  header { padding-right: calc(10px + var(--safe-right, 0px)); }
+     takes the width, in landscape too (the 480px rule below 640 never did).
+     SCOPED TO THE PHONE (25 Sep): these two rules were bare `header` and hit
+     the Mac's 560 px Settings window, overriding 80 px to 10 px and putting
+     the traffic lights over the first tab -- Osca's screenshot, SET-1. */
+  html[data-phone] header { padding-left: calc(10px + var(--safe-left, 0px)); }
+  html[data-phone] header { padding-right: calc(10px + var(--safe-right, 0px)); }
   /* the strip takes what the row has left (`width: 100%` until 6 Sep, when
      the door to the Library joined the row and 100% + 44 crossed the edge) */
   header .set-tabs { width: auto; }

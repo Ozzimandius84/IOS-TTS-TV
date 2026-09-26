@@ -346,6 +346,9 @@
          file, after this bar is built. */
       sysvoice: function () { return window.Transport ? Transport.system : null; },
       cursor: function () { return lastCursor; },
+      /* ★ D7b: the book's own data, for unrendered chapters. Asked for, never
+         held: OPEN_BOOK changes on every openBook(). */
+      book: function () { try { return OPEN_BOOK; } catch (_) { return null; } },
       doors: {
         voiceui: function () { return window.VoiceUI && VoiceUI.instance; },
         transport: function () { return window.Transport; },
@@ -1965,7 +1968,14 @@ addEventListener("keydown", e => {
     return;
   }
   const w = which("word");
-  if(w >= 0){ e.preventDefault(); listen.seekWordDelta(null, w === 0 ? 1 : -1); }
+  if(w >= 0){ e.preventDefault(); listen.seekWordDelta(null, w === 0 ? 1 : -1); return; }
+  /* THE VIEW KEY (V): toggle between the reader and one-word view.
+     nav.go(1) enters one word (the axis travels there as a transition);
+     nav.go(0) returns to the reader. nav.level is "word" when the axis
+     is past 0.5 and "reader" when it is between -0.5 and 0.5. */
+  if(is("view") && typeof nav !== "undefined" && nav.go){
+    e.preventDefault(); nav.go(nav.level === "word" ? 0 : 1); return;
+  }
 });
 </script>
 
@@ -1986,6 +1996,7 @@ addEventListener("keydown", e => {
 <script src="../voiceui/commands.js"></script>
 <script src="../voiceui/context.js"></script>
 <script src="../voiceui/records.js"></script>
+<script src="../voiceui/catalogue.js"></script>
 <script src="../voiceui/app.js"></script>
 <script>
 /* boot AFTER the first book has opened, because attachToWindow throws when

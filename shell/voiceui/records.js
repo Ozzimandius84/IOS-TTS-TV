@@ -59,8 +59,19 @@ function browserFetchJson(win) {
 // createRecords({slug, base, fetchJson}) -> the record doors
 //   base      "../books/" by default (reader.html's own relative root)
 //   slug      the book; may be changed later with setSlug()
-function createRecords({ slug = null, base = "../books/", fetchJson, win, doc } = {}) {
+function browserFetchText(win) {
+  return function (url) {
+    if (!win || typeof win.fetch !== "function") return Promise.resolve(null);
+    return win.fetch(url).then((r) => (r && r.ok ? r.text() : null)).catch(() => null);
+  };
+}
+
+// createRecords({slug, base, fetchJson, fetchText}) -> the record doors
+//   fetchText  the same door for a file that is not JSON (book-data.js);
+//              node tests hand it fsFetchText
+function createRecords({ slug = null, base = "../books/", fetchJson, fetchText, win, doc } = {}) {
   const get = fetchJson || browserFetchJson(win);
+  const getText = fetchText || browserFetchText(win);
   let cur = slug;
   const cache = new Map(); // "<slug>/<file>" -> Promise<record|null>
 
@@ -72,6 +83,41 @@ function createRecords({ slug = null, base = "../books/", fetchJson, win, doc } 
       cache.set(key, Promise.resolve().then(() => get(url(s, file))).catch(() => null).then((v) => (v && typeof v === "object" ? v : null)));
     }
     return cache.get(key);
+  }
+
+  // the shelf's own index (`books/index.json`, the file the Library draws
+  // from), read once: the one place a `<a>+<b>` slug names a pair
+  function index() {
+    const key = "/index.json";
+    if (!cache.has(key)) cache.set(key, Promise.resolve().then(() => get(base + "index.json")).catch(() => null).then((v) => (Array.isArray(v) ? v : (v && Array.isArray(v.books) ? v.books : null))));
+    return cache.get(key);
+  }
+  // `book-data.js` -- `window.__LIB_BOOK = {...};` (core/bookdata.py) -- read
+  // as text and parsed, because it is the ONE small file that carries a
+  // book's chapters in reading order with their blocks (the words the reader
+  // numbers) and book.json is 96 MB on the Complete Works
+  function bookData(s = cur) {
+    if (!s) return Promise.resolve(null);
+    const key = s + "/book-data.js";
+    if (!cache.has(key)) {
+      cache.set(key, Promise.resolve().then(() => getText(url(s, "book-data.js"))).catch(() => null).then((t) => {
+        if (!t || typeof t !== "string") return null;
+        const a = t.indexOf("{"), b = t.lastIndexOf("}");
+        if (a < 0 || b < a) return null;
+        try { const v = JSON.parse(t.slice(a, b + 1)); return v && typeof v === "object" ? v : null; } catch (e) { return null; }
+      }));
+    }
+    return cache.get(key);
+  }
+  // one chapter's timings, in the shape on disk ({<sid>: {start, end, words}}
+  // or {sentences: [...]}) normalised to [{id, words:[{id}]}] in file order
+  function timings(cid, s = cur) {
+    if (!s || !cid) return Promise.resolve(null);
+    return load(s, "timings/" + cid + ".json").then((t) => {
+      if (!t) return null;
+      if (Array.isArray(t.sentences)) return t.sentences;
+      return Object.keys(t).filter((k) => t[k] && Array.isArray(t[k].words)).map((k) => Object.assign({ id: k }, t[k]));
+    });
   }
 
   function setSlug(s) { if (s && s !== cur) cur = s; return cur; }
@@ -167,21 +213,28 @@ function createRecords({ slug = null, base = "../books/", fetchJson, win, doc } 
   }
 
   return { setSlug, slugNow, meta, names, grammar, stitch, spans, langOf, learnLang, bookLangs, langAt, chapterOf,
-           halfOf, grammarAt, namesAt, load, _cache: cache };
+           halfOf, grammarAt, namesAt, load, index, bookData, timings, _cache: cache };
 }
 
 // a fetchJson over the filesystem, for node tests and the CLI
+// the path under root: what follows the base's own "books/" (a slug and a
+// file, a slug and "timings/<cid>.json", or the shelf's "index.json")
+function fsPathOf(pathMod, root, url) {
+  const u = String(url);
+  const i = u.lastIndexOf("books/");
+  const rel = (i >= 0 ? u.slice(i + 6) : u).split("/").filter(Boolean).map((seg) => { try { return decodeURIComponent(seg); } catch (e) { return seg; } });
+  return pathMod.join(root, ...rel);
+}
 function fsFetchJson(fs, pathMod, root) {
   return function (url) {
-    // url is "<base><slug>/<file>" -- take the tail two segments
-    const parts = String(url).split("/").filter(Boolean);
-    const file = parts.pop();
-    let slug = parts.pop() || "";
-    try { slug = decodeURIComponent(slug); } catch (e) { /* as is */ }
-    const p = pathMod.join(root, slug, file);
-    try { return Promise.resolve(JSON.parse(fs.readFileSync(p, "utf8"))); } catch (e) { return Promise.resolve(null); }
+    try { return Promise.resolve(JSON.parse(fs.readFileSync(fsPathOf(pathMod, root, url), "utf8"))); } catch (e) { return Promise.resolve(null); }
+  };
+}
+function fsFetchText(fs, pathMod, root) {
+  return function (url) {
+    try { return Promise.resolve(fs.readFileSync(fsPathOf(pathMod, root, url), "utf8")); } catch (e) { return Promise.resolve(null); }
   };
 }
 
-  return { createRecords, slugFromLocation, fsFetchJson, BOOK_JSON_MAX_WORDS };
+  return { createRecords, slugFromLocation, fsFetchJson, fsFetchText, fsPathOf, BOOK_JSON_MAX_WORDS };
 });
