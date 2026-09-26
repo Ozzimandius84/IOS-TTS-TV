@@ -1,3 +1,77 @@
+# B-phone, wave 8 — Sign in again: the dead Drive grant · 26 Sep (Cowork: bridge VM + container Chromium) · phone `95b79d6` · TTSTV untouched · no GPU, 0 GPU-minutes
+
+**Status line:** `phone · B-phone wave 8 · 26 Sep · Settings ▸ Sync: a refresh refused with invalid_grant marks the stored grant revoked, the row says "Drive refused the saved sign-in … Sign in again to sync." and its account button becomes SIGN IN AGAIN (the one existing sign-in flow, a fresh grant over the dead one, then Sync runs); proved headless over a fake token endpoint, 49/49; the two shell files are AHEAD of TTSTV's masters (patch applies cleanly) and the real press is Osca's`
+
+### 1. Built
+
+**Phone (`main`), one commit `95b79d6`, four files** — on Osca's `> go` "PHONE repo only", which beats this repo's own "shell/ is never edited by hand" (CLAUDE.md precedence: a dated go from Osca beats every folder rule). The cost of that is in §6.
+
+- `shell/library/drive.js` — **the grant can die.** `googleRefresh` reads Google's `error` field: on `invalid_grant` it returns `{why, code: "invalid_grant"}` and **marks the stored token `revoked: <ms>`** (kept, not dropped — "Connected as …" stays true because the account IS still the account). A token so marked is refused by `googleRefresh`/`googleAccessToken` **at once, with no round trip**, with the same sentence (`the refresh was refused: invalid_grant -- the sign-in of 2026-09-26 expired or was revoked; sign in again`). The thrown Error carries `.code`. The mark fires `ttstv:grant` on the window so a row that did not ask can still say so. `googleSignInPhone` was not touched: it already writes a fresh `{access, refresh, expires, clientId}` over the store, which is what "replaces the stored grant" means. New exports: `GOOGLE_GRANT_DEAD`, `GOOGLE_GRANT_EVENT`, `googleGrantDead(why)` (pure: drive.js's sentence or pull.rs's `the refresh was refused: HTTP 400 (invalid_grant)`).
+- `shell/settings/settings.js` — **the row.** Two pure functions, `syncNeedsSignIn(why)` and `syncSignInAgainLine(account)` (exported). In `buildTransferPanel`, `grantDead()` is true on a phone when the press's `failed`, the app's pull status `why`, or the stored token's `revoked` mark says invalid_grant. `paint()` then: the who-line keeps "Connected as … · Google" but loses `kag-on`; its second line reads "Google · the saved sign-in expired or was revoked — sign in again"; the account button reads **Sign in again** (`data-state="signin-again"`, `kag-primary`, not `danger`); the Sync row's line is the sentence above. The button's click runs `signIn()` — the existing flow — instead of `signOut()`. `signIn()`'s phone branch, on success, clears the refusal it earned (`failed`, a `pullSt.why` of that kind) and, when it was a re-sign-in, **calls `press()`** so Sync runs without a second tap. The panel listens for `ttstv:grant` and repaints.
+- `tests/phone_signin_again.mjs` (new, 285 lines) — the headless proof, §2.
+- `shell.manifest.json` — the two files' bytes/sha256 updated so `tools/prebuild.py` accepts the tree, and `source.ahead_of_source` records **which two files and why**, naming the patch. Without this the build is refused ("shell/ is never edited by hand").
+
+Not built: nothing in Rust. `pull.rs::refresh` already says `the refresh was refused: HTTP 400 (invalid_grant)`, and `syncPlanDrive` opens the folder through `googleAccessToken` BEFORE handing the job to Rust, so on a marked grant the app's own pull now gets a job whose `why` is the sentence, without a wire ask.
+
+### 2. Verified — and how
+
+**`tests/phone_signin_again.mjs` — container Chromium 393×852, the REAL `shell/settings/settings.html?phone` served off disk, every Google host routed to a fake in the test (Playwright routes; a catch-all 404 first so nothing else leaves), a stand-in `TTSTVHost` (`google.clientId`/`redirect`, `googleSignIn(url)` writes the redirect back into `ttstv.sync.googleRedirect` the way the crate does, `sync.start(job)` records the job), the form handle caught as `mount` is defined: all passed, 49 assertions, 5 blocks, 0 page errors.** The sequence, as measured:
+
+1. **On opening.** The page's own first Drive ask — the Languages tab's catalogue (`settings.js` ≈ L1826) — refreshes: token endpoint asked **1×**, `grant_type=refresh_token` with the dead grant → fake 400 `{"error":"invalid_grant","error_description":"Token has been expired or revoked."}` → stored token `revoked` is a number and, with no press here, the account button already reads **"Sign in again"** (the `ttstv:grant` repaint — without it the row painted before the ask returned and said "Sign out", which is what the first run of the test found).
+2. **Press Sync.** Token endpoint still **1×** (the press sent nothing: the mark short-circuits); Drive asked **0×**; the row line says `Drive refused the saved sign-in for osca@example.com — it expired or was revoked. Sign in again to sync.`; who-line `Connected as osca@example.com · Google`; who's second line says "sign in again"; button "Sign in again", `data-state=signin-again`, primary true, danger false; the dead refresh token is still in the store. Button rect **[255, 280, 109, 44]**.
+3. **Press Sign in again.** Page URL unchanged; auth URL opened **1×** — `https://accounts.google.com/o/oauth2/v2/auth`, `client_id` = the stand-in id, `code_challenge_method=S256`, `prompt=consent`; token endpoint **2× total**, the second `grant_type=authorization_code` with `code=CODE-26-SEP`, a `code_verifier`, the redirect URI; **the dead grant went over the wire exactly once (at open)**; stored `refresh` = `1//fresh-26-sep`, `access` = `ya29.fresh`, `revoked` gone.
+4. **Sync ran by itself.** `sync.start` called; job `transport=drive`, `auth.access=ya29.fresh`, `auth.refresh=1//fresh-26-sep`, 0 books (the fake Frank folder is empty); every Drive v3 ask carried `Bearer ya29.fresh` (the fake answers 401 to anything else, so a stale bearer would have failed the run); button back to "Sign out", `data-state=signout`; the dead-grant line gone; the row reads `Drive · up to date · 16:08`.
+5. **Pure halves.** `syncNeedsSignIn` true on drive.js's sentence and on pull.rs's, false on `Google not reachable (Load failed)` and on null; `googleGrantDead(Error)` true; the line's exact text.
+
+**Same bytes both sides:** `settings.js b49d0a3d…`, `drive.js c914889b…`, `phone_signin_again.mjs 0cbf380b…` md5 in the container and in the repo.
+**Existing suite on the bridge VM:** `python3 -m pytest tests -q` → **118 passed, 5 failed**, the 5 all pre-existing and none on these files — `test_google_link` (lib.rs carries test client ids), `test_pair_link` (a second scheme in the config), `test_phone_loop` ×2 (`phone.sh`'s PATH line), `test_phone_shell` (the app names a shell file). A stash to prove the pre/post count failed on a stale `index.lock` (§8b), so "pre-existing" is by subject, not by re-run.
+**`tools/prebuild.py`:** after the manifest edit the only complaint left is the pre-existing `library/library.json` (the dev shelf, `DEV_ONLY`, not mine).
+**The TTSTV patch:** `git -C TTSTV apply --check _to_delete/signin-again-for-ttstv.patch` → **applies cleanly** to `library/drive.js` and `settings/settings.js` at TTSTV HEAD `14d77e2`.
+
+**NOT verified:** WebKit (`--engine webkit` is Osca's Mac); a build; the phone; the simulator; the real Google token endpoint. **The real press is Osca's**: `tools/phone.sh --sim` (or the device build), Settings ▸ Sync, expect the row to already read "Sign in again" on opening (the app's launch pull refuses first), press it, Google in Safari, back, Sync runs.
+
+### 3. Judgment calls
+
+- **Mark, don't drop.** Dropping the token would turn the who-line into "Not signed in" and lose the very fact that tells a person what happened; the `revoked` mark keeps the account and refuses the wire.
+- **The one flow.** "Sign in again" is `signIn()`, byte-for-byte the flow the Account row already runs; nothing new asks Google.
+- **Press after sign-in only when it WAS a re-sign-in** (`again` read before the flow), so a first sign-in from "Not signed in" behaves as before.
+- **`prompt=consent` stays** (it was there): a re-consent is what makes Google issue a new refresh token instead of an access token alone.
+- **The catalogue ask asked first** was a finding, not a plan; the `ttstv:grant` event is the smallest thing that makes the row true on opening whoever asked.
+
+### 4. Boundary check
+
+Phone repo only, one module: `shell/library/drive.js` + `shell/settings/settings.js` (the sync seam, both halves of one account, as the file's own comment names them) + its test + the record. No Rust, no `tools/`, no TTSTV. This is a re-wire across the page and its transport by nature (the page reads a mark the transport writes), one session, named here.
+
+### 5. Footprint
+
+Container: `/tmp/ph` (shell/ untarred, playwright from `/opt/node-tools`), gone with the session. VM: `pip3 install --user pytest pyyaml`. Repo residue, all under `_to_delete/`: `shell-b-phone-26sep.tgz` (976 KB, the staged copy of shell/), `settings.js`, `drive.js` (staging copies), `patch_gd.py`, `patch_ev.py`, **`signin-again-for-ttstv.patch` (keep this one until TTSTV has it)**, and three moved locks (`index.lock.*`, `HEAD.lock.*`, `next-index-9.lock.*`). No SSD, no server started, no Google reached.
+
+### 6. Requests — one for the TTSTV masters, one for Osca
+
+- **TTSTV `library/drive.js` + `settings/settings.js` (the settings lane / the sync lane): apply `_to_delete/signin-again-for-ttstv.patch`** (207 lines, applies cleanly at `14d77e2`), then `export.py --shell` when every other lane's shell files are committed. **Until then the next `tools/import_shell.py` ERASES this road** — `shell.manifest.json`'s `source.ahead_of_source` says so in the file.
+- **Osca:** the press (§2), and whether the mark should also grey the Drive "In use" row while dead (it does not today — Drive is still the chosen transport, only its grant is dead).
+- **Osca:** the moved locks in `_to_delete/` — a `.git/index.lock` from **14:24**, before this session, was blocking every git write (a stash and the first commit); the bridge cannot delete inside the repo, so they are moved, not gone. 435 `tmp_obj_*` files under `.git/objects/` are the same residue over the sessions; `git fsck` is quiet.
+
+### 7. Known gaps
+
+- Not run on WebKit, a phone or a simulator. The redirect-back through the crate (`frank-pair://`/the reverse-id scheme into `ttstv.sync.googleRedirect`) is the 11 Sep road and is not re-proved here — the test writes the key the way the crate does.
+- A grant that dies while the app is in the background is marked by the launch/return pull; the row learns it on the next `ttstv:grant` or paint. Nothing polls the store.
+- iCloud is still "not built yet"; nothing here touches it.
+
+### 8. Next
+
+Osca's press. Then the TTSTV patch, then a re-import that carries it.
+
+### 8b. Commit check
+
+`95b79d6` — `git show --stat HEAD`: exactly `shell.manifest.json`, `shell/library/drive.js`, `shell/settings/settings.js`, `tests/phone_signin_again.mjs` (4 files, +397/−16). Pathspec form; the new test `git add`-ed first. Locks moved to `_to_delete/` (§6). No other lane's files were dirty in this tree (`git status --short` before: only these four). Working tree after: clean but `_to_delete/`.
+
+### 9. Status line
+
+`phone · B-phone wave 8 · 26 Sep · Sign in again on a dead Drive grant · 95b79d6 · 49/49 headless · press is Osca's · TTSTV patch pending`
+
+---
+
 # B-phone, wave 8 — the shelf keeps the device's books, the dictionary is the pack · 26 Sep (Cowork: bridge VM + container) · phone `37ad4c3` · TTSTV `a194138` + `bfaf2eb` · no GPU, 0 GPU-minutes
 
 **Status line:** `phone · B-phone wave 8 · 26 Sep · 40 books -> 40 tiles on a first-ever open (was 1, or 0 with no dev shelf): a race in library.html's refresh(), fixed in the TTSTV master and re-imported (shell v60); has_dictionary=false x40 is G-LANG's designed state, the la pack answers 'arma' in 1.7 ms and the card draws it; reader.html hand-edit DROPPED; the sim rebuild is Osca's one press: tools/phone.sh --sim`
