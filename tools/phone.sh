@@ -25,6 +25,23 @@
 #   4. devicectl       install onto the one connected phone, by udid.
 #
 # usage:  tools/phone.sh [--shell] [--ttstv PATH] [--device UDID] [--no-install]
+#                        [--register] [--sim [NAME]]
+#
+#   --register  ONE LINE FOR A MAC THE TEAM HAS NEVER SEEN (BUILD, 26 Sep, the
+#               Air): Tauri's `xcodebuild ... -sdk iphoneos build` names no
+#               destination, so Xcode never registers the phone and the build
+#               dies at "Your team has no devices from which to generate a
+#               provisioning profile". One direct xcodebuild aimed at the phone
+#               with -allowProvisioningDeviceRegistration registers it and mints
+#               the profile; its OWN build then fails at "Build Rust Code" (the
+#               xcode-script wants Tauri's options server) and that exit is
+#               ignored on purpose -- it is good for signing only. Also the
+#               renewal: a free team's profile lives 7 days (next: 3 Oct).
+#   --sim       the SIMULATOR debug build instead of the phone: `tauri ios build
+#               --debug --target aarch64-sim --ci`, then `simctl install` onto
+#               the booted device (or NAME, booted headless by simctl). Never
+#               opens Simulator.app -- a booted device is a process, not a
+#               window, and every gate this repo has runs without one.
 #
 # Nothing here signs anything: codesign uses the identity Xcode already has.
 # If it asks for the login password, PHONE.md step 0 is the one line that stops
@@ -41,12 +58,17 @@ WITH_SHELL=0
 TTSTV="${TTSTV:-$HOME/Documents/RUNNERS/TTSTV/TTSTV}"
 DEVICE=""
 INSTALL=1
+REGISTER=0
+SIM=0
+SIM_NAME=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --shell)      WITH_SHELL=1; shift ;;
     --ttstv)      TTSTV="$2"; shift 2 ;;
     --device)     DEVICE="$2"; shift 2 ;;
     --no-install) INSTALL=0; shift ;;
+    --register)   REGISTER=1; shift ;;
+    --sim)        SIM=1; shift; if [ $# -gt 0 ] && [ "${1#--}" = "$1" ]; then SIM_NAME="$1"; shift; fi ;;
     -h|--help)    sed -n '2,32p' "${BASH_SOURCE[0]}"; exit 0 ;;
     *)            echo "phone.sh: unknown argument $1 (try --help)" >&2; exit 2 ;;
   esac
@@ -68,6 +90,43 @@ if [ "$WITH_SHELL" = 1 ]; then
   python3 "$REPO/tools/import_shell.py" --ttstv "$TTSTV"
 else
   say "2/4  shell: not re-imported (pass --shell to take a new one from TTSTV)"
+fi
+
+if [ "$SIM" = 1 ]; then
+  # THE SIMULATOR ROAD. The card's exact command (B-phone, 25/26 Sep): a debug
+  # build for the arm64 simulator, --ci so nothing prompts. Tauri's rename-app
+  # step is known to exit unhappy on a REPEAT simulator build while the .app is
+  # good (NOT-DONE-25-sep, wave A) -- so the .app's presence is the verdict, not
+  # the exit code.
+  SIM_APP="$APPLE/build/arm64-sim/Frank.app"
+  say "3/4  tauri ios build --debug --target aarch64-sim --ci"
+  ( cd "$REPO" && npm run --silent -- tauri ios build --debug --target aarch64-sim --ci ) || \
+    echo "phone.sh: tauri exited $? -- checking for the .app anyway (the rename-app step is the known one)" >&2
+  [ -d "$SIM_APP" ] || { echo "phone.sh: no $SIM_APP -- the build did not produce one" >&2; exit 1; }
+  printf 'built: %s (%s)\n' "$SIM_APP" "$(du -sh "$SIM_APP" | cut -f1)"
+  if [ "$INSTALL" = 0 ]; then say "4/4  install: skipped (--no-install)"; exit 0; fi
+  if [ -n "$SIM_NAME" ]; then
+    # boot by name, headless: simctl boots a device without Simulator.app
+    xcrun simctl boot "$SIM_NAME" 2>/dev/null || true
+    TARGET="$SIM_NAME"
+  else
+    TARGET=booted
+  fi
+  say "4/4  simctl install $TARGET"
+  xcrun simctl install "$TARGET" "$SIM_APP"
+  echo "installed: $(xcrun simctl listapps "$TARGET" 2>/dev/null | grep -c 'com.ttstv.frank' || echo '?') x com.ttstv.frank on $TARGET"
+  echo "launch:  xcrun simctl launch $TARGET com.ttstv.frank   (no Simulator.app needed; the eye is scratch-probe/probe.log)"
+  exit 0
+fi
+
+if [ "$REGISTER" = 1 ]; then
+  [ -n "$DEVICE" ] || DEVICE="$(xcrun devicectl list devices 2>/dev/null \
+    | awk '$0 ~ /connected/ { for (i=1;i<=NF;i++) if ($i ~ /^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$/) print $i }' | head -1)"
+  [ -n "$DEVICE" ] || { echo "phone.sh: --register needs a connected phone (or --device <udid>)" >&2; exit 1; }
+  say "2b   register $DEVICE with the team and mint the profile (its own build is expected to fail)"
+  ( cd "$APPLE" && xcodebuild -project frank.xcodeproj -scheme frank_iOS -configuration debug \
+      -destination "id=$DEVICE" -allowProvisioningUpdates -allowProvisioningDeviceRegistration build ) \
+    >/dev/null 2>&1 || echo "  (xcodebuild exited non-zero at Build Rust Code, as expected -- the profile is what it was for)"
 fi
 
 say "3/4  tauri ios build --debug"
