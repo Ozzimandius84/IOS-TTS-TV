@@ -1,3 +1,55 @@
+# wave 8 · E-parser (26 Sep 2026) — Stevens' 149 words explained, the sidecar bug fixed, the Complete Shakespeare end to end, and a scene has no poems
+
+`PROMPTS/lanes/wave-8.md` row E-parser. Cowork: bridge VM for git and light tests, the cloud container for every parse (`git archive HEAD` of parser/core/dictionary/languages/testkit, the en pack and the sources staged across). `TTSTV_DATA_HOME`/`TTS_DATA` outside the tree for every run; `languages/catalogue.json` md5 `617c7c8c68f42d6c86b1d651abeef326` at the gate and at the end (no route pressed). No GPU, no Kaggle, no Modal.
+
+## 1. Built
+- `parser/tools/reparse_migrate.py::timing_files(d)` + `TIMING_STEM` — `timings/` is read as `cNNN.json` only; `migrate_timings` and `migrate()`'s anchored set both use it (`708d8c5`).
+- `parser/tools/reparse_cost.py::timings()` — the same filter (§6.1 item 2a: `tim 2` for one timing file).
+- `parser/tests/test_reparse_migrate_sidecar.py` — 3 tests.
+- `core/schema.py` — `Book.form`'s comment names all eight `parser.form.FORMS` (`492d2c9`, comment only, core/ clean and no other session's commit on it: `git log -5 -- core/` = b3591e3…, `git status core/` empty).
+- `parser/hierarchy.py::poems_from_runs` — a chapter with `speaker` paragraphs is a scene and gets no `poem` units; refused with `why="a scene's verse speeches are dialogue, not poems"` (`c01e5f6`). `parser/tests/test_matter.py::test_a_scenes_verse_speeches_are_not_poems`; `parser/README.md` P6/P7 paragraph, one clause.
+
+## 2. Verified — and how
+- **live, Stevens — EXPLAINED, and it is not a fault.** `stevens-collected-poems` re-parsed twice in the container from the same `.ocr.pdf`: (a) with no `en` pack resolvable → **108 chapters, 85,551 words, every (id, text) row identical to the shelf's book.json** (14 Sep 00:41); (b) with the depot's `packs/en.sqlite` → **108 chapters, 85,402 words: −149 in exactly 22 chapters, and `meta.ornament_headings_refused` names exactly those 22.** Every one of the 149 words is an ornament line dropped by chat 110's P1/P3 rule (`77d2a65` + `readers.py`'s half, landed in `83e6916`): `BOOHHOPOGSOBOSO` → `INVECTIVE AGAINST SWANS`, `OOOO` → `METAPHORS OF A MAGNIFICO`, … the full list is `dropped` per title in the new book's meta. The shelf's parse predates the rule (its meta has no `ornament_headings_refused`); the 25 Sep re-parse was the first Stevens parse to run with the pack on the machine. The "different numbering" is the in-chapter shift of `pNNNN`/word ids after the dropped lines — it divergences at word 0 of each of the 22 chapters and nowhere else. Stevens carries **0 marks, no position, 0 timings, no audio** (`reparse_cost.marks/position/timings` on the real shelf), so nothing anchors to the old ids.
+- **live, ids stable on the anchored books** — `eclogues-en` 8,306 words, `eclogues-la` 5,701, `poems` 6,456, `a-minor-collection-of-works` 45,761: **(id, text) md5 identical shelf vs fresh parse on all four, before and after the hierarchy fix**; the 20,660 timed word ids of the three timed books (8,294 + 5,701 + 6,665 in `timings/c*.json`) resolve to the same text on the fresh parse where they resolved on the shelf (8,294 / 5,513 / 6,456 — the 188 + 209 that resolve on neither are pre-existing orphans in the timing files, T-PARSERD's number, not moved); a-minor's 3,018 all resolve.
+- **live, the Complete Shakespeare end to end** — `pg100-images-3.epub` through `parser.cli` in the container, **1 m 35 s, 865 chapters, 951,046 words, (id, text) md5 `a16386545a0a` identical to the shelf's**, `kind` counts identical (verse 114,931 · body 5,962 · speaker 31,485), titles identical, verdict `clean` both. The tree: shelf 1,242 nodes → first run **1,373** → after the fix **1,244** = the shelf's 1,242 + 2 generated indexes (`Poems` contents 154, `Index of first lines` 158). c001's `section` `THE SONNETS` → `None` (a group of one is not a group; P7's `label_sections` rule, the shelf predates it). `meta` gains `langs` and `paragraphs` (regime `blank`, preserve, 0 joins) — the shelf's parse predates G-LANGMIX and P4 too.
+- **unit**: `parser/tests` in the container **710 passed, 104 skipped** (with the hierarchy fix); on the VM `test_matter.py` 14/14, `test_reparse_migrate_sidecar.py` + `test_reparse_cost.py` 17/17; `core/tests` 357 pass, 6 fail — all six pre-existing and environmental (4× `test_bookdata_matches_reader` need node + the shelf, the PNG gate, `test_data_home_is_the_checkout_when_nothing_sets_it` under my env var), none touch `schema.py`.
+- **live, the sidecar bug**: the fixture is the real shape (`c002.json` beside `c002.attach.json`); before the fix `migrate_timings` quarantined the sidecar and named `c002.attach`; after, `quarantined == []`, `needs_aligner == []`, the sidecar untouched. Not re-run on the real a-minor (it would write into the shelf).
+- **not verified**: `--reattach` (torch) still not run; `--ocr force` not run.
+
+## 3. Judgment calls
+- "explain or fix" Stevens → **explain, and do not touch the shelf.** The 149 words are printer's ink read as letters, dropped by a rule Osca asked for (OCRFORCE §6); the new parse is the better book (22 titles recovered). But re-parsing in place through `parser.cli` would leave `dictionary.json`, `names.json`, `sections.json`, `book-data.js`, `text/`, `parses/` behind the new ids — that is `studio.add.reparse`'s job (the product verb), and it is one press in Frank: reparse_cost says it costs nothing. Named in §8 for Osca.
+- The Shakespeare's 129 `runs` poems → **fixed, not just named**: `poems_from_runs` was written for La Vita Nuova and never met a play; a `speaker` paragraph in the chapter is the cleanest signal that its verse is speech. Chose that over "book form == drama" so a mixed collection (a-minor) keeps its poems in prose chapters and loses none — proved: its structure is identical before and after.
+- Chat 110's own residual stands: c067 promotes `TOTO IOI` (both in the pack) over `CERTAIN PHENOMENA OF SOUND` two lines down; 1 of 22. Left, §7.
+- `reparse_cost` on the real shelf raised `PermissionError` on the book's `source.path`: **34 of the 40 book.jsons carry a `/sessions/rcw-…/mnt/TTS_APP/…` bridge path** as their source, a mount that belonged to the session that parsed them. Not this lane's file shape to change; §6.
+
+## 4. Boundary check
+Touched and committed: `parser/tools/reparse_migrate.py`, `parser/tools/reparse_cost.py`, `parser/tests/test_reparse_migrate_sidecar.py` (`708d8c5`); `core/schema.py` (`492d2c9`, the comment the prompt named, core/ alone); `parser/hierarchy.py`, `parser/tests/test_matter.py`, `parser/README.md` (`c01e5f6`); this file. No other module.
+Found dirty, left alone, not mine: `studio/cli.py` (the `++` hunk wave-8 names), `desktop/src-tauri/build.rs`, `desktop/src-tauri/src/lib.rs`, `desktop/src-tauri/src/stt.rs`, `voiceui/stt-native.js`, `voiceui/tests/hands-off.test.js`, `voiceui/tests/stt-native.test.js` (D-hands, live during this lane; several landed as `218f181` while I worked). HEAD moved under me four times (`85f9ede` → `218f181` → `68f1fb1` → `e8a1ff1` → `0299713`).
+
+## 5. Footprint
+VM: `$HOME/pv` venv (pytest, ebooklib, bs4, lxml, pymupdf; ~120 MB, gone with the session), `/tmp/pt` empty DATA_HOME. Repo, gitignored: **`out/e-parser-w8/` 115 MB** (the staging tarballs, five shelf book.jsons, `timed_ids.json`, `hierarchy.py`) — the bridge cannot delete it; Osca `rm -rf out/e-parser-w8`. Container: scratchpad parses of six books (~350 MB), gone with the session. SSD read only (sources, the en pack); nothing written under `TTS_DATA`. `books/` untouched.
+
+## 6. Requests to core / other modules
+1. **`core` / whoever owns `Book.source.path`** — 34 of 40 shelf books record a bridge-session mount (`/sessions/rcw-…/mnt/TTS_APP/tts_data/sources/…`) as their source path; every `reparse_cost`/`reparse_migrate` run on them needs `--sources`. Proposal: `parser.cli` writes the path relative to `TTS_DATA` (`sources/pdfs/…`) and `reparse_cost.fresh_word_rows` resolves it under the current `paths.TTS_DATA`; a one-off `tools/relang`-style sweep rewrites the 34.
+2. **studio** — `add.reparse()` still cannot pass `--new-hash` (P9 §6, three lanes running).
+
+## 7. Known gaps
+- Stevens c067: `TOTO IOI` promoted as a title (the one residual chat 110 named). A "prefer the longer clean all-caps line within the lookahead" rule would fix it and risk the others; not done.
+- `--reattach` and `--ocr force` still unexercised (NOT-DONE §B, unchanged).
+- The six "shape" books were not re-run beyond the four anchored + Shakespeare + Stevens.
+
+## 8. Next
+Osca's presses, none blocking: (1) re-parse `stevens-collected-poems` through Frank (studio's reparse, the product verb) to take the 22 recovered titles — cost 0; (2) the same for `the-complete-works-of-william-shakespeare` if he wants the two generated indexes on the shelf — ids identical, so also cost 0; (3) `rm -rf out/e-parser-w8`. Stopping.
+
+## 8b. Commit check
+Three pathspec commits, `git show --stat HEAD` confirmed each lists exactly its files (3 / 1 / 3). Locks moved into `_to_delete/` when older than 3 s, each after the retry loop: `index.lock`, `HEAD.lock`, `next-index-18.lock`, `next-index-37.lock`, `next-index-21.lock` (with epoch suffixes) — `_to_delete/` now holds 93 files, Osca's to clear. No `--amend`, no `-a`.
+
+## 9. Status line
+`parser · wave 8 E-parser · 26 Sep · Stevens' −149 words / 22 chapters EXPLAINED: chat 110's ornament rule firing for the first time with the en pack present, all 149 are dropped ornament lines, 22 titles recovered, shelf untouched (0 marks/timings/audio); reparse_migrate + reparse_cost no longer quarantine or count <cid>.attach.json (708d8c5, 3 tests); core/schema.py form comment names the eight forms (492d2c9); Complete Shakespeare end to end in 1 m 35 s, 865 chapters / 951,046 words (id,text)-identical to the shelf, and the 129 'poems' it grew inside its plays fixed at the source — a scene has no poems (c01e5f6); ids identical on all four anchored books, 20,660 timed ids resolve as before; parser/tests 710 pass / 104 skip. 0 GPU-minutes.`
+
+---
+
 # 85 Stage 2 — THE COURIER: the phone's Studio runs on the person's own Kaggle · 14 Sep (Cowork: bridge VM + container) · phone `8076717` · TTSTV `b7caaab` · **no GPU, no Kaggle, no Modal, 0 GPU-minutes, 0 quota spent**
 
 **Status line:** `phone · 85 Stage 2 · 14 Sep · the five Kaggle verbs in Rust (15 tests) + the ttstv-studio CPU kernel and its flat packer (9 tests); F7 ★ PROVED OFFLINE — kernel hash == Mac hash, cfda3087a17772f6, 304 words, twice; the live round trip, the cold start and K-C are UNMEASURED and Osca's press`
