@@ -165,13 +165,51 @@ function googleExchange(fetchFn, code, verifier, redirect, clientId, now) {
              expires: (now == null ? Date.now() : now) + 1000 * (Number(r.body.expires_in) || 3600) };
   });
 }
+/* THE GRANT CAN DIE (B-phone, 26 Sep). A refresh token Google answers with
+ * `invalid_grant` is gone for good -- expired, revoked at
+ * myaccount.google.com, or (Osca's phone, 26 Sep) the grant of 11 Sep that
+ * a reinstall left pointing at nothing. No retry ever brings it back; the
+ * only road is the sign-in flow again, which writes a fresh token over
+ * this one (`googleSignInPhone`). So the dead grant is MARKED, not
+ * removed: `revoked` on the stored token keeps "Connected as ..." true --
+ * the account is still the account -- while every later ask for a bearer
+ * refuses at once, without a round trip, with the sentence the Settings
+ * row turns into its Sign in again button. */
+var GOOGLE_GRANT_DEAD = "invalid_grant";
+var GOOGLE_GRANT_EVENT = "ttstv:grant";               // fired on the window when a stored grant is marked dead
+/* Pure: is this refusal the dead grant, whoever wrote the sentence -- this
+ * file ("the refresh was refused: invalid_grant -- Token has been expired
+ * or revoked.") or pull.rs ("the refresh was refused: HTTP 400
+ * (invalid_grant)"). */
+function googleGrantDead(why) {
+  return /\binvalid_grant\b/.test(String((why && why.message) || why || ""));
+}
+function googleGrantDeadWhy(tok) {
+  return "the refresh was refused: " + GOOGLE_GRANT_DEAD + " -- the sign-in of "
+    + (tok && tok.revoked ? new Date(tok.revoked).toISOString().slice(0, 10) : "this device")
+    + " expired or was revoked; sign in again";
+}
 function googleRefresh(fetchFn, tok, now) {
   if (!tok || !tok.refresh || !tok.clientId) return Promise.resolve({ why: "not signed in" });
+  if (tok.revoked) return Promise.resolve({ why: googleGrantDeadWhy(tok), code: GOOGLE_GRANT_DEAD });
   return googleFetchJSON(fetchFn, GOOGLE.TOKEN, {
     method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: formBody({ client_id: tok.clientId, refresh_token: tok.refresh, grant_type: "refresh_token" }),
   }).then(function (r) {
-    if (!r.ok || !r.body || typeof r.body.access_token !== "string") return { why: "the refresh was refused: " + (r.why || "no token") };
+    if (!r.ok || !r.body || typeof r.body.access_token !== "string") {
+      var out = { why: "the refresh was refused: " + (r.why || "no token") };
+      if (r.body && r.body.error === GOOGLE_GRANT_DEAD) {
+        out.code = GOOGLE_GRANT_DEAD;
+        var stored = syncRead(GOOGLE_TOKEN_KEY);
+        if (stored && stored.refresh === tok.refresh) {
+          syncWrite(GOOGLE_TOKEN_KEY, Object.assign({}, stored, { revoked: now == null ? Date.now() : now }));
+          // whoever asked (the app's pull, the Languages tab), the Sync row
+          // is the one that can offer the road: tell it, the way the pull does
+          try { global.dispatchEvent(new CustomEvent(GOOGLE_GRANT_EVENT, { detail: { why: out.why } })); } catch (e) {}
+        }
+      }
+      return out;
+    }
     var next = Object.assign({}, tok, { access: r.body.access_token,
       expires: (now == null ? Date.now() : now) + 1000 * (Number(r.body.expires_in) || 3600) });
     syncWrite(GOOGLE_TOKEN_KEY, next);
@@ -187,7 +225,7 @@ function googleAccessToken(fetchFn, force, now) {
   if (!tok || !tok.access) return Promise.reject(new Error("not signed in"));
   if (!force && Number(tok.expires) - 60000 > t) return Promise.resolve(tok.access);
   return googleRefresh(fetchFn, tok, t).then(function (r) {
-    if (r.why) throw new Error(r.why);
+    if (r.why) { var e = new Error(r.why); if (r.code) e.code = r.code; throw e; }
     return r.access;
   });
 }
@@ -1267,6 +1305,7 @@ global.TTSTVDrive = {
   GOOGLE: GOOGLE, DRIVE: DRIVE, GOOGLE_TOKEN_KEY: GOOGLE_TOKEN_KEY, GOOGLE_REDIRECT_KEY: GOOGLE_REDIRECT_KEY,
   googlePkce: googlePkce, googleAuthUrl: googleAuthUrl, googleRedirectParams: googleRedirectParams,
   googleExchange: googleExchange, googleRefresh: googleRefresh, googleAccessToken: googleAccessToken,
+  GOOGLE_GRANT_DEAD: GOOGLE_GRANT_DEAD, GOOGLE_GRANT_EVENT: GOOGLE_GRANT_EVENT, googleGrantDead: googleGrantDead,   // the dead grant (B-phone, 26 Sep)
   googleSignInPhone: googleSignInPhone, googleSignOutPhone: googleSignOutPhone, googleAwaitRedirect: googleAwaitRedirect,
   driveClient: driveClient, driveFolder: driveFolder, runDriveSync: runDriveSync,
   syncMergeMarks: syncMergeMarks, syncMergePositions: syncMergePositions, syncMergeSettings: syncMergeSettings,

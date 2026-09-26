@@ -2,7 +2,7 @@
   "added_here": [
     "index.html"
   ],
-  "bytes": 2851166,
+  "bytes": 2856656,
   "count": 75,
   "files": {
     "bar/askbar.css": {
@@ -26,8 +26,8 @@
       "sha256": "899c3ffa9eadbbd0746f7cd112027982db421c2a63102e86b9abe01e91aeede0"
     },
     "library/drive.js": {
-      "bytes": 67745,
-      "sha256": "43a6b54585d7495c345d51fdd0e59b0e15a07ce3956ced3cee70c1a7a21a5687"
+      "bytes": 70145,
+      "sha256": "aa6f6f022277787ddf9da4cb594ba7cc169f4c020a7aceb592eff47758af1a0b"
     },
     "library/host.js": {
       "bytes": 8907,
@@ -250,8 +250,8 @@
       "sha256": "c58113ea8ab67105dee3b20259e8233bd66f9ec405de30cd9a63624f1fed2796"
     },
     "settings/settings.js": {
-      "bytes": 334684,
-      "sha256": "948d416e0b6064848aebdb182bab58a87710d72b17ed42d78770b9cf7c72d648"
+      "bytes": 337774,
+      "sha256": "a873f5670cffd7db492bf94e6e17a6f29dbe7616f2cc4b8a5831f685c81302a2"
     },
     "voiceui/answers.js": {
       "bytes": 4253,
@@ -308,6 +308,13 @@
   },
   "home_page": "library/library.html",
   "source": {
+    "ahead_of_source": {
+      "files": [
+        "library/drive.js",
+        "settings/settings.js"
+      ],
+      "why": "B-phone 26 Sep: the Sign in again road for a dead Drive grant (invalid_grant), built here on Osca's 'PHONE repo only'; TTSTV's library/drive.js and settings/settings.js must take the same diff (_to_delete/signin-again-for-ttstv.patch) before the next import_shell.py, or the import erases it"
+    },
     "commit": "2d03858",
     "repo": "/sessions/rcw-01daqke7brlcxu77wypzwnpb/mnt/TTSTV",
     "shell_cache": "ttstv-shell-v60"

@@ -3239,6 +3239,24 @@
     return "This device only";
   }
 
+  /* THE DEAD GRANT (B-phone, 26 Sep). Osca's phone: "Connected as ..." and
+   * every Sync refused with `invalid_grant -- Token has been expired or
+   * revoked` -- the grant of 11 Sep died with the reinstall, and the row
+   * offered nothing but Sign out. The account IS still the account, so the
+   * who-line stays; what changes is the button: Sign out becomes SIGN IN
+   * AGAIN, which is the one existing sign-in flow (`signIn()`), whose
+   * success writes a fresh grant over the dead one and then presses Sync.
+   * Pure: is this refusal the dead grant -- drive.js's sentence or
+   * pull.rs's ("the refresh was refused: HTTP 400 (invalid_grant)")? */
+  function syncNeedsSignIn(why) {
+    return /\binvalid_grant\b/.test(String((why && why.message) || why || ""));
+  }
+  /* Pure: the row's line while the grant is dead. */
+  function syncSignInAgainLine(account) {
+    return "Drive refused the saved sign-in" + (account && account.who ? " for " + account.who : "")
+      + " \u2014 it expired or was revoked. Sign in again to sync.";
+  }
+
   /* Pure: the code as the row prints it, "483 912". */
   /* TEN digits since 14 September (Osca: *"It's just got to be a 10-digit
    * number or a QR code"*), grouped the way a phone number is, because that
@@ -4340,6 +4358,19 @@
      * pressed four times and saw nothing. Memory only: a reload is a fresh
      * look, and `last` (the last GOOD sync) is never overwritten by a bad one. */
     var failed = null;
+    /* The dead grant (B-phone, 26 Sep): true while the last refusal -- the
+     * press's or the app's pull's -- was `invalid_grant`. Read by paint()
+     * for the button and the line; cleared by a sign-in that succeeded. */
+    function grantDead() {
+      if (isStudio || !signedNow()) return false;
+      if (syncNeedsSignIn(failed) || syncNeedsSignIn(pullSt && pullSt.why)) return true;
+      // the mark drive.js left on the stored grant -- an earlier ask's
+      // refusal (the app's pull on launch, the Languages tab's catalogue
+      // ask), so the row says so on opening, before any press here
+      var D = driveModule();
+      var tok = D ? syncRead(D.GOOGLE_TOKEN_KEY) : null;
+      return !!(tok && tok.revoked);
+    }
     /* THE APP'S PULL (G-SYNCBG, 11 Sep). On the phone a press plans the books
      * and hands them to the app, which pulls them outside this page; the
      * row paints the app's status -- polled while it runs, whoever started
@@ -4402,15 +4433,18 @@
       firstHead.hidden = chosen;
       first.hidden = chosen;
       var signed = signedNow();
+      var dead = grantDead();
       who.textContent = signed ? syncWhoLine(a, null, false) : "Not signed in";
-      who.classList.toggle("kag-on", signed);
-      whoWhy.textContent = signed ? "Google · the account every device signs in to"
+      who.classList.toggle("kag-on", signed && !dead);
+      whoWhy.textContent = dead ? "Google · the saved sign-in expired or was revoked \u2014 sign in again"
+        : signed ? "Google · the account every device signs in to"
         : syncWhoLine(null, pair, isStudio) + (canGoogle ? " · Google is the account" : " · " + NO_GOOGLE_HERE);
-      acctBtn.textContent = signed ? "Sign out" : "Sign in with Google";
-      acctBtn.classList.toggle("danger", signed);
-      acctBtn.classList.toggle("kag-primary", !signed);
-      acctBtn.disabled = !signed && !canGoogle;
-      acctBtn.title = signed || canGoogle ? "" : NO_GOOGLE_HERE;
+      acctBtn.textContent = dead ? "Sign in again" : signed ? "Sign out" : "Sign in with Google";
+      acctBtn.dataset.state = dead ? "signin-again" : signed ? "signout" : "signin";
+      acctBtn.classList.toggle("danger", signed && !dead);
+      acctBtn.classList.toggle("kag-primary", !signed || dead);
+      acctBtn.disabled = (!signed || dead) && !canGoogle;
+      acctBtn.title = signed && !dead ? "" : canGoogle ? "" : NO_GOOGLE_HERE;
       if (isStudio && studioAcct && studioAcct.ids && !studioAcct.ids.desktop && !signed) {
         acctBtn.title = "no desktop client id yet -- paste it into " + (studioAcct.path || "TTS_DATA/studio/account.json");
       }
@@ -4423,7 +4457,7 @@
       gdPick.setAttribute("aria-pressed", useDrive ? "true" : "false");
       gdPick.disabled = !signed;
       gdPick.title = signed ? "" : "sign in with Google first";
-      if (!busy) paintLine(failed != null ? failed : (pullSt && pullSt.since ? syncPullLine(pullSt) : syncStateLine(last)));
+      if (!busy) paintLine(dead ? syncSignInAgainLine(a) : failed != null ? failed : (pullSt && pullSt.since ? syncPullLine(pullSt) : syncStateLine(last)));
       if (isStudio) {
         var s = studio || {};
         var on = !!s.port;
@@ -4737,10 +4771,18 @@
           });
         });
       }
+      var again = grantDead();
       return googleSignInPhone(host, { say: function (l) { say.textContent = l; } }).then(function (r) {
         if (r.why) { say.textContent = r.why; }
-        else { account = syncRead(SYNC_ACCOUNT_KEY); through = "gdrive"; syncWrite(SYNC_THROUGH_KEY, through); say.textContent = "Signed in as " + r.who; }
+        else {
+          account = syncRead(SYNC_ACCOUNT_KEY); through = "gdrive"; syncWrite(SYNC_THROUGH_KEY, through); say.textContent = "Signed in as " + r.who;
+          // the fresh grant replaced the dead one: the refusal it earned is over
+          if (syncNeedsSignIn(failed)) failed = null;
+          if (pullSt && syncNeedsSignIn(pullSt.why)) pullSt = null;
+        }
         paint();
+        // SIGN IN AGAIN, then Sync -- the press the dead grant refused
+        if (again && !r.why) return press().then(function () { return r; });
         return r;
       });
     }
@@ -4800,6 +4842,7 @@
     });
     acctBtn.addEventListener("click", function () {
       var a = acctNow();
+      if (grantDead()) return signIn();          // Sign in again: the same flow, a fresh grant
       return (a && a.kind === "google" && a.who) ? signOut() : signIn();
     });
     gdPick.addEventListener("click", function () {
@@ -4948,6 +4991,12 @@
       if (typeof global.addEventListener === "function") {
         global.addEventListener("ttstv:sync", function (e) { watchPull(e && e.detail); });
       }
+    }
+    // the dead grant, marked by an ask that was not this row's (the app's
+    // pull on launch, the Languages tab's catalogue): repaint, so the row
+    // offers Sign in again without waiting for a press here (B-phone, 26 Sep)
+    if (!isStudio && typeof global.addEventListener === "function") {
+      global.addEventListener("ttstv:grant", function () { paint(); });
     }
 
     return { ask: ask, paint: paint, press: press, signIn: signIn, signOut: signOut,
@@ -6356,6 +6405,7 @@
     TABS: TABS, TAB_KEY: TAB_KEY, KAGGLE: KAGGLE, MODAL: MODAL,
     SYNC: SYNC, SYNC_PAIR_KEY: SYNC_PAIR_KEY, SYNC_LAST_KEY: SYNC_LAST_KEY, SYNC_ACCOUNT_KEY: SYNC_ACCOUNT_KEY,
     syncStateLine: syncStateLine, syncPullLine: syncPullLine, syncHostPull: syncHostPull, syncWhoLine: syncWhoLine, syncCodeText: syncCodeText,
+    syncNeedsSignIn: syncNeedsSignIn, syncSignInAgainLine: syncSignInAgainLine,   // the dead grant (B-phone, 26 Sep)
     syncRemote: syncRemote, syncUrl: syncUrl, syncBaseOf: syncBaseOf, syncDeviceId: syncDeviceId,
     // where a studio ask GOES (G-SETTINGS2, 13 Sep): this origin, else the
     // paired door with the pass on it. Exported because it is pure and
