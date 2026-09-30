@@ -134,3 +134,19 @@
     height:var(--subrail-hit-land, 16px);
   }
 }
+
+/* ABOVE THE PLAY CAPSULE, NOT UNDER IT (EXPORT, 28 Sep; the band Stranger: "the pill
+   sits over the sentence line"). On the Mac and the web the capsule stands at
+   --mplay-place from the foot and is ~44 tall, so the line and its rail start above it. */
+html:not([data-phone]){ --sub-bottom: calc(var(--mplay-place, 22px) + 62px); --subrail-bottom: calc(var(--mplay-place, 22px) + 50px); }
+
+/* ABOVE THE PHONE'S FOOT ROW, NOT UNDER IT (ASKS #177, the phone Stranger: ".wordsubrail (y 813–833) is hidden under
+   the foot row (779–827)" and into the home bar). On the phone the band's row of ⚙ · pill · mic stands
+   --band-foot from the foot (band.css), so the rail starts a --gap above that and the line a --gap above the rail --
+   the same shape the Mac/web rule above gives them over the play capsule. Upright and on its side alike. */
+html[data-phone]{
+  --subrail-bottom: calc(var(--band-foot, 73px) + var(--gap, 8px));
+  --sub-bottom: calc(var(--band-foot, 73px) + var(--gap, 8px) + var(--subrail-hit, 20px));
+  --subrail-bottom-land: calc(var(--band-foot, 73px) + var(--gap, 8px) / 2);
+  --sub-bottom-land: calc(var(--band-foot, 73px) + var(--gap, 8px) / 2 + var(--subrail-hit-land, 16px));
+}

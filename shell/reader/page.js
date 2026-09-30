@@ -217,9 +217,18 @@ function mount(o){
 
   /* ONE CHAPTER'S HTML. Lifted out of render()'s loop unchanged -- it is what
      a section gets when it mounts, which is now not always at render. */
-  function chapterHTML(ch, BASE, prevLastPg){
-    let h='<div class="opener"><snap></snap><h1>'
-         +(ch.n?'<small>'+esc(ch.n)+'</small>':'')+esc(ch.t||"")+'</h1></div>';
+  /* THE HEADING IS A DOOR TO CONTENTS (READER-LINKS, 26 Sep). Osca's second
+     press: the contents pane's entries are links; the chapter heading as it
+     stands in the text was not. So the opener's <h1> carries an <a> whose
+     href names the unit's own contents entry -- `#toc-<index>`, the id
+     wheel.js writes on the row book-nav.js gives it (ensurePane). The page
+     writes the href and nothing else: book-nav.js owns the click (its
+     reader-column delegate opens the contents at that unit), so a page
+     mounted with no nav still shows an honest link. */
+  const tocHref = ci => '#toc-' + ci;
+  function chapterHTML(ch, BASE, prevLastPg, ci){
+    let h='<div class="opener"><snap></snap><h1><a class="unitlink" href="'+tocHref(ci)+'">'
+         +(ch.n?'<small>'+esc(ch.n)+'</small>':'')+esc(ch.t||"")+'</a></h1></div>';
     let open=false, lastStanza=null, lastPage=prevLastPg||0;
     (ch.blocks||[]).forEach(b=>{
       /* PAGE MARKER (J2p, 25 Sep 2026).  `b.pg` is the 1-based page number
@@ -321,7 +330,22 @@ function mount(o){
          7,718 of the Penguin book's paragraphs are French verse. */
       const verse = b.st !== undefined && b.st !== null;
       const secLang = (ch && ch.lang) || LANG;
-      const lg = b.lg && b.lg !== secLang ? ' lang="'+esc(b.lg)+'"' : '';
+      /* ...AND A WORD TAKES ITS OWN (LANG-WORD, Osca 28 Sep: "Lang detection
+         has to be per word, of course"). `wl` is core/bookdata.py's runs of
+         `Word.lang` over this block's whitespace tokens -- `[[count, code |
+         null], ...]` -- written only where a word differs from its sentence.
+         It is carried as ONE attribute, `data-wl="20:,1:grc-Latn,10:"`, and
+         never as a <span> round the run: buildWordDomIndex (book-nav.js)
+         indexes `p.firstChild` as one text node, and a span inside the line
+         would drop every word after it out of the word index. book-nav.js's
+         wzMarkLang reads the run the word is in and puts that code on the
+         one-word view, where lookup.js already reads `lang`; `grc-Latn` is
+         Greek somebody's OCR wrote in Latin letters, which no dictionary
+         answers and no voice reads. 0 of the shelf's blocks carry it today
+         but Daphnis and Chloe's 3,413. */
+      const wl = Array.isArray(b.wl) && b.wl.length
+        ? ' data-wl="'+esc(b.wl.map(r => (+r[0]||0)+':'+(r[1]||'')).join(','))+'"' : '';
+      const lg = (b.lg && b.lg !== secLang ? ' lang="'+esc(b.lg)+'"' : '') + wl;
       /* DATA-KIND: the parser's own kind, or inferred from the block's shape.
          `b.k` is the parser's `Paragraph.kind` when book.js carries it;
          without it, verse/prose is told from `st` (stanza) and everything
@@ -368,7 +392,7 @@ function mount(o){
     /* F6: seed the page-marker dedup from the previous chapter so a page
        that spans a boundary emits exactly one marker, not two. */
     const prevPg = ci > 0 ? lastPgOf(CUR.chapters[ci-1]) : 0;
-    sec.innerHTML = chapterHTML(CUR.chapters[ci], BASE, prevPg);
+    sec.innerHTML = chapterHTML(CUR.chapters[ci], BASE, prevPg, ci);
     sec.classList.remove("stub");
     sec.style.minHeight = "";
     tintOpener(sec.querySelector(".opener"), (CUR.title?1:0)+ci, CUR.palette);
@@ -700,9 +724,12 @@ function mount(o){
     if(runhead){
       const onTitle = LINE < (chs[0]?chs[0].offsetTop:0);
       const ch=(CUR&&CUR.chapters&&CUR.chapters[cur])||{n:"",t:""};
+      /* the running title is the same door (READER-LINKS): the chapter's
+         name in the head links to its contents entry, the book's title does not */
       runhead.innerHTML='<b>'+esc(CUR?CUR.title:"")+'</b>'
         + (onTitle ? '<span>'+esc((CUR&&CUR.author)||"")+'</span>'
-                   : '<span>'+esc(ch.n)+(ch.t?(ch.n?' · ':'')+esc(ch.t):'')+'</span>');
+                   : '<span><a class="unitlink" href="'+tocHref(cur)+'">'
+                     +esc(ch.n)+(ch.t?(ch.n?' · ':'')+esc(ch.t):'')+'</a></span>');
     }
   }
 

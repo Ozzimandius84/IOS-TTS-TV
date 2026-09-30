@@ -226,6 +226,9 @@ html[data-phone] .column h2{
        --gutter-min: calc(var(--sc-band, 23px) + var(--gutter-breath));
        --gutter-pc:7.5%; --gutter-n:7.5; --gutter-max-frac:0.4;
        --gutter: clamp(var(--gutter-min), calc(var(--gutter-n) / 100 * var(--measure)), calc(var(--measure) * var(--gutter-max-frac))); }
+/* THE PHONE'S MARGINS (Osca, 28 Sep late: "the margins are still small" -- on the phone the column was 264 of 393,
+   65 px of paper each side, lines of four words and rivers): a smaller breath and proportion, so the text runs wider */
+html[data-phone]{ --gutter-breath:6px; --gutter-pc:3%; --gutter-n:3; }
 
 /* ====================== PER-BLOCK GUTTER RULES (J1) ========================
    R3: "the setting is one proportion; the reader turns it into a per-BLOCK
@@ -525,6 +528,10 @@ h1 small{ display:block; font-size:.48rem; letter-spacing:.18em;
   opacity:var(--head-fade, 0.24);
   color:var(--dim); }
 .runhead b{ font-weight:600; color:var(--ink); }
+/* READER-LINKS (26 Sep): the heading and the running title are links to the
+   unit's contents entry -- drawn as the words they were, the hand says door */
+.opener h1 a.unitlink, .runhead a.unitlink{ color:inherit; text-decoration:none; cursor:pointer; pointer-events:auto; }
+.opener h1 a.unitlink:hover, .runhead a.unitlink:hover{ text-decoration:underline; text-underline-offset:.12em; }
 html[data-runhead="off"]  .runhead{ display:none; }
 html[data-runhead="book"] .runhead span{ display:none; }
 html[data-runhead="here"] .runhead b{ display:none; }
@@ -667,3 +674,60 @@ html[data-skipoff] .column.zoomed .chapter.stub{
 html[data-skipoff] .column.zoomed .chapter:not(.wordzoom){
   contain-intrinsic-size:900px;
 }
+
+/* ====================== READER-WIDE (Osca, 28 Sep) =========================
+   *"use the left of the screen, also in the reader ... the margins are VERY
+   narrow, text is small. Should be larger, wider. Contents can still just
+   pull over."*  PROMPTS/lanes/design.md, Lane READER-WIDE.
+
+   ONE DIAL PAIR: size and measure move together off the window, so a wider
+   window gets bigger type AND a longer line, never a longer line alone.
+     --read-size    8px + 0.8333vw, clamped 16..26  -> 18.7 @1280 · 20 @1440 · 22.3 @1710
+     --read-measure 28em of that size: max 71 characters a line (measured, 204 lines)
+     --read-margin  max(64px, 10vw) each side -- the floor the column never eats
+   Settings' Size still works: prefs writes --optical = 1.06 x size/100, and
+   the ratio to 1.06 multiplies the dial, so the default is exactly 20 @1440.
+   The column is CENTRED ON THE WINDOW (margin-inline:auto on a box that is the
+   whole window -- book-nav.js no longer pushes #readerbox on the Mac/web; the
+   contents rail slides OVER the page, see its RAIL_OVER).
+   The phone keeps its own measure: every rule here is html:not([data-phone]). */
+html:not([data-phone]){
+  /* raised (Osca, 28 Sep late: "the margins are still small"): 24 @1440 (22.2 @1280, 27 @1710), a 30em column */
+  --read-size: calc(clamp(18px, 8px + 1.1111vw, 32px) * var(--optical, 1.06) / 1.06);
+  --read-measure: 30em;
+  --read-margin: max(64px, 10vw);
+}
+html:not([data-phone]) #readercol{ font-size:var(--read-size); }
+html:not([data-phone]) #readercol p{ font-size:1em; line-height:var(--read-line, 1.55); }
+html:not([data-phone]) #readercol h1{ font-size:1.25em; }
+html:not([data-phone]) #readercol h1.booktitle{ font-size:2.1em; }
+html:not([data-phone]) #readercol .chapter{
+  width:min(var(--w, var(--read-measure)), var(--read-measure), calc(100% - 2 * var(--read-margin)));
+  max-width:none; }
+html:not([data-phone]) #readercol.zoomed .chapter{ max-width:none; }
+
+/* THE PHONE USES THE WHOLE SCREEN (Osca, 29 Sep: "the margins aren't wide enough, use THE ENTIRE screen"). The column
+   was capped by --measure (145 px + 50vw = 341 on a 393 phone) and then lost the rail's band and a breath each side:
+   283 of 393, 55 px of paper a side, lines of five words with rivers when justified. On the phone the measure is the
+   screen and the margin is one 22 px band each side -- the scroll bar sits inside the right one, and it goes away
+   while you read (reader.html, data-away). */
+html[data-phone]{ --measure:100vw; --gutter-pc:0%; --gutter-n:0; --gutter-breath:9px;
+  --gutter-min: calc(var(--sc-band, 23px) + var(--gutter-breath)); }
+/* ...AND WIDER, SYMMETRICALLY (Osca, 29 Sep, later: "the margin isn't wide enough on the phone, you have to move the
+   scrub bar slightly further in, so you can make the margins wider symmetrically"). The rail stands 20 px in from the
+   right edge (scrub.js shiftPhone 6: 26 - 6), is 3 px awake, and the text keeps a 9 px breath from it: 32 px of paper
+   on BOTH sides, the rail inside the right one. On its side the phone is 852 wide: a line the width of the screen is
+   a hundred characters, so the measure stops at 620 and the page is centred in it -- the island's side and the
+   other side the same. */
+@media (orientation: landscape){
+  html[data-phone]{ --measure:min(100vw, 620px); }
+}
+/* ON ITS SIDE THE TYPE STAYS THE PHONE'S (the landscape Stranger, 29 Sep: 22 px sideways against 18.6 upright, eight
+   lines on the screen). The root size is 14.5 px + 0.75vw, so 852 px wide grew it; on its side the phone's type is the
+   upright phone's (393 px: 14.5 + 2.95), and more lines fit. */
+@media (orientation: landscape){ html[data-phone]{ font-size: calc((14.5px + 2.95px) * var(--optical, 1)); } }
+/* A STITCHED BOOK'S TWO LANGUAGES ARE TWO FACES (ASKS #119, the e-reader Stranger). page.js writes `lang` on a line only
+   when it is not the section's language -- so `p.line[lang]` IS the book's second language, the translation beside the
+   original. It is set in the book serif's italic, a shade lighter, as a facing-page edition sets its translation: the
+   original is the page, the second face answers it. Words, sizes and the word index are untouched (no spans). */
+#readercol section.chapter p.line[lang]{ font-style: italic; color: color-mix(in srgb, var(--ink) 80%, transparent); }

@@ -6,7 +6,7 @@
      the phone pages exist to end. library.html and settings.html carry the
      same line; the reader had none. Inert in a desktop window. -->
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Frank — the shell</title>
+<title>Frank</title>
 <link rel="stylesheet" href="tokens.css">
 <link rel="stylesheet" href="wheel.css">
 <link rel="stylesheet" href="page.css">
@@ -19,6 +19,62 @@
 <link rel="stylesheet" href="listen.css">
 <link rel="stylesheet" href="marginalia.css">
 <link rel="stylesheet" href="surface.css">
+<!-- THE BAND ON A BOOK (EXPORT, 28 Sep; design/reader/band.html is its master,
+     design/reader/band.design.json the values Osca set). It replaces #frankdoor,
+     STRANGER-FIX's placeholder for it: the mark at the left IS the way back
+     ("everybody knows, like YouTube"), the title and chapter centred, the four
+     layers as glyphs at the right. It goes with the page -- carried up by what
+     the text scrolls, back by a scroll up or the pointer at the window's top --
+     so it never jumps. The phone keeps #pbar (pbar.js: the pill, the drag up
+     to the shelf, the hide-as-you-read) until those gestures move under
+     band.js; so the band is not mounted there. -->
+<link rel="stylesheet" href="band.css">
+<link rel="stylesheet" href="layers.css">
+<link rel="stylesheet" href="tellfrank.css"><!-- Tell Frank (ASKS #134-#136) -->
+<script src="band.js"></script>
+<script src="layers.js"></script>
+<style>
+#bandHost{ position:fixed; top:0; left:0; right:0; z-index:60; pointer-events:none; }
+#bandHost .band{ pointer-events:auto; }
+/* the band says the book and the chapter; the running head would say them twice */
+html[data-band="reader"]:not([data-phone]) .runhead{ visibility:hidden; }
+html[data-band="reader"] .band-head{ cursor:pointer; }
+.layernote{ position:fixed; left:50%; transform:translateX(-50%); top:calc(var(--band-h, 44px) + 8px);
+  z-index:59; font-family:var(--ui); font-size:var(--ui-act, 13px); color:var(--chrome-dim, var(--ink));
+  background:var(--chrome-bg, var(--bg)); border:var(--hair, 1px) solid var(--chrome-border, transparent);
+  border-radius:var(--r-ui, 8px); padding:6px 12px; max-width:min(560px, 90vw); text-align:center; }
+.layernote[hidden]{ display:none; }
+/* the phone's layers: a glass capsule under the island (the mount is below, "THE LAYERS ON THE PHONE") */
+.phlayers{ display:none; }
+html[data-phone] .phlayers{ display:block; position:fixed; z-index:62; left:50%; transform:translateX(-50%);
+  top:calc(var(--safe-top, env(safe-area-inset-top, 0px)) + 6px); transition:transform .24s ease, opacity .24s ease; }
+html[data-phone] .phlayers .layers{ margin:0; height:40px; padding:3px; border-radius:20px; display:flex; gap:2px;
+  border:1px solid color-mix(in srgb, var(--ink) 12%, transparent);
+  background:color-mix(in srgb, var(--ground) 62%, transparent);
+  -webkit-backdrop-filter:saturate(1.8) blur(18px); backdrop-filter:saturate(1.8) blur(18px);
+  box-shadow:0 4px 18px rgba(0,0,0,.12); }
+html[data-phone] .phlayers .layers button{ width:52px; height:34px; padding:0; border-radius:17px; display:grid; place-items:center; }
+html[data-phone] .phlayers .layers button svg{ width:18px; height:18px; display:block; }
+html[data-phone][data-away] .phlayers{ transform:translate(-50%, calc(-100% - 60px)); opacity:0; pointer-events:none; }
+html[data-phone] .layernote{ top:calc(var(--safe-top, env(safe-area-inset-top, 0px)) + 56px); }
+/* THE TOP FADES UNDER THE ISLAND, as the foot does under the band: the status bar's height is always paper (the
+   words never run under the island and the clock), and while the bars are up the fade reaches under the layers too */
+html[data-phone] body::before{ content:""; position:fixed; z-index:61; left:0; right:0; top:0; pointer-events:none;
+  height:calc(var(--safe-top, env(safe-area-inset-top, 0px)) + 84px);
+  background:linear-gradient(to bottom, var(--ground) 0%, var(--ground) calc(var(--safe-top, env(safe-area-inset-top, 0px)) + 30px),
+    color-mix(in srgb, var(--ground) 80%, transparent) calc(var(--safe-top, env(safe-area-inset-top, 0px)) + 58px),
+    color-mix(in srgb, var(--ground) 0%, transparent) 100%);   /* solid under the layers' capsule too (landscape Stranger: words ran under it) */
+  transition:height .24s ease; }
+html[data-phone][data-away] body::before{ height:calc(var(--safe-top, env(safe-area-inset-top, 0px)) + 18px); }
+/* on its side the rail stands in the margin beside the text, not in the strip at the screen's edge */
+@media (orientation: landscape){ html[data-phone] .scrub2{ right:calc(var(--safe-right, env(safe-area-inset-right, 0px)) + 12px) !important; } }
+#playnote{ position:fixed; left:50%; transform:translateX(-50%); bottom:calc(var(--mplay-place, 22px) + 56px); z-index:61;
+  font-family:var(--ui); font-size:var(--ui-act, 13px); color:var(--ink); background:var(--ground);
+  border:1px solid var(--rule); border-radius:10px; padding:8px 14px; box-shadow:0 8px 24px rgba(0,0,0,.12); white-space:nowrap; }
+#playnote a{ color:var(--chrome-accent, var(--ink)); font-weight:600; }
+#playnote[hidden]{ display:none; }
+html[data-phone] #playnote{ bottom:calc(var(--safe-bottom, env(safe-area-inset-bottom, 0px)) + 110px); white-space:normal; box-sizing:border-box; width:min(calc(100% - 48px - var(--safe-left, 0px) - var(--safe-right, 0px)), 420px); text-align:center; }
+</style>
 
 <!-- THE TWO ROOTS EVERY SURFACE LOADS BEFORE IT PAINTS (job 15 step 3b).
      keys.js: while the caret is in a field the keyboard belongs to the
@@ -49,6 +105,8 @@
 })();
 </script>
 
+<header id="bandHost"></header>
+<div class="layernote" id="layernote" role="status" hidden></div>
 <div id="book">
   <div class="readerbox" id="readerbox">
     <div class="pane" id="readerpane"><div class="column" id="readercol"></div></div>
@@ -216,6 +274,8 @@
     /* FLOAT: a small card standing off the corner of a bigger one. Not a
        window and not an arrow -- what the button does is put ONE WORD in a
        card that stays in front of everything else. */
+    /* ONE WORD (ASKS #120): a word's bar with its pivot marked above and below -- the view that holds one word still */
+    oneword: svg('<path d="M4.6 10h10.8" stroke-width="2"/><path d="M10 4.8v2.4M10 12.8v2.4" stroke-width="1.5"/>'),
     float: svg('<rect x="2.6" y="3.4" width="10.6" height="9" rx="1.8"/>'
              + '<rect x="9.4" y="9.2" width="8" height="7.4" rx="1.8" fill="var(--ground)"/>'
              + '<path d="M11.6 12.9h3.6"/>'),
@@ -262,7 +322,7 @@
              + ' aria-label="Follow the voice" title="Follow the voice"'
              + ' aria-pressed="false" data-follow="off">' + ICON.follow + '</button>';
   var speed = '<button type="button" class="' + P + '-speed" id="' + P + 'speed"'
-            + ' aria-label="Pace" title="Pace">' + (PHONE ? "300" : "300 wpm") + '</button>';
+            + ' aria-label="Pace" title="Pace">' + "300 wpm" + '</button>';
   /* ★ THE FLOAT IS THE MAC'S AND ONLY THE MAC'S (13 Sep, design/reader/FLOAT.md).
      "The Mac has no PiP limit": the float there is our own always-on-top
      window and every pixel of it is ours. The phone's float is Apple's window
@@ -285,6 +345,11 @@
              + ' aria-label="Float" title="Float this word"'
              + ' aria-pressed="false" data-float="off">' + ICON.float + '</button>';
 
+  /* A DOOR TO THE ONE-WORD VIEW (ASKS #120, the e-reader Stranger: only the V key went there): beside Follow, a press
+     is the V key -- nav.go(1) in, nav.go(0) out -- and it reads pressed while the view is one word (data-axis) */
+  function oneb(id, cls) {
+    return '<button type="button" class="' + cls + ' play-oneword" id="' + id + '" aria-label="One word" title="One word (V)" aria-pressed="false">' + ICON.oneword + '</button>';
+  }
   if (PHONE) {
     bar.className = "pplay"; bar.id = "pplay";
     bar.innerHTML =
@@ -296,6 +361,7 @@
       +   b("pplaynext", "pplay-b", "The sentence after", ICON.next)
       +   speed
       +   follow
+      +   oneb("pplayword", "pplay-b")
       + '</div>';
   } else {
     bar.className = "mplay"; bar.id = "mplay";
@@ -305,11 +371,38 @@
       + b("mplaygo",   "mplay-b mplay-go", "Play", ICON.play)
       + b("mplaynext", "mplay-b", "The sentence after", ICON.next)
       + b("mplayfwd",  "mplay-b", "Forward fifteen seconds", ICON.fwd)
-      + t0 + rail + t1 + speed + follow + floatb;
+      + t0 + rail + t1 + speed + follow + oneb("mplayword", "mplay-b") + floatb;
   }
   bar.setAttribute("data-shown", "off");
   bar.hidden = true;                    /* until the transport says there is a voice */
   document.body.appendChild(bar);
+  (function () {
+    var w1 = bar.querySelector(".play-oneword"); if (!w1) return;
+    /* ONE PRESS, ONE VIEW (ASKS #176): past the page (dx > 0, travelling or arrived) a press goes home to the page;
+       on the page it goes into one word. The key reads pressed on the WORD side of the axis only -- data-axis is
+       also set while the contents panes are open (dx < 0), which is not one word. */
+    var onWordSide = function () { try { return typeof nav !== "undefined" && nav && nav.dx > 0.0001; } catch (_) { return false; } };
+    w1.addEventListener("click", function (e) {
+      e.stopPropagation();
+      if (typeof nav === "undefined" || !nav || !nav.go) return;
+      var into = !onWordSide();
+      nav.go(into ? 1 : 0);
+      w1.setAttribute("aria-pressed", into ? "true" : "false");
+      keepView(into ? "oneword" : "page");
+    });
+    /* ...AND THE CHOICE IS THE VIEW (the Stranger: "aria-pressed flips, data-read-view stays oneword"). A press on the
+       key, or Esc inside one word, is the reader choosing a view, so it is written where Settings' View writes it:
+       data-read-view follows, the Settings form shows it, and the next book opens where they left off -- never in a
+       one word somebody else chose. A gesture along the axis is not a choice of view and writes nothing. */
+    function keepView(v) {
+      try { var S = window.TTSTVSettings; if (S && S.read().view !== v) S.patch({ view: v }); } catch (_) {}
+    }
+    document.addEventListener("keydown", function (e) {
+      if (e.key === "Escape" && !e.defaultPrevented && onWordSide()) keepView("page");
+    }, true);
+    var sync = function () { var on = document.documentElement.hasAttribute("data-axis") && onWordSide() ? "true" : "false"; if (w1.getAttribute("aria-pressed") !== on) w1.setAttribute("aria-pressed", on); };
+    new MutationObserver(sync).observe(document.documentElement, { attributes: true, attributeFilter: ["data-axis"] }); sync();
+  })();
 
   var $ = function (id) { return document.getElementById(id); };
   var railEl = $(P + "rail"), tEl = $(P + "t"), leftEl = $(P + "left"),
@@ -332,7 +425,7 @@
   var lastCursor = null;
   addEventListener("ttstv:cursor", function (e) {
     var d = e && e.detail;
-    if (d && d.word != null) lastCursor = { chapter: d.chapter, word: d.word };
+    if (d && d.word != null) lastCursor = { chapter: d.chapter, word: d.word, text: typeof d.text === "string" ? d.text : "" };
   });
   var floatDoor = null;
   function floatReady() {
@@ -352,7 +445,30 @@
       doors: {
         voiceui: function () { return window.VoiceUI && VoiceUI.instance; },
         transport: function () { return window.Transport; },
+        /* §10's scrub (stage 5): the one-word view's own word step, n times --
+           the reader's cursor moves and the feed brings the word to the HUD */
+        scrub: function (n) { var k = Math.abs(n | 0), d = n < 0 ? -1 : 1; while (k-- > 0) { try { nav.step(d); } catch (_) { break; } } },
         define: function () { window.dispatchEvent(new CustomEvent("ttstv:float-define")); },
+        /* DEFINE ANSWERS ON THE FLOAT (ASKS #147, Osca 29 Sep: "Define and Explain answer in a card beside the floating
+           word, and Frank stays minimised"): the cursor's word looked up here, in the dictionary this page already has,
+           and handed to floatdoor, which feeds it to the HUD -- the minimised reader opens nothing. Resolves to
+           {word, lang, head, lines} or null; waits up to 2 s for a pack that is still answering. */
+        defineText: function () {
+          var L = window.Lookup && Lookup.current, w = lastCursor && lastCursor.text;
+          if (!L || !L.entry || !w) return Promise.resolve(null);
+          var word = String(w).replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, ""), t0 = Date.now();
+          return new Promise(function (res) {
+            (function ask() {
+              var e = null; try { e = L.entry(word); } catch (_) {}
+              var done = e || (L.settled && L.settled(word)) || Date.now() - t0 > 2000;
+              if (!done) return setTimeout(ask, 120);
+              var lang = L.lang || "", name = (window.Lookup && Lookup.langName) ? Lookup.langName(lang) : lang;
+              var gs = e ? (Array.isArray(e.gloss) ? e.gloss : (e.gloss ? [e.gloss] : [])) : [];
+              res({ word: word, lang: lang, head: "Frank · " + (name || lang) + (e && e.pos ? " · " + e.pos : ""),
+                    lines: gs.length ? gs.slice(0, 3).map(String) : ["No entry for “" + word + "” in Frank’s " + (name || "") + " dictionary."] });
+            })();
+          });
+        },
         translate: function () { window.dispatchEvent(new CustomEvent("ttstv:float-translate")); },
         /* ★ AND CLOSE REALLY CLOSES (14 Sep). `floatDoor.stop()` stops the
            FEED; it does not take the window down, and nothing else did
@@ -362,13 +478,7 @@
            on the screen. `host_float` is a toggle and the panel is open
            whenever this arrives, so one call closes it. The paint and
            book-nav are told by `setFloat`, as every road is. */
-        close: function () {
-          if (floatDoor) floatDoor.stop();
-          if (!floatIsOpen) { setFloat(false); return; }
-          var H = window.TTSTVHost;
-          if (H && typeof H.float === "function") H.float().then(setFloat, function () { setFloat(false); });
-          else setFloat(false);
-        },
+        close: function () { closeFloat(); },
         said: function () {
           var V = window.VoiceUI && VoiceUI.instance;
           return V && typeof V.said === "function" ? V.said() : "";
@@ -387,6 +497,21 @@
      the axis listens for beside `nav` further down this file. The button's
      own paint is the same subscription and not a second copy. */
   var floatIsOpen = false;
+  /* ★ D17 (Osca, 27 Sep) -- CLOSE IS ITS OWN VERB. Since F2b `host_float`
+     RAISES an open panel and never toggles it (the axis's door must open,
+     never flip), so the 14 Sep "one more call closes it" left the HUD on the
+     screen and the app in the Dock. `floatClose` is `host_float_close`: it
+     takes the HUD down and Rust unminimises the window that opened it. Every
+     road out -- the panel's wheel-back `close`, the button while the panel is
+     up -- comes through here. */
+  function closeFloat() {
+    if (floatDoor) floatDoor.stop();
+    var H = window.TTSTVHost;
+    if (H && typeof H.floatClose === "function") {
+      return H.floatClose().then(function () { return setFloat(false); }, function () { return setFloat(false); });
+    }
+    return Promise.resolve(setFloat(false));
+  }
   function setFloat(open) {
     floatIsOpen = open !== false;
     if (floatEl) {
@@ -401,13 +526,30 @@
   /* ★ THE AXIS'S DOOR. `book-nav.js` calls this when a scroll past the view's
      end has committed, and it OPENS -- never toggles. It resolves to what the
      panel IS, which is what the axis records and what the button paints. */
+  /* ★ WHERE THE WORD IS, for §9's slide (FLOAT-HANDS stage 1, 28 Sep). Read
+     off the one-word view's own elements -- `.wordview-word` is the box
+     wordview.js sizes in px and `.pv` its red letter -- in this webview's
+     CSS pixels; Rust adds the window and the webview's place in it. The box's
+     height is the em, so the HUD's window is em + 2 × margin and the panel's
+     `--float-em` comes out equal to the view's: same font, same size, same
+     place, and then the reader goes under it. */
+  function wordRectNow() {
+    var view = document.querySelector(".wordview.on");
+    var box = view && view.querySelector(".wordview-word");
+    if (!box) return null;
+    var r = box.getBoundingClientRect();
+    if (!(r.width > 0 && r.height > 0)) return null;
+    var em = parseFloat(getComputedStyle(box).fontSize) || r.height;
+    return { x: r.left, y: r.top + (r.height - em) / 2, w: r.width, h: em };
+  }
   window.ReaderFloat = {
     open: function () {
       if (floatIsOpen) return Promise.resolve(true);
       var d = floatReady();
       if (!d) return Promise.resolve(false);
-      return d.toggle().then(setFloat, function () { return setFloat(false); });
+      return d.toggle(wordRectNow()).then(setFloat, function () { return setFloat(false); });
     },
+    wordRect: wordRectNow,
     isOpen: function () { return floatIsOpen; },
   };
   if (floatEl) {
@@ -415,9 +557,10 @@
       floatEl.hidden = true;                  /* no panel to open: no button */
     } else {
       floatEl.addEventListener("click", function () {
+        if (floatIsOpen) { closeFloat(); return; }   /* D17: a latched button closes */
         var d = floatReady();
         if (!d) return;
-        d.toggle().then(setFloat);
+        d.toggle(wordRectNow()).then(setFloat);
       });
     }
   }
@@ -438,7 +581,62 @@
   followEl.addEventListener("click", function () {
     if (window.Follow) { Follow.toggle(); repaint(); }
   });
-  goEl.addEventListener("click", function () { T.toggle(); });
+  /* PLAY ALWAYS ANSWERS (PLAY-SILENT, Osca 28 Sep; the listener Stranger: "pressing Play
+     did nothing on screen"). On the title page there is no chapter to read, so Play
+     goes to the first one and starts there; if nothing can speak at all -- no rendered
+     voice and no system voice on this machine -- it says so in one sentence, with the
+     one door that fixes it, beside the button. */
+  function playNote(text) {
+    var n = document.getElementById("playnote");
+    if (!n) { n = document.createElement("div"); n.id = "playnote"; n.setAttribute("role", "status"); document.body.appendChild(n); }
+    n.innerHTML = "";
+    n.appendChild(document.createTextNode(text + " "));
+    var a = document.createElement("a"); a.href = "../settings/settings.html"; a.textContent = "Choose a voice";
+    a.addEventListener("click", function (e) {
+      if (window.TTSTVSettings && typeof TTSTVSettings.openWindow === "function") { e.preventDefault(); TTSTVSettings.openWindow("models"); }
+    });
+    n.appendChild(a);
+    n.hidden = false; clearTimeout(playNote.t); playNote.t = setTimeout(function () { n.hidden = true; }, 7000);
+  }
+  goEl.addEventListener("click", function () {
+    var st = T.state ? T.state() : {};
+    var was = !!st.playing;
+    function check() { setTimeout(function () {
+      var now = T.state ? T.state() : {};
+      /* ASKS #114: the transport says "playing" even when nothing sounds (no rendered voice, the
+         system voice silent), so the test is what is SOUNDING, and a silent play is stopped again
+         so the button does not turn into ⏸ over silence. */
+      var sounding = (now.playing && now.voice) || (window.speechSynthesis && (speechSynthesis.speaking || speechSynthesis.pending));
+      if (!was && !sounding) { if (now.playing) { try { T.toggle(); } catch (e) {} } playNote("Frank has no voice to read this with yet."); }
+    }, 1200); }
+    /* PLAY READS THE PAGE YOU ARE LOOKING AT (ASKS #108, and again #187: the web Stranger scrolled to Extracts,
+       pressed ▶ and heard "CONTENTS"). nav.playStart() names the first word on screen -- or null when the cursor's
+       own word is already on screen, so a pause resumes where it stopped -- and the cursor goes there first. The
+       old "no chapter yet -> go(0, 0)" was the front of the book whatever was on screen; it is the fallback only
+       now, when the page has no line to name. */
+    var here = (!was && typeof nav !== "undefined" && nav && nav.playStart) ? nav.playStart() : null;
+    if (here && window.TTSTVBook) {
+      try { TTSTVBook.go(here.ch, here.wi); } catch (e) {}
+      setTimeout(function () { T.toggle(); check(); }, 350);
+      return;
+    }
+    if (!was && st.chapterIndex < 0 && window.TTSTVBook) {
+      try { TTSTVBook.go(0, 0); } catch (e) {}
+      setTimeout(function () { T.toggle(); check(); }, 350);
+      return;
+    }
+    if (!was && typeof nav !== "undefined" && nav && nav.wordAtPoint && !nav.playStart && window.TTSTVBook) {
+      var pane = document.getElementById("readerpane") || document.scrollingElement, col = document.getElementById("readercol");
+      var pr = pane.getBoundingClientRect(), cr = col ? col.getBoundingClientRect() : pr, hit = null;
+      for (var yy = Math.max(pr.top, 0) + 90; !hit && yy < Math.min(pr.bottom, innerHeight) - 60; yy += 24) hit = nav.wordAtPoint(cr.left + 24, yy);
+      if (hit && hit.ch !== st.chapterIndex) {
+        try { TTSTVBook.go(hit.ch, hit.wi); } catch (e) {}
+        setTimeout(function () { T.toggle(); check(); }, 350);
+        return;
+      }
+    }
+    T.toggle(); check();
+  });
   /* ★ ONE STORE. The press writes Settings' `wpm` and nothing else; the
      rendered master follows through `playbackRate` inside the same call and
      the system voice re-bases off the store's own subscriber (below). No
@@ -583,6 +781,7 @@
   function paint(s) {
     var here = wanted(s);
     if (bar.hidden === here) bar.hidden = !here;
+    if (PHONE) { if (here) R.setAttribute("data-voice", ""); else R.removeAttribute("data-voice"); }   /* the band's ▶ shows only with a voice to play */
     if (!here) { R.removeAttribute("data-pplay"); return; }
 
     /* ★ NO CLOCK, AND THE BAR SAYS SO. The system voice moves no clock --
@@ -607,6 +806,8 @@
        that is already right is the one expensive thing on this strip. */
     if (s.playing !== lastPlaying) {
       lastPlaying = s.playing;
+      bar.setAttribute("data-playing", s.playing ? "on" : "off");
+      if (PHONE) { if (s.playing) R.setAttribute("data-playing", ""); else R.removeAttribute("data-playing"); }   /* the phone's player is only the ▶ in the pill until it plays (shell.css, 29 Sep) */
       goEl.innerHTML = s.playing ? ICON.pause : ICON.play;
       goEl.setAttribute("aria-label", s.playing ? "Pause" : "Play");
       goEl.setAttribute("title", s.playing ? "Pause" : "Play");
@@ -639,7 +840,7 @@
        reports 0 and the readout is left exactly as it is. */
     if (s.wpm && s.wpm !== lastWpm) {
       lastWpm = s.wpm;
-      speedEl.textContent = PHONE ? String(Math.round(s.wpm)) : (Math.round(s.wpm) + " wpm");
+      speedEl.textContent = Math.round(s.wpm) + " wpm";   /* the unit on the phone too -- "300" alone was a number with no meaning (Osca, 28 Sep) */
       speedEl.setAttribute("aria-label", "Pace, " + Math.round(s.wpm) + " words a minute");
       speedEl.setAttribute("title", "Pace");
     }
@@ -698,8 +899,12 @@
     .forEach(function (el) {
       if (el) new MutationObserver(zoomFlip).observe(el, { attributes: true, attributeFilter: ["class"] });
     });
-  var nav = document.getElementById("pbar");
-  if (nav) new MutationObserver(repaint).observe(nav, { attributes: true, attributeFilter: ["data-shown"] });
+  /* `pbarEl`, not `nav`: a `var nav` here is hoisted over this whole block
+     and shadowed the page's BookNav (`const nav`, further down) inside the
+     scrub door above -- `nav.step` was the #pbar element's, undefined, and
+     the Air's side-band scrub did nothing (FLOAT-HANDS stage 5c). */
+  var pbarEl = document.getElementById("pbar");
+  if (pbarEl) new MutationObserver(repaint).observe(pbarEl, { attributes: true, attributeFilter: ["data-shown"] });
   new MutationObserver(repaint).observe(R, { attributes: true, attributeFilter: ["style"] });
   /* #pbar is built by the mount above, which runs before this one; on a Mac
      there is none and this observer is simply never created. */
@@ -745,6 +950,28 @@
 <script src="pane.js"></script>
 <script src="wordpane.js"></script>
 <script src="wordview.js"></script>
+<script src="hints.js"></script>
+<script src="tellfrank.js"></script>
+<script src="dismiss.js"></script>
+<script>
+/* FIRST-TIME HINTS in a book (hints.js): once, after first run is answered. The phone's way back to the shelf is the
+   drag up on the title, and nothing else on screen says so (Osca, 29 Sep: no back button -- "I do NOT like that";
+   the hint is the answer). */
+(function () {
+  function go() {
+    if (!window.FrankHints) return;
+    var ph = document.documentElement.hasAttribute("data-phone");
+    FrankHints.show("book", ph ? [
+      { at: "foot", text: "To go back to your shelf, drag the book’s title up." },
+      { at: "#pplaygo", text: "Play reads the book aloud; each word lights up as it is read." },   /* the ▶ itself, not the whole row (Stranger, 29 Sep) */
+    ] : [
+      { at: ".band .layers", text: "Book, Mine, Everyone, Voice: the same page, with your notes, everyone’s, or the voice’s marks." },
+      { at: "top", text: "Press V to read one word at a time; press it again to come back to the page." },
+    ]);
+  }
+  setTimeout(go, 1800);
+})();
+</script>
 <script>
 /* ============ THE SHELL MUST NOT BE ABLE TO GO STALE ============
    Osca, 10 September, after a full loop and a push: *"the desktop app is still
@@ -834,6 +1061,8 @@ function buildStampText(b) {
   var el = null, fromServer = false;
   function paint(t) {
     if (!t || !document.body) return;
+    /* the stamp is the Mac's (Z1); a website or a phone shows none -- a stranger read it as the page */
+    if ((window.TTSTVHost && (TTSTVHost.isWeb || TTSTVHost.isPhone)) || document.documentElement.hasAttribute("data-phone")) return;
     if (!el) {
       el = document.createElement("div");
       el.id = "build-stamp";
@@ -854,7 +1083,8 @@ function buildStampText(b) {
   addEventListener("DOMContentLoaded", function () {
     // W1 SHELL-WEB: `/build-stamp` is a Studio route; skip on a website to
     // avoid a 404.  The shell name (`data-shell`) is still painted if present.
-    if (window.TTSTVHost && TTSTVHost.isWeb) { fromShell(); return; }
+    // a website shows no build stamp: a stranger read "ttstv-shell-v60" as part of the page (EXPORT, 28 Sep)
+    if ((window.TTSTVHost && (TTSTVHost.isWeb || TTSTVHost.isPhone)) || document.documentElement.hasAttribute("data-phone")) return;
     fetch("/build-stamp", { cache: "no-store" })
       .then(function (r) { return r.ok ? r.json() : null; })
       .then(function (b) { if (b) { fromServer = true; paint(buildStampText(b)); } else fromShell(); })
@@ -948,6 +1178,196 @@ const nav = BookNav.mount({
      (shell.css says what it carried). book-nav.js still writes both behind
      `if(o.big)` guards, so the omission is the whole of the change here. */
 });
+/* THE TAB IS THE BOOK (STRANGER-FIX, 28 Sep): a browser tab titled "Frank —
+   the shell" beside a shelf titled "TTSTV Library" named the product twice
+   and the book never. Every open names the tab after the book -- wrapped
+   here, ABOVE the block that opens the first book (the warm-cache race,
+   reader/STATUS.md), so the bench's picker and the app's slug both pass
+   through it. */
+function nameTab(b){ document.title = ((b && b.title) || "A book") + " · Frank"; }
+(function(){ const open0 = nav.openBook; nav.openBook = function(b){ const r = open0.call(nav, b); nameTab(b); return r; }; })();
+/* THE BOOK BAND (EXPORT, 28 Sep) -- mounted on the first open, named by the
+   book, its chapter kept by the cursor event. Installed here, above the block
+   that opens the book, for the same warm-cache reason as nameTab. */
+(function(){
+  const R = document.documentElement, host = document.getElementById("bandHost");
+  try{ if(window.TTSTVHost && TTSTVHost.isWeb) R.setAttribute("data-web", "1"); }catch(_){}
+  if(!host || !window.Band || R.hasAttribute("data-phone")) return;
+  let band = null, B = null;
+  const NOTE = {
+    book: "",
+    mine: "Your notes and highlights on this book show here. You have none yet.",
+    everyone: "What other readers share on this book shows here. Nobody has yet.",
+    voice: "The voice's marks on this chapter show here. It has none yet."
+  };
+  function chapterName(ch){
+    const c = B && B.chapters && B.chapters[ch];
+    const t = c && (c.t || c.n || c.title || c.name); if(!t) return "";
+    return window.Band && Band.chapterLabel ? Band.chapterLabel(t) : String(t).replace(/\.$/, "");   /* the name, or the number in Roman (band.js) */
+  }
+  function mount(b){
+    B = b; if(band){ band.remove(); band = null; }
+    band = Band.mount(host, { page: "reader", book: { title: (b && b.title) || "A book", chapter: chapterName(0) },
+      hrefs: { library: "../library/library.html", settings: "../settings/settings.html" } });
+    const note = document.getElementById("layernote");
+    if(window.Layers && Layers.control) Layers.control(band, { layer: "book", onLayer: function(l){
+      document.getElementById("book").setAttribute("data-layer", l);
+      note.textContent = NOTE[l] || ""; note.hidden = !NOTE[l];
+    }});
+    const hd = band.querySelector(".band-head");
+    if(hd) hd.addEventListener("click", function(){ const rh = document.getElementById("readerhead"); if(rh) rh.click(); });
+    ride(band);
+    setTimeout(function(){ const p = document.getElementById("readerpane"); if(p) p.dispatchEvent(new Event("scroll")); }, 350);   /* the head's state at opening, not only after a scroll */
+    outOfBook(band);
+  }
+  /* PINCH OUT AND FLING OUT, FROM INSIDE A BOOK (ASKS #148, #149; dismiss.js). A pinch out anywhere on the page -- the
+     Mac trackpad, Safari's gesture, two fingers -- shrinks the book with the hand and, past the threshold, goes to the
+     shelf. Grabbing the book is grabbing its title in the band (the page itself is for reading and selecting): drag it
+     and throw it and the book goes, the band riding the hand; the phone's pill already throws up to the shelf. The way
+     out is the band's own: `band:library`, then the mark's link. */
+  function outOfBook(band){
+    if(!window.Dismiss || !band) return;
+    const bookEl = document.getElementById("book") || document.body;
+    const leave = function(){
+      const ev = new CustomEvent("band:library", { bubbles: true, cancelable: true });
+      if(band.dispatchEvent(ev)){ const a = band.querySelector(".band-mark"); location.href = (a && a.getAttribute("href")) || "../library/library.html"; }
+    };
+    Dismiss.pinch(document.getElementById("readerpane") || document.body, function(p){
+      bookEl.style.transition = p ? "none" : "transform .2s ease, opacity .2s ease";
+      bookEl.style.transformOrigin = "50% 40%";
+      bookEl.style.transform = p ? "scale(" + (1 - 0.3 * p).toFixed(3) + ")" : "";
+      bookEl.style.opacity = p ? String(1 - 0.5 * p) : "";
+    }, leave);
+    const head = band.querySelector(".band-head");
+    if(head && !document.documentElement.hasAttribute("data-phone")) Dismiss.fling(head, function(dx, dy, p){
+      bookEl.style.transition = p ? "none" : "transform .2s ease, opacity .2s ease";
+      bookEl.style.transform = p ? "translate(" + dx + "px," + dy + "px) scale(" + (1 - 0.25 * p).toFixed(3) + ")" : "";
+      bookEl.style.opacity = p ? String(1 - 0.4 * p) : "";
+    }, leave);
+  }
+  /* the band rides the reader's own scroller (#readerpane), not the document */
+  function ride(el){
+    let off = 0, last = null;
+    const H = () => el.offsetHeight || 44;
+    const put = (v, glide) => { off = Math.max(0, Math.min(H(), v)); el.style.transition = glide ? "transform .18s ease" : "none"; el.style.setProperty("--band-off", off + "px"); };
+    document.addEventListener("scroll", function(e){
+      const t = e.target; if(!t || t.id !== "readerpane") return;
+      if(last != null) put(off + (t.scrollTop - last), false);
+      last = t.scrollTop;
+    }, { capture: true, passive: true });
+    document.addEventListener("pointermove", function(e){ if(off && e.clientY < H()) put(0, true); }, { passive: true });
+    el.addEventListener("focusin", () => put(0, true));
+  }
+  const open1 = nav.openBook;
+  nav.openBook = function(b){ const r = open1.call(nav, b); try{ mount(b); }catch(_){} return r; };
+  document.addEventListener("ttstv:cursor", function(e){
+    const i = band && band.querySelector(".band-head i");
+    if(i && e.detail && e.detail.chapter != null) i.textContent = chapterName(e.detail.chapter);
+  });
+  /* ...and by what is ON SCREEN: the chapter whose section holds the top of the
+     column (the listener Stranger: the head "stays on the first chapter after I
+     move to Act 2" -- the cursor moves only when the voice or a click does) */
+  let chTick = 0;
+  document.addEventListener("scroll", function(e){
+    if(!band || !e.target || e.target.id !== "readerpane" || chTick) return;
+    chTick = requestAnimationFrame(function(){
+      chTick = 0;
+      const i = band.querySelector(".band-head i"); if(!i) return;
+      const top = e.target.getBoundingClientRect().top + 60;
+      let cur = null;
+      e.target.querySelectorAll("section.chapter[data-ch]").forEach(function(sec){ if(sec.getBoundingClientRect().top <= top) cur = sec; });
+      const n = cur ? chapterName(+cur.getAttribute("data-ch")) : "";
+      if(i.textContent !== n) i.textContent = n;
+      /* THE CHAPTER IS SAID ONCE (ASKS #23, the band Strangers: "the chapter is said twice, band head + page
+         heading"): while a chapter's own heading is on screen, the band's chapter line steps aside (band.css) */
+      const pr = e.target.getBoundingClientRect(); let seen = false;
+      e.target.querySelectorAll("section.chapter[data-ch] > .opener").forEach(function(h){
+        const r = h.getBoundingClientRect(); if(r.bottom > pr.top + 8 && r.top < pr.bottom - 8) seen = true; });
+      if(seen !== document.documentElement.hasAttribute("data-headseen")){
+        if(seen) document.documentElement.setAttribute("data-headseen", ""); else document.documentElement.removeAttribute("data-headseen"); }
+      /* ...and the title page says the title (ASKS #80, "don't tell the user the same thing 100 times": the Mac said
+         "David Copperfield" three times on opening -- tab, band, page): while it is on screen the band's head steps aside */
+      const tp = e.target.querySelector("section.titlepage"), tr = tp && tp.getBoundingClientRect();
+      const title = !!(tr && tr.bottom > pr.top + 40 && tr.top < pr.bottom - 40);
+      if(title !== document.documentElement.hasAttribute("data-titleseen")){
+        if(title) document.documentElement.setAttribute("data-titleseen", ""); else document.documentElement.removeAttribute("data-titleseen"); }
+    });
+  }, { capture: true, passive: true });
+})();
+/* THE LAYERS ON THE PHONE (Osca, 29 Sep: "where have the layers gone on the phone? You need to design those too").
+   The Mac and the web carry the four in the book band's right cluster; the phone mounted none. Here they are the
+   same control (Layers.control, glyphs only -- Osca 28 Sep) in a glass capsule at the top of the screen, under the
+   island, centred: Book · Mine · Everyone · Voice. It is part of the bars: it goes as you read (data-away) and comes
+   back with them. The chosen layer is the accent, as everywhere. */
+(function(){
+  const R = document.documentElement;
+  const NOTE = { book: "", mine: "Your notes and highlights show here. You have none yet.",
+    everyone: "What other readers share shows here. Nobody has yet.", voice: "The voice's marks show here. It has none yet." };
+  function mountPhoneLayers(){
+    if(!R.hasAttribute("data-phone") || !window.Layers || !Layers.control || document.querySelector(".phlayers")) return;
+    const box = document.createElement("div"); box.className = "phlayers";
+    document.body.appendChild(box);
+    const note = document.getElementById("layernote"), book = document.getElementById("book");
+    const ctl = Layers.control({ querySelector: function(){ return box; } }, { layer: "book", onLayer: function(l){
+      if(book) book.setAttribute("data-layer", l);
+      if(note){ note.textContent = NOTE[l] || ""; note.hidden = !NOTE[l]; }
+    }});
+    swipeLayers(box, ctl);
+  }
+  /* A SIDEWAYS SWIPE IN THE TOP 88 PX CHANGES LAYER, WHETHER THE CAPSULE SHOWS OR NOT (ASKS #12; Osca 28 Sep:
+     "IMPORTANT, and natural"). The zone is the top 88 px or down to the capsule's foot, whichever is lower (the
+     island takes 54). Finger to the left is the next layer (Book → Mine → Everyone → Voice), to the right the one
+     before, like turning a page. The touch is taken in the window's capture phase ONLY once it has shown itself
+     sideways, so book-nav's own sideways axis never sees it, and a tap on a glyph or a scroll down still passes.
+     A change while the bars are away brings them back, so the capsule is seen answering. */
+  function swipeLayers(box, ctl){
+    if(!ctl || swipeLayers.on) return; swipeLayers.on = true;
+    const order = (window.Layers.LAYERS || []).map(function(l){ return l[0]; });
+    let s = null;
+    function zone(){ const b = box.getBoundingClientRect(); return Math.max(88, R.hasAttribute("data-away") ? 88 : b.bottom + 12); }
+    addEventListener("touchstart", function(e){
+      const t = e.touches; s = null;
+      if(!R.hasAttribute("data-phone") || !t || t.length !== 1 || t[0].clientY > zone()) return;
+      s = { x: t[0].clientX, y: t[0].clientY, mine: false };
+    }, { capture: true, passive: true });
+    addEventListener("touchmove", function(e){
+      if(!s) return; const t = e.touches && e.touches[0]; if(!t) return;
+      const dx = t.clientX - s.x, dy = t.clientY - s.y;
+      if(!s.mine){ if(Math.abs(dy) > 14 && Math.abs(dy) > Math.abs(dx)) { s = null; return; } if(Math.abs(dx) > 10 && Math.abs(dx) > 1.5 * Math.abs(dy)) s.mine = true; }
+      if(s.mine){ e.stopPropagation(); if(e.cancelable) e.preventDefault(); s.dx = dx; }
+    }, { capture: true, passive: false });
+    addEventListener("touchend", function(e){
+      if(!s || !s.mine){ s = null; return; }
+      e.stopPropagation();
+      const dx = s.dx || 0; s = null; if(Math.abs(dx) < 40) return;
+      const i = order.indexOf(ctl.get()), j = i + (dx < 0 ? 1 : -1);
+      if(i < 0 || j < 0 || j >= order.length) return;
+      ctl.set(order[j]); R.removeAttribute("data-away");
+    }, { capture: true });
+  }
+  if(document.readyState === "loading") document.addEventListener("DOMContentLoaded", mountPhoneLayers); else setTimeout(mountPhoneLayers, 0);
+  setTimeout(mountPhoneLayers, 600);   /* data-phone can land after load */
+})();
+/* AWAY AS YOU READ, THE PHONE (Osca, 29 Sep: "the bars AND the scroll bar should disappear on the phone as you
+   read"). Reading forward in #readerpane past 12 px sets html[data-away]; any scroll back, or the chapter's end,
+   clears it. The band (band.css), the player (shell.css) and the scroll bar (.scrub2, shell.css) each answer the one
+   flag. band.js does the same for a band that rides a page of its own. */
+(function(){
+  const R = document.documentElement;
+  let last = null, acc = 0, hand = 0;   /* data-phone is asked at each scroll: it can land after this runs */
+  /* only a READER's scroll takes the bars: the book restoring its place on open is a scroll too, and it hid them
+     before anyone had read a line. A hand within the last second is what counts. */
+  ["touchmove", "wheel", "keydown", "pointerdown"].forEach(function(t){ addEventListener(t, function(){ hand = Date.now(); }, { capture: true, passive: true }); });
+  const set = (away) => { if(away === R.hasAttribute("data-away")) return; if(away) R.setAttribute("data-away", ""); else R.removeAttribute("data-away"); };
+  document.addEventListener("scroll", function(e){
+    const t = e.target; if(!t || t.id !== "readerpane" || !R.hasAttribute("data-phone")) return;
+    const y = t.scrollTop; if(last == null){ last = y; return; }
+    const dy = y - last; last = y;
+    acc = (dy > 0) === (acc > 0) ? acc + dy : dy;
+    if(acc > 12){ if(Date.now() - hand < 1000) set(true); }
+    else if(acc < -12 || y + t.clientHeight >= t.scrollHeight - 2) set(false);
+  }, { capture: true, passive: true });
+})();
 /* ===================== THE BENCH -- ?bench, AND ONLY ?bench ================
    Osca, 6 September, pressing the reader in Frank Studio: *"it looks like a
    designer, not a finished reader."* So the page IS the reader now. Every
@@ -1029,6 +1449,16 @@ try{ (function(){
          and a console can reach the two mounts. Nothing in the design or the
          app reads either. */
       window.lookup = lookup; window.marginalia = marginalia; window.cursor = cursor;
+      /* ASKS #144: a press on a word opens Frank's card, in the language of the word's line (book-nav.js names both) */
+      if(!window.__wordPress){ window.__wordPress = 1;
+        document.addEventListener("ttstv:wordpress", function(e){
+          const L = window.Lookup && Lookup.current; if(!L || !L.open || !e.detail) return;
+          /* on the next tick: the press's own click is still on its way to the document, whose handler closes a card
+             for any press off the view */
+          const d = e.detail;
+          setTimeout(function(){ try{ L.open(d.text, d.lang || undefined, { page: true }); L.fromPage = true; }catch(err){ console.warn("[dictionary] press:", err); } }, 0);
+        });
+      }
       window.ReaderControl = listen;      // voiceui/reader-bridge.js's one hook
     }catch(e){ console.warn("[listen] not mounted:", e); }
     return r;
@@ -1103,7 +1533,12 @@ try{ (function(){
      for the same reason the block above this one sits above the open. */
   const open0 = nav.openBook;
   nav.openBook = function(b){ const r = open0.call(nav, b); view(S.read()); return r; };
-  S.subscribe(s => { paint(s); view(s, true); });
+  /* ...and the store re-applies the view ONLY when the view itself changed (ASKS #176). Forcing it on every
+     store change put a reader who had pressed back to the page straight into one word again the next time
+     ANY setting moved -- a pace drag, a theme key, another window's write -- so the bar's One word button
+     and Esc "did not leave". */
+  let lastView = S.read().view;
+  S.subscribe(s => { paint(s); if(s.view !== lastView){ lastView = s.view; view(s, true); } });
 })(); }catch(e){ console.warn("[settings] not wired:", e); }
 
 /* ======================= PACE — ONE WORD'S OWN CLOCK ======================
@@ -1194,7 +1629,9 @@ try{ (function(){
      narration had the cursor. */
   function watch(){
     const word = atWord();
-    if(word && !wasWord) armed = true;                  // arriving arms it
+    /* ARRIVING NO LONGER ARMS IT (ASKS #176, the Stranger: "the word walks by itself, Play showing ▶"). Nothing
+       moves that the reader did not start: the pace runs from the play key (Space) inside one word, and stops
+       on any hand, as before. */
     if(!word && wasWord) armed = false;                 // leaving disarms it
     wasWord = word;
     if(word && armed && !playing()){ start(); return; }
@@ -1295,6 +1732,13 @@ try{ (function(){
    has neither. `context.js` already reads kind as a fact about the machine,
    and this is the same fact asked a question. */
 let OPEN_BOOK = null;                    // the book nav actually opened
+/* SURFACE-ONE (28 Sep): the sheet over a book searches that book first, so it
+   needs the book and a way to put the cursor on what it found. Asked for,
+   never held (OPEN_BOOK changes on every openBook), and `go` is nav.goTo. */
+window.TTSTVBook = {
+  book: function(){ return OPEN_BOOK; },
+  go: function(ch, wi){ return nav.goTo(ch, wi); }
+};
 function hostTakesTarget(){
   return !!(window.TTSTVHost && typeof window.TTSTVHost.setTarget === "function");
 }
@@ -1963,6 +2407,10 @@ addEventListener("keydown", e => {
      VOICE), so a rendered chapter reaches `listen` exactly as it always did. */
   if(is("play") || (!S && e.code === "Space")){
     e.preventDefault();
+    /* nothing sounding: the key is the bar's ▶, which starts on the page you are looking at (#187) */
+    var go = document.getElementById("mplaygo") || document.getElementById("pplaygo");
+    var st0 = window.Transport && Transport.state ? Transport.state() : null;
+    if(go && st0 && !st0.playing){ go.click(); return; }
     if(window.Transport && (Transport.speaks() || Transport.speaking())) Transport.toggle();
     else listen.toggle();
     return;
@@ -1998,6 +2446,17 @@ addEventListener("keydown", e => {
 <script src="../voiceui/records.js"></script>
 <script src="../voiceui/catalogue.js"></script>
 <script src="../voiceui/app.js"></script>
+<!-- (d) THE CONTEXT ENGINE (CONTEXT-1, 26 Sep). A question typed into the
+     bar and ended with `?` is built into a ContextPackage on this page,
+     answered by the shell's Brain, and WRITTEN on the ring's line with each
+     citation a tap (context/ring.js). Absolute paths on purpose: context/ is
+     a ROOT, not a shell module, so ship.py rewrites nothing here and the
+     phone bundle (which has no /context/) simply loads nothing and shows
+     nothing -- the phone's brain is road 3's. Loaded after voiceui so the
+     say line exists to write on. -->
+<script src="/context/package.js"></script>
+<script src="/context/brain.js"></script>
+<script src="/context/ring.js"></script>
 <script>
 /* boot AFTER the first book has opened, because attachToWindow throws when
    window.ReaderControl is absent and the pill would come up permanently
@@ -2015,3 +2474,414 @@ addEventListener("keydown", e => {
 })();
 </script>
 
+<script data-design-baked>/* design/editor/apply.js -- inlined verbatim by design/export.py:
+   the one definition of what a .design.json means */
+/* design/editor/apply.js -- THE HAND THAT APPLIES A DESIGN FILE TO A PAGE.
+   (EDITOR lane, wave 10 round 2, 27 Sep 2026.)
+
+   One file, two readers: editor.js loads it to make every edit live, and
+   design/export.py inlines it VERBATIM into an export beside the page's
+   `.design.json`, so the export IS the edit (wave-10 rule 6) and there is
+   ONE definition of what a design file means -- never a Python copy.
+
+   WHAT A DESIGN FILE IS (design/<module>/<page>.design.json):
+     { "page":  "design/reader/band.html",
+       "items": { "<el>": { "kind":"door", "word":"Notes", "icon":"icons:page",
+                            "cluster":"left", "order":4,
+                            "on":["app","web","book"], "label":"words", "href":"…" } },
+       "css":   { "<el>": { "base":{"border-radius":"10px"}, "hover":{…}, "press":{…},
+                            "app":{…}, "web":{…}, "phone":{…}, "book":{…} } } }
+   plus, since EDITOR-2 (round 3), the page's EVENTS -- "when things happen":
+       "events": { "cmdk": { "effect":"fade", "ms":180, "easing":"ease-out" }, … }
+     one entry per event a page answers (open · cmdk · menu · info · theme ·
+     layer · close), written as `[data-ev="<id>"] { animation: … }` so a page
+     that stamps data-ev on the thing that appears gets the animation;
+     "theme" is a transition of colours instead. Unwritten = EVENTS' default.
+   and design/tokens.design.json:
+     { "light": {"--chrome-bg":"#…"}, "dark": {…}, "scale": {"--tap":"44px", …} }
+
+   COMPONENT FILES (EDITOR-3, round 5 -- Osca: "changes made in band aren't
+   global … I think it'd be stronger if band had everything"): a design file
+   belongs to the thing it describes. The band is a COMPONENT every page
+   wears, so its design is design/reader/band.design.json -- `items` (the
+   band's members) and `css` for them -- and EVERY page that mounts the band
+   loads that file; the layers (Book · Mine · Everyone · Voice) are
+   design/reader/layers.design.json the same way. A PAGE's own file
+   (design/<module>/<page>.design.json; band.html's canvas is
+   design/reader/pages.design.json) holds only what is that page's own: its
+   elements' css and its `events`. A page boots with the list -- components
+   first, the page last -- and `merge()` folds them into one state, the
+   later file winning a key: `DesignApply.boot([band, layers, page], tokens)`.
+   The editor writes an edit to the file that OWNS the selected element
+   (editor.js fileOf), so the band edited on any page is the band on all.
+
+   <el> is the element's stable name, stamped on the node as data-el. The
+   band's own are band · left · mark · name · library · surface · settings ·
+   head · right · theme · pill · mic; a door added in the editor is its own
+   id (notes, annotations, oneword, profile, highlights, mic, assistant,
+   community). A page may register more targets (the shelf's tile, Sort,
+   the foot) by a selector -- `targets: { tile: ".railrow.tile" }`.
+
+   HOW THE CSS IS WRITTEN, and the specificity is the design:
+     base   -> [data-el="x"]                        (0,1,0) beats the module's
+               class rules by ORDER, and loses to :hover / [aria-current] /
+               the phone's own rules -- so a base edit never kills a state.
+     hover  -> .band [data-el="x"]:hover            (0,3,0) wins the state;
+               also [data-el="x"]:hover for a target outside the band, and
+               [data-el="x"].ed-st-hover so the editor's States row can
+               HOLD the state on the canvas (round 3).
+     press  -> .band [data-el="x"]:active  (+ :active, .ed-st-press likewise)
+     phone  -> html[data-phone] .band [data-el="x"] (0,3,1) wins the phone.
+     web    -> html[data-web] …   app -> html:not([data-phone]):not([data-web]) …
+     book   -> .band[data-book] [data-el="x"]  (the band itself: .band[data-book][data-el=band])
+   Nothing here writes !important. */
+(function () {
+  "use strict";
+  var R = document.documentElement;
+
+  /* ---- the glyphs a door can carry: the band's 16-grid set, drawn here so
+     an export needs no fetch. icons.json's records are copied INTO the design
+     file by the editor (item.svg) when picked, for the same reason. ---- */
+  var G16 = {
+    library:  '<path d="M2 13.5h12"/><rect x="3" y="4" width="2.5" height="9.5" rx=".5"/><rect x="6.5" y="2.5" width="2.5" height="11" rx=".5"/><path d="M10.3 4.6l2.3-.6 2 8.9-2.3.6z"/>',   /* books on a shelf -- the same drawing as band.js's G.library */
+    surface:  '<circle cx="7" cy="7" r="4"/><path d="M10 10l3.5 3.5"/>',
+    settings: '<path d="M6.45 3.24L6.76 1.11L9.24 1.11L9.55 3.24L11.35 4.28L13.35 3.48L14.59 5.63L12.89 6.96L12.89 9.04L14.59 10.37L13.35 12.52L11.35 11.72L9.55 12.76L9.24 14.89L6.76 14.89L6.45 12.76L4.65 11.72L2.65 12.52L1.41 10.37L3.11 9.04L3.11 6.96L1.41 5.63L2.65 3.48L4.65 4.28z"/><circle cx="8" cy="8" r="2.25"/>',
+    notes:    '<path d="M4 2.5h6l3 3v8H4z"/><path d="M10 2.5v3h3M6 8.5h4M6 11h4"/>',
+    annotations: '<path d="M2.5 12.5h11M3.5 9.5l6.2-6.2 2 2-6.2 6.2H3.5z"/>',
+    oneword:  '<rect x="2.5" y="5.5" width="11" height="5" rx="1.5"/><path d="M8 3v2.5M8 10.5V13"/>',
+    profile:  '<circle cx="8" cy="5.5" r="2.75"/><path d="M2.75 13.5a5.25 5.25 0 0 1 10.5 0"/>',
+    highlights: '<path d="M3 13h10M4.5 10.5l5-7 2 1.5-5 7z"/><path d="M4.5 10.5l-1 2.5 2.5-1"/>',
+    mic:      '<rect x="5.5" y="2" width="5" height="8" rx="2.5"/><path d="M3.5 8a4.5 4.5 0 0 0 9 0M8 12.5V14M6 14h4"/>',
+    assistant:'<circle cx="8" cy="8" r="5.5"/><path d="M8 5v.01M6.5 7.5h1.5v3M6.5 10.5h3"/>',
+    community:'<circle cx="5.5" cy="6" r="2.25"/><circle cx="10.5" cy="6" r="2.25"/><path d="M1.5 13a4 4 0 0 1 8 0M6.5 13a4 4 0 0 1 8 0"/>',
+    theme:    '<circle cx="8" cy="8" r="5.5"/><path d="M8 2.5v11a5.5 5.5 0 0 1 0-11z" style="fill:currentColor;stroke:none"/>',
+    head:     '<path d="M2.5 4.5h11M4.5 8h7M6 11.5h4"/>',
+    mark:     '<rect x="2.5" y="2.5" width="11" height="11" rx="2.5"/><path d="M5.5 10.5v-5l2.5 3 2.5-3v5"/>',
+    name:     '<path d="M3 12.5l3.5-9h1l3.5 9M4.6 9.5h4.8"/>',
+    page:     '<path d="M4 2.5h6l3 3v8H4z"/><path d="M10 2.5v3h3"/>'
+  };
+
+  /* THE PICK-LIST (wave-10 rule 4): every door MAP.md names and the ones
+     Osca named. A door with no page yet still appears, and navigates to its
+     row in MAP.md. */
+  var CATALOGUE = {
+    library:     { word: "Library",     glyph: "library",     kind: "door",  href: "library.html" },
+    surface:     { word: "Surface",     glyph: "surface",     kind: "door",  kbd: "⌘K" },
+    settings:    { word: "Settings",    glyph: "settings",    kind: "door",  href: "../settings/settings.html" },
+    annotations: { word: "Annotations", glyph: "annotations", kind: "door",  href: "../MAP.md#notes--highlights" },
+    oneword:     { word: "One word",    glyph: "oneword",     kind: "door",  href: "../MAP.md#reader--one-word" },
+    profile:     { word: "Profile",     glyph: "profile",     kind: "door",  href: "../MAP.md#account--sign-in" },
+    notes:       { word: "Notes",       glyph: "notes",       kind: "door",  href: "../MAP.md#notes--highlights" },
+    highlights:  { word: "Highlights",  glyph: "highlights",  kind: "door",  href: "../MAP.md#notes--highlights" },
+    mic:         { word: "Voice",       glyph: "mic",         kind: "door",  href: "../MAP.md#voice-ui" },
+    assistant:   { word: "Assistant",   glyph: "assistant",   kind: "door",  href: "../MAP.md#assistant" },
+    community:   { word: "Community",   glyph: "community",   kind: "door",  href: "../MAP.md#community" },
+    theme:       { word: "Theme",       glyph: "theme",       kind: "fixed" },
+    head:        { word: "Running head",glyph: "head",        kind: "fixed" },
+    mark:        { word: "The mark",    glyph: "mark",        kind: "fixed" },
+    name:        { word: "Frank",       glyph: "name",        kind: "fixed" }
+  };
+  /* the band's members as band.js writes them, and where each lives */
+  var NATIVE = {
+    band: ".band", left: ".band-left", right: ".band-right", head: ".band-head",
+    mark: ".band-mark", name: ".band-name", theme: ".band-theme", pill: ".band-pill", mic: ".band-mic",
+    library: '.band-door[data-door="library"]', surface: '.band-door[data-door="surface"]', settings: '.band-door[data-door="settings"]'
+  };
+  var DEFAULT_ORDER = { left: ["mark", "name", "library", "surface", "settings"], centre: ["head"], right: ["theme", "mic"] };
+  var HOSTS = ["app", "web", "phone", "book"];
+  /* THE EVENTS a page answers (round 3, LAYERS.md §5.1 "when things
+     happen"): what appears, and how it animates by default. A design file's
+     `events` overrides per key; "theme" is a colour transition, the rest an
+     entrance of the thing stamped data-ev="<id>". */
+  var EVENTS = {
+    open:  { name: "Open a book",    effect: "rise",  ms: 240, easing: "ease-out" },
+    cmdk:  { name: "⌘K — the sheet", effect: "fade",  ms: 180, easing: "ease-out" },
+    menu:  { name: "Right-click",    effect: "fade",  ms: 120, easing: "ease-out" },
+    info:  { name: "Book info",      effect: "rise",  ms: 200, easing: "ease-out" },
+    theme: { name: "Theme flip",     effect: "cross", ms: 200, easing: "ease" },
+    layer: { name: "Layer switch",   effect: "fade",  ms: 160, easing: "ease" },
+    unit:  { name: "A unit crossed", effect: "fade",  ms: 160, easing: "ease" },   /* D18: the one-word marker moves on */
+    close: { name: "A sheet closes", effect: "fade",  ms: 120, easing: "ease-in" }
+  };
+  var EFFECTS = [["none", "none"], ["fade", "fade in"], ["rise", "rise in"], ["drop", "drop in"], ["scale", "scale in"], ["cross", "cross-fade colours"]];
+
+  /* ---- svg ---- */
+  function esc(s) { return String(s == null ? "" : s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
+  function iconsPath(p, grid) {
+    /* icons.json's record shapes: a string is a path d; an object is a
+       rect [x y w h r] / circle [cx cy r] / {d, fill} */
+    if (typeof p === "string") return '<path d="' + esc(p) + '"/>';
+    if (p.rect) return '<rect x="' + p.rect[0] + '" y="' + p.rect[1] + '" width="' + p.rect[2] + '" height="' + p.rect[3] + '" rx="' + (p.rect[4] || 0) + '"/>';
+    if (p.circle) return '<circle cx="' + p.circle[0] + '" cy="' + p.circle[1] + '" r="' + p.circle[2] + '"' + (p.fill ? ' style="fill:currentColor;stroke:none"' : "") + '/>';
+    if (p.d) return '<path d="' + esc(p.d) + '"' + (p.fill ? ' style="fill:currentColor;stroke:none"' : "") + '/>';
+    return "";
+  }
+  /* item.icon: "band:library" (G16) · "icons:page" (needs item.svg copied
+     from icons.json by the editor) · "svg:<markup>" (an added SVG) */
+  function iconSVG(item) {
+    var icon = item.icon || "", m = /^(band|icons|svg):(.*)$/s.exec(icon);
+    if (!m) return "";
+    if (m[1] === "band") return G16[m[2]] ? '<svg viewBox="0 0 16 16" aria-hidden="true" data-icon="' + esc(icon) + '">' + G16[m[2]] + '</svg>' : "";
+    if (m[1] === "svg") {
+      var raw = m[2];
+      if (!/^\s*<svg[\s>]/i.test(raw)) return "";
+      return raw.replace(/<svg\b/i, '<svg aria-hidden="true" data-icon="svg:"');
+    }
+    var rec = item.svg;
+    if (!rec) return "";
+    var paths = rec.p16 || rec.d || [], grid = rec.p16 ? 16 : 24;
+    return '<svg viewBox="0 0 ' + grid + ' ' + grid + '" aria-hidden="true" data-icon="' + esc(icon) + '"' + (grid === 24 ? ' style="stroke-width:1.6"' : "") + '>'
+      + paths.map(function (p) { return iconsPath(p, grid); }).join("") + '</svg>';
+  }
+
+  /* ---- the css a design file means ---- */
+  function decl(props) {
+    var s = "";
+    for (var k in props) if (props[k] !== "" && props[k] != null) s += "  " + k + ": " + props[k] + ";\n";
+    return s;
+  }
+  function scopeSel(el, scope) {
+    var self = el === "band";
+    var base = self ? '.band[data-el="band"]' : '.band [data-el="' + esc(el) + '"]';
+    var plain = '[data-el="' + esc(el) + '"]';
+    switch (scope) {
+      case "base":  return plain;
+      case "hover": return base + ":hover, " + plain + ":hover, " + plain + ".ed-st-hover";
+      case "press": return base + ":active, " + plain + ":active, " + plain + ".ed-st-press";
+      case "phone": return "html[data-phone] " + base;
+      case "web":   return "html[data-web] " + base;
+      case "app":   return "html:not([data-phone]):not([data-web]) " + base;
+      case "book":  return self ? '.band[data-book][data-el="band"]' : '.band[data-book] [data-el="' + esc(el) + '"]';
+      /* a book ON a host (DESIGN, 28 Sep -- Osca: "web, app, phone etc different"): the book band per host */
+      case "app-book":   return 'html:not([data-phone]):not([data-web]) ' + (self ? '.band[data-book][data-el="band"]' : '.band[data-book] [data-el="' + esc(el) + '"]');
+      case "web-book":   return 'html[data-web] ' + (self ? '.band[data-book][data-el="band"]' : '.band[data-book] [data-el="' + esc(el) + '"]');
+      case "phone-book": return 'html[data-phone] ' + (self ? '.band[data-book][data-el="band"]' : '.band[data-book] [data-el="' + esc(el) + '"]');
+    }
+    return plain;
+  }
+  var SCOPES = ["base", "app", "web", "phone", "book", "app-book", "web-book", "phone-book", "hover", "press"];
+  function css(state) {
+    state = state || {};
+    var out = ["/* written by design/editor/apply.js from " + (state.page || "the design file") + " */"];
+    /* the label modes and the per-host visibility, once */
+    out.push('.band [data-el][data-label="glyph"] > span, .band [data-el][data-label="glyph"] > kbd { display: none; }');
+    out.push('.band [data-el][data-label="words"] > svg:not(.band-back) { display: none; }');
+    out.push('.band [data-el][data-label="both"] > svg:not(.band-back) { display: block; }');
+    /* the two enter animations the Interactions section offers */
+    out.push("@keyframes ed-fade { from { opacity: 0; } }");
+    out.push("@keyframes ed-rise { from { opacity: 0; transform: translateY(6px); } }");
+    out.push("@keyframes ed-drop { from { opacity: 0; transform: translateY(-6px); } }");
+    out.push("@keyframes ed-scale { from { opacity: 0; transform: scale(.96); } }");
+    /* the events: an entrance per data-ev, the theme a transition */
+    var evs = Object.assign({}, EVENTS), over = state.events || {};
+    for (var e in evs) {
+      var d = Object.assign({}, evs[e], over[e] || {});
+      var ms = parseFloat(d.ms); if (isNaN(ms)) ms = evs[e].ms;
+      var ease = d.easing || evs[e].easing;
+      if (d.effect === "cross") out.push('[data-ev="' + e + '"], [data-ev="' + e + '"] * { transition: background-color ' + ms + "ms " + ease + ", color " + ms + "ms " + ease + ", border-color " + ms + "ms " + ease + "; }");
+      else if (!d.effect || d.effect === "none") out.push('[data-ev="' + e + '"] { animation: none; }');
+      else out.push('[data-ev="' + e + '"] { animation: ed-' + d.effect + " " + ms + "ms " + ease + " both" + (e === "close" ? " reverse" : "") + "; }");
+    }
+    var items = state.items || {};
+    for (var id in items) {
+      var it = items[id], on = it.on || HOSTS;
+      HOSTS.forEach(function (h) {
+        if (on.indexOf(h) >= 0) {
+          /* named ON for a host where band.css hides it: bring it back
+             (only when `on` was written -- an untouched item shows where
+             the band shows it) */
+          if (it.on && h === "phone" && NATIVE[id] && ["mark", "name", "library", "surface", "head", "theme"].indexOf(id) >= 0)
+            out.push('html[data-phone] .band [data-el="' + id + '"] { display: ' + (id === "head" ? "flex" : id === "theme" ? "grid" : "inline-flex") + '; }');
+          return;
+        }
+        var sel = h === "book" ? '.band[data-book] [data-el="' + id + '"]'
+                : h === "phone" ? 'html[data-phone] .band [data-el="' + id + '"]'
+                : h === "web" ? 'html[data-web] .band [data-el="' + id + '"]'
+                : 'html:not([data-phone]):not([data-web]) .band:not([data-book]) [data-el="' + id + '"]';
+        out.push(sel + " { display: none; }");
+      });
+    }
+    var map = state.css || {};
+    for (var el in map) {
+      var scopes = map[el] || {};
+      SCOPES.forEach(function (sc) {
+        var props = scopes[sc];
+        if (!props || !Object.keys(props).length) return;
+        var d = decl(props);
+        if (d) out.push(scopeSel(el, sc) + " {\n" + d + "}");
+      });
+    }
+    return out.join("\n") + "\n";
+  }
+  function tokensCSS(t) {
+    t = t || {};
+    var light = Object.assign({}, t.scale || {}, t.light || {});
+    var s = "/* written by design/editor/apply.js from design/tokens.design.json */\n";
+    if (Object.keys(light).length) s += ":root {\n" + decl(light) + "}\n";
+    if (t.dark && Object.keys(t.dark).length) {
+      s += 'html[data-theme="dark"] {\n' + decl(t.dark) + "}\n";
+      s += "@media (prefers-color-scheme: dark) { html:not([data-theme=\"light\"]) {\n" + decl(t.dark) + "} }\n";
+    }
+    return s;
+  }
+  function sheet(id, text, doc) {
+    doc = doc || document;
+    var st = doc.getElementById(id);
+    if (!st) {
+      st = doc.createElement("style"); st.id = id;
+      (doc.head || doc.documentElement).appendChild(st);
+    }
+    /* the design's sheets stay LAST in <head>, so they win the cascade
+       whatever a page links after them */
+    if (st !== doc.head.lastElementChild) doc.head.appendChild(st);
+    if (st.textContent !== text) st.textContent = text;
+    return st;
+  }
+
+  /* ---- the dom: stamp, add, order, label, icon ---- */
+  function stamp(band, targets) {
+    for (var id in NATIVE) {
+      var n = band.matches(NATIVE[id]) ? band : band.querySelector(NATIVE[id]);
+      if (n) n.setAttribute("data-el", id);
+    }
+    if (targets) {
+      var doc = band.ownerDocument;
+      for (var t in targets) doc.querySelectorAll(targets[t]).forEach(function (n) { n.setAttribute("data-el", t); });
+    }
+  }
+  function clusterNode(band, c) {
+    return band.querySelector(c === "right" ? ".band-right" : c === "centre" ? ".band-head" : ".band-left");
+  }
+  function makeDoor(band, id, it) {
+    var cat = CATALOGUE[id] || {};
+    var href = it.href || cat.href;
+    var el = band.ownerDocument.createElement(href ? "a" : "button");
+    el.className = "band-door";
+    el.setAttribute("data-door", id);
+    if (href) el.setAttribute("href", href); else el.setAttribute("type", "button");
+    return el;
+  }
+  function applyBand(band, state, opts) {
+    opts = opts || {};
+    stamp(band, opts.targets);
+    var items = state.items || {};
+    var ids = Object.keys(items);
+    if (!ids.length) return;
+    var phone = R.hasAttribute("data-phone");
+    /* 1. every item exists */
+    ids.forEach(function (id) {
+      var it = items[id];
+      var node = band.querySelector('[data-el="' + id + '"]');
+      if (!node && (it.kind === "door" || CATALOGUE[id] && CATALOGUE[id].kind === "door")) {
+        node = makeDoor(band, id, it);
+        node.setAttribute("data-el", id);
+        node.innerHTML = "<span></span>";
+        clusterNode(band, it.cluster || "left").appendChild(node);
+      }
+      if (!node) return;
+      /* the word, the glyph, the label mode */
+      if (node.classList.contains("band-door")) {
+        var word = it.word != null ? it.word : (CATALOGUE[id] || {}).word || id;
+        var span = node.querySelector(":scope > span");
+        if (!span) { span = band.ownerDocument.createElement("span"); node.insertBefore(span, node.firstChild); }
+        if (span.textContent !== word) span.textContent = word;
+        var icon = it.icon || ("band:" + ((CATALOGUE[id] || {}).glyph || id));
+        var have = node.querySelector(":scope > svg:not(.band-back)");
+        /* the band's own glyph stands until an icon is CHOSEN; a chosen one
+           replaces whatever is there */
+        if (have && it.icon && have.getAttribute("data-icon") !== icon) { have.remove(); have = null; }
+        if (!have && (it.icon || it.label === "glyph" || it.label === "both")) {
+          var html = iconSVG(Object.assign({}, it, { icon: icon }));
+          if (html) {
+            var tmp = band.ownerDocument.createElement("div"); tmp.innerHTML = html;
+            var svg = tmp.firstChild;
+            node.insertBefore(svg, span);
+          }
+        }
+        if (!NATIVE[id] && (CATALOGUE[id] || {}).kbd && !node.querySelector("kbd") && !phone) {
+          var k = band.ownerDocument.createElement("kbd"); k.textContent = CATALOGUE[id].kbd; node.appendChild(k);
+        }
+        /* no label state: the band's own drawing stands (words on the Mac,
+           the ⚙ a glyph on the phone, glyphs when --band-glyph is 1) */
+        if (it.label) { if (node.getAttribute("data-label") !== it.label) node.setAttribute("data-label", it.label); }
+        else node.removeAttribute("data-label");
+      }
+      /* 2. the cluster (never the phone's pill: it lives in the row itself) */
+      var want = id === "pill" ? null : clusterNode(band, it.cluster || defaultCluster(id));
+      if (want && want !== node && node.parentNode !== want && node !== band && !node.classList.contains("band-left") && !node.classList.contains("band-right") && !node.classList.contains("band-head")) {
+        if (want.classList.contains("band-head")) want.insertBefore(node, want.firstChild); else want.appendChild(node);
+      }
+    });
+    /* 3. the order: DOM order within each cluster, and an inline `order`
+       so band.css's own `order: 1` on the Settings door yields to it */
+    ["left", "centre", "right"].forEach(function (c) {
+      var host = clusterNode(band, c); if (!host) return;
+      var members = ids.filter(function (id) { return (items[id].cluster || defaultCluster(id)) === c && band.querySelector('[data-el="' + id + '"]'); });
+      members.sort(function (a, b) { return num(items[a].order, DEFAULT_ORDER[c].indexOf(a)) - num(items[b].order, DEFAULT_ORDER[c].indexOf(b)); });
+      var nodes = members.map(function (id) { return band.querySelector('[data-el="' + id + '"]'); }).filter(function (n) { return n !== host && n.parentNode === host; });
+      /* the head keeps its own b / i last; the clusters take the members in order */
+      var anchor = c === "centre" ? host.querySelector("b, i") : null;
+      nodes.forEach(function (n, i) {
+        n.style.order = String(i);
+        if (anchor) { if (n.nextSibling !== anchor) host.insertBefore(n, anchor); }
+        else if (host.children[i] !== n) host.insertBefore(n, host.children[i] || null);
+      });
+    });
+  }
+  function defaultCluster(id) {
+    for (var c in DEFAULT_ORDER) if (DEFAULT_ORDER[c].indexOf(id) >= 0) return c;
+    return "left";
+  }
+  function num(v, d) { v = parseFloat(v); return isNaN(v) ? (d < 0 ? 99 : d) : v; }
+
+  /* ---- several files, one state: components first, the page last ---- */
+  function merge(list) {
+    var out = { page: "", items: {}, css: {}, events: {} };
+    (Array.isArray(list) ? list : [list]).forEach(function (s) {
+      if (!s) return;
+      if (s.page) out.page = s.page;
+      var k, id, sc;
+      for (id in (s.items || {})) out.items[id] = Object.assign({}, out.items[id] || {}, s.items[id]);
+      for (id in (s.css || {})) {
+        out.css[id] = out.css[id] || {};
+        for (sc in s.css[id]) out.css[id][sc] = Object.assign({}, out.css[id][sc] || {}, s.css[id][sc]);
+      }
+      for (k in (s.events || {})) out.events[k] = Object.assign({}, out.events[k] || {}, s.events[k]);
+    });
+    return out;
+  }
+
+  /* ---- the whole: css + tokens + every band on the page ---- */
+  function apply(state, tokens, opts) {
+    opts = opts || {};
+    if (Array.isArray(state)) state = merge(state);
+    var doc = opts.doc || document;
+    if (tokens) sheet("design-tokens", tokensCSS(tokens), doc);
+    sheet("design-css", css(state || {}), doc);
+    doc.querySelectorAll(".band").forEach(function (b) { applyBand(b, state || {}, opts); });
+    if (opts.targets) {
+      for (var t in opts.targets) doc.querySelectorAll(opts.targets[t]).forEach(function (n) { n.setAttribute("data-el", t); });
+    }
+  }
+  /* an export's boot: apply now, and again whenever a band is mounted.
+     `state` is one file or the list [component…, page] */
+  function boot(state, tokens, opts) {
+    if (Array.isArray(state)) state = merge(state);
+    var run = function () { apply(state, tokens, opts); };
+    if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", run); else run();
+    if (window.MutationObserver) new MutationObserver(function (ms) {
+      for (var i = 0; i < ms.length; i++) for (var j = 0; j < ms[i].addedNodes.length; j++) {
+        var n = ms[i].addedNodes[j];
+        if (n.nodeType === 1 && (n.classList.contains("band") || n.querySelector && n.querySelector(".band"))) { run(); return; }
+      }
+    }).observe(document.documentElement, { childList: true, subtree: true });
+  }
+
+  window.DesignApply = {
+    apply: apply, applyBand: applyBand, boot: boot, merge: merge, css: css, tokensCSS: tokensCSS,
+    iconSVG: iconSVG, CATALOGUE: CATALOGUE, NATIVE: NATIVE, G16: G16, HOSTS: HOSTS, EVENTS: EVENTS, EFFECTS: EFFECTS,
+    DEFAULT_ORDER: DEFAULT_ORDER, defaultCluster: defaultCluster, stamp: stamp
+  };
+})();</script>
+<script data-design-baked>/* the design file(s), components first: design/reader/band.design.json, design/tokens.design.json */
+DesignApply.boot([{"css": {"band": {"app": {"display": "none"}, "app-book": {"display": "block"}, "base": {"--band-gap": "12px", "--band-mark": "32px"}}, "head": {"app": {"grid-area": "1 / 2"}, "web": {"grid-area": "1 / 2"}}, "left": {"app": {"grid-column": "1 / -1", "grid-row": "1"}, "app-book": {"grid-column": "auto"}, "web": {"grid-column": "1 / -1", "grid-row": "1"}, "web-book": {"grid-column": "auto"}}, "mark": {"app": {"margin-right": "auto"}, "web": {"margin-right": "auto"}}, "right": {"app": {"grid-area": "1 / 3"}, "web": {"grid-area": "1 / 3"}}, "settings": {"app-book": {"display": "none"}}}, "events": {}, "items": {"head": {"cluster": "centre", "order": 0}, "library": {"cluster": "left", "label": "glyph", "on": ["app", "web"], "order": 2}, "mark": {"cluster": "left", "on": ["app", "web", "book"], "order": 0}, "name": {"cluster": "left", "on": [], "order": 1}, "settings": {"cluster": "left", "label": "glyph", "on": ["app", "web", "phone", "book"], "order": 4}, "surface": {"cluster": "left", "label": "glyph", "on": ["app", "web"], "order": 3}, "theme": {"cluster": "right", "on": [], "order": 0}}, "page": ""}], {"dark": {"--chrome-accent": "#d9736a"}, "light": {}, "scale": {}});</script>

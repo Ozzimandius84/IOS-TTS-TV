@@ -197,11 +197,8 @@ html[data-theme="dark"], html[data-dark]{
 }
 /* the lookup ring, bar.css's own -- a ring with a hand, not a magnifier,
    because a lookup lands you at a PLACE IN A BOOK */
-.sf-look{ flex:0 0 auto; width:15px; height:15px; border-radius:50%;
-  box-shadow:inset 0 0 0 1.2px var(--sf-dim); position:relative; }
-.sf-look::after{ content:""; position:absolute; left:7px; top:3.5px;
-  width:1.2px; height:5px; background:var(--sf-dim); transform-origin:50% 100%;
-  transform:rotate(38deg); }
+.sf-look{ flex:0 0 auto; width:18px; height:18px; display:block; color:var(--sf-dim); }
+.sf-look svg{ width:18px; height:18px; display:block; fill:none; stroke:currentColor; stroke-width:1.4; stroke-linecap:round; }
 .sf-field input{
   flex:1 1 auto; min-width:0; border:0; outline:0; background:transparent;
   font:var(--sf-field)/1.2 var(--sf-ui); letter-spacing:-.01em; color:var(--sf-ink);
@@ -575,8 +572,29 @@ html[data-theme="dark"], html[data-dark]{
 .sf-chip.s-off{ cursor:pointer; opacity:.72; }
 .sf-chip.s-nothing{ opacity:.62; }
 .sf-chip.s-drop{ opacity:.72; }
+/* SURFACE-PRESS (26 Sep): a chip with rows is a FILTER -- pointer, and the
+   one that is on is filled; `filtered` too. A still-running source is the
+   fifth word: its rows so far, and a breathing "still asking" after them. */
+.sf-chip.s-n, .sf-chip.s-drop, .sf-chip.s-still{ cursor:pointer; }
+.sf-chip.on{ background:var(--sf-ink); border-color:var(--sf-ink); color:var(--sf-ground); }
+.sf-chip.on b, .sf-chip.on i{ color:var(--sf-ground); }
+.sf-chip.s-still{ border-style:dashed;
+  border-color:color-mix(in srgb, var(--sf-ink) 30%, transparent); }
+.sf-chip.s-still i:first-of-type{ color:var(--sf-ink); }
+.sf-chip.s-still i.still::before{ content:""; display:inline-block; width:5px; height:5px;
+  margin-right:4px; vertical-align:1px; border-radius:50%; background:currentColor;
+  animation:sfPulse 1.1s ease-in-out infinite; }
+.sf-chip.s-rejoined::after{ content:"↺"; font-size:.9em; opacity:.7; }
 .sf-srcwhy{ flex:1 0 100%; padding:5px 0 0; color:var(--sf-dim);
             font:var(--sf-meta)/1.5 var(--sf-ui); }
+/* the sentence under a row: why it was dropped, why it has no Add */
+.sf-row .sf-why{ display:block; padding-top:2px; font:var(--sf-meta)/1.45 var(--sf-ui);
+  color:var(--sf-dim); overflow-wrap:anywhere; }
+.sf-row .sf-borrow{ color:#a8532a; }
+.sf-row .sf-open-ptr{ display:block; padding-top:2px; font:var(--sf-meta)/1.45 var(--sf-ui);
+  color:var(--sf-dim); }
+.sf-row .sf-open-ptr i{ font-style:normal; }
+.sf-row.sf-flash{ background:color-mix(in srgb, var(--sf-ink) 10%, transparent); }
 
 /* --- a hit out there is still a row, and it still lines up --------------- */
 .sf-row.sf-hit{ cursor:pointer; }
@@ -841,3 +859,165 @@ html[data-theme="dark"], html[data-dark]{
   padding:0 2px; }
 .sf-chipx:hover{ opacity:1; }
 .sf-setverbs{ padding:8px 0; display:flex; flex-wrap:wrap; gap:6px; }
+
+/* ============================================================ SOURCE-DOOR
+   (D9, 26 Sep) the origin half of a provenance line is a BUTTON when there is
+   an origin: same type, same colour, underlined on hover so it reads as the
+   door it is. The band above the list is the one row the door opens on. */
+.sf-prov .po.sf-door{ background:none; border:0; padding:0; margin:0; font:inherit;
+  color:inherit; cursor:pointer; text-align:left; text-decoration:underline dotted; }
+.sf-prov .po.sf-door:hover{ color:var(--sf-ink); text-decoration:underline; }
+.sf-doorband{ margin:0 0 6px; padding:0 0 6px; border-bottom:1px solid var(--sf-rule); }
+.sf-doorband .sf-row.r-door{ border-left:2px solid var(--sf-ink); }
+.sf-provpane .sf-fate{ padding-top:6px; font-size:11px; line-height:1.4; color:var(--sf-dim); }
+
+/* ============================================================ SURFACE-ONE
+   (28 Sep) Osca: search everything first, KINDS after; one field; the book
+   first; keep the two panes. */
+
+/* (1) the kind pills -- drawn only once there are results, above them, "All"
+   first and chosen; glyphs, the word is the aria-label. Sticky at the top of
+   the list's own scroller so a pill is always one press away. */
+.sf-kinds{ position:sticky; top:-6px; z-index:3; display:flex; flex-wrap:wrap; gap:6px;
+  margin:0 calc(-1 * var(--sf-pad)); padding:8px var(--sf-pad) 8px;
+  background:var(--sf-sheet); border-bottom:1px solid var(--sf-rule); }
+.sf-kind{ display:inline-flex; align-items:center; gap:5px; height:26px; padding:0 10px;
+  border:1px solid var(--sf-rule); border-radius:13px; background:transparent;
+  color:var(--sf-dim); font:500 12px/1 var(--sf-ui); cursor:pointer; }
+.sf-kind svg{ width:15px; height:15px; display:block; }
+.sf-kind b{ font-weight:600; }
+.sf-kind i{ font-style:normal; font-variant-numeric:tabular-nums; opacity:.8; }
+.sf-kind:hover{ color:var(--sf-ink); border-color:color-mix(in srgb, var(--sf-ink) 35%, transparent); }
+.sf-kind.on{ background:var(--sf-ink); border-color:var(--sf-ink); color:var(--sf-ground); }
+.sf-kind.on i{ opacity:1; }
+.sf-list > [hidden]{ display:none !important; }
+
+/* (4) a passage found in the open book: the words around it, the match marked */
+.sf-row.sf-pass .t{ white-space:normal; font-weight:400; }
+.sf-row.sf-pass .t mark{ background:color-mix(in srgb, var(--sf-ink) 16%, transparent);
+  color:inherit; border-radius:2px; padding:0 1px; font-weight:600; }
+
+/* (2)(5) THE PHONE. One field on screen: the sheet's field IS the pill -- it
+   sits where the foot bar's pill sits, at the foot, rounded like it, and the
+   sheet covers the bar so there is never a second one. Before a selection the
+   list is the whole sheet; once a book or a thing is selected the list is the
+   top half and the selected thing the bottom half, two scrollers. */
+@media (max-width:720px), (pointer:coarse){
+  .sf-field{ order:3; height:auto; border-bottom:0; border-top:1px solid var(--sf-rule);
+    padding:8px 12px calc(8px + env(safe-area-inset-bottom, 0px)); gap:8px; }
+  .sf-field input{ height:40px; padding:0 14px; border-radius:20px; text-align:center;
+    background:color-mix(in srgb, var(--sf-ink) 7%, transparent); font-size:17px; }
+  .sf-field input:focus{ text-align:left; }
+  .sf-field .sf-look{ display:none; }
+  .sf-cols{ order:1; flex:1 1 auto; min-height:0; }
+  .sf-list{ order:1; flex:1 1 0; min-height:0; overflow-y:auto; }
+  .sf-works{ order:2; flex:0 0 0; max-height:none; display:none;
+             border-bottom:0; border-top:1px solid var(--sf-rule); }
+  .sf.sf-hassel .sf-works, .sf.sf-hassel .sf-works.empty{ display:block; flex:1 1 0; min-height:0; overflow-y:auto; }
+  .sf.sf-hassel .sf-list{ flex:1 1 0; }
+}
+
+/* ===== BOOK-PANE (EXPORT, 28 Sep): the right column is the book's page ===== */
+.sf-h.sf-subj{ font-size:20px; white-space:normal; padding-top:10px; }
+.sf-subja{ font:italic 13px/1.3 var(--sf-serif); border-bottom:0; padding-bottom:10px; }
+.sf-bookpane{ padding:0 0 14px; border-bottom:1px solid var(--sf-rule); }
+.sf-bfacts{ font:600 9.5px/1.4 var(--sf-ui); letter-spacing:.12em; text-transform:uppercase; color:var(--sf-dim); }
+.sf-bookpane .sf-open{ margin:12px 0 4px; font-size:10px; padding:.8em 1.6em; }
+.sf-bhead{ padding:16px 0 6px; font:600 var(--sf-head)/1 var(--sf-ui); letter-spacing:.14em; text-transform:uppercase; color:var(--sf-dim); }
+.sf-btoc{ display:flex; flex-direction:column; }
+.sf-bch{ text-align:left; background:none; border:0; border-top:1px solid var(--sf-rule); padding:7px 0;
+  font:13px/1.35 var(--sf-serif); color:var(--sf-ink); cursor:pointer; }
+.sf-bch:hover{ color:var(--sf-ink); background:rgba(127,127,127,.08); }
+.sf-studiofold{ margin-top:10px; }
+.sf-studiosum{ cursor:pointer; list-style:none; padding:12px 0 6px; font:600 var(--sf-head)/1 var(--sf-ui);
+  letter-spacing:.14em; text-transform:uppercase; color:var(--sf-dim); }
+.sf-studiosum::-webkit-details-marker{ display:none; }
+.sf-studiosum::after{ content:" \203A"; }
+.sf-studiofold[open] > .sf-studiosum::after{ content:" \2304"; }
+
+/* THE SHEET IN THE LIBRARY'S GLASS (DESIGN, 29 Sep; Osca: "ALL doors ... the same app"). It was already a blurred
+   sheet with the book serif in its rows and the shelf's capitals in its headings; what differed from the Library's
+   objects: the corner (14 -> 16, the first-run card's), the hairline (the rule colour -> ink at 12 %, as every
+   glass piece has), and the ESC key (a 5 px box -> a capsule, like the band's ⌘K). */
+.sf{ border-radius:16px; border-color:color-mix(in srgb, var(--sf-ink) 12%, transparent); }
+.sf-esc{ border-radius:999px; padding:5px 9px; border-color:color-mix(in srgb, var(--sf-ink) 12%, transparent); }
+/* ON THE PHONE THE PILL IS THE FIELD (Osca, 28 Sep; the all-doors Stranger, 29 Sep: the sheet's own "Search
+   everything" field sat at y 795-852, wholly under the band's pill, a word peeking out). The sheet draws no field of
+   its own on the phone -- what is typed goes in the pill (band.js PHONE-PASS) -- and its list ends above the band. */
+html[data-phone] .sf-field{ display:none; }
+html[data-phone] .sf{ padding-bottom:calc(var(--band-foot, var(--pbar-h, 56px)) + 12px); }
+/* the phone on its side: the sheet's rows keep clear of the island's side and the other side (29 Sep) */
+@media (orientation: landscape){
+  html[data-phone] .sf{ padding-left: var(--safe-left, env(safe-area-inset-left, 0px)); padding-right: var(--safe-right, env(safe-area-inset-right, 0px)); }
+}
+html[data-phone] .sf{ padding-top: var(--safe-top, env(safe-area-inset-top, 0px)); }
+@media (orientation: landscape){
+  html[data-phone] .sf{ left: var(--safe-left, env(safe-area-inset-left, 0px)); right: var(--safe-right, env(safe-area-inset-right, 0px)); width: auto; padding-left: 0; padding-right: 0; }
+}
+/* "you typed …" (ASKS #129): the Surface's own small line, in the serif's italic, above the rows */
+.sf-corrected{ margin:10px 0 2px; padding:0 var(--sf-pad, 16px); font:italic 13px/1.4 var(--sf-serif, Georgia, serif); color:var(--sf-dim); }
+/* THE PHONE IS THE PHONE ON ITS SIDE TOO (ASKS #111; measured in band 852 x 393: the sheet kept the Mac's
+   translate(-50%) under the landscape rule's left, so it stood at x -307 and its rows ran under the island). The
+   phone's own sheet above answers `(max-width:720px), (pointer:coarse)`; a phone on its side is wider than 720, so
+   the same sheet is also keyed on html[data-phone], which every master is given on the phone. */
+html[data-phone] .sf{ top:0; max-width:none; height:100%; transform:translate(0, 10px); border-radius:0; border:0; }
+html[data-phone] .sf.on{ transform:translate(0, 0); }
+html[data-phone] .sf-cols{ flex-direction:column; order:1; flex:1 1 auto; min-height:0; }
+html[data-phone] .sf-list{ order:1; flex:1 1 0; min-height:0; overflow-y:auto; }
+html[data-phone] .sf-works{ order:2; flex:0 0 0; max-height:none; display:none; border-left:0; border-bottom:0; border-top:1px solid var(--sf-rule); }
+html[data-phone] .sf.sf-hassel .sf-works, html[data-phone] .sf.sf-hassel .sf-works.empty{ display:block; flex:1 1 0; min-height:0; overflow-y:auto; }
+@media (orientation: portrait){ html[data-phone] .sf{ left:0; width:100%; } }
+/* ONE RECIPE FOR THE SMALL CAPITALS (ASKS #105, the Stranger: "three recipes for the small capital label"). Measured in
+   band across the Library, book view, Surface, Settings, Tell Frank, Reports, first run: a LABEL is 11 px, 600, .13 em
+   (Settings' heads, Tell Frank, Reports, the failure card, the book view's byline); an ACTION is 12 px, 600, .13 em
+   (Read, Send, Sign in); the META line under a name in a dense list is --sf-meta, 400, .13 em. The Surface's heads were
+   9.5 at .14 and its meta .14 / .12: they take the two recipes. The ESC keycap is a key, not a label. */
+.sf{ --sf-head:11px; }
+.sf-h{ letter-spacing:.13em; }
+.sf-row .s, .sf-row .end{ letter-spacing:.13em; }
+.sf-verb{ font-size:11px; letter-spacing:.13em; }
+.sf-bfacts{ font-size:11px; letter-spacing:.13em; }   /* the Surface's book facts line, the same LABEL */
+/* the TELL FRANK line on a broken search (ASKS #136; surface.js brokeLine): the failure card's own words, in the LABEL recipe */
+.sf-note .sf-tell{ -webkit-appearance:none; appearance:none; background:none; border:0; padding:0 0 0 4px; cursor:pointer;
+  font:600 11px/1.4 var(--sf-ui); letter-spacing:.13em; text-transform:uppercase; color:var(--sf-ink); }
+
+/* THE FIELD RISES WHERE YOU PRESSED (ASKS #158; PHOTOS rule 3; the Stranger, 30 Sep: "the Search pill opens a sheet
+   with no field -- the input 0 x 0 in a hidden .sf-field -- so nothing can be typed"). The PHONE-PASS pill field lived
+   only on the canvas's sketch; the real sheet drew none, and every page's centre was a dead end. Now, as Settings'
+   find does (settings-look.css): on the phone the sheet's own field IS the pill -- the same capsule, in the same place
+   (the band's row: --pad from the edges, --gap over the home indicator's half, --band-float tall, a phone's width on
+   its side), the caret in it the moment the pill is pressed, the hits above it -- and the band steps aside while the
+   sheet is up, so there is one field on screen and the pill is not drawn twice. The × stands where the mic stood: a
+   press is close, as Esc is. */
+html[data-phone] .sf-field{
+  display:flex; position:absolute; z-index:2; order:3;
+  bottom:calc(var(--gap, 8px) + var(--safe-bottom, env(safe-area-inset-bottom, 0px)) / 2);
+  left:50%; transform:translateX(-50%);
+  width:calc(min(560px, 100% - 2 * var(--pad, 12px)) - var(--band-float, 48px) - var(--gap, 8px));
+  margin-left:calc((0px - var(--band-float, 48px) - var(--gap, 8px)) / 2);
+  height:var(--band-float, 48px); box-sizing:border-box;
+  padding:0 var(--pad, 12px); gap:calc(var(--gap, 8px) - 2px);
+  border:1px solid color-mix(in srgb, var(--sf-ink) 12%, transparent); border-radius:calc(var(--band-float, 48px) / 2);
+  background:color-mix(in srgb, var(--sf-ground, var(--sf-sheet)) 58%, transparent);
+  -webkit-backdrop-filter:saturate(1.8) blur(18px); backdrop-filter:saturate(1.8) blur(18px);
+  box-shadow:0 4px 18px rgba(0, 0, 0, .14);
+}
+html[data-phone] .sf-field .sf-look{ display:block; width:16px; height:16px; color:var(--sf-dim); transform:translateY(2px); }
+html[data-phone] .sf-field .sf-look svg{ width:16px; height:16px; stroke-width:1.25; }
+html[data-phone] .sf-field input{
+  height:100%; padding:0; border:0; border-radius:0; background:transparent; text-align:left;
+  font:400 17px/1.2 var(--sf-ui); letter-spacing:0; caret-color:var(--sf-accent, currentColor);
+  -webkit-appearance:none; appearance:none;
+}
+html[data-phone] .sf-field .sf-esc{
+  position:absolute; top:-1px; right:calc(-1px - var(--band-float, 48px) - var(--gap, 8px));
+  width:var(--band-float, 48px); height:var(--band-float, 48px); padding:0; display:grid; place-items:center;
+  border:1px solid color-mix(in srgb, var(--sf-ink) 12%, transparent); border-radius:50%;
+  background:color-mix(in srgb, var(--sf-ground, var(--sf-sheet)) 58%, transparent);
+  -webkit-backdrop-filter:saturate(1.8) blur(18px); backdrop-filter:saturate(1.8) blur(18px);
+  box-shadow:0 4px 18px rgba(0, 0, 0, .14); color:var(--sf-ink); -webkit-tap-highlight-color:transparent;
+}
+.sf-esc svg{ display:none; }
+html[data-phone] .sf-esc span{ display:none; }
+html[data-phone] .sf-esc svg{ display:block; width:16px; height:16px; fill:none; stroke:currentColor; stroke-width:1.25; stroke-linecap:round; }
+/* the band steps aside while the sheet is up: band.css (html[data-phone][data-sheet] .band) */

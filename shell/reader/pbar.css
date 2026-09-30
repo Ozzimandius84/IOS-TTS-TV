@@ -187,3 +187,16 @@
     pointer-events:none; }
   html[data-phone] .pbar[data-shown="off"] + .pbar-peek{ pointer-events:auto; }
 }
+
+/* THE PHONE'S FOOT, SMALLER AND IN THE PRODUCT'S TYPE (EXPORT, 28 Sep; Osca: "real
+   estate is SCARCE -- the foot bar lower / less tall"; "the fonts fell back to the
+   default -- looks crappy"). The pill says the book in the book's serif and the chapter
+   in its italic, as the band does; the voice's corner sentence is not squeezed beside
+   the mic (its "why" is in Settings > Models). */
+@media (max-width: 600px), (max-height: 500px){
+  html[data-phone]{ --pbar-h:36px; --pplay-h:44px; }
+  html[data-phone] .pbar-pill b{ font-family:var(--serif, Georgia, serif); font-weight:600; letter-spacing:-.01em; }
+  html[data-phone] .pbar-pill span{ font-family:var(--serif, Georgia, serif); font-style:italic; }
+  html[data-phone] .pbar .voiceui-proposal{ display:none; }
+}
+

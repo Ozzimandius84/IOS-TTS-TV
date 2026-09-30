@@ -22,6 +22,12 @@
   width:var(--sc-w-awake, 9px);
   /* the rail is a control, so it takes the pointer; nothing else here does */
   cursor:pointer; touch-action:none;
+  /* A DRAG IS NOT A SELECTION (30 Sep, found proving #170). A drag that passed
+     over a chapter's name selected it ("Economy."), and the NEXT press on the
+     rail started the browser's own drag of that selection -- a pointercancel
+     on the first move, and the second scrub did nothing at all, mouse and
+     finger alike. Nothing on the rail is text a person copies. */
+  -webkit-user-select:none; user-select:none; -webkit-touch-callout:none;
   font-family:var(--ui); }
 
 /* AND SOMETHING TO AIM AT. Nine pixels of rail, held off the edge, is a hard
@@ -29,8 +35,12 @@
    screen belongs to it too: invisible, but it wakes the rail and takes a drag.
    Nothing else lives out there. */
 .scrub2::after{ content:""; position:absolute; top:0; bottom:0;
-  right:calc(-1 * var(--sc-inset, 26px));
-  width:var(--sc-inset, 26px); }
+  right:calc(-1 * var(--sc-out, var(--sc-inset, 26px)));
+  width:var(--sc-out, var(--sc-inset, 26px)); }
+/* ...and where the rail stands nearer the edge than scrub.js's `edge` (the phone on its side), the zone reaches
+   left of it too, so the right `edge` px of the screen are the rail's on every host (ASKS #178). */
+.scrub2::before{ content:""; position:absolute; top:0; bottom:0;
+  right:100%; width:var(--sc-reach, 0px); }
 
 /* ---- A CHAPTER. The box is the whole chapter's share of the book; the
    capsule inside it is that box less the gap, so the gaps come out of the
@@ -179,3 +189,33 @@
   width:var(--sc-fill-w, 9px); height:var(--sc-notch, 2px);
   background:var(--sc-notch-c, var(--bg, #ffffff)); }
 .scrub2.barfill .seg:first-of-type::before{ display:none; }
+/* ============================ SCRUBBING SPEED =============================
+   ASKS #170 #171 (Osca, 30 Sep): pressed on the rail, a hand that moves OUT
+   from it slows the scrub -- half, quarter, fine -- as iOS's scrubber does
+   (scrub.js, `slowAt`). The speed is said once it is below full and only while
+   the drag lasts: one line in the LABEL recipe (11 / 600 / .13em, uppercase),
+   on the page's own glass, beside the place the drag is holding -- a line
+   ABOVE it, so the finger that is out to the left does not sit on it. It never
+   takes a press, and it is the only thing on the rail that is not a chapter. */
+.scrub2 > .speed{
+  position:absolute; z-index:5; top:0;
+  right:calc(var(--sc-w-awake, 9px) + var(--sc-lab-gap, 14px));
+  transform:translateY(calc(-100% - 8px));
+  padding:3px 7px; border-radius:999px; white-space:nowrap;
+  font:600 11px/1.2 var(--ui); font-style:normal;
+  letter-spacing:.13em; text-transform:uppercase;
+  color:var(--ink, #1d1d1b);
+  background:color-mix(in srgb, var(--ground, #fbfaf6) 70%, transparent);
+  border:1px solid color-mix(in srgb, var(--ink, #1d1d1b) 12%, transparent);
+  -webkit-backdrop-filter:saturate(1.8) blur(12px); backdrop-filter:saturate(1.8) blur(12px);
+  pointer-events:none; opacity:0; transition:opacity .12s ease; }
+.scrub2.slowed > .speed{ opacity:1; }
+/* THE RAIL IS NOT READING (#171): a scrub forward on the phone is a forward
+   scroll by a hand, which sets html[data-away] -- and shell.css then takes the
+   rail away mid-drag. `held` (scrub.js) keeps it from the drag's start until a
+   hand next moves the page. */
+html[data-phone][data-away] .scrub2.held{ opacity:1; pointer-events:auto; }
+/* THE EDGE STILL TAKES A PRESS WHILE THE RAIL IS AWAY (ASKS #178): the rail is out of sight (shell.css,
+   opacity 0) but its band down the right edge is not out of reach -- a press there moves, `held` goes on and the
+   rail comes up under the finger. A tap there is not a chapter jump (scrub.js, hiddenDown). */
+html[data-phone][data-away] .scrub2.scrub2{ pointer-events:auto; }

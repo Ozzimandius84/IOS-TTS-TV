@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>TTSTV Settings</title>
+<title>Settings</title>
 <link rel="icon" href="../reader/icon-192.png">
 <meta name="theme-color" content="#832f2b">
 <link rel="manifest" href="../reader/manifest.webmanifest">
@@ -51,7 +51,21 @@
      both named bare; chrome.css, the icon and the manifest are still
      reader/'s and are reached as "../reader/<name>", and the preferences
      store is "../prefs/prefs.js". -->
+<!-- THE PAPER AND THE LOOK (EXPORT, 30 Sep; design/reader/settings-module.html is how the canvas
+     showed it): tokens.css BEFORE settings.css, so Settings wears the reader's warmth, contrast and
+     light/dark (ASKS #179); settings-look.css LAST, the Library's head and glass (ASKS #182 #183);
+     tellfrank.css for the Tell Frank row settings-look.js puts at the foot of General (ASKS #134). -->
+<link rel="stylesheet" href="../reader/tokens.css">
 <link rel="stylesheet" href="settings.css">
+<link rel="stylesheet" href="../reader/tellfrank.css">
+<link rel="stylesheet" href="../reader/settings-look.css" data-look>
+<!-- THE BAND ON SETTINGS (EXPORT, 30 Sep; ASKS #159): on the web and the phone Settings wears the band like
+     every other page -- the gear lit, the field reads "Search Settings", the gear pressed again closes
+     Settings (band.js page "settings"). On the Mac the window's own strip is the chrome: band.css hides a
+     band that is neither html[data-web] nor html[data-phone]. -->
+<link rel="stylesheet" href="../reader/band.css">
+<script src="../reader/band.js"></script>
+<script>try { if (window.TTSTVHost && TTSTVHost.isWeb) document.documentElement.setAttribute("data-web", "1"); } catch (e) {}</script>
 </head>
 <body>
 <!-- NO "< Library" (Osca, 31 Aug: "Inside Settings, I DO NOT need a Library
@@ -65,6 +79,14 @@
      event's own target, so the attribute on this element drags and the tabs,
      which are <button>s inside it, still click. It is inert in a browser tab and
      in the export, which is exactly right -- there is no window to drag there. -->
+<div id="bandHost"></div>
+<script>
+(function () {
+  var host = document.getElementById("bandHost");
+  if (!window.Band || !host) return;
+  Band.mount(host, { page: "settings", hrefs: { library: "../library/library.html", settings: "settings.html" } });
+})();
+</script>
 <header class="set-titlebar" id="titlebar" data-tauri-drag-region>
   <!-- THE DOOR BACK TO THE LIBRARY, ON THE PHONE ONLY (design/phone/settings.html,
        6 Sep). It does not contradict the note below: on the Mac this page is
@@ -247,5 +269,431 @@ S.fetchMirror().then(m => {
 // Internal debug hook for the load harness (not a documented API).
 window.__SETTINGS_DEBUG__ = { get current() { return form.current; }, paint, status: form.status, form };
 </script>
+<!-- EXPORT, 30 Sep: the design master's look (design/reader/settings-look.js) -- the tab's name as the head,
+     search that searches Settings, the Tell Frank row. tellfrank.js first, so settings-look.js finds
+     window.TellFrank and loads nothing from design/. -->
+<script src="../reader/tellfrank.js" data-tf></script>
+<script src="../reader/settings-look.js" data-look></script>
+<script>
+/* THE MAC WINDOW IS THE ONE WITH NO BAND (settings-look.js: "at EXPORT the Mac window sets html[data-mac-window]").
+   The master guesses it from the path, which is settings.html on every host once shipped; the host is known here:
+   on the web and the phone the band's search is the one search, so the strip's glyph goes (ASKS #159). */
+(function () {
+  var R = document.documentElement;
+  if (R.hasAttribute("data-web") || R.hasAttribute("data-phone")) R.removeAttribute("data-mac-window");
+  else R.setAttribute("data-mac-window", "");
+})();
+</script>
+<script data-design-baked>/* design/editor/apply.js -- inlined verbatim by design/export.py:
+   the one definition of what a .design.json means */
+/* design/editor/apply.js -- THE HAND THAT APPLIES A DESIGN FILE TO A PAGE.
+   (EDITOR lane, wave 10 round 2, 27 Sep 2026.)
+
+   One file, two readers: editor.js loads it to make every edit live, and
+   design/export.py inlines it VERBATIM into an export beside the page's
+   `.design.json`, so the export IS the edit (wave-10 rule 6) and there is
+   ONE definition of what a design file means -- never a Python copy.
+
+   WHAT A DESIGN FILE IS (design/<module>/<page>.design.json):
+     { "page":  "design/reader/band.html",
+       "items": { "<el>": { "kind":"door", "word":"Notes", "icon":"icons:page",
+                            "cluster":"left", "order":4,
+                            "on":["app","web","book"], "label":"words", "href":"…" } },
+       "css":   { "<el>": { "base":{"border-radius":"10px"}, "hover":{…}, "press":{…},
+                            "app":{…}, "web":{…}, "phone":{…}, "book":{…} } } }
+   plus, since EDITOR-2 (round 3), the page's EVENTS -- "when things happen":
+       "events": { "cmdk": { "effect":"fade", "ms":180, "easing":"ease-out" }, … }
+     one entry per event a page answers (open · cmdk · menu · info · theme ·
+     layer · close), written as `[data-ev="<id>"] { animation: … }` so a page
+     that stamps data-ev on the thing that appears gets the animation;
+     "theme" is a transition of colours instead. Unwritten = EVENTS' default.
+   and design/tokens.design.json:
+     { "light": {"--chrome-bg":"#…"}, "dark": {…}, "scale": {"--tap":"44px", …} }
+
+   COMPONENT FILES (EDITOR-3, round 5 -- Osca: "changes made in band aren't
+   global … I think it'd be stronger if band had everything"): a design file
+   belongs to the thing it describes. The band is a COMPONENT every page
+   wears, so its design is design/reader/band.design.json -- `items` (the
+   band's members) and `css` for them -- and EVERY page that mounts the band
+   loads that file; the layers (Book · Mine · Everyone · Voice) are
+   design/reader/layers.design.json the same way. A PAGE's own file
+   (design/<module>/<page>.design.json; band.html's canvas is
+   design/reader/pages.design.json) holds only what is that page's own: its
+   elements' css and its `events`. A page boots with the list -- components
+   first, the page last -- and `merge()` folds them into one state, the
+   later file winning a key: `DesignApply.boot([band, layers, page], tokens)`.
+   The editor writes an edit to the file that OWNS the selected element
+   (editor.js fileOf), so the band edited on any page is the band on all.
+
+   <el> is the element's stable name, stamped on the node as data-el. The
+   band's own are band · left · mark · name · library · surface · settings ·
+   head · right · theme · pill · mic; a door added in the editor is its own
+   id (notes, annotations, oneword, profile, highlights, mic, assistant,
+   community). A page may register more targets (the shelf's tile, Sort,
+   the foot) by a selector -- `targets: { tile: ".railrow.tile" }`.
+
+   HOW THE CSS IS WRITTEN, and the specificity is the design:
+     base   -> [data-el="x"]                        (0,1,0) beats the module's
+               class rules by ORDER, and loses to :hover / [aria-current] /
+               the phone's own rules -- so a base edit never kills a state.
+     hover  -> .band [data-el="x"]:hover            (0,3,0) wins the state;
+               also [data-el="x"]:hover for a target outside the band, and
+               [data-el="x"].ed-st-hover so the editor's States row can
+               HOLD the state on the canvas (round 3).
+     press  -> .band [data-el="x"]:active  (+ :active, .ed-st-press likewise)
+     phone  -> html[data-phone] .band [data-el="x"] (0,3,1) wins the phone.
+     web    -> html[data-web] …   app -> html:not([data-phone]):not([data-web]) …
+     book   -> .band[data-book] [data-el="x"]  (the band itself: .band[data-book][data-el=band])
+   Nothing here writes !important. */
+(function () {
+  "use strict";
+  var R = document.documentElement;
+
+  /* ---- the glyphs a door can carry: the band's 16-grid set, drawn here so
+     an export needs no fetch. icons.json's records are copied INTO the design
+     file by the editor (item.svg) when picked, for the same reason. ---- */
+  var G16 = {
+    library:  '<path d="M2 13.5h12"/><rect x="3" y="4" width="2.5" height="9.5" rx=".5"/><rect x="6.5" y="2.5" width="2.5" height="11" rx=".5"/><path d="M10.3 4.6l2.3-.6 2 8.9-2.3.6z"/>',   /* books on a shelf -- the same drawing as band.js's G.library */
+    surface:  '<circle cx="7" cy="7" r="4"/><path d="M10 10l3.5 3.5"/>',
+    settings: '<path d="M6.45 3.24L6.76 1.11L9.24 1.11L9.55 3.24L11.35 4.28L13.35 3.48L14.59 5.63L12.89 6.96L12.89 9.04L14.59 10.37L13.35 12.52L11.35 11.72L9.55 12.76L9.24 14.89L6.76 14.89L6.45 12.76L4.65 11.72L2.65 12.52L1.41 10.37L3.11 9.04L3.11 6.96L1.41 5.63L2.65 3.48L4.65 4.28z"/><circle cx="8" cy="8" r="2.25"/>',
+    notes:    '<path d="M4 2.5h6l3 3v8H4z"/><path d="M10 2.5v3h3M6 8.5h4M6 11h4"/>',
+    annotations: '<path d="M2.5 12.5h11M3.5 9.5l6.2-6.2 2 2-6.2 6.2H3.5z"/>',
+    oneword:  '<rect x="2.5" y="5.5" width="11" height="5" rx="1.5"/><path d="M8 3v2.5M8 10.5V13"/>',
+    profile:  '<circle cx="8" cy="5.5" r="2.75"/><path d="M2.75 13.5a5.25 5.25 0 0 1 10.5 0"/>',
+    highlights: '<path d="M3 13h10M4.5 10.5l5-7 2 1.5-5 7z"/><path d="M4.5 10.5l-1 2.5 2.5-1"/>',
+    mic:      '<rect x="5.5" y="2" width="5" height="8" rx="2.5"/><path d="M3.5 8a4.5 4.5 0 0 0 9 0M8 12.5V14M6 14h4"/>',
+    assistant:'<circle cx="8" cy="8" r="5.5"/><path d="M8 5v.01M6.5 7.5h1.5v3M6.5 10.5h3"/>',
+    community:'<circle cx="5.5" cy="6" r="2.25"/><circle cx="10.5" cy="6" r="2.25"/><path d="M1.5 13a4 4 0 0 1 8 0M6.5 13a4 4 0 0 1 8 0"/>',
+    theme:    '<circle cx="8" cy="8" r="5.5"/><path d="M8 2.5v11a5.5 5.5 0 0 1 0-11z" style="fill:currentColor;stroke:none"/>',
+    head:     '<path d="M2.5 4.5h11M4.5 8h7M6 11.5h4"/>',
+    mark:     '<rect x="2.5" y="2.5" width="11" height="11" rx="2.5"/><path d="M5.5 10.5v-5l2.5 3 2.5-3v5"/>',
+    name:     '<path d="M3 12.5l3.5-9h1l3.5 9M4.6 9.5h4.8"/>',
+    page:     '<path d="M4 2.5h6l3 3v8H4z"/><path d="M10 2.5v3h3"/>'
+  };
+
+  /* THE PICK-LIST (wave-10 rule 4): every door MAP.md names and the ones
+     Osca named. A door with no page yet still appears, and navigates to its
+     row in MAP.md. */
+  var CATALOGUE = {
+    library:     { word: "Library",     glyph: "library",     kind: "door",  href: "library.html" },
+    surface:     { word: "Surface",     glyph: "surface",     kind: "door",  kbd: "⌘K" },
+    settings:    { word: "Settings",    glyph: "settings",    kind: "door",  href: "../settings/settings.html" },
+    annotations: { word: "Annotations", glyph: "annotations", kind: "door",  href: "../MAP.md#notes--highlights" },
+    oneword:     { word: "One word",    glyph: "oneword",     kind: "door",  href: "../MAP.md#reader--one-word" },
+    profile:     { word: "Profile",     glyph: "profile",     kind: "door",  href: "../MAP.md#account--sign-in" },
+    notes:       { word: "Notes",       glyph: "notes",       kind: "door",  href: "../MAP.md#notes--highlights" },
+    highlights:  { word: "Highlights",  glyph: "highlights",  kind: "door",  href: "../MAP.md#notes--highlights" },
+    mic:         { word: "Voice",       glyph: "mic",         kind: "door",  href: "../MAP.md#voice-ui" },
+    assistant:   { word: "Assistant",   glyph: "assistant",   kind: "door",  href: "../MAP.md#assistant" },
+    community:   { word: "Community",   glyph: "community",   kind: "door",  href: "../MAP.md#community" },
+    theme:       { word: "Theme",       glyph: "theme",       kind: "fixed" },
+    head:        { word: "Running head",glyph: "head",        kind: "fixed" },
+    mark:        { word: "The mark",    glyph: "mark",        kind: "fixed" },
+    name:        { word: "Frank",       glyph: "name",        kind: "fixed" }
+  };
+  /* the band's members as band.js writes them, and where each lives */
+  var NATIVE = {
+    band: ".band", left: ".band-left", right: ".band-right", head: ".band-head",
+    mark: ".band-mark", name: ".band-name", theme: ".band-theme", pill: ".band-pill", mic: ".band-mic",
+    library: '.band-door[data-door="library"]', surface: '.band-door[data-door="surface"]', settings: '.band-door[data-door="settings"]'
+  };
+  var DEFAULT_ORDER = { left: ["mark", "name", "library", "surface", "settings"], centre: ["head"], right: ["theme", "mic"] };
+  var HOSTS = ["app", "web", "phone", "book"];
+  /* THE EVENTS a page answers (round 3, LAYERS.md §5.1 "when things
+     happen"): what appears, and how it animates by default. A design file's
+     `events` overrides per key; "theme" is a colour transition, the rest an
+     entrance of the thing stamped data-ev="<id>". */
+  var EVENTS = {
+    open:  { name: "Open a book",    effect: "rise",  ms: 240, easing: "ease-out" },
+    cmdk:  { name: "⌘K — the sheet", effect: "fade",  ms: 180, easing: "ease-out" },
+    menu:  { name: "Right-click",    effect: "fade",  ms: 120, easing: "ease-out" },
+    info:  { name: "Book info",      effect: "rise",  ms: 200, easing: "ease-out" },
+    theme: { name: "Theme flip",     effect: "cross", ms: 200, easing: "ease" },
+    layer: { name: "Layer switch",   effect: "fade",  ms: 160, easing: "ease" },
+    unit:  { name: "A unit crossed", effect: "fade",  ms: 160, easing: "ease" },   /* D18: the one-word marker moves on */
+    close: { name: "A sheet closes", effect: "fade",  ms: 120, easing: "ease-in" }
+  };
+  var EFFECTS = [["none", "none"], ["fade", "fade in"], ["rise", "rise in"], ["drop", "drop in"], ["scale", "scale in"], ["cross", "cross-fade colours"]];
+
+  /* ---- svg ---- */
+  function esc(s) { return String(s == null ? "" : s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
+  function iconsPath(p, grid) {
+    /* icons.json's record shapes: a string is a path d; an object is a
+       rect [x y w h r] / circle [cx cy r] / {d, fill} */
+    if (typeof p === "string") return '<path d="' + esc(p) + '"/>';
+    if (p.rect) return '<rect x="' + p.rect[0] + '" y="' + p.rect[1] + '" width="' + p.rect[2] + '" height="' + p.rect[3] + '" rx="' + (p.rect[4] || 0) + '"/>';
+    if (p.circle) return '<circle cx="' + p.circle[0] + '" cy="' + p.circle[1] + '" r="' + p.circle[2] + '"' + (p.fill ? ' style="fill:currentColor;stroke:none"' : "") + '/>';
+    if (p.d) return '<path d="' + esc(p.d) + '"' + (p.fill ? ' style="fill:currentColor;stroke:none"' : "") + '/>';
+    return "";
+  }
+  /* item.icon: "band:library" (G16) · "icons:page" (needs item.svg copied
+     from icons.json by the editor) · "svg:<markup>" (an added SVG) */
+  function iconSVG(item) {
+    var icon = item.icon || "", m = /^(band|icons|svg):(.*)$/s.exec(icon);
+    if (!m) return "";
+    if (m[1] === "band") return G16[m[2]] ? '<svg viewBox="0 0 16 16" aria-hidden="true" data-icon="' + esc(icon) + '">' + G16[m[2]] + '</svg>' : "";
+    if (m[1] === "svg") {
+      var raw = m[2];
+      if (!/^\s*<svg[\s>]/i.test(raw)) return "";
+      return raw.replace(/<svg\b/i, '<svg aria-hidden="true" data-icon="svg:"');
+    }
+    var rec = item.svg;
+    if (!rec) return "";
+    var paths = rec.p16 || rec.d || [], grid = rec.p16 ? 16 : 24;
+    return '<svg viewBox="0 0 ' + grid + ' ' + grid + '" aria-hidden="true" data-icon="' + esc(icon) + '"' + (grid === 24 ? ' style="stroke-width:1.6"' : "") + '>'
+      + paths.map(function (p) { return iconsPath(p, grid); }).join("") + '</svg>';
+  }
+
+  /* ---- the css a design file means ---- */
+  function decl(props) {
+    var s = "";
+    for (var k in props) if (props[k] !== "" && props[k] != null) s += "  " + k + ": " + props[k] + ";\n";
+    return s;
+  }
+  function scopeSel(el, scope) {
+    var self = el === "band";
+    var base = self ? '.band[data-el="band"]' : '.band [data-el="' + esc(el) + '"]';
+    var plain = '[data-el="' + esc(el) + '"]';
+    switch (scope) {
+      case "base":  return plain;
+      case "hover": return base + ":hover, " + plain + ":hover, " + plain + ".ed-st-hover";
+      case "press": return base + ":active, " + plain + ":active, " + plain + ".ed-st-press";
+      case "phone": return "html[data-phone] " + base;
+      case "web":   return "html[data-web] " + base;
+      case "app":   return "html:not([data-phone]):not([data-web]) " + base;
+      case "book":  return self ? '.band[data-book][data-el="band"]' : '.band[data-book] [data-el="' + esc(el) + '"]';
+      /* a book ON a host (DESIGN, 28 Sep -- Osca: "web, app, phone etc different"): the book band per host */
+      case "app-book":   return 'html:not([data-phone]):not([data-web]) ' + (self ? '.band[data-book][data-el="band"]' : '.band[data-book] [data-el="' + esc(el) + '"]');
+      case "web-book":   return 'html[data-web] ' + (self ? '.band[data-book][data-el="band"]' : '.band[data-book] [data-el="' + esc(el) + '"]');
+      case "phone-book": return 'html[data-phone] ' + (self ? '.band[data-book][data-el="band"]' : '.band[data-book] [data-el="' + esc(el) + '"]');
+    }
+    return plain;
+  }
+  var SCOPES = ["base", "app", "web", "phone", "book", "app-book", "web-book", "phone-book", "hover", "press"];
+  function css(state) {
+    state = state || {};
+    var out = ["/* written by design/editor/apply.js from " + (state.page || "the design file") + " */"];
+    /* the label modes and the per-host visibility, once */
+    out.push('.band [data-el][data-label="glyph"] > span, .band [data-el][data-label="glyph"] > kbd { display: none; }');
+    out.push('.band [data-el][data-label="words"] > svg:not(.band-back) { display: none; }');
+    out.push('.band [data-el][data-label="both"] > svg:not(.band-back) { display: block; }');
+    /* the two enter animations the Interactions section offers */
+    out.push("@keyframes ed-fade { from { opacity: 0; } }");
+    out.push("@keyframes ed-rise { from { opacity: 0; transform: translateY(6px); } }");
+    out.push("@keyframes ed-drop { from { opacity: 0; transform: translateY(-6px); } }");
+    out.push("@keyframes ed-scale { from { opacity: 0; transform: scale(.96); } }");
+    /* the events: an entrance per data-ev, the theme a transition */
+    var evs = Object.assign({}, EVENTS), over = state.events || {};
+    for (var e in evs) {
+      var d = Object.assign({}, evs[e], over[e] || {});
+      var ms = parseFloat(d.ms); if (isNaN(ms)) ms = evs[e].ms;
+      var ease = d.easing || evs[e].easing;
+      if (d.effect === "cross") out.push('[data-ev="' + e + '"], [data-ev="' + e + '"] * { transition: background-color ' + ms + "ms " + ease + ", color " + ms + "ms " + ease + ", border-color " + ms + "ms " + ease + "; }");
+      else if (!d.effect || d.effect === "none") out.push('[data-ev="' + e + '"] { animation: none; }');
+      else out.push('[data-ev="' + e + '"] { animation: ed-' + d.effect + " " + ms + "ms " + ease + " both" + (e === "close" ? " reverse" : "") + "; }");
+    }
+    var items = state.items || {};
+    for (var id in items) {
+      var it = items[id], on = it.on || HOSTS;
+      HOSTS.forEach(function (h) {
+        if (on.indexOf(h) >= 0) {
+          /* named ON for a host where band.css hides it: bring it back
+             (only when `on` was written -- an untouched item shows where
+             the band shows it) */
+          if (it.on && h === "phone" && NATIVE[id] && ["mark", "name", "library", "surface", "head", "theme"].indexOf(id) >= 0)
+            out.push('html[data-phone] .band [data-el="' + id + '"] { display: ' + (id === "head" ? "flex" : id === "theme" ? "grid" : "inline-flex") + '; }');
+          return;
+        }
+        var sel = h === "book" ? '.band[data-book] [data-el="' + id + '"]'
+                : h === "phone" ? 'html[data-phone] .band [data-el="' + id + '"]'
+                : h === "web" ? 'html[data-web] .band [data-el="' + id + '"]'
+                : 'html:not([data-phone]):not([data-web]) .band:not([data-book]) [data-el="' + id + '"]';
+        out.push(sel + " { display: none; }");
+      });
+    }
+    var map = state.css || {};
+    for (var el in map) {
+      var scopes = map[el] || {};
+      SCOPES.forEach(function (sc) {
+        var props = scopes[sc];
+        if (!props || !Object.keys(props).length) return;
+        var d = decl(props);
+        if (d) out.push(scopeSel(el, sc) + " {\n" + d + "}");
+      });
+    }
+    return out.join("\n") + "\n";
+  }
+  function tokensCSS(t) {
+    t = t || {};
+    var light = Object.assign({}, t.scale || {}, t.light || {});
+    var s = "/* written by design/editor/apply.js from design/tokens.design.json */\n";
+    if (Object.keys(light).length) s += ":root {\n" + decl(light) + "}\n";
+    if (t.dark && Object.keys(t.dark).length) {
+      s += 'html[data-theme="dark"] {\n' + decl(t.dark) + "}\n";
+      s += "@media (prefers-color-scheme: dark) { html:not([data-theme=\"light\"]) {\n" + decl(t.dark) + "} }\n";
+    }
+    return s;
+  }
+  function sheet(id, text, doc) {
+    doc = doc || document;
+    var st = doc.getElementById(id);
+    if (!st) {
+      st = doc.createElement("style"); st.id = id;
+      (doc.head || doc.documentElement).appendChild(st);
+    }
+    /* the design's sheets stay LAST in <head>, so they win the cascade
+       whatever a page links after them */
+    if (st !== doc.head.lastElementChild) doc.head.appendChild(st);
+    if (st.textContent !== text) st.textContent = text;
+    return st;
+  }
+
+  /* ---- the dom: stamp, add, order, label, icon ---- */
+  function stamp(band, targets) {
+    for (var id in NATIVE) {
+      var n = band.matches(NATIVE[id]) ? band : band.querySelector(NATIVE[id]);
+      if (n) n.setAttribute("data-el", id);
+    }
+    if (targets) {
+      var doc = band.ownerDocument;
+      for (var t in targets) doc.querySelectorAll(targets[t]).forEach(function (n) { n.setAttribute("data-el", t); });
+    }
+  }
+  function clusterNode(band, c) {
+    return band.querySelector(c === "right" ? ".band-right" : c === "centre" ? ".band-head" : ".band-left");
+  }
+  function makeDoor(band, id, it) {
+    var cat = CATALOGUE[id] || {};
+    var href = it.href || cat.href;
+    var el = band.ownerDocument.createElement(href ? "a" : "button");
+    el.className = "band-door";
+    el.setAttribute("data-door", id);
+    if (href) el.setAttribute("href", href); else el.setAttribute("type", "button");
+    return el;
+  }
+  function applyBand(band, state, opts) {
+    opts = opts || {};
+    stamp(band, opts.targets);
+    var items = state.items || {};
+    var ids = Object.keys(items);
+    if (!ids.length) return;
+    var phone = R.hasAttribute("data-phone");
+    /* 1. every item exists */
+    ids.forEach(function (id) {
+      var it = items[id];
+      var node = band.querySelector('[data-el="' + id + '"]');
+      if (!node && (it.kind === "door" || CATALOGUE[id] && CATALOGUE[id].kind === "door")) {
+        node = makeDoor(band, id, it);
+        node.setAttribute("data-el", id);
+        node.innerHTML = "<span></span>";
+        clusterNode(band, it.cluster || "left").appendChild(node);
+      }
+      if (!node) return;
+      /* the word, the glyph, the label mode */
+      if (node.classList.contains("band-door")) {
+        var word = it.word != null ? it.word : (CATALOGUE[id] || {}).word || id;
+        var span = node.querySelector(":scope > span");
+        if (!span) { span = band.ownerDocument.createElement("span"); node.insertBefore(span, node.firstChild); }
+        if (span.textContent !== word) span.textContent = word;
+        var icon = it.icon || ("band:" + ((CATALOGUE[id] || {}).glyph || id));
+        var have = node.querySelector(":scope > svg:not(.band-back)");
+        /* the band's own glyph stands until an icon is CHOSEN; a chosen one
+           replaces whatever is there */
+        if (have && it.icon && have.getAttribute("data-icon") !== icon) { have.remove(); have = null; }
+        if (!have && (it.icon || it.label === "glyph" || it.label === "both")) {
+          var html = iconSVG(Object.assign({}, it, { icon: icon }));
+          if (html) {
+            var tmp = band.ownerDocument.createElement("div"); tmp.innerHTML = html;
+            var svg = tmp.firstChild;
+            node.insertBefore(svg, span);
+          }
+        }
+        if (!NATIVE[id] && (CATALOGUE[id] || {}).kbd && !node.querySelector("kbd") && !phone) {
+          var k = band.ownerDocument.createElement("kbd"); k.textContent = CATALOGUE[id].kbd; node.appendChild(k);
+        }
+        /* no label state: the band's own drawing stands (words on the Mac,
+           the ⚙ a glyph on the phone, glyphs when --band-glyph is 1) */
+        if (it.label) { if (node.getAttribute("data-label") !== it.label) node.setAttribute("data-label", it.label); }
+        else node.removeAttribute("data-label");
+      }
+      /* 2. the cluster (never the phone's pill: it lives in the row itself) */
+      var want = id === "pill" ? null : clusterNode(band, it.cluster || defaultCluster(id));
+      if (want && want !== node && node.parentNode !== want && node !== band && !node.classList.contains("band-left") && !node.classList.contains("band-right") && !node.classList.contains("band-head")) {
+        if (want.classList.contains("band-head")) want.insertBefore(node, want.firstChild); else want.appendChild(node);
+      }
+    });
+    /* 3. the order: DOM order within each cluster, and an inline `order`
+       so band.css's own `order: 1` on the Settings door yields to it */
+    ["left", "centre", "right"].forEach(function (c) {
+      var host = clusterNode(band, c); if (!host) return;
+      var members = ids.filter(function (id) { return (items[id].cluster || defaultCluster(id)) === c && band.querySelector('[data-el="' + id + '"]'); });
+      members.sort(function (a, b) { return num(items[a].order, DEFAULT_ORDER[c].indexOf(a)) - num(items[b].order, DEFAULT_ORDER[c].indexOf(b)); });
+      var nodes = members.map(function (id) { return band.querySelector('[data-el="' + id + '"]'); }).filter(function (n) { return n !== host && n.parentNode === host; });
+      /* the head keeps its own b / i last; the clusters take the members in order */
+      var anchor = c === "centre" ? host.querySelector("b, i") : null;
+      nodes.forEach(function (n, i) {
+        n.style.order = String(i);
+        if (anchor) { if (n.nextSibling !== anchor) host.insertBefore(n, anchor); }
+        else if (host.children[i] !== n) host.insertBefore(n, host.children[i] || null);
+      });
+    });
+  }
+  function defaultCluster(id) {
+    for (var c in DEFAULT_ORDER) if (DEFAULT_ORDER[c].indexOf(id) >= 0) return c;
+    return "left";
+  }
+  function num(v, d) { v = parseFloat(v); return isNaN(v) ? (d < 0 ? 99 : d) : v; }
+
+  /* ---- several files, one state: components first, the page last ---- */
+  function merge(list) {
+    var out = { page: "", items: {}, css: {}, events: {} };
+    (Array.isArray(list) ? list : [list]).forEach(function (s) {
+      if (!s) return;
+      if (s.page) out.page = s.page;
+      var k, id, sc;
+      for (id in (s.items || {})) out.items[id] = Object.assign({}, out.items[id] || {}, s.items[id]);
+      for (id in (s.css || {})) {
+        out.css[id] = out.css[id] || {};
+        for (sc in s.css[id]) out.css[id][sc] = Object.assign({}, out.css[id][sc] || {}, s.css[id][sc]);
+      }
+      for (k in (s.events || {})) out.events[k] = Object.assign({}, out.events[k] || {}, s.events[k]);
+    });
+    return out;
+  }
+
+  /* ---- the whole: css + tokens + every band on the page ---- */
+  function apply(state, tokens, opts) {
+    opts = opts || {};
+    if (Array.isArray(state)) state = merge(state);
+    var doc = opts.doc || document;
+    if (tokens) sheet("design-tokens", tokensCSS(tokens), doc);
+    sheet("design-css", css(state || {}), doc);
+    doc.querySelectorAll(".band").forEach(function (b) { applyBand(b, state || {}, opts); });
+    if (opts.targets) {
+      for (var t in opts.targets) doc.querySelectorAll(opts.targets[t]).forEach(function (n) { n.setAttribute("data-el", t); });
+    }
+  }
+  /* an export's boot: apply now, and again whenever a band is mounted.
+     `state` is one file or the list [component…, page] */
+  function boot(state, tokens, opts) {
+    if (Array.isArray(state)) state = merge(state);
+    var run = function () { apply(state, tokens, opts); };
+    if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", run); else run();
+    if (window.MutationObserver) new MutationObserver(function (ms) {
+      for (var i = 0; i < ms.length; i++) for (var j = 0; j < ms[i].addedNodes.length; j++) {
+        var n = ms[i].addedNodes[j];
+        if (n.nodeType === 1 && (n.classList.contains("band") || n.querySelector && n.querySelector(".band"))) { run(); return; }
+      }
+    }).observe(document.documentElement, { childList: true, subtree: true });
+  }
+
+  window.DesignApply = {
+    apply: apply, applyBand: applyBand, boot: boot, merge: merge, css: css, tokensCSS: tokensCSS,
+    iconSVG: iconSVG, CATALOGUE: CATALOGUE, NATIVE: NATIVE, G16: G16, HOSTS: HOSTS, EVENTS: EVENTS, EFFECTS: EFFECTS,
+    DEFAULT_ORDER: DEFAULT_ORDER, defaultCluster: defaultCluster, stamp: stamp
+  };
+})();</script>
+<script data-design-baked>/* the design file(s), components first: design/reader/band.design.json, design/tokens.design.json */
+DesignApply.boot([{"css": {"band": {"app": {"display": "none"}, "app-book": {"display": "block"}, "base": {"--band-gap": "12px", "--band-mark": "32px"}}, "head": {"app": {"grid-area": "1 / 2"}, "web": {"grid-area": "1 / 2"}}, "left": {"app": {"grid-column": "1 / -1", "grid-row": "1"}, "app-book": {"grid-column": "auto"}, "web": {"grid-column": "1 / -1", "grid-row": "1"}, "web-book": {"grid-column": "auto"}}, "mark": {"app": {"margin-right": "auto"}, "web": {"margin-right": "auto"}}, "right": {"app": {"grid-area": "1 / 3"}, "web": {"grid-area": "1 / 3"}}, "settings": {"app-book": {"display": "none"}}}, "events": {}, "items": {"head": {"cluster": "centre", "order": 0}, "library": {"cluster": "left", "label": "glyph", "on": ["app", "web"], "order": 2}, "mark": {"cluster": "left", "on": ["app", "web", "book"], "order": 0}, "name": {"cluster": "left", "on": [], "order": 1}, "settings": {"cluster": "left", "label": "glyph", "on": ["app", "web", "phone", "book"], "order": 4}, "surface": {"cluster": "left", "label": "glyph", "on": ["app", "web"], "order": 3}, "theme": {"cluster": "right", "on": [], "order": 0}}, "page": ""}], {"dark": {"--chrome-accent": "#d9736a"}, "light": {}, "scale": {}});</script>
 </body>
 </html>

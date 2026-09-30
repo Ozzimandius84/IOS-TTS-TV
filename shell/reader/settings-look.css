@@ -1,0 +1,219 @@
+/* SETTINGS IN THE LIBRARY'S LANGUAGE (DESIGN, 29 Sep) -- the design master for how Settings looks on every host.
+   Osca: "make sure they all look like the same app, as good as each other, continuity between them ... ALL doors,
+   everywhere, on all platforms". The Library is: the page's name large in Frank's book serif, a line under it in the
+   shelf's tracked capitals, and glass controls (a ground at ~60 % under an 18 px blur, a hairline of ink at 12 %).
+   Settings was the system's sans all through, a painted grey toolbar, and small-caps headings tracked at .06 em.
+   Now:
+   - THE HEAD: the tab you are on, as the page's name (settings-look.js writes it: "Reading", then SETTINGS · THE
+     PAGE'S TYPE), 32 on Mac/web and 30 on the phone -- the Library's h1 and range line, same sizes, same weights.
+   - THE TABS: the bar is glass, not grey; the tab you are on sits in a glass tile and its glyph is Frank's red,
+     as the band's door you are behind is.
+   - THE HEADINGS over each card: the shelf's capitals, 600 11 px tracked .13 em.
+   - THE CARDS: 14 radius, the hairline at 12 %.
+   - THE PHONE'S WAY BACK (‹, a page needs a way out): a 36 glass circle, the book view's ‹ exactly.
+   EXPORT: settings/settings.html links this file and settings-look.js after settings.css (see design.md). */
+html body header.set-titlebar{
+  background: color-mix(in srgb, var(--bg, #fbfaf6) 72%, transparent);
+  -webkit-backdrop-filter: saturate(1.8) blur(18px); backdrop-filter: saturate(1.8) blur(18px);
+  border-bottom: 1px solid color-mix(in srgb, var(--fg, #1d1d1b) 9%, transparent);
+}
+html body header.set-titlebar .set-tab{ border-radius: 12px; border: 1px solid transparent; }
+html body header.set-titlebar .set-tab[aria-selected="true"]{
+  color: var(--fg); border-color: color-mix(in srgb, var(--fg, #1d1d1b) 12%, transparent);
+  background: color-mix(in srgb, var(--bg, #fbfaf6) 62%, transparent);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
+}
+html body header.set-titlebar .set-tab[aria-selected="true"] svg{ color: var(--accent, #b3261e); }
+
+.look-head{ margin: 6px auto 18px; }
+.look-head h1{ margin: 0; font: 600 32px / 1.15 var(--serif, "Iowan Old Style", Palatino, Georgia, serif); color: var(--fg); }
+.look-head p{ margin: 4px 0 0; font: 600 11px / 1.4 var(--ui-font, -apple-system, system-ui, sans-serif); letter-spacing: .13em;
+  text-transform: uppercase; color: var(--fg); opacity: .78; }
+html[data-phone] .look-head h1{ font-size: 30px; }
+
+html body .ttstv-settings .set-head{ font: 600 11px / 1.4 var(--ui-font, -apple-system, system-ui, sans-serif); letter-spacing: .13em;
+  text-transform: uppercase; color: var(--fg); opacity: .78; }
+html body .ttstv-settings .set-card{ border-radius: 14px; border-color: color-mix(in srgb, var(--fg, #1d1d1b) 12%, transparent); }
+
+html body header .headerLink#libraryDoor{
+  width: 36px; height: 36px; min-width: 36px; min-height: 36px; border-radius: 50%;
+  border: 1px solid color-mix(in srgb, var(--fg, #1d1d1b) 12%, transparent);
+  background: color-mix(in srgb, var(--bg, #fbfaf6) 62%, transparent);
+  -webkit-backdrop-filter: saturate(1.8) blur(18px); backdrop-filter: saturate(1.8) blur(18px);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.10); color: var(--fg); font-size: 22px;
+}
+
+/* THE PHONE ON ITS SIDE (29 Sep): the tabs and the cards keep clear of the island's side and the other side */
+@media (orientation: landscape){
+  html[data-phone] body header.set-titlebar{ padding-left: calc(var(--safe-left, env(safe-area-inset-left, 0px)) + 12px); padding-right: calc(var(--safe-right, env(safe-area-inset-right, 0px)) + 12px); }
+  html[data-phone] body main{ padding-left: calc(var(--safe-left, env(safe-area-inset-left, 0px)) + 16px) !important; padding-right: calc(var(--safe-right, env(safe-area-inset-right, 0px)) + 16px) !important; }
+  html[data-phone] body main > *{ max-width: 560px !important; margin-left: auto; margin-right: auto; }
+}
+/* portrait: the tabs sit under the island, not in the status bar (the one-row Stranger: tabs at top 6 px) */
+html[data-phone] body header.set-titlebar{ padding-top: calc(var(--safe-top, env(safe-area-inset-top, 0px)) + 4px); }
+
+/* SAID ONCE (Osca, 29 Sep: "anything they don't need to know, we don't have to tell them"): the Reading tab's
+   explanations go -- a font's note under the faces, the theme row's sentence (and its ⌘⇧L, which a phone has no
+   keys for). What each control does is what it shows. */
+html body .ttstv-settings .set-panel[data-tab="reading"] .set-note,
+html body .ttstv-settings .set-row[data-field="theme"] .set-l small{ display: none; }
+/* ONE SIZE OF ROUND BUTTON (ASKS #106; library.css says the rule): the phone's way back is 40, as its sort is */
+@media (max-width: 720px){ html body header .headerLink#libraryDoor{ width:40px; height:40px; min-width:40px; min-height:40px; } }
+/* THE SEGMENTS ARE CAPSULES (ASKS #106, the Stranger: "Settings segments radius 5"): Light · Dark · System and
+   Page · One word were a 7 px track holding 5 px keys, the one square-ish control in a glass of capsules (the band's
+   layers, the ⌘K key, the player). The track and its keys are rounded to their height. */
+html body .ttstv-settings .opts.set-seg{ border-radius:999px; }
+html body .ttstv-settings .opts.set-seg > button{ border-radius:999px; }
+/* SETTINGS SEARCHES SETTINGS (ASKS #33; settings-look.js): the glyph ends the tab strip in the tabs' own ink; the field
+   is the Library's glass under the strip, its hits a name in the UI face and where it lives in the LABEL recipe */
+html body .set-tabs .set-findbtn{ -webkit-appearance:none; appearance:none; background:none; border:0; cursor:pointer;
+  display:grid; place-items:center; align-self:center; width:40px; height:40px; border-radius:50%; color:var(--fg-dim, currentColor); opacity:.8; }
+html body .set-tabs .set-findbtn:hover{ opacity:1; background:color-mix(in srgb, var(--fg, #1d1d1b) 7%, transparent); }
+.set-find{ position:fixed; z-index:9000; left:50%; top:96px; transform:translateX(-50%); width:min(520px, calc(100vw - 32px));
+  border-radius:16px; border:1px solid color-mix(in srgb, var(--fg, #1d1d1b) 12%, transparent);
+  background:color-mix(in srgb, var(--bg, #fbfaf6) 94%, transparent); -webkit-backdrop-filter:saturate(1.8) blur(22px); backdrop-filter:saturate(1.8) blur(22px);
+  box-shadow:0 24px 64px rgba(0,0,0,.22); overflow:hidden; color:var(--fg); }
+.set-find[hidden]{ display:none; }
+.set-find input{ display:block; width:100%; box-sizing:border-box; height:52px; padding:0 18px; border:0; outline:0; background:transparent;
+  font:400 18px/1 var(--serif, Georgia, serif); color:var(--fg); }
+.set-findlist{ max-height:min(60vh, 420px); overflow-y:auto; border-top:1px solid color-mix(in srgb, var(--fg, #1d1d1b) 9%, transparent); }
+.set-findlist:empty{ display:none; border:0; }
+.set-findhit{ -webkit-appearance:none; appearance:none; display:block; width:100%; text-align:left; background:none; border:0; cursor:pointer;
+  padding:10px 18px; color:var(--fg); border-bottom:1px solid color-mix(in srgb, var(--fg, #1d1d1b) 6%, transparent); }
+.set-findhit b{ display:block; font:500 15px/1.3 var(--ui-font, -apple-system, system-ui, sans-serif); }
+.set-findhit small{ display:block; margin-top:3px; font:600 11px/1.3 var(--ui-font, -apple-system, system-ui, sans-serif); letter-spacing:.13em; text-transform:uppercase; opacity:.62; }
+.set-findhit[aria-selected="true"], .set-findhit:hover{ background:color-mix(in srgb, var(--fg, #1d1d1b) 7%, transparent); }
+.set-findnone{ padding:14px 18px; font:italic 15px/1.4 var(--serif, Georgia, serif); opacity:.7; }
+.set-row.set-found{ outline:2px solid color-mix(in srgb, var(--fg, #1d1d1b) 45%, transparent); outline-offset:2px; border-radius:10px; transition:outline-color .6s ease; }
+
+/* ⚙ IS THE WAY OUT, THE BAND'S SEARCH IS THE SEARCH (ASKS #159, Osca 30 Sep: "Settings doesn't need a back button, the
+   search becomes a search inside settings ... you just press the same settings key again to close it"): no ‹ on any
+   host; on the web and the phone the strip's own search glyph goes -- the band's field / the pill is the one search */
+html body header .headerLink#libraryDoor{ display: none !important; }
+html:not([data-mac-window]) body .set-tabs .set-findbtn{ display: none; }
+/* on the phone the field rises where the finger pressed -- at the foot, over the pill, the hits above it (Photos' search) */
+html[data-phone] .set-find{ top:auto; bottom:calc(var(--safe-bottom, 34px) + 12px); display:flex; flex-direction:column-reverse; }
+html[data-phone] .set-find[hidden]{ display:none; }
+.set-findx{ display:none; }
+/* ONE FIELD, IN THE PILL'S PLACE (ASKS #168, the phone-search Stranger: "in Settings the pill opens a second 'Search
+   Settings' field inside the page that is half-covered by the band's own pill"). The find was a card of its own
+   (17,753 359x52) standing 26 px under the band's pill. Now it is drawn exactly as the Surface's field is on the
+   phone (surface.css, ASKS #158): the band's row -- --pad from the edges, --gap plus half the home indicator over the
+   foot, --band-float tall, a phone's width on its side -- the × in the mic's circle, the hits in one glass above it;
+   and while it is up the band steps aside (html[data-sheet], settings-look.js), so there is one field on screen.
+   The band's numbers are named with the band's own fallbacks: Settings loads no band.css. */
+html[data-phone] .set-find{
+  --sfb: var(--band-float, 48px); --sfg: var(--gap, 8px); --sfp: var(--pad, 12px);
+  top:auto; bottom:calc(var(--sfg) + var(--safe-bottom, env(safe-area-inset-bottom, 0px)) / 2);
+  left:50%; transform:translateX(-50%);
+  width:calc(min(560px, 100vw - var(--safe-left, 0px) - var(--safe-right, 0px) - 2 * var(--sfp)) - var(--sfb) - var(--sfg));
+  margin-left:calc((var(--safe-left, 0px) - var(--safe-right, 0px) - var(--sfb) - var(--sfg)) / 2);
+  height:var(--sfb); box-sizing:border-box; overflow:visible; display:block;
+  border-radius:calc(var(--sfb) / 2); background:color-mix(in srgb, var(--bg, #fbfaf6) 86%, transparent);   /* Settings' rows are text to the edge: the glass is thicker than the Surface's 58 so the field reads over them */
+  -webkit-backdrop-filter:saturate(1.8) blur(18px); backdrop-filter:saturate(1.8) blur(18px); box-shadow:0 4px 18px rgba(0, 0, 0, .14);
+}
+html[data-phone] .set-find[hidden]{ display:none; }
+html[data-phone] .set-find input{ height:100%; padding:0 var(--sfp); border-radius:inherit; font:400 17px/1.2 var(--ui-font, -apple-system, system-ui, sans-serif);
+  -webkit-appearance:none; appearance:none; caret-color:var(--accent, currentColor); }
+html[data-phone] .set-find input::-webkit-search-cancel-button{ -webkit-appearance:none; appearance:none; display:none; }
+html[data-phone] .set-findlist{
+  position:absolute; left:0; bottom:calc(100% + var(--sfg)); width:calc(100% + var(--sfb) + var(--sfg)); max-height:min(50vh, 420px);
+  border:1px solid color-mix(in srgb, var(--fg, #1d1d1b) 12%, transparent); border-radius:16px;
+  background:color-mix(in srgb, var(--bg, #fbfaf6) 94%, transparent); -webkit-backdrop-filter:saturate(1.8) blur(22px); backdrop-filter:saturate(1.8) blur(22px);
+  box-shadow:0 12px 40px rgba(0, 0, 0, .18);
+}
+html[data-phone] .set-findlist:empty{ display:none; }
+html[data-phone] .set-findx{
+  display:grid; place-items:center; position:absolute; top:-1px; right:calc(-1px - var(--sfb) - var(--sfg));
+  width:var(--sfb); height:var(--sfb); padding:0; cursor:pointer; -webkit-appearance:none; appearance:none;
+  border:1px solid color-mix(in srgb, var(--fg, #1d1d1b) 12%, transparent); border-radius:50%;
+  background:color-mix(in srgb, var(--bg, #fbfaf6) 58%, transparent);
+  -webkit-backdrop-filter:saturate(1.8) blur(18px); backdrop-filter:saturate(1.8) blur(18px);
+  box-shadow:0 4px 18px rgba(0, 0, 0, .14); color:var(--fg); -webkit-tap-highlight-color:transparent;
+}
+html[data-phone] .set-findx svg{ width:16px; height:16px; fill:none; stroke:currentColor; stroke-width:1.25; stroke-linecap:round; }
+
+/* SETTINGS WEARS THE SETTINGS (ASKS #179 #180, Osca 30 Sep: "the reading settings etc, aren't effecting
+   settings either, they should" -- "do that now too"). Settings drew itself in settings.css's own literal
+   palette (#fcfcfb / #0b0b0b, dark #131316) and its own 13 px type "sized off the picture rather than off the
+   reader's own ... which no window should" -- a call Osca has now reversed. Settings links tokens.css
+   (settings-module.html; settings.html; EXPORT: settings/settings.html, before settings.css), so:
+   - THE COLOURS are tokens.css's chrome, which IS the paper now (--ground / --ink with --warm and --contrast):
+     warmth, contrast and light/dark repaint this page as they are pressed, as they repaint the book;
+   - THE TYPE follows the book's: Size scales every step of the window's scale (--s-text 13 -> 15.3 at 118 %),
+     Line height scales its leading around the page's own 1.75, and the Reading font is the face of the words
+     a person reads here -- the page's name, every setting's name, the preview. Controls, tabs and the grey
+     lines under a name stay in the interface font (that row's own job).
+   Weighed (0,3,0) so it beats settings.css's :root and [data-theme] and its media block's (0,2,0). */
+:root:root:root{
+  --bg: var(--chrome-bg); --fg: var(--chrome-fg); --fg-dim: var(--chrome-fg-dim);
+  --border: var(--chrome-border); --panel-bg: var(--chrome-panel-bg); --control-bg: var(--chrome-control-bg);
+  --accent: var(--chrome-accent); --link: var(--chrome-link);
+}
+/* tokens.css sizes rem off the viewport for the reading page; this window's rem is the browser's (the Mac) or
+   the phone's own --ph-type (settings.css) -- neither moves because tokens.css is linked */
+html:not([data-phone]){ font-size: medium; }
+html body .ttstv-settings{
+  --fg-faint: color-mix(in oklab, var(--fg) 45%, var(--bg));
+  --s-text: calc(13px * var(--read-scale, 1)); --s-small: calc(12px * var(--read-scale, 1));
+  --s-ctl-text: calc(12.5px * var(--read-scale, 1)); --s-tiny: calc(11px * var(--read-scale, 1));
+  line-height: calc(1.45 * var(--read-line, 1.75) / 1.75);
+}
+html body .ttstv-settings .set-name,
+.look-head h1{ font-family: var(--read-family, var(--serif, "Iowan Old Style", Palatino, Georgia, serif)); }
+html body .ttstv-settings .set-name{ font-size: calc(15px * var(--read-scale, 1)); }
+.look-head h1{ font-size: calc(32px * var(--read-scale, 1)); }
+html[data-phone] .look-head h1{ font-size: calc(30px * var(--read-scale, 1)); }
+
+/* READING IS GENERAL, AND ACCOUNT IS A TAB (ASKS #183, Osca 30 Sep: "I think reading can maybe just be
+   general, then another tab is account"). settings-look.js moves every Reading row into General and draws
+   Account; the Reading tab is not drawn (its panel stays, empty, so settings.js's own showTab still knows it). */
+html body .set-tab[data-tab="reading"]{ display: none !important; }
+/* the preview is General's now: settings.html's onTab hides it off Reading, and Reading is never shown */
+html body .set-panel[data-tab="general"] #preview[hidden]{ display: block; }
+html body .set-panel[data-tab="general"] #preview{ margin: 4px 0 18px; }
+
+/* APPEARANCE FIRST, AND ON THE PHONE WHERE THE THUMB IS (ASKS #182, Osca 30 Sep: "warmth and light darm
+   should be right there whhen you press settings, in the phone UI you want it right where your thumb is ...
+   in the lower portion of the screen"). Light / dark, Warmth and Contrast are one card at the top of General.
+   On the phone the card and the paragraph it paints are one block as tall as the first screen, the card at
+   its foot -- over the band, under the thumb that just pressed ⚙ -- and the paragraph above it is what the
+   eye watches while the thumb moves. settings-look.js measures the screen for --look-thumb-h. */
+html[data-phone] body .look-thumb{ display: flex; flex-direction: column; justify-content: flex-end;
+  min-height: var(--look-thumb-h, 0px); box-sizing: border-box; }
+/* the paragraph is the page itself here, not a card (PHOTOS rule 1): no box, no fill, centred in the room above
+   the card, set at the reading size -- the thing the thumb is changing */
+html[data-phone] body .look-thumb #preview, html[data-phone] body .look-thumb #preview[hidden]{ flex: 1 1 auto; display: flex; flex-direction: column; justify-content: center;
+  margin: 0 0 12px; padding: 0 4px; border: 0; background: none; box-shadow: none; }
+
+/* THE CONTRAST ROW (ASKS #172): five stops, the middle the page as it always was. Its rail IS the scale, as
+   Warmth's is: from ink-on-ground washed out to ink-on-ground hard. */
+html body .ttstv-settings .set-row[data-look="contrast"] .set-l{ flex: 0 0 90px; }   /* the ruler starts where Warmth's does */
+html body .ttstv-settings .set-row[data-look="contrast"] .set-c{ flex: 1 1 auto; }
+html body .ttstv-settings .set-row[data-look="contrast"] .set-rail{
+  background: linear-gradient(to right, color-mix(in oklab, var(--fg) 35%, var(--bg)), var(--fg));
+}
+
+/* THE ACCOUNT TAB (ASKS #183: "where you set your user name, and your email and things ... you get a set name
+   even as a browser"): the name and the email are the form's own field (kag-in), full width of the row */
+html body .ttstv-settings .set-row[data-look="name"] .set-l, html body .ttstv-settings .set-row[data-look="email"] .set-l{ flex: 0 0 72px; }
+html body .ttstv-settings .set-row[data-look="name"] .set-c, html body .ttstv-settings .set-row[data-look="email"] .set-c{ flex: 1 1 auto; display: flex; gap: 8px; }
+html body .ttstv-settings .set-row[data-look] .kag-in{ flex: 1 1 auto; }
+html[data-phone] body .ttstv-settings .set-row[data-look="name"] .set-c, html[data-phone] body .ttstv-settings .set-row[data-look="email"] .set-c{ width: 100%; }
+html[data-phone] body .ttstv-settings .set-row[data-look] .kag-in{ min-height: var(--ph-tap, 44px); }
+html body .ttstv-settings .set-panel[data-tab="account"] small{ white-space: normal; overflow-wrap: anywhere; }
+/* ON ITS SIDE the phone is 393 tall: the paragraph and the card do not both fit over the band, so the card comes
+   first under the head, the thumb's reach on a phone held sideways, and the paragraph follows it */
+@media (orientation: landscape){
+  html[data-phone] body .look-thumb{ min-height: 0; }
+  html[data-phone] body .look-thumb #preview, html[data-phone] body .look-thumb #preview[hidden]{ order: 2; margin: 12px 0 0; }
+}
+/* Light / dark on ONE line on the phone: settings.css puts a segment under its name because the row's grey
+   sentence left no room (135 px); the sentence is gone (said once, above), so the three keys sit beside the name
+   and the thumb's card is three rows, not four */
+html[data-phone] body .ttstv-settings .look-appear .set-row[data-field="theme"]{ flex-wrap: nowrap; }
+html[data-phone] body .ttstv-settings .look-appear .set-row[data-field="theme"] > .set-l{ flex: 0 0 90px; }
+html[data-phone] body .ttstv-settings .look-appear .set-row[data-field="theme"] > .set-c{ flex: 1 1 auto; justify-content: flex-end; }
+
+/* THE WEB SAYS ONLY WHAT THE WEB CAN DO (ASKS #187, settings-look.js): a row the web cannot use is absent */
+[data-look-off]{ display: none !important; }

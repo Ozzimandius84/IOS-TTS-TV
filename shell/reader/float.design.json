@@ -1,0 +1,15 @@
+{
+  "page": "design/reader/float.html",
+  "_": "THE FLOAT'S CONTENTS (FLOAT.md §10, Osca 28 Sep). The INTERACTIONS are fixed in float.js -- tap W = play/pause, press a band or corner = the fan, drag W = move, drag a side = scrub, drag a corner = resize, drag inward from the border side = HOME. What is IN the fan is this file's, 3 or 4 of the verbs below, in order; the editor's Float page writes it; float.js reads it at open and no code changes when the list changes. speak is a TOGGLE (the mic stays open until pressed again; the red letter breathes while it is). define / explain / translate act on the word showing at the press. frank = home. prevch / nextch = the chapter before / after. pace / sleep = the transport's.",
+  "fan": ["speak", "define", "explain", "frank"],
+  "verbs": ["speak", "define", "explain", "translate", "frank", "prevch", "nextch", "pace", "sleep"],
+  "dials": {
+    "hold": 350,
+    "snap": 12,
+    "home": 80,
+    "fan": { "radius": 64, "size": 40, "arc": 100 },
+    "breathe": { "period": 4000, "sat": 0.15, "light": 0.08, "hue": 3 }
+  },
+  "css": {},
+  "events": {}
+}

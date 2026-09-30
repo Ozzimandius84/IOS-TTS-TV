@@ -123,7 +123,11 @@
   }
 
   var SOURCE = { gutenberg: "Gutenberg", archive: "Archive", librivox: "LibriVox",
-                 youtube: "YouTube", dokumen: "Dokumen", fadedpage: "Faded Page" };
+                 youtube: "YouTube", dokumen: "Dokumen", fadedpage: "Faded Page",
+                 /* SEARCH-2's four new sources, named (ASKS #126; tools/search/STATUS.md §6b). A web row is named by its
+                    own site on the row (srcOf), and "The web" on the chips. */
+                 perseus: "Perseus", standardebooks: "Standard Ebooks", files: "On this Mac", web: "The web" };
+  function srcOf(c) { return c && c.source === "web" && c.url ? shortHost(c.url) : (SOURCE[c && c.source] || (c && c.source) || "out there"); }
   /* every source the app already covers -- the -site: list is built from this
      and nowhere else (search.html's own COVERED, kept identical) */
   var COVERED = ["gutenberg.org", "archive.org", "youtube.com",
@@ -212,18 +216,26 @@
   }
   var PAIRED = null;   /* the record `api()` puts the pass on, or null       */
 
-  /* Is this page inside Frank? `TTSTVHost.kind` is the ONE predicate (W1
-     SHELL-WEB) -- `library/host.js` sets it. On a website the kind is "web"
-     and the host has no Studio API, so `hostHere()` is false. */
+  /* Is this page one of Frank's? `TTSTVHost` is the ONE predicate (W1
+     SHELL-WEB) -- `library/host.js` sets it on every page Frank serves, the
+     web edition included, and on no design bench. STRANGER-FIX (28 Sep):
+     the web edition USED to count as "no host" here, so a stranger on the
+     site with an empty shelf opened ⌘K on the bench's fixture -- *"WORKING
+     -- 2 running, 2 queued … Les Pensées … YOUR LIBRARY: Eclogues, Ethics,
+     Ficciones … none of it is mine"*. A website is not a bench: it has no
+     Studio (`S.live` false, every control that needs one disabled and
+     WHY_STUDIO said), and it invents nothing. */
   function hostHere() {
-    try { return !!window.TTSTVHost && !window.TTSTVHost.isWeb; } catch (e) { return false; }
+    try { return !!window.TTSTVHost; } catch (e) { return false; }
   }
   /* THE SENTENCE, and there is one of it. A page with no studio says which
      of the two it is and, in Frank, what to do about it -- "Studio is not
      here" with no next step is the half-answer the phone was giving. */
   function noStudioLine() {
     // W1 SHELL-WEB: on a website the sentence is D3's.
-    if (window.TTSTVHost && window.TTSTVHost.isWeb) return window.TTSTVHost.WHY_STUDIO;
+    /* ...and on the web, what the web did (ASKS #187, the web Stranger: "carthage" said "Studio needs the Mac app or
+       Frank's cloud" -- a sentence about another device, POLISH 5): the shelf was searched and had nothing */
+    if (window.TTSTVHost && window.TTSTVHost.isWeb) return "Nothing on your shelf for that.";
     return S.bench
       ? "Search needs Studio on this Mac — open Frank"
       : (PAIRED
@@ -469,13 +481,17 @@
          has them too, or the Where row's second line cannot be looked at */
       kaggle: { id: "kaggle", label: "On Kaggle", pill: "Kaggle", ok: true,
                 short: null, why: null, running: [], hours_left: 27.4, slots: 2 },
-      modal:  { id: "modal", label: "Fast, on Modal", pill: "Fast", ok: false,
-                short: "Modal is not connected on this Mac.",
-                why: "no Modal credentials at ~/.modal.toml" }
+      modal:  { id: "modal", label: "Frank\u2019s cloud", pill: "Cloud", ok: false,
+                short: "Frank\u2019s cloud is not signed in on this Mac.",
+                why: "this Mac is not signed in to Frank\u2019s cloud -- the sign-in is the owner's" }
     }
   };
-  var MOCK_SETTINGS = { render: { where: "kaggle" }, chosen: true,
-                        modal: { connected: false } };
+  /* CLOUD-HIDE: the bench draws a USER's Surface -- Frank's cloud, this Mac
+     -- unless the URL says `?owner`, which is Osca's own view with the Kaggle
+     lane, the kernel buttons and the credentials line. */
+  var MOCK_OWNER = (function () { try { return /[?&]owner(=|&|$)/.test(location.search || ""); } catch (e) { return false; } })();
+  var MOCK_SETTINGS = { render: { where: MOCK_OWNER ? "kaggle" : "modal" }, chosen: true,
+                        modal: { connected: false }, owner: MOCK_OWNER };
   /* §5.9: THE WORKING QUEUE, so the bench shows the column BUSY -- which is
      the state the whole right-hand design is for and the one a still page
      cannot reach. `/state`'s own two fields, in its own shapes: a running
@@ -580,6 +596,9 @@
                            when it is a book, so 138/139's blocks keep working. */
     sel: null,          /* COMPAT: derived from set[0]; see setSelCompat()    */
     selAuto: false,     /* true = the page pre-selected, false = a click     */
+    door: null,         /* SOURCE-DOOR: {origin, slug, asking, cand, books, err}
+                           -- the ONE result row for a book's origin, asked by
+                           id (`GET /origin`), drawn above everything else     */
     live: false,        /* is there a server behind us                        */
     base: "",           /* ...and where it is (`?api=`, or this origin)       */
     /* ------------------------------------- TRUE OR ABSENT, NEVER BOTH (13 Sep)
@@ -637,6 +656,16 @@
        `srcNames` which sources there are -- the last report's own keys,
                  remembered (see `knownSources`) */
     asking: null, askedMs: 0, srcNames: null,
+    /* ------------------------------ SURFACE-PRESS, Osca's press 26 Sep 15:00
+       `srcFilter` null, or the chip that is ON: a source key (only that
+                 source's rows are drawn) or "filtered" (the rows the
+                 title/author filter DROPPED are drawn, each with its reason).
+                 Click the chip again and it is null. Cleared by a new query.
+       `repressed` the query this page has already re-asked ONCE on its own
+                 because a source was `still_running` at the wall -- one
+                 automatic re-press per query, never a loop. */
+    srcFilter: null, repressed: "",
+    kind: "all",        /* SURFACE-ONE: the kind pill that is on -- all | books | sources | voices | people */
     /* the works column is the LIVE studio, not a display: these are what it
        is doing about it right now */
     hold: null,         /* studio/tasks.py::hold_state -- null, or the hold  */
@@ -715,10 +744,10 @@
     sheet.setAttribute("aria-label", "Search");
     sheet.innerHTML =
       '<div class="sf-field">'
-      + '<span class="sf-look"></span>'
+      + '<span class="sf-look"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="7" cy="7" r="4"/><path d="M10 10l3.5 3.5"/></svg></span>'   /* the band's magnifier -- the drawn dial read as a clock */
       + '<input type="text" spellcheck="false" autocomplete="off" placeholder="'
-      + esc(opts.placeholder || "Search your library, and everywhere else") + '">'
-      + '<button class="sf-esc" type="button">esc</button>'
+      + esc(opts.placeholder || "Search everything") + '">'
+      + '<button class="sf-esc" type="button" aria-label="Close"><span>esc</span><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8"/></svg></button>'   /* on the phone the key is a drawn × in its own glass circle, where the mic was (ASKS #158) */
       + '</div>'
       + '<div class="sf-cols"><div class="sf-list"></div><div class="sf-works"></div></div>';
     root.appendChild(scrim); root.appendChild(sheet);
@@ -749,25 +778,22 @@
     addEventListener("keydown", function (e) {
       if ((e.metaKey || e.ctrlKey) && !e.altKey && (e.key === "k" || e.key === "K")) {
         e.preventDefault(); opened ? close() : open(S.q);
-      } else if (e.key === "Escape" && opened) {
-        /* D6 ESCAPE (AMENDMENT 1, Osca 24 Sep): three-state sequence.
-           Escape #1 while the caret is in the search input → BLUR the
-           input; input keeps its text, surface stays open.
-           Escape #2 (or #1 when the caret is NOT in the input) → CLOSE
-           the whole surface.
-           Escape NEVER closes the reader tab from inside the surface —
-           `stopImmediatePropagation` is the whole of that (plain
-           `stopPropagation` would not help: host.js's own keydown is on
-           the same window target, so it fires regardless). */
-        e.preventDefault();
-        e.stopImmediatePropagation();
-        if (document.activeElement === input) {
-          input.blur();
-        } else {
-          close();
-        }
       }
     });
+    /* ONE ESC CLOSES (ASKS #168, the phone-search Stranger 30 Sep: "Esc takes two presses (the first only blurs)";
+       Safari's and Photos' Cancel is one press). This replaces D6's three-state sequence (AMENDMENT 1, 24 Sep:
+       Esc #1 blurred, #2 closed): from anywhere -- the caret in the field or not -- one Esc closes the sheet, and
+       close() takes the caret out of the field and empties it. CAPTURE, on the window: the reader's own Esc
+       (book-nav.js, "Escape -> closeToLibrary", a bubble listener on the same window, registered before this
+       surface mounts) must never see an Esc that closed the sheet -- it took the book away with it. Esc NEVER
+       closes the reader tab from inside the surface. A dropdown open in the works column keeps its own first Esc
+       (ddWire's capture listener, registered later, would otherwise never run). */
+    addEventListener("keydown", function (e) {
+      if (e.key !== "Escape" || !opened || DD.open) return;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      close();
+    }, true);
     S.base = BASE;
     S.live = !!BASE || !!(window.TTSTVWorks && window.TTSTVWorks.available());
     S.paired = PAIRED ? (PAIRED.name || PAIRED.base) : "";
@@ -889,6 +915,7 @@
   }
   function handle() {
     return { open: open, close: close, toggle: toggle, ask: ask, draw: draw,
+             openOrigin: openOrigin,
              measure: measure, cfg: CFG, state: S, sheet: sheet, input: input };
   }
 
@@ -901,10 +928,16 @@
     if (!root) mount();
     opened = true;
     scrim.classList.add("on"); sheet.classList.add("on");
+    document.documentElement.setAttribute("data-sheet", "");   /* ONE SEARCH BAR ON SCREEN (ASKS #29): the band's field steps aside while the sheet's is up (band.css) */
     if (q != null && q !== input.value) input.value = q;
-    input.focus(); input.select();
+    /* opened WITH words (the band's field hands over its first key): the caret goes
+       after them, so the next key adds to the word -- select() ate it ("hamlet" -> "amlet") */
+    input.focus();
+    if (q) { try { input.setSelectionRange(input.value.length, input.value.length); } catch (e) {} } else input.select();
     var prevInBook = S.inBook;
     S.inBook = openBookHere();      /* the reader may have moved since mount */
+    /* SURFACE-ONE (4): over a book the field says whose words come first */
+    input.placeholder = S.inBook ? "Search this book, then everywhere" : "Search everything";
     /* G-AUTOSEL: the book underneath is pre-selected so the reader does not
        land on "Choose a book" for a book they are already in. A click
        (select()) outranks the page -- selAuto tracks which it was, and a
@@ -921,8 +954,18 @@
   function close() {
     if (!root) return;
     opened = false;
+    /* × AND ESC PUT EVERYTHING BACK (ASKS #168: "× leaves focus in the hidden field" -- on a phone the keyboard
+       stays up over nothing, and the next search began "dollvirgil"): the caret leaves, the words go, and an
+       answer still out for them is dropped (the token), as an emptied field drops it in ask() */
+    var ae = document.activeElement;
+    if (ae && ae !== document.body && sheet.contains(ae) && ae.blur) ae.blur();   /* the field, or the × just pressed */
+    if (input.value) input.value = "";
+    clearTimeout(outTimer); clearTimeout(repressTimer); token++;
+    S.q = ""; S.asking = null; S.out = [];
     scrim.classList.remove("on"); sheet.classList.remove("on");
+    document.documentElement.removeAttribute("data-sheet");
     S.videoOpen = false;
+    S.door = null;
     stopTick();
   }
   function toggle() { opened ? close() : open(S.q); }
@@ -952,7 +995,13 @@
      waits for a pause (or Enter). */
   var outTimer = null;
   function ask(q, now) {
-    S.q = String(q || "").trim();
+    var q1 = String(q || "").trim();
+    /* a NEW query drops the chip filter and the one-shot re-press with the
+       answer they described (SURFACE-PRESS) */
+    if (q1 !== S.q) { S.srcFilter = null; S.kind = "all"; clearTimeout(repressTimer);
+                      /* typed words are a search again, not the door */
+                      if (S.door && q1 !== S.door.q) S.door = null; }
+    S.q = q1;
     /* DRAW THE SHELF FIRST, SYNCHRONOUSLY, from whatever S.shelf already
        holds. If it is empty (first open, no poll yet), nothing is drawn and
        yours() fills it on the next tick -- but when the shelf IS in memory,
@@ -1023,7 +1072,16 @@
      is driven by pollWorks and lands here through askState. */
   function yours() {
     if (S.shelf.length && Date.now() - shelfAt < 10000) return Promise.resolve();
-    if (!api("/state")) { S.shelf = MOCK_SHELF.slice().map(shelfOf); shelfAt = Date.now(); return Promise.resolve(); }
+    /* THE WEB'S SHELF IS THE PAGE'S OWN (29 Sep: the web sheet was an empty box saying "Studio needs the Mac app or
+       Frank's cloud" over a Library showing 41 books). A website has no /state, but the Library it opens over already
+       holds the shelf; YOUR LIBRARY lists those books, as the Mac's and the phone's sheets do. */
+    if (window.TTSTVHost && window.TTSTVHost.isWeb && typeof window.shelfEntries === "function") {
+      try { S.shelf = (window.shelfEntries() || []).filter(function (b) { return b && b.slug; }).map(shelfOf); } catch (e) { S.shelf = []; }
+      shelfAt = Date.now(); return Promise.resolve();
+    }
+    /* no route: the BENCH draws its four mock books; Frank with no studio (an
+       unpaired phone, the web edition) draws nothing of anyone's */
+    if (!api("/state")) { S.shelf = S.bench ? MOCK_SHELF.slice().map(shelfOf) : []; shelfAt = Date.now(); return Promise.resolve(); }
     return askState();
   }
   function askState() {
@@ -1031,6 +1089,14 @@
     if (window.TTSTVHost && window.TTSTVHost.isWeb) return Promise.resolve();
     if (stateAsking) return stateAsking;
     stateAsking = getJSON("/state", 20000)
+      /* the phone's stand-in /state (library/works.js) hands `books` over as the host's list() answer, which on the
+         phone is a PROMISE -- "(d.books || []).map is not a function" was the whole Surface on the phone (29 Sep).
+         Waited for here; anything else that is not a list is taken as none. */
+      .then(function (d) {
+        if (d && d.books && typeof d.books.then === "function") return d.books.then(function (b) { d.books = b; return d; }, function () { d.books = []; return d; });
+        return d;
+      })
+      .then(function (d) { if (d && d.books && !Array.isArray(d.books)) d.books = Object.keys(d.books).map(function (k) { return d.books[k]; }); return d; })
       .then(takeState)
       .catch(function (e) {
         /* SAY WHAT HAPPENED, and never the mock's sentence: there IS a server
@@ -1344,7 +1410,104 @@
      and it is why Add is never drawn on a row Add would refuse. */
   function isText(c) { return !c.kind || c.kind === "text"; }
 
-  function elsewhere() {
+  /* ------------------------------------------- THE OPEN EDITION IS A ROW
+     SURFACE-PRESS (Osca's press, 26 Sep 15:00, finding 2): *"the row you can
+     take has no Add, the rows you cannot have one."* A borrow-only Archive
+     scan (`candidate.borrow_only`, `sources/archive.is_borrow_only`) is a row
+     Add would refuse four presses later; the open edition of the same work
+     (`sources/archive.open_editions`) is the row Add can take. So the borrow
+     row loses Add and NAMES its open edition, and the open edition is drawn
+     as a candidate of its own, with Add, in the borrow row's place.
+
+     THE CONTRACT WITH `/search`, read as data, in two shapes and both are
+     honoured:
+       (a) a candidate carrying `open_edition_of: <source_id>` -- E-search
+           returning the open edition as a first-class candidate (wave-8's
+           E-search request), ranked by this page above the row it replaces;
+       (b) a borrow-only candidate carrying `open_editions: [{identifier,
+           title, url, downloads}]` -- `archive.open_editions`' own shape,
+           today only computed at the refusal (`serve.py::
+           _borrow_only_sentence`). Each entry not already a candidate is
+           LIFTED into one here, so the page draws the door whichever half
+           studio sends first. A lifted row is marked `lifted: true` and its
+           `note` says whose open edition it is. */
+  function withOpenEditions(texts) {
+    var byId = {};
+    texts.forEach(function (c) { if (c.source_id) byId[c.source + ":" + c.source_id] = c; });
+    var out = texts.slice();
+    texts.forEach(function (c) {
+      if (!c.borrow_only) return;
+      (c.open_editions || []).forEach(function (o) {
+        if (!o || !o.identifier) return;
+        var k = "archive:" + o.identifier;
+        if (byId[k]) { if (!byId[k].open_edition_of) byId[k].open_edition_of = c.source_id; return; }
+        var lifted = { source: "archive", source_id: String(o.identifier),
+                       url: o.url || ("https://archive.org/details/" + o.identifier),
+                       kind: "text", title: String(o.title || o.identifier),
+                       author: c.author || null, language: c.language || null,
+                       popularity: o.downloads || null, license_status: "needs-check",
+                       borrow_only: false, direct_download: false, lifted: true,
+                       open_edition_of: c.source_id,
+                       note: "open edition on archive.org of “" + c.title + "” — downloadable" };
+        byId[k] = lifted;
+        out.push(lifted);
+      });
+    });
+    return out;
+  }
+  /* the borrow-only row's own open editions, as rows of the current answer */
+  function openEditionsOf(c) {
+    if (!c || !c.borrow_only || !c.source_id) return [];
+    /* one open edition can answer several borrow rows ("Plays" and "Four
+       plays" are both editions of the same work) -- so a row is this
+       borrow row's open edition when it points at it OR when the borrow
+       row's own `open_editions` names it */
+    var named = {};
+    (c.open_editions || []).forEach(function (o) { if (o && o.identifier) named[String(o.identifier)] = 1; });
+    return S.out.filter(function (o) {
+      return String(o.open_edition_of) === String(c.source_id) || (o.source_id && named[String(o.source_id)]);
+    });
+  }
+  /* THE SOURCES IN A REPORT, and nothing else (SURFACE-FIX, 28 Sep). The
+     server's report carries one entry that is not a source: `_query`, what
+     `tools/search/shape.py` HEARD in the typed words -- the title it actually
+     searched for, an author after "by", a kind (audiobook), a language, a
+     source (LibriVox). Every reader of the report skips the underscore. */
+  function srcKeys(report) {
+    return Object.keys(report || {}).filter(function (k) { return k.charAt(0) !== "_"; });
+  }
+  function heard() { return (S.adapters && S.adapters._query) || null; }
+  /* THE WORDS THE ROWS ARE RANKED BY are the words that were searched for.
+     `match()` against the raw string gave 0 to every row of "Moby Dick
+     LibriVox" (no row contains "librivox"), so the tie-break -- Gutenberg
+     first -- was the whole order and three texts sat above the recording a
+     person had named. Ranked by the heard title, the recording's own words
+     count. Until the answer lands the raw string ranks the shelf, as before. */
+  function rankQ() { var h = heard(); return (h && h.title) || S.q; }
+  /* THE FORM A PERSON NAMED ("Wallace Stevens poems") is worth half a
+     tier: a row whose title says poems (or plays, essays, letters, stories)
+     ranks above one that does not, so the essays do not sit above the
+     poems because both begin with the poet's name. */
+  var FORM_WORDS = { poems: /\bpoe(m|ms|try)\b/i, plays: /\bplays?\b|\bdrama/i, essays: /\bessays?\b/i,
+                     letters: /\bletters?\b|correspondence/i, stories: /\bstor(y|ies)\b|\btales?\b/i,
+                     novels: /\bnovels?\b/i };
+  function formBoost(title) {
+    var h = heard(), re = h && h.form && FORM_WORDS[h.form];
+    return re && re.test(title || "") ? 0.5 : 0;
+  }
+  /* the query NAMED a recording -- an audiobook, LibriVox, YouTube -- so the
+     recordings are what it wants, and they are drawn first */
+  function wantsRecording() {
+    var h = heard();
+    return !!h && (h.kind === "audio" || h.source === "librivox" || h.source === "youtube");
+  }
+  function anyStillRunning(report) {
+    return !!report && srcKeys(report).some(function (k) { return report[k] && report[k].still_running; });
+  }
+  var REPRESS_MS = 1500;   /* the ledger holds the thread; the re-ask joins it */
+  var repressTimer = null;
+
+  function elsewhere(keep) {
     var my = ++token;
     var url = api("/search?title=" + encodeURIComponent(S.q));
     if (!url) {
@@ -1356,8 +1519,19 @@
       draw();
       return Promise.resolve();
     }
-    beginAsking();
-    S.out = []; S.media = []; S.adapters = null; S.outErr = ""; draw();
+    beginAsking(!!keep);
+    /* the one automatic re-press KEEPS the rows it already has on the page
+       -- "N so far" stays N so far until the rest joins, never a blank */
+    if (!keep) { S.out = []; S.media = []; S.adapters = null; }
+    S.outErr = ""; draw();
+    /* THE FIRST ROWS AT ~2.5 s, NOT 17 (ASKS #128; SEARCH-2 §6d). `/search?stream=1` answers NDJSON, one line per
+       source as it lands, each line the whole ranked list so far; the page redraws on every line and stops "asking"
+       on the last. A studio without the stream answers plain JSON, which is read the old way below. */
+    if (!keep && window.ReadableStream && window.TextDecoder && !/^works:/.test(url)) {
+      return streamSearch(my, url).catch(function () { return oneShot(); });
+    }
+    return oneShot();
+    function oneShot() {
     /* 40 s: `sources.SEARCH_BUDGET` is 25 s and the route answers inside it
        by construction, so past 40 s the route is not coming back. */
     return ask_(url, 40000, { cache: "no-store" })
@@ -1397,8 +1571,21 @@
         var all = ((j && j.candidates) || [])
           .map(function (c) { return (c && c.candidate) || c; })
           .filter(function (c) { return c && c.title && c.source !== "library"; });
-        S.out = all.filter(isText);
+        S.out = withOpenEditions(all.filter(isText));
         S.media = all.filter(function (c) { return !isText(c); });
+        /* THE WALL, DRAWN AND ANSWERED ONCE (finding 3): a source that
+           `still_running` past the 25 s wall answered with its rows so far
+           and its thread is in E-search's ledger, so ONE re-ask of the same
+           words takes the rest. One, per query, automatically; a second is
+           yours to press. */
+        var q0 = S.q;
+        clearTimeout(repressTimer);
+        if (anyStillRunning(S.adapters) && S.repressed !== q0) {
+          S.repressed = q0;
+          repressTimer = setTimeout(function () {
+            if (S.q === q0 && opened && !S.asking) elsewhere(true);
+          }, REPRESS_MS);
+        }
         /* ITEM 6: WHO IS PAIRED WITH WHOM, built once from this answer.
            `tools/search/pair.py` puts the SAME `linked_id` on both halves of a
            pair, so grouping by it is the whole of the question -- a token held
@@ -1421,6 +1608,46 @@
         S.outErr = why("/search", e);
         S.out = []; S.media = []; draw();
       });
+    }
+  }
+  /* one ranked list, from a stream line or a whole answer, into the page's state -- the same rules as the one-shot path */
+  function takeRows(cands, dropped) {
+    S.dropped = (dropped || []).map(function (c) { return (c && c.candidate) || c; });
+    var all = (cands || []).map(function (c) { return (c && c.candidate) || c; })
+      .filter(function (c) { return c && c.title && c.source !== "library"; });
+    S.out = withOpenEditions(all.filter(isText));
+    S.media = all.filter(function (c) { return !isText(c); });
+    S.pairs = {};
+    all.forEach(function (c) { if (!c.linked_id) return; var k = String(c.linked_id); (S.pairs[k] = S.pairs[k] || []).push(c); });
+  }
+  function streamSearch(my, url) {
+    var surl = url + (url.indexOf("?") >= 0 ? "&" : "?") + "stream=1";
+    return ask_(surl, 40000, { cache: "no-store" }).then(function (r) {
+      var ct = (r.headers && r.headers.get("content-type")) || "";
+      if (!r.ok || !r.body || /application\/json/.test(ct)) throw new Error("no stream");
+      var reader = r.body.getReader(), dec = new TextDecoder(), buf = "", report = {};
+      S.searchedFor = S.q; S.outErr = "";
+      function line(t) {
+        if (!t.trim() || my !== token) return;
+        var j; try { j = JSON.parse(t); } catch (e) { return; }
+        if (j.done) { S.adapters = j.adapters || report; endAsking(S.adapters); draw(); return; }
+        if (j.query) report._query = j.query;
+        if (j.source) report[j.source] = j.report || {};
+        S.adapters = report;
+        takeRows(j.candidates, j.dropped);
+        draw();
+      }
+      return (function pump() {
+        return reader.read().then(function (x) {
+          if (my !== token) { try { reader.cancel(); } catch (e) {} return; }
+          if (x.done) { if (buf) line(buf); if (S.asking) { endAsking(S.adapters); draw(); } return; }
+          buf += dec.decode(x.value, { stream: true });
+          var parts = buf.split("\n"); buf = parts.pop();
+          parts.forEach(line);
+          return pump();
+        });
+      })();
+    });
   }
 
 
@@ -1456,8 +1683,8 @@
     } catch (e) {}
     return Object.keys(SOURCE).sort();
   }
-  function beginAsking() {
-    S.asking = { q: S.q, t0: Date.now(), names: knownSources() };
+  function beginAsking(again) {
+    S.asking = { q: S.q, t0: Date.now(), names: knownSources(), again: !!again };
     S.askedMs = 0;
     tick();
   }
@@ -1466,7 +1693,7 @@
     S.asking = null;
     stopTick();
     if (report) {
-      var names = Object.keys(report).filter(function (k) { return k !== "library"; }).sort();
+      var names = srcKeys(report).filter(function (k) { return k !== "library"; }).sort();
       if (names.length) {
         S.srcNames = names;
         try { localStorage.setItem(SRC_KEY, JSON.stringify(names)); } catch (e) {}
@@ -1489,6 +1716,17 @@
   function askingWords(a) {
     var sec = (Date.now() - a.t0) / 1000;
     var names = a.names.length;
+    if (a.again) {
+      /* the automatic re-press: the rows so far are still on the page under
+         this strip, and the head says what is being waited for */
+      var t = sourceTally();
+      return { head: "Asking again for “" + a.q + "” — " + t.rows + " so far · "
+                     + t.still + " still asking",
+               clock: Math.floor(sec) + " s",
+               sub: "a source passed studio's " + BUDGET_S + " s wall with rows so far; "
+                  + "its thread was kept and this one re-ask joins it — once, on its own",
+               p: Math.min(1, sec / BUDGET_S) };
+    }
     if (sec <= BUDGET_S)
       return { head: "Searching " + names + " source" + (names === 1 ? "" : "s")
                      + " for “" + a.q + "”",
@@ -1534,8 +1772,18 @@
      `{count: 0, error: null, log: []}`. */
   function sourceState(rep) {
     if (!rep) return { word: "—", why: "" };
+    /* still_running (E-search, 59a6dbf): the source passed the 25 s wall
+       with `count` rows so far, its thread kept in the ledger -- drawn as
+       "N so far · still asking", a fifth word, and never as `failed` even
+       when `error` carries the note for a source with 0 rows so far.
+       `rejoined`: this answer came from an earlier ask's thread. */
+    if (rep.still_running)
+      return { word: (rep.count || 0) + " so far", still: true, n: rep.count || 0,
+               rejoined: !!rep.rejoined, why: rep.note || "" };
     if (rep.error) return { word: "failed", why: String(rep.error) };
-    if (rep.count > 0) return { word: String(rep.count), why: "" };
+    if (rep.count > 0) return { word: String(rep.count), n: rep.count,
+                                rejoined: !!rep.rejoined,
+                                why: rep.rejoined ? "answer joined from the earlier ask's thread" : "" };
     var fails = rep.failures || [];
     if (fails.length) return { word: "down", why: fails.join(" · ") };
     var log = rep.log || [];
@@ -1546,12 +1794,16 @@
   /* how many sources actually looked -- so "nothing found" can be told from
      "nothing could be asked" in one number, on the page */
   function sourceTally() {
-    var t = { worked: 0, down: 0, off: 0, nothing: 0, failed: 0, n: 0 };
+    var t = { worked: 0, down: 0, off: 0, nothing: 0, failed: 0, n: 0,
+              still: 0, rejoined: 0, rows: 0 };
     if (!S.adapters) return t;
-    Object.keys(S.adapters).forEach(function (k) {
+    srcKeys(S.adapters).forEach(function (k) {
       if (k === "library") return;                 /* your own shelf is not "out there" */
       t.n++;
-      var w = sourceState(S.adapters[k]).word;
+      var st = sourceState(S.adapters[k]), w = st.word;
+      if (st.rejoined) t.rejoined++;
+      if (st.still) { t.still++; t.rows += st.n; if (st.n) t.worked++; return; }
+      if (st.n) t.rows += st.n;
       if (w === "down") t.down++;
       else if (w === "off") t.off++;
       else if (w === "failed") t.failed++;
@@ -1601,17 +1853,30 @@
      Gutenberg text is a parse away, an Archive scan may be a scan. */
   var SRCW = { gutenberg: 0.10, archive: 0.05, librivox: 0.02 };
   function rank() {
-    var q = S.q, out = [];
+    var q = rankQ(), out = [];
     S.shelf.forEach(function (b) {
       var s = match(b.title, b.author, q);
       if (q && !s) return;
       out.push({ kind: "shelf", key: "b:" + b.slug, book: b, s: s + CFG.bias });
     });
+    var outRows = {};
     S.out.forEach(function (c, i) {
       var k = "o:" + (c.url || (c.source + ":" + c.title) || i);
       if (S.work[k] || onShelf(c)) return;    /* it is ours now; not twice */
-      out.push({ kind: "out", key: k, cand: c,
-                 s: match(c.title, c.author, q) + (SRCW[c.source] || 0) });
+      var row = { kind: "out", key: k, cand: c, i: i,
+                  s: match(c.title, c.author, q) + (SRCW[c.source] || 0) + formBoost(c.title) };
+      if (c.source_id) outRows[String(c.source_id)] = row;
+      out.push(row);
+    });
+    /* THE OPEN EDITION SITS WHERE THE BORROW-ONLY ROW WAS, ABOVE IT
+       (SURFACE-PRESS, finding 2): a row with `open_edition_of` takes its
+       borrow row's score plus a hair, so it is drawn directly above the row
+       it replaces, wherever that row ranked -- and never below its own
+       merit either. */
+    out.forEach(function (r) {
+      if (r.kind !== "out" || !r.cand.open_edition_of) return;
+      var b = outRows[String(r.cand.open_edition_of)];
+      if (b) r.s = Math.max(r.s, b.s + 0.001);
     });
     /* ON THE DRIVE, AND NOT PARSED -- `studio.html::panelSources`, which was
        a modal list of buttons that until studio-simplify had no handler at
@@ -1637,6 +1902,26 @@
       if (q && !sc) return;
       out.push({ kind: "drive", key: k, file: f, s: sc });
     });
+    /* THE SERVER'S ORDER FOR WHAT IS OUT THERE (ASKS #125; SEARCH-2, tools/search/STATUS.md §6a: the page re-sorted the
+       server's ranked rows by its own title match, and that cost row 1 on 3 of 48). `/search` ranks by what a title
+       match cannot see -- the kind asked for, the source's parse prior, the format, how the same file parsed before --
+       and sends it as `rank` (and in that order). When the rows carry it, yours come first as before, then the rows from
+       out there exactly in the server's order, then the files on the drive; a row without `rank` keeps the old score. */
+    var ranked = out.some(function (r) { return r.kind === "out" && typeof r.cand.rank === "number"; });
+    if (ranked) {
+      var grp = function (r) { return r.kind === "shelf" ? 0 : r.kind === "out" ? 1 : 2; };
+      out.sort(function (a, b) {
+        var ga = grp(a), gb = grp(b); if (ga !== gb) return ga - gb;
+        if (ga === 1) {
+          var ra = typeof a.cand.rank === "number" ? a.cand.rank : -Infinity, rb = typeof b.cand.rank === "number" ? b.cand.rank : -Infinity;
+          if (rb !== ra) return rb - ra;
+          if (a.cand.open_edition_of || b.cand.open_edition_of) return b.s - a.s;
+          return a.i - b.i;
+        }
+        return b.s - a.s;
+      });
+      return out;
+    }
     out.sort(function (a, b) { return b.s - a.s; });
     return out;
   }
@@ -1683,9 +1968,18 @@
   /* the one line a row carries: FROM where, then the FILE -- lowercase and
      monospaced, because both are names a person may have to type or find,
      and letter case is part of a path */
-  function provLine(from, file, fileTitle, fromTitle) {
+  function provLine(from, file, fileTitle, fromTitle, door) {
     var n = el("span", "sf-prov");
-    var o = el("span", "po"); o.textContent = from; if (fromTitle) o.title = fromTitle;
+    /* SOURCE-DOOR (D9, 26 Sep): when the line names an origin it IS the door
+       -- a button, not a label -- and pressing it opens the Surface on that
+       origin's own result row (`openOrigin`). A line with no origin stays a
+       label: there is nowhere for it to go. */
+    var o = el(door ? "button" : "span", "po" + (door ? " sf-door" : ""));
+    if (door) { o.type = "button"; o.title = (fromTitle ? fromTitle + " — " : "") + "open this origin's row in the Surface";
+                o.dataset.doorId = door.origin.id || ""; o.dataset.doorUrl = door.origin.url || "";
+                o.addEventListener("click", function (e) { e.stopPropagation(); openOrigin(door.origin, door.slug); }); }
+    else if (fromTitle) o.title = fromTitle;
+    o.textContent = from;
     n.appendChild(o);
     if (file) {
       n.appendChild(el("span", "sep", "·"));
@@ -1698,9 +1992,11 @@
     var p = provOf(b.source);
     if (!p.file && !p.origin) return null;
     var from = p.origin ? "from " + p.label : "no origin on record";
-    return provLine(from, p.file, p.path || p.file,
+    var file = p.file + (b.source && b.source.kept === false ? " (not kept)" : "");
+    return provLine(from, file, p.path || p.file,
                     p.origin ? (p.url || p.label) + (p.from === "file" ? " — the file's own identifier" : "")
-                             : "added by hand, or before origins were kept");
+                             : "added by hand, or before origins were kept",
+                    p.origin ? { origin: p.origin, slug: b.slug } : null);
   }
   /* the working row's line: what the file was SAVED AS, the moment staging
      answers -- `/stage_for_ingest`'s own `source`, relative to the depot's
@@ -1735,7 +2031,30 @@
     box.appendChild(dl);
     if (p.url) { var u = el("div", "sf-url sf-origin"); u.textContent = p.url; u.title = p.url; box.appendChild(u); }
     if (p.path) { var f = el("div", "sf-url sf-path"); f.textContent = p.path; f.title = p.path; box.appendChild(f); }
+    /* SOURCE-DOOR: what became of the FILE, in one sentence, and what the
+       door is. `kept === false` is studio's own word (`source.kept`): the
+       file was parked after its parse, so Finder has nothing to show and
+       the origin is the road back. A book with no origin at all is a local
+       file: the folder is its only door, and the sentence says so. */
+    var kept = b.source && b.source.kept;
+    var fate = el("div", "sf-fate");
+    if (kept === false) fate.textContent = p.origin
+      ? "The source file was not kept after its parse (Settings: keep source files). Its origin is the door: open it in the Surface to look it over, add it again or re-parse from there."
+      : "The source file was not kept after its parse, and this book has no recorded origin — put the file back under sources/ to re-parse it.";
+    else if (!p.origin) fate.textContent = p.path
+      ? "A local file — no origin was recorded, so the folder is the door: Show in Finder."
+      : "";
+    else fate.textContent = "";
+    if (fate.textContent) box.appendChild(fate);
     var acts = el("div", "sf-acts");
+    if (p.origin) {
+      var d = el("button", "sf-verb sf-door");
+      d.type = "button"; d.textContent = "Find it in the Surface";
+      d.title = "the result row for " + (p.url || p.label) + ", by its id — with Add and Re-parse";
+      d.dataset.doorId = p.origin.id || ""; d.dataset.doorUrl = p.url || "";
+      d.addEventListener("click", function () { openOrigin(p.origin, b.slug); });
+      acts.appendChild(d);
+    }
     if (p.url && /^https?:/.test(p.url)) {
       var o = el("button", "sf-verb ghost");
       o.type = "button"; o.textContent = "Open the source page";
@@ -1747,10 +2066,11 @@
     var isPhone = document.documentElement.hasAttribute("data-phone");
     var r = el("button", "sf-verb ghost");
     r.type = "button"; r.textContent = "Show in Finder";
-    r.title = p.path ? "POST /reveal — Finder, with " + p.file + " selected"
+    r.title = kept === false ? "the source file was parked after its parse — nothing to show"
+            : p.path ? "POST /reveal — Finder, with " + p.file + " selected"
                      : "this book has no source file on record";
     if (isPhone) r.hidden = true;
-    else if (!p.path || !S.live) r.disabled = true;
+    else if (!p.path || !S.live || kept === false) r.disabled = true;
     r.addEventListener("click", function () {
       if (r.disabled) return;
       r.disabled = true;
@@ -1786,6 +2106,134 @@
      row began (`w.before`). That last clause is the whole difference from
      the rule this replaces: the first edition of "The Ethics" was already
      there when the second was pressed, so it can never be taken for it. */
+  /* ====================================================== SOURCE-DOOR (D9)
+     Osca, 26 Sep: *"once parsed, the source file GOES (or is never kept);
+     the origin LINK stays and is a door -- from the book, back into the
+     Surface at that result, to look it over and re-add/re-parse from there.
+     Today the link leads nowhere."*
+
+     THE DOOR IS ASKED BY ID, NEVER BY TITLE. A title search finds a book;
+     an id finds THIS one -- so the field takes the id (or the url when that
+     is all the record has), `/search` is NOT pressed, and `GET /origin`
+     answers with the one row built off the source's own item record
+     (`studio/sources.py::candidate_for`) plus the shelf books that came from
+     it. The row is drawn ABOVE everything, under its own head, and it
+     carries the two verbs the press asked for: Add (a second copy, or the
+     book back when it is gone) and Re-parse (the same file fetched again --
+     `/stage_for_ingest` -- then `/ingest` naming the book, which studio
+     turns into that book's re-parse from the fresh file).
+
+     The twin rule (`onShelf`) does not apply here on purpose: the row IS the
+     shelf book's origin, and being on the shelf is the reason to show it.
+     With no studio behind the page (the bench) the row is built from what
+     the book itself recorded, and says so. */
+  function normOrigin(o) {
+    o = o || {};
+    var src = o.source || null, id = o.id ? String(o.id) : null, url = o.url || null;
+    if (!id && url) {
+      var g = /gutenberg\.org\/(?:ebooks|files|cache\/epub)\/(\d+)/.exec(url);
+      var a = /archive\.org\/(?:details|download|metadata)\/([^\/?#]+)/.exec(url);
+      if (g) { src = src || "gutenberg"; id = g[1]; }
+      else if (a) { src = src || "archive"; id = a[1]; }
+    }
+    return { source: src, id: id, url: url };
+  }
+  function doorQuery(o) { return o.id || o.url || ""; }
+  function openOrigin(origin, slug) {
+    var o = normOrigin(origin);
+    if (!o.id && !o.url) return null;
+    if (!root) mount();
+    if (!opened) open("", false);
+    var q = doorQuery(o);
+    S.door = { origin: o, slug: slug || null, q: q, asking: true, cand: null, books: [], err: "", mock: false };
+    /* the field says what was asked -- the id -- and nothing else is asked:
+       no `/search`, no 320 ms pause, no twin rule */
+    token++; clearTimeout(outTimer); clearTimeout(repressTimer);
+    S.srcFilter = null; S.asking = null; stopTick();
+    S.q = q; S.searchedFor = q; S.out = []; S.media = []; S.adapters = null; S.outErr = "";
+    if (input && input.value !== q) input.value = q;
+    draw();
+    var url = api("/origin?" + [["source", o.source], ["id", o.id], ["url", o.url]]
+                  .filter(function (kv) { return kv[1]; })
+                  .map(function (kv) { return kv[0] + "=" + encodeURIComponent(kv[1]); }).join("&"));
+    var door = S.door;
+    if (!url) {
+      /* the bench, or no studio: the row is what the BOOK recorded, and it
+         is labelled as such -- nothing is fetched and nothing is invented */
+      var b = (S.shelf || []).filter(function (x) { return x.slug === slug; })[0];
+      door.mock = true; door.asking = false;
+      door.cand = { source: o.source || "out there", source_id: o.id, url: o.url || "", kind: "text",
+                    title: b ? b.title : (o.id || o.url), author: b ? b.author : null,
+                    language: b ? b.lang : null, license_status: "needs-check", note: "" };
+      door.books = b ? [b.slug] : [];
+      draw();
+      return door;
+    }
+    ask_(url, 20000, { cache: "no-store" })
+      .then(function (r) { return r.text().then(function (t) {
+        var j = null; try { j = JSON.parse(t); } catch (e) { throw new Error("answered " + r.status + " but not JSON"); }
+        if (!r.ok && !(j && (j.error || j.candidate !== undefined))) throw new Error("answered " + r.status);
+        return j; }); })
+      .then(function (j) {
+        if (S.door !== door) return;
+        door.asking = false;
+        door.books = (j && j.books) || [];
+        door.cand = (j && j.candidate) || null;
+        door.err = (j && j.error) || "";
+        door.reason = (j && j.reason) || "";
+        draw();
+      })
+      .catch(function (e) {
+        if (S.door !== door) return;
+        door.asking = false; door.err = why("/origin", e); draw();
+      });
+    return door;
+  }
+  /* the band: head, the row, and the one line under it that says what is
+     on the shelf from this origin */
+  function doorBand(into) {
+    var d = S.door;
+    if (!d) return;
+    var o = d.origin;
+    var label = o.url ? String(o.url).replace(/^https?:\/\//, "").replace(/^www\./, "").replace(/\/+$/, "")
+                      : [SOURCE[o.source] || o.source, o.id].filter(Boolean).join(" · ");
+    var h = head("The source — " + label);
+    h.classList.add("sf-doorhead");
+    into.appendChild(h);
+    var band = el("div", "sf-doorband");
+    band.dataset.doorId = o.id || ""; band.dataset.doorUrl = o.url || "";
+    if (d.asking) { band.appendChild(note("asking " + (SOURCE[o.source] || o.source || "the source") + " for " + (o.id || o.url) + "…")); into.appendChild(band); return; }
+    if (d.cand) {
+      var r0 = { kind: "out", key: "door:" + (o.id || o.url), cand: d.cand, door: true,
+                 reparseOf: d.slug || d.books[0] || null };
+      var row = outRow(r0);
+      row.classList.add("r-door");
+      row.dataset.sid = String(d.cand.source_id || o.id || "");
+      /* RE-PARSE, beside Add, when a shelf book came from this origin: the
+         same file fetched again, and THAT book parsed from it */
+      if (r0.reparseOf && isText(d.cand) && !d.cand.borrow_only) {
+        var rp = el("button", "sf-verb sf-reparse");
+        rp.type = "button"; rp.textContent = "Re-parse";
+        rp.title = "fetch " + (o.id || o.url) + " again and re-parse " + r0.reparseOf + " from it";
+        rp.addEventListener("click", function (e) { e.stopPropagation(); add(r0, rp, null, { reparseOf: r0.reparseOf }); });
+        row.querySelector(".end").appendChild(rp);
+      }
+      band.appendChild(row);
+      var on = (d.books || []).map(function (sl) { return bookTitle(sl) || sl; });
+      band.appendChild(note(on.length ? "on your shelf as " + on.join(", ") + (d.mock ? " — the row is the book's own record (no studio behind this page)" : "")
+                                      : "not on your shelf — Add brings it back"));
+    } else {
+      band.appendChild(note(d.err ? d.err : (d.reason || "no row for this origin")));
+      if (o.url && /^https?:/.test(o.url)) {
+        var go = el("button", "sf-verb ghost");
+        go.type = "button"; go.textContent = "Open the source page";
+        go.addEventListener("click", function () { openOut(o.url); });
+        band.appendChild(go);
+      }
+    }
+    into.appendChild(band);
+  }
+
   function landedBook(c) {
     var file = c.source ? String(c.source).split("/").pop() : "";
     var stem = file.replace(/\.[^.]+$/, "");
@@ -1822,9 +2270,13 @@
     var hits = [];
     S.shelf.forEach(function (b) {
       var text = norm((b.title || "") + " " + (b.author || ""));
+      /* EVERY WORD, AT A WORD'S START (ASKS #168, the phone-search Stranger: "moby dick" listed David Copperfield
+         -- "dick" inside "Dickens" -- and "war and peace" listed every title with "and" in it). One word hitting
+         was a book; now each typed word must begin a word of the title or the author. */
+      var words = " " + text.replace(/[^a-z0-9\u00c0-\uffff]+/g, " ") + " ";
       var matched = 0;
-      toks.forEach(function (t) { if (text.indexOf(t) >= 0) matched++; });
-      if (matched >= 1) hits.push({ book: b, matched: matched });
+      toks.forEach(function (t) { if (words.indexOf(" " + t) >= 0) matched++; });
+      if (matched === toks.length) hits.push({ book: b, matched: matched });
     });
     /* most matched tokens first, then alphabetical by title for ties */
     hits.sort(function (a, b) {
@@ -1843,11 +2295,29 @@
     var searching = !!S.asking;
     listEl.textContent = "";
     var rows = rank();
+    /* A QUERY THAT NAMED A RECORDING (SURFACE-FIX, 28 Sep: "Monte Cristo
+       audiobook", "Moby Dick LibriVox") gets the recordings FIRST -- the
+       Elsewhere lanes, video and web, drawn above Results instead of at the
+       foot, so the thing a person asked for is the first row and not the
+       fourth screen. Every other query is drawn as before. */
+    var recordingsFirst = !!S.q && !searching && !S.srcFilter && wantsRecording()
+                          && (videos().length || webHits().length);
+    /* THE CHIP THAT IS ON decides what the list is (SURFACE-PRESS): one
+       source's rows and nothing else, or the dropped rows with their
+       reasons and nothing else. The shelf, the drive and the Elsewhere
+       lanes are not that source's rows, so they are not drawn under it. */
+    var filt = S.q && S.adapters && S.srcFilter;
+    if (filt === "filtered") rows = droppedRows();
+    else if (filt) rows = rows.filter(function (r) { return r.kind === "out" && r.cand.source === filt; });
     /* ONE LIST, AND IT IS THE FOLD (item 1). This was `S.work`'s own rows
        alone -- what this surface had started -- while the queue lived in the
        other column. `workingRows()` folds studio's five queue fields in with
        them, in studio's order, so the band is the whole answer. */
     var working = workingRows();
+
+    /* SOURCE-DOOR: the origin's own row, above everything -- it was asked
+       for by name, from a book, and it is the only thing the field holds */
+    doorBand(listEl);
 
     /* WORKING first, always, and pinned -- it is the only band that is about
        what the machine is doing rather than about what you asked. Since
@@ -1874,6 +2344,12 @@
        what each did once it has answered. Not a debug panel -- it is the
        difference between "nothing anywhere" and "the three places that
        would have it did not answer". */
+    /* SURFACE-ONE (4), Osca 28 Sep: *"the sheet on a book searches that book
+       first."* Over an open book the book's own words come before the shelf
+       and before everywhere else: the passages that hold the query, then the
+       chapters whose titles do. Anywhere else these stay at the foot. */
+    var bookFirst = !!(S.q && S.inBook && !filt);
+    if (bookFirst) inBookBand(listEl);
     var strip = S.q && (searching || S.adapters) ? sourcesStrip() : null;
     /* D5: LOCAL SHELF FIRST. Before the nine external sources, shelf hits
        with ≥2 token matches render under "ON THIS SHELF". The heading and
@@ -1888,6 +2364,40 @@
         row.setAttribute("data-shelf-result", b.slug);
         listEl.appendChild(row);
       });
+    }
+    if (recordingsFirst) {
+      listEl.appendChild(head("Recordings"));
+      /* the source a person NAMED comes first: "Moby Dick LibriVox" is the
+         LibriVox recording (the web lane -- archive.org's librivoxaudio),
+         not YouTube's readings above it */
+      if (heard().source === "librivox") { webLane(listEl); videoLane(listEl); }
+      else { videoLane(listEl); webLane(listEl); }
+    }
+    if (filt) {
+      listEl.appendChild(head(filt === "filtered" ? "Filtered out" : "Results — " + (SOURCE[filt] || filt)));
+      if (strip) listEl.appendChild(strip);
+      rows.forEach(function (r) { listEl.appendChild(rowFor(r)); });
+      if (!rows.length) listEl.appendChild(note(filt === "filtered"
+        ? "nothing the filter dropped is a text — the dropped rows are recordings or pages"
+        : "no text rows from " + (SOURCE[filt] || filt) + " — its rows are in the Elsewhere lanes"));
+      kinds();
+      drawWorks();
+      return;
+    }
+    /* "CORRECTED FROM …" (ASKS #129; SEARCH-2 §6e): when the speller fixed the words (a correction is only ever to a
+       real title on disk), say it once, above the rows, the way a person would: what was searched, and what was typed */
+    var hq = heard();
+    if (S.q && hq && hq.corrected_from && hq.title) {
+      var cf = el("p", "sf-corrected");
+      cf.appendChild(document.createTextNode("Showing “" + hq.title + "” · you typed “" + hq.corrected_from + "”"));
+      listEl.appendChild(cf);
+    }
+    /* A BOOK ON THE SHELF IS DRAWN ONCE (ASKS #168: "moby dick" drew Moby Dick under ON THIS SHELF and again under
+       RESULTS): a book already drawn above is not a result again */
+    if (shelfHits.length) {
+      var drawn = {};
+      shelfHits.forEach(function (b) { drawn[b.slug] = 1; });
+      rows = rows.filter(function (r) { return !(r.kind === "shelf" && r.book && drawn[r.book.slug]); });
     }
     if (CFG.mixed) {
       if (rows.length || strip) listEl.appendChild(head(S.q ? "Results" : "Your library"));
@@ -1905,38 +2415,254 @@
       if (them.length) { listEl.appendChild(head("Out there"));
         them.forEach(function (r) { listEl.appendChild(outRow(r)); }); }
     }
+    /* SURFACE-ONE (1): the two kinds that are not books or places -- a voice
+       you have and a person whose books you have -- as their own sections, so
+       the kind pills have something to count. */
+    if (S.q) { voiceBand(listEl); peopleBand(listEl); }
     /* THE FILES ALREADY PARSED ARE NOT ROWS, AND THEY ARE NOT NOTHING. The
        twin rule drops them from the list (the book is a row above); the
        count is the sentence that makes the drop legible. */
     if (!S.q && driveParsed() && rows.some(function (r) { return r.kind === "drive"; }))
       listEl.appendChild(note(driveHead()));
 
-    if (S.q && !searching && S.outErr) listEl.appendChild(note(S.outErr));
-    else if (S.q && !searching && !rows.length && !working.length && !S.media.length)
-      listEl.appendChild(note(nothingLine()));
+    /* A SEARCH THAT BROKE SAYS SO IN ONE QUIET LINE (ASKS #136 / #80: it printed the route's raw answer -- "/search —
+       answered 404 but not JSON — <!DOCTYPE HTML> ..." -- into the results). The detail goes to the console, where
+       Tell Frank's log keeps it, and the line carries the one door: TELL FRANK, the sheet about this search. */
+    /* ONE LINE, NEVER TWO (ASKS #187, the web Stranger): "Only your shelf answered" is said only when the shelf DID
+       answer; with nothing found anywhere the one line says so, and the no-studio line below is not added to it */
+    var said = false;
+    if (S.q && !searching && S.outErr) { listEl.appendChild(brokeLine(S.outErr, !rows.length && !shelfHits.length)); said = true; }
+    else if (S.q && !searching && !rows.length && !working.length && !S.media.length) {
+      listEl.appendChild(note(!S.live && window.TTSTVHost && TTSTVHost.isWeb ? noStudioLine() : nothingLine())); said = true; }
     /* THE MOCK SAYS SO, AND ONLY THE MOCK. With studio behind the page this
        line is not softened or reworded -- it is not there. What replaces it
        when the server is there but silent is `S.stateErr`, which names the
        route and the failure rather than calling live rows a mock. */
-    if (!S.live) listEl.appendChild(note(noStudioLine()));
+    /* ...and never over an empty field (ASKS #168: the first thing an empty search said was "Studio needs the Mac
+       app or Frank's cloud" -- a sentence about another device, POLISH 5). Nothing typed: nothing said, the shelf
+       shows. Words typed that nothing here answered: the one line that says why. */
+    if (!S.live) { if (!said && S.q && !rows.length && !shelfHits.length && !(bookFirst && S.inBook)) listEl.appendChild(note(noStudioLine())); }
     else if (S.stateErr) listEl.appendChild(note(S.stateErr));
 
     /* the per-source strip that stood here moved to the TOP of Results --
        see `strip` above (G-SURF2) */
 
     /* the lanes that are not books, at the foot of the one list */
-    if (S.q) {
+    if (S.q && !bookFirst) {
       var here = inBookRow();
       if (here) { listEl.appendChild(head("In this book")); listEl.appendChild(here); }
       chapterRows().forEach(function (n, i) {
         if (!i) listEl.appendChild(head("Chapters"));
         listEl.appendChild(n);
       });
+      if (!recordingsFirst) {
+        listEl.appendChild(head("Elsewhere"));
+        videoLane(listEl);
+        webLane(listEl);
+      }
+    }
+    if (S.q && bookFirst && !recordingsFirst) {
       listEl.appendChild(head("Elsewhere"));
       videoLane(listEl);
       webLane(listEl);
     }
+    kinds();
     drawWorks();
+  }
+
+  /* ============================================================ SURFACE-ONE
+     Osca, 28 Sep: *"it's a search, you just search everything; once you have
+     searched, you can filter it for KINDS of results, with little pills ...
+     you DO NOT want to do it first."* So nothing here is asked before the
+     words are typed: the list is drawn whole, exactly as before, and only
+     then is it READ back into kinds -- each section head names what its rows
+     are, every node under it belongs to it -- and a pill per kind that has
+     rows is drawn above them, with its count, "All" first and chosen. A pill
+     pressed hides the other kinds' nodes; nothing is re-asked, so a pill
+     costs no network and cannot lose a row. The pills are glyphs; the word is
+     the aria-label and the title. */
+  var KIND_GLYPH = {
+    books: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 3.2c1.9-.6 3.8-.4 5.5.8v9c-1.7-1.2-3.6-1.4-5.5-.8zM13.5 3.2c-1.9-.6-3.8-.4-5.5.8v9c1.7-1.2 3.6-1.4 5.5-.8z" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg>',
+    voices: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 8h1.5M5 5v6M8 2.5v11M11 5v6M14 8h-1.5" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>',
+    sources: '<svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="5.6" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M2.4 8h11.2M8 2.4c-2.2 2.9-2.2 8.3 0 11.2M8 2.4c2.2 2.9 2.2 8.3 0 11.2" fill="none" stroke="currentColor" stroke-width="1.1"/></svg>',
+    people: '<svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="5.4" r="2.6" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M3 13.6c.6-2.6 2.6-4 5-4s4.4 1.4 5 4" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>'
+  };
+  var KIND_WORD = { all: "All", books: "Books", voices: "Voices", sources: "Sources", people: "People" };
+  var KIND_ORDER = ["books", "voices", "sources", "people"];
+  function headKind(t) {
+    t = String(t || "").toLowerCase();
+    if (/^(recordings|elsewhere)/.test(t)) return "sources";
+    if (/^voices/.test(t)) return "voices";
+    if (/^people/.test(t)) return "people";
+    if (/^working|running|queued/.test(t)) return "working";
+    return "books";
+  }
+  function kinds() {
+    if (!listEl) return;
+    var old = listEl.querySelector(".sf-kinds");
+    if (old) listEl.removeChild(old);
+    var counts = { books: 0, voices: 0, sources: 0, people: 0 };
+    var sec = "top", kids = Array.prototype.slice.call(listEl.children);
+    kids.forEach(function (n) {
+      if (n.classList.contains("sf-workhead")) sec = "working";
+      else if (n.classList.contains("sf-h")) sec = headKind(n.textContent);
+      n.setAttribute("data-kind", sec);
+      if (counts[sec] != null && n.classList.contains("sf-row") && !n.classList.contains("sf-query")) counts[sec]++;
+    });
+    var total = KIND_ORDER.reduce(function (a, k) { return a + counts[k]; }, 0);
+    /* (1) ONLY ONCE THERE ARE RESULTS: no query, or a query with nothing yet,
+       draws no pills at all -- the list alone, as it always was */
+    if (!S.q || !total) { S.kind = "all"; kids.forEach(function (n) { n.hidden = false; }); return; }
+    if (S.kind !== "all" && !counts[S.kind]) S.kind = "all";
+    kids.forEach(function (n) {
+      var k = n.getAttribute("data-kind");
+      n.hidden = S.kind !== "all" && k !== S.kind;
+    });
+    var bar = el("div", "sf-kinds");
+    bar.setAttribute("role", "tablist");
+    bar.setAttribute("aria-label", "Kinds of result");
+    ["all"].concat(KIND_ORDER).forEach(function (k) {
+      if (k !== "all" && !counts[k]) return;
+      var b = el("button", "sf-kind" + (S.kind === k ? " on" : ""));
+      b.type = "button";
+      b.setAttribute("role", "tab");
+      b.setAttribute("aria-selected", S.kind === k ? "true" : "false");
+      b.dataset.kind = k;
+      var n = k === "all" ? total : counts[k];
+      b.setAttribute("aria-label", KIND_WORD[k] + ", " + n);
+      b.title = KIND_WORD[k] + " — " + n;
+      b.innerHTML = (k === "all" ? '<b>' + KIND_WORD.all + '</b>' : KIND_GLYPH[k])
+                  + '<i>' + n + '</i>';
+      b.addEventListener("click", function () {
+        S.kind = k;
+        kinds();
+        listEl.scrollTop = 0;
+      });
+      bar.appendChild(b);
+    });
+    listEl.insertBefore(bar, listEl.firstChild);
+  }
+
+  /* THE VOICES YOU HAVE, by name, when the words name one. Pressing it makes
+     it the voice this surface renders with -- the same `S.voice` the
+     column's own voice pills write. */
+  function voiceBand(box) {
+    var q = norm(S.q);
+    var vs = (S.voices || []).filter(function (v) {
+      return v && v.name && (score(v.name, S.q) > 0 || norm(v.transcript || "").indexOf(q) >= 0);
+    });
+    if (!vs.length) return;
+    box.appendChild(head("Voices"));
+    vs.slice(0, 8).forEach(function (v) {
+      var r = rowShell("r-voice", "v:" + v.name);
+      r.querySelector(".t").textContent = v.name;
+      r.querySelector(".s").textContent = [
+        v.seconds ? Math.round(v.seconds) + " s of reference" : "",
+        S.voice === v.name ? "the voice in use" : "press to use it"
+      ].filter(Boolean).join(" · ");
+      if (S.voice === v.name) r.classList.add("sel");
+      r.addEventListener("click", function () { S.voice = v.name; draw(); });
+      box.appendChild(r);
+    });
+  }
+
+  /* THE PEOPLE: an author the words name, on your shelf or out there, once.
+     Pressing one searches for that person. */
+  function peopleBand(box) {
+    var seen = {}, list = [];
+    function add(a, where) {
+      a = String(a || "").trim();
+      if (!a || score(a, S.q) <= 0) return;
+      var k = norm(a);
+      if (!seen[k]) { seen[k] = { name: a, shelf: 0, out: 0 }; list.push(seen[k]); }
+      seen[k][where]++;
+    }
+    (S.shelf || []).forEach(function (b) { add(b.author, "shelf"); });
+    (S.out || []).forEach(function (c) { if (isText(c)) add(c.author, "out"); });
+    if (!list.length) return;
+    list.sort(function (a, b) { return (b.shelf - a.shelf) || (b.out - a.out); });
+    box.appendChild(head("People"));
+    list.slice(0, 6).forEach(function (p) {
+      var r = rowShell("r-person", "p:" + norm(p.name));
+      r.querySelector(".t").textContent = p.name;
+      r.querySelector(".s").textContent = [
+        p.shelf ? p.shelf + " on your shelf" : "",
+        p.out ? p.out + " out there" : ""
+      ].filter(Boolean).join(" · ");
+      r.addEventListener("click", function () { input.value = p.name; ask(p.name, true); });
+      box.appendChild(r);
+    });
+  }
+
+  /* (4) THE BOOK UNDERNEATH, FIRST. `window.TTSTVBook` is the reader's own
+     door (reader.html): the book it opened and `go(chapter, word)`, which is
+     `nav.goTo`. The word number is counted the way book-nav.js::wordsOf
+     counts it -- every block but a speaker or a stage direction, split on
+     whitespace -- so a press lands the cursor on the word that was found. */
+  var PASS_MAX = 12;
+  var WORDCH = (function () { try { return new RegExp("[\\p{L}\\p{N}]", "u"); } catch (e) { return /[A-Za-z0-9\u00C0-\u024F]/; } })();
+  function bookHits(q) {
+    var B = window.TTSTVBook, b = null;
+    try { b = B && typeof B.book === "function" ? B.book() : null; } catch (e) { b = null; }
+    if (!b || !b.chapters) return null;
+    if (S.inBook && b.slug && b.slug !== S.inBook) return null;
+    var nq = String(q || "").toLowerCase();
+    if (nq.length < 2) return { hits: [], n: 0 };
+    var hits = [], n = 0;
+    b.chapters.forEach(function (ch, ci) {
+      var wi = 0;
+      (ch.blocks || []).forEach(function (blk) {
+        if (blk.r === "sp" || blk.r === "dir") return;
+        var t = String(blk.t || ""), lt = t.toLowerCase(), at = lt.indexOf(nq);
+        /* a word STARTS with the query -- "ash" is not found in "cash" (the
+           language-reader Stranger, 28 Sep); any script, by \p{L} */
+        while (at > 0 && WORDCH.test(lt.charAt(at - 1))) at = lt.indexOf(nq, at + 1);
+        if (at >= 0) {
+          n++;
+          if (hits.length < PASS_MAX) {
+            var pre = t.slice(0, at), k = pre.split(/\s+/).filter(Boolean).length;
+            if (k && !/\s$/.test(pre)) k--;          /* the word the match starts inside */
+            var a0 = Math.max(0, at - 38), a1 = Math.min(t.length, at + nq.length + 48);
+            hits.push({ ci: ci, wi: wi + k, ch: ch,
+                        pre: (a0 ? "…" : "") + t.slice(a0, at),
+                        hit: t.slice(at, at + nq.length),
+                        post: t.slice(at + nq.length, a1) + (a1 < t.length ? "…" : "") });
+          }
+        }
+        wi += t.split(/\s+/).filter(Boolean).length;
+      });
+    });
+    return { hits: hits, n: n, book: b };
+  }
+  function inBookBand(box) {
+    var r = bookHits(S.q);
+    if (r && r.n) {
+      box.appendChild(head("In this book — " + r.n + (r.n === 1 ? " passage" : " passages")));
+      r.hits.forEach(function (h) {
+        var row = rowShell("r-shelf sf-pass", "w:" + h.ci + ":" + h.wi);
+        row.style.setProperty("--hue", hue(S.inBook || ""));
+        row.querySelector(".spine").style.background = hue(S.inBook || "");
+        var t = row.querySelector(".t");
+        t.appendChild(document.createTextNode(h.pre));
+        var m = document.createElement("mark"); m.textContent = h.hit; t.appendChild(m);
+        t.appendChild(document.createTextNode(h.post));
+        row.querySelector(".s").textContent = (h.ch.n || h.ch.t || h.ch.id || "") ;
+        row.dataset.ch = h.ci; row.dataset.w = h.wi;
+        row.addEventListener("click", function () {
+          close();
+          try { window.TTSTVBook.go(h.ci, h.wi); } catch (e) {}
+        });
+        box.appendChild(row);
+      });
+      if (r.n > r.hits.length) box.appendChild(note("the first " + r.hits.length + " of " + r.n + " — type more words to narrow them"));
+    } else if (r) {
+      box.appendChild(head("In this book"));
+      box.appendChild(note("not in this book — everywhere else is below"));
+    }
+    chapterRows().forEach(function (nd, i) {
+      if (!i) box.appendChild(head("Chapters"));
+      box.appendChild(nd);
+    });
   }
 
   /* "Nothing on the shelves for that." WAS A LIE WHENEVER A SOURCE WAS DOWN.
@@ -1984,7 +2710,7 @@
       paintAsking(box);
       return box;
     }
-    var names = Object.keys(S.adapters).filter(function (k) { return k !== "library"; }).sort();
+    var names = srcKeys(S.adapters).filter(function (k) { return k !== "library"; }).sort();
     var t = sourceTally();
     var parts = [];
     if (t.worked) parts.push(t.worked + " found something");
@@ -1992,17 +2718,37 @@
     if (t.failed) parts.push(t.failed + " failed");
     if (t.off) parts.push(t.off + " off");
     if (t.nothing) parts.push(t.nothing + " nothing");
+    if (t.still) parts.push(t.still + " still asking");
+    if (t.rejoined) parts.push(t.rejoined + " rejoined");
     hl.textContent = names.length + " source" + (names.length === 1 ? "" : "s")
       + " answered for “" + (S.searchedFor || S.q) + "”"
       + (parts.length ? " — " + parts.join(" · ") : "");
     ck.textContent = S.askedMs ? (S.askedMs / 1000).toFixed(1) + " s" : "";
+    /* THE CHIPS ARE FILTERS (SURFACE-PRESS, finding 1: *"Clicking `Archive
+       23` or `filtered 25` does nothing"*). A chip with rows, clicked, draws
+       only that source's rows; `filtered`, clicked, draws the rows the
+       title/author filter dropped, each with its reason; the same chip
+       clicked again draws everything. A chip with NO rows (down, failed,
+       off, nothing) still opens its reason line, as before -- there is
+       nothing of it to filter to. */
+    function toggleFilter(key) {
+      S.srcFilter = S.srcFilter === key ? null : key;
+      draw();
+    }
     names.forEach(function (k) {
       var st = sourceState(S.adapters[k]);
-      var chip = el("span", "sf-chip s-" + (/^\d+$/.test(st.word) ? "n" : st.word));
+      var cls = "sf-chip s-" + (st.still ? "still" : /^\d+$/.test(st.word) ? "n" : st.word)
+              + (st.rejoined ? " s-rejoined" : "") + (S.srcFilter === k ? " on" : "");
+      var chip = el("span", cls);
+      chip.dataset.src = k;
       chip.appendChild(el("b", null, esc(SOURCE[k] || k)));
       chip.appendChild(el("i", null, esc(st.word)));
+      if (st.still) chip.appendChild(el("i", "still", "still asking"));
       if (st.why) chip.title = st.why;
+      if (st.n) { chip.title = (SOURCE[k] || k) + " — " + st.n + " row" + (st.n === 1 ? "" : "s")
+                             + " · click to show only these" + (st.why ? " · " + st.why : ""); }
       chip.addEventListener("click", function () {
+        if (st.n) return toggleFilter(k);
         if (!st.why) return;
         var open = box.querySelector(".sf-srcwhy");
         if (open) box.removeChild(open);
@@ -2016,14 +2762,46 @@
       box.appendChild(chip);
     });
     if (S.dropped.length) {
-      var d = el("span", "sf-chip s-drop");
+      var d = el("span", "sf-chip s-drop" + (S.srcFilter === "filtered" ? " on" : ""));
+      d.dataset.src = "filtered";
       d.appendChild(el("b", null, "filtered"));
       d.appendChild(el("i", null, String(S.dropped.length)));
       d.title = S.dropped.length + " hit(s) came back and the title/author filter "
-              + "dropped them as a different work";
+              + "dropped them as a different work · click to see each one and why";
+      d.addEventListener("click", function () { toggleFilter("filtered"); });
       box.appendChild(d);
     }
+    if (S.srcFilter) {
+      var fl = el("div", "sf-srcwhy sf-filterline");
+      fl.dataset.k = S.srcFilter;
+      fl.textContent = S.srcFilter === "filtered"
+        ? "showing the " + S.dropped.length + " the title/author filter dropped, each with its "
+          + "reason — click the chip again for the results"
+        : "showing only " + (SOURCE[S.srcFilter] || S.srcFilter) + "'s rows — click the chip "
+          + "again for all sources";
+      box.appendChild(fl);
+    }
     return box;
+  }
+
+  /* WHY A DROPPED ROW WAS DROPPED, as a sentence. `drop_reason` when
+     `/search` says one (the field this page reads first, so E-search can
+     name a reason without this file changing); otherwise the one filter
+     there is today -- `tools/search/serve.py::run_search_with_report`'s
+     `names_match` -- said in terms of what it compared. */
+  function dropReason(c) {
+    if (c.drop_reason) return String(c.drop_reason);
+    if (c.why) return String(c.why);
+    return "title/author filter — “" + (c.title || "?") + "”"
+         + (c.author ? " by " + c.author : "")
+         + " read as a different work from “" + (S.searchedFor || S.q) + "”";
+  }
+  /* the dropped rows, as `rank()`-shaped out rows, in the answer's order */
+  function droppedRows() {
+    return S.dropped.filter(isText).map(function (c, i) {
+      return { kind: "out", key: "x:" + (c.url || (c.source + ":" + c.title) || i),
+               cand: c, s: 0, dropped: true };
+    });
   }
 
   /* the IN THIS BOOK lane: one row, and it is only drawn when there is
@@ -2165,9 +2943,16 @@
         draw();
       });
   }
-  /* WHERE IT RAN, in the words Settings uses for the same three. */
+  /* WHERE IT RAN, in the words Settings uses for the same three. CLOUD-HIDE
+     (27 Sep): a USER sees one cloud -- *Frank's cloud* -- and never a
+     provider; the owner (`/state`.settings.owner) still reads his own lanes
+     by name. */
+  function isOwner() { return !!(S.settings && S.settings.owner); }
+  var CLOUD_NOT_UP = "Frank\u2019s cloud is not set up on this Mac yet \u2014 Settings \u25B8 Frank\u2019s cloud";
   function whereWord(w) {
-    return w === "modal" ? "Modal" : w === "kaggle" ? "Kaggle" : "this Mac";
+    if (w === "modal") return isOwner() ? "Modal" : "Frank\u2019s cloud";
+    if (w === "kaggle") return isOwner() ? "Kaggle" : "Frank\u2019s cloud";
+    return "this Mac";
   }
   /* ONE GROUP, ONE ROW. Book(s) · lane · model · when, then its chapters,
      then ONE state word AND ITS REASON IN THE SAME BREATH -- a failed group
@@ -2218,7 +3003,9 @@
           openLog(key, q, books.join(" · ") || ("push " + g.group));
         }));
     }
-    if (g.kernel_url)
+    /* the kernel is the OWNER's (CLOUD-HIDE): a user's push ran on Frank's
+       cloud and there is no page of a provider's for them to open */
+    if (g.kernel_url && isOwner())
       end.appendChild(rowBtn("kernel", "open the kernel this push ran on",
         function () { openOut(g.kernel_url); }));
     return r;
@@ -2317,6 +3104,17 @@
     return h;
   }
   function note(t) { var n = el("span", "sf-note"); n.textContent = t; return n; }
+  function brokeLine(detail, none) {
+    if (brokeLine.said !== detail) { brokeLine.said = detail; try { console.warn("[surface] search broke: " + detail); } catch (e) {} }
+    var n = note(none ? "Nothing on your shelf for that, and the search beyond it didn’t come back this time. "
+                      : "Only your shelf answered — the search beyond it didn’t come back this time. ");
+    if (window.TellFrank && TellFrank.open) {
+      var b = el("button", "sf-tell"); b.type = "button"; b.textContent = "Tell Frank";
+      b.addEventListener("click", function (e) { e.stopPropagation(); TellFrank.open({ about: "search for “" + S.q + "”: " + String(detail).replace(/\s+—\s+<[\s\S]*$/, ""), kind: "search" });   /* the HTML scrap is the log's, not the sentence's */ });
+      n.appendChild(b);
+    }
+    return n;
+  }
 
   function rowShell(cls, key) {
     var r = el("div", "sf-row " + cls);
@@ -2402,6 +3200,36 @@
   }
 
   /* --- ON THE SHELF: the row is the door ---------------------------------- */
+  /* THE ONE QUIET WORD THAT TELLS TWINS APART (ASKS #168: three identical "The Bucolics and Eclogues · VIRGIL · LA ·
+     ON THE SHELF" rows -- nothing said which was which). Books on the shelf with the same title and author are
+     told apart by the first thing that differs between them and that the book itself says: its languages, where
+     it came from, that it is two books stitched (a `+` slug is a stitch, stitch/); and when nothing it says
+     differs, "copy 2", "copy 3" in shelf order -- a copy is what it is. A book with no twin says nothing. */
+  function twinWord(b) {
+    var key = function (x) { return norm(x.title || "") + "|" + norm(x.author || ""); };
+    var k = key(b), twins = S.shelf.filter(function (x) { return key(x) === k; });
+    if (twins.length < 2) return "";
+    var said = function (x) {
+      var langs = (x.langs || [x.lang]).filter(Boolean).join("+");
+      var p = x.source && x.source.origin ? provOf(x.source).label || "" : "";
+      var stitched = (x.source && x.source.type === "stitch") || /\+/.test(x.slug) ? "stitched" : "";
+      return [langs, p, stitched];
+    };
+    var mine = said(b), words = [];
+    for (var i = 1; i < mine.length; i++) {      /* the language is already on the line */
+      if (!mine[i]) continue;
+      var same = twins.filter(function (x) { return x !== b && x.lang === b.lang && said(x)[i] === mine[i]; });
+      words.push(mine[i]);
+      if (!same.length) break;
+    }
+    var w = words.join(" · ");
+    var alike = twins.filter(function (x) { return x.lang === b.lang && (x.langs || []).join() === (b.langs || []).join() && said(x).slice(1).join() === mine.slice(1).join(); });
+    if (alike.length > 1) {
+      var n = alike.indexOf(b);
+      if (n > 0) w = (w ? w + " · " : "") + "copy " + (n + 1);
+    }
+    return w;
+  }
   function shelfRow(b) {
     var r = rowShell("r-shelf", "b:" + b.slug);
     /* THE HELD COLOUR, not a fresh hash (Round 2 item 3): a book that arrived
@@ -2412,7 +3240,7 @@
     r.querySelector(".spine").style.background = bh;
     r.querySelector(".t").textContent = b.title;
     r.querySelector(".s").textContent =
-      [b.author || "unknown author", (b.langs || [b.lang]).filter(Boolean).join(" · "), "on the shelf"].filter(Boolean).join(" · ");
+      [b.author || "unknown author", (b.langs || [b.lang]).filter(Boolean).join(" + "), twinWord(b), "on the shelf"].filter(Boolean).join(" · ");
     /* WHAT A SHELF ROW CAN HONESTLY SAY, and it is the counters `/state`
        carries -- not a duration, which that payload has never had. */
     var pv = shelfProv(b);
@@ -2437,7 +3265,13 @@
       select(r, b);
     });
     end.appendChild(peek);
-    r.addEventListener("click", function () { select(r, b); });
+    /* ONE PRESS OPENS IT ON THE PHONE (ASKS #168, the Stranger: "opening a shelf result is two presses: the row opens
+       a card, then a 66x26 OPEN"). A finger has no double-click; the row is the book. The › is still the card
+       (its steps, its voice). The Mac keeps G-SET: a click adds it to the set, a double-click reads. */
+    r.addEventListener("click", function () {
+      if (document.documentElement.hasAttribute("data-phone")) { openBook(b); return; }
+      select(r, b);
+    });
     /* DOUBLE-CLICK: opens the reader (what READ used to do), and does NOT
        toggle membership — the click event fires first and toggles, then the
        dblclick fires and we undo the toggle (the second click) so the net
@@ -2488,14 +3322,16 @@
      carries the 903 px of overflow. */
   function outRow(r0) {
     var c = r0.cand;
-    var r = rowShell("r-out", r0.key);
+    var r = rowShell("r-out" + (c.borrow_only ? " r-borrow" : "")
+                     + (c.open_edition_of ? " r-open" : "") + (r0.dropped ? " r-dropped" : ""), r0.key);
+    if (c.source_id) r.dataset.sid = String(c.source_id);
     r.querySelector(".t").textContent = c.title;
 
     /* the second line: SOURCE first and unshrinkable, then the author */
     var s = r.querySelector(".s");
     s.textContent = "";
     var src = el("span", "sf-src-tag");
-    src.textContent = SOURCE[c.source] || c.source || "out there";
+    src.textContent = srcOf(c);
     s.appendChild(src);
     var who = el("span", "sf-who");
     who.textContent = c.author || "unknown author";
@@ -2528,8 +3364,56 @@
       p.textContent = pv;
       r.querySelector(".body").appendChild(p);
     }
+    /* under the `filtered` chip: WHY this row was dropped, on the row */
+    if (r0.dropped) {
+      var dr = el("span", "sf-why");
+      dr.textContent = "dropped: " + dropReason(c);
+      r.querySelector(".body").appendChild(dr);
+    }
 
     var end = r.querySelector(".end");
+    /* A BORROW-ONLY ROW CARRIES NO ADD AND NO SAMPLE (SURFACE-PRESS,
+       finding 2). archive.org refuses EVERY file of a lending item to a
+       client that has not borrowed it -- the .epub, the OCR .txt, so
+       `/peek` too (`sources/archive.is_borrow_only`, measured 13 Sep). Add
+       would say so four presses later; the row says so now, and points at
+       the open edition drawn above it, which is the row that takes Add. */
+    if (c.borrow_only) {
+      var bo = el("span", "sf-why sf-borrow");
+      bo.textContent = "borrow-only on archive.org — its files are refused to anyone who has not borrowed it";
+      r.querySelector(".body").appendChild(bo);
+      var oe = openEditionsOf(c);
+      var ptr = el("span", "sf-open-ptr");
+      if (oe.length) {
+        ptr.appendChild(el("i", null, "open edition above: "));
+        oe.forEach(function (o, i) {
+          var go = el("button", "sf-verb ghost sf-goto");
+          go.type = "button"; go.textContent = o.title;
+          go.title = "the same work, downloadable — Add is on that row";
+          go.dataset.sid = String(o.source_id || "");
+          go.addEventListener("click", function (e) {
+            e.stopPropagation();
+            var t = listEl.querySelector('.sf-row.r-open[data-sid="' + String(o.source_id || "") + '"]');
+            if (t) { t.scrollIntoView({ block: "nearest" }); t.classList.add("sf-flash");
+                     setTimeout(function () { t.classList.remove("sf-flash"); }, 1200); }
+          });
+          if (i) ptr.appendChild(el("i", null, " · "));
+          ptr.appendChild(go);
+        });
+      } else {
+        ptr.appendChild(el("i", null, "no open edition came back with it"));
+      }
+      r.querySelector(".body").appendChild(ptr);
+      r.addEventListener("click", function () { selectCandidate(r, r0); });
+      return r;
+    }
+    if (c.open_edition_of) {
+      var oel = el("span", "sf-why sf-openof");
+      var bt = null;
+      S.out.forEach(function (x) { if (x.borrow_only && String(x.source_id) === String(c.open_edition_of)) bt = x; });
+      oel.textContent = "open edition" + (bt ? " of “" + bt.title + "”" : "") + " — downloadable";
+      r.querySelector(".body").appendChild(oel);
+    }
     /* G-SET: out rows carry Add and Sample ONLY (Osca 16 Sep). AUDITION,
        OPEN and USE AS VOICE are gone. Sample = /peek for text (draw the
        400 words in the column under the chip, not a modal) and the audition
@@ -3130,7 +4014,7 @@
     var ta = textAudio(c);
     var rows = [
       ["Author", c.author],
-      ["Source", SOURCE[c.source] || c.source],
+      ["Source", srcOf(c)],
       ["Has", ta.word],
       ["Parts", c.chapters ? String(c.chapters) : null],
       ["Length", c.duration_s ? mmss(c.duration_s) : null],
@@ -3223,14 +4107,20 @@
     S.work[key] = w;
     return w;
   }
-  function add(r0, verb, pick) {
+  function add(r0, verb, pick, opts) {
     if (verb && verb.disabled) return;
     var c = r0.cand;
     if (c.kind && c.kind !== "text") {
       if (verb) { verb.textContent = "A recording — use Attach"; verb.disabled = true; }
       return;
     }
+    /* SOURCE-DOOR: Re-parse is Add with the book's name on the candidate --
+       `reparse_of` -- and studio's `add()` makes it that book's re-parse
+       from the fresh file rather than a second book or a refusal */
+    var reparseOf = (opts && opts.reparseOf) || (pick && pick.reparseOf) || null;
+    if (reparseOf) c = Object.assign({}, c, { reparse_of: reparseOf });
     var w = S.work[r0.key] || beginWork(r0.key, c);
+    if (reparseOf) { w.reparseOf = reparseOf; w.word = "Re-parsing " + reparseOf; }
     /* where it came from, held on the row from the first press -- the working
        row says it at once, and `/ingest` is handed the whole candidate so
        studio can record it on the book (G-SURF2 + G-SLUG) */
@@ -3247,7 +4137,7 @@
        which is a surface you then have to go to, and the whole point of this
        one is that you do not. */
     var body = { candidate: c };
-    if (pick) { body.file_url = pick.url; body.file_name = pick.name; }
+    if (pick && pick.url) { body.file_url = pick.url; body.file_name = pick.name; }
     postJSON("/stage_for_ingest", body)
       .then(function (st) {
         if (st.error) throw new Error(st.error);
@@ -3256,7 +4146,7 @@
              one file and only a person can say which. The list is the
              server's own `files` -- name, url, size -- drawn in the works
              column, and pressing one calls this function again with it. */
-          S.choose = { key: r0.key, r0: r0, title: c.title,
+          S.choose = { key: r0.key, r0: r0, title: c.title, reparseOf: reparseOf,
                        identifier: st.identifier || "",
                        files: (st.files || []).slice(0, 40) };
           w.word = "Which file?"; w.cells.parse = "-"; w.p = 0;
@@ -3269,7 +4159,7 @@
            grows a twin -- measured, 7 Sep: one Add, two working rows. */
         w.source = st.source;
         holdAs(w.key, st.source);   /* item 3: the staged name is the same book */
-        w.word = "Parsing"; w.cells.parse = "running"; w.p = 0.06; draw();
+        w.word = reparseOf ? "Re-parsing " + reparseOf : "Parsing"; w.cells.parse = "running"; w.p = 0.06; draw();
         /* THE CANDIDATE RIDES WITH IT (G-SLUG): studio records where the
            book came from on the book, and a second edition of a title you
            already have gets a slug of its own from the candidate's id */
@@ -3319,7 +4209,7 @@
           draw();
           return;
         }
-        add(ch.r0, null, f);
+        add(ch.r0, null, ch.reparseOf ? Object.assign({}, f, { reparseOf: ch.reparseOf }) : f);
       });
       box.appendChild(row);
     });
@@ -3382,6 +4272,14 @@
     var busy = !!(running || S.pending.length || S.ingests.length ||
                   S.reparses.length || working.length);
     worksEl.classList.toggle("empty", !busy && !S.set.length && !S.sel);
+    /* SURFACE-ONE (5): on the phone the selected thing is the bottom half
+       and the list the top half -- only once something IS selected */
+    if (sheet) sheet.classList.toggle("sf-hassel", !!(S.set.length || S.sel) && !S.selAuto);
+    /* ...and a selection the PAGE made is not one (ASKS #168, #45; the phone-search Stranger: "inside a book the
+       sheet opens split, the bottom half a card for the book I'm already in; on its side that leaves room for ONE
+       passage"). Over a book the book is pre-selected (G-AUTOSEL) so the Mac's works column names it; on the phone
+       that card is the half the list lost. The passages take the whole height; the card comes when a row is
+       pressed (select() sets selAuto false). */
 
     /* THE COLUMN IS HEADED BY THE BOOK (G-DROPDOWN, Osca 16 Sep: "the works
        is that book, however it still calls itself the works ... and shows
@@ -3406,18 +4304,16 @@
        WHAT REPLACES IT IS NOT A PLACEHOLDER. With nothing selected this column
        has genuinely nothing to say, and it says which of the two reasons it
        is -- no studio, a studio that would not answer, or nothing chosen. */
-    if (!S.live) worksEl.appendChild(note(noStudioLine()));
-    else if (S.stateErr) worksEl.appendChild(note(S.stateErr));
-    else if (!S.set.length && !S.sel && !S.cand && !S.choose)
-      worksEl.appendChild(note(working.length
-        ? "Choose a book — " + working.length + " in the WORKING list, and its controls are on its own row."
-        : "Choose a book to set its voice, where it renders, and its model."));
+    /* no studio: the left list already says so once; this column only waits for a pick */
+    /* SAID ONCE (Osca, 29 Sep: "we don't need to tell the user the same thing 100 times, they know what they're
+       looking at"): an empty column waits in silence for a pick; only a real fault is spoken. */
+    if (S.live && S.stateErr) worksEl.appendChild(note(S.stateErr));
 
     /* G-SET: draw the set as chips at the top of the column. Each chip has
        a × that removes the member. Under the chips, for a SINGLE book
        member, exactly 138/139's blocks. For other combinations, the verb
        row says what can be done with this set. */
-    if (S.set.length) {
+    if (S.set.length > 1) {   /* one book: its name is the head above -- a chip saying it again was noise */
       var chipBar = el("div", "sf-chips");
       S.set.forEach(function (m) {
         var chip = el("span", "sf-chip");
@@ -3502,7 +4398,7 @@
        thing in this column that is not about what was clicked. `studio.html`
        had it as a modal panel (`panelQueue`); it is a state of this surface
        now, shut by default and asked for only when it is opened. */
-    if (S.live) worksEl.appendChild(allBand());
+    /* (EXPORT, 28 Sep) allBand now sits inside the studio fold, below the book */
 
     /* THE QUEUE MOVED LEFT (Round 2 item 1). Everything that stood here --
        the three halves of studio's queue, their bins, and the click that
@@ -3518,6 +4414,22 @@
        G-SET: only drawn for a SINGLE book member. With multiple members or
        non-book members, the verb row above handles the combination. */
     var singleBook = books.length === 1 && S.set.length === 1;
+    /* THE BOOK FIRST (BOOK-PANE, Osca 28 Sep: the info card "has to read as the
+       book's page"; the Stranger: "the right-hand column should show the book").
+       What a person needs about a book they picked -- its languages, its size,
+       one Open, its contents as doors -- and the render studio folded under it,
+       shut until asked for. The studio's rows are unchanged, only moved. */
+    var fold = null, into = worksEl;
+    if (singleBook) {
+      worksEl.appendChild(bookPane(books[0]));
+      fold = el("details", "sf-studiofold");
+      var sum = el("summary", "sf-studiosum"); sum.textContent = "Voice & rendering";
+      fold.appendChild(sum);
+      if (S.foldOpen) fold.open = true;
+      fold.addEventListener("toggle", function () { S.foldOpen = fold.open; });
+      worksEl.appendChild(fold); into = fold;
+    }
+    if (S.live) into.appendChild(allBand());
     var st = singleBook ? studioBlock() : null;
     if (st) {
       /* `head("Studio")` is gone (G-DROPDOWN): the column's one heading is
@@ -3528,7 +4440,7 @@
       if (S.bench) worksEl.appendChild(note("these four rows are the mock — "
         + "the fixtures the real studio code generated, so the shapes are studio's; "
         + "nothing is being asked and nothing is being written."));
-      worksEl.appendChild(st);
+      into.appendChild(st);
     }
 
     /* WHAT WAS CLICKED, FIRST. A candidate has no steps and no studio, so
@@ -3544,9 +4456,16 @@
     /* G-SURF2: a shelf book's provenance, whole, above its steps -- where
        it came from is the first thing to know about a book you did not add
        five minutes ago */
-    if (S.sel && singleBook && S.sel.slug && !S.sel.cells && "source" in S.sel)
-      worksEl.appendChild(provPane(S.sel));
-    if (S.sel && singleBook) worksEl.appendChild(gridFor(S.sel));
+    /* SOURCE-DOOR (26 Sep): `S.sel` has been a SET MEMBER since G-SET
+       (slug, title, lang, hue -- no `source`), so the `"source" in S.sel`
+       test above this line was false on every click and the pane had not
+       been drawn since 16 Sep. The provenance is the SHELF row's; look it up
+       by slug. */
+    var provBook = null;
+    if (S.sel && singleBook && S.sel.slug && !S.sel.cells)
+      (S.shelf || []).forEach(function (b) { if (b.slug === S.sel.slug && b.source) provBook = b; });
+    if (provBook) into.appendChild(provPane(provBook));
+    if (S.sel && singleBook) into.appendChild(gridFor(S.sel));
     /* the log is no longer drawn here: it belongs under its own WORKING row
        (item 2), which `draw()` appends immediately after that row */
     /* IN THE SAME TASK AS THE CLEAR. `worksEl.textContent = ""` above detaches
@@ -3563,10 +4482,47 @@
      `hueFor(slug)` -- the same HELD colour the row's spine has, so the head
      and the row read as one book. With no subject the head is an
      instruction, not a name. */
+  /* THE BOOK'S PAGE in the right column (BOOK-PANE, 28 Sep): the facts in one
+     line, Open, and the contents -- each chapter a door that opens the book there. */
+  function bookPane(m) {
+    var b = null;
+    (S.shelf || []).forEach(function (x) { if (x.slug === m.slug) b = x; });
+    b = b || m;
+    var box = el("div", "sf-bookpane");
+    var facts = [];
+    var langs = (b.langs && b.langs.length ? b.langs : (b.lang ? [b.lang] : [])).map(function (l) { return String(l).toUpperCase(); });
+    if (langs.length) facts.push(langs.join(" + "));
+    var d = S.detail[m.slug];
+    var nch = (d && d.chapters && d.chapters.length) || Number(b.chapters) || 0;
+    if (nch) facts.push(nch + (nch === 1 ? " chapter" : " chapters"));
+    var voiced = Number(b.chapters_voiced || b.voiced) || 0;
+    facts.push(voiced ? (voiced + " read aloud") : "not read aloud yet");
+    box.appendChild(el("div", "sf-bfacts", facts.join(" \u00b7 ")));
+    var go = el("button", "sf-verb sf-open");
+    go.type = "button"; go.textContent = "Open";
+    go.addEventListener("click", function () { openBook({ slug: m.slug }); });
+    box.appendChild(go);
+    if (!d) loadBook(m.slug);
+    var rows = d && d.chapters ? d.chapters : [];
+    if (rows.length) {
+      box.appendChild(el("div", "sf-bhead", "Contents"));
+      var list = el("div", "sf-btoc");
+      rows.forEach(function (ch) {
+        if (!ch || !ch.id) return;
+        var r = el("button", "sf-bch");
+        r.type = "button"; r.textContent = String(ch.title || ch.id).replace(/\.$/, "");
+        r.addEventListener("click", function () { openBook({ slug: m.slug }, ch.id); });
+        list.appendChild(r);
+      });
+      box.appendChild(list);
+    } else if (d && d.loading) box.appendChild(note("Reading its contents\u2026"));
+    return box;
+  }
+
   function subjectHead() {
     var b = subject();
     var h = el("div", "sf-h sf-subj");
-    if (!b) { h.textContent = "Choose a book \u2014 click a row"; return { head: h, who: null }; }
+    if (!b) { h.textContent = ""; h.hidden = true; return { head: h, who: null }; }
     h.textContent = b.title || b.slug || "";
     var tint = hueFor(b.slug || b.key || "");
     h.style.setProperty("--hue", tint);
@@ -3586,6 +4542,9 @@
   function selectSlug(slug) {
     var b = null;
     S.shelf.forEach(function (x) { if (x.slug === slug) b = x; });
+    /* no shelf row (no studio): the reader's open book names itself */
+    if (!b) { try { var ob = window.TTSTVBook && window.TTSTVBook.book();
+      if (ob && ob.slug === slug) b = { slug: slug, title: ob.title, author: ob.author, lang: ob.lang }; } catch (e) {} }
     /* G-SET: selectSlug adds to the set (replacing an auto-seeded member,
        keeping a clicked one) rather than replacing the whole selection. */
     var already = S.set.some(function (m) { return m.slug === slug; });
@@ -3978,7 +4937,7 @@
     var id = whereNow(), o = d[id];
     if (!o) return "this studio did not answer for " + id;
     if (!o.ok) return o.why || o.short || (id + " is not available");
-    if (id === "modal" && !o.render_deployed) return "Deploy the render lane in Settings \u25B8 Modal first";
+    if (id === "modal" && !o.render_deployed) return CLOUD_NOT_UP;
     return null;
   }
   function runFace(b, rows) {
@@ -4890,10 +5849,17 @@
       line.appendChild(note("This choice will not survive a restart — "
         + (sp.save_error || "studio could not write its settings file")
         + (sp.path ? " (" + sp.path + ")" : "")));
-    if (S.live && S.kaggle.err) { box.appendChild(offPill("no answer", S.kaggle.err));
-                             line.appendChild(note(S.kaggle.err));
+    /* SURFACE-REWIRE (27 Sep): the route's name is the OWNER's word. A user
+       who sees `GET /kaggle` or `/kaggle — ...` has been shown a provider
+       and a route, neither of which is his; his wait is *asking Frank’s
+       cloud…* and his refusal is the CLOUD_NOT_UP sentence Settings
+       uses for the same fact. */
+    if (S.live && S.kaggle.err) { var kerr = isOwner() ? S.kaggle.err : CLOUD_NOT_UP;
+                             box.appendChild(offPill("no answer", kerr));
+                             line.appendChild(note(kerr));
                              return prow("Where", box, line); }
-    if (!k) { box.appendChild(offPill("asking\u2026", "GET /kaggle")); return prow("Where", box, line); }
+    if (!k) { box.appendChild(offPill("asking\u2026", isOwner() ? "GET /kaggle" : "asking Frank\u2019s cloud\u2026"));
+              return prow("Where", box, line); }
     var d = k.destinations || {};
     var on = whereNow();
     /* Kaggle first because that is the standard route and where the free GPU
@@ -4903,7 +5869,10 @@
        a lane that is not available is a greyed row carrying the server's own
        `short` on its face and its `why` in the title -- never hidden. */
     var items = [];
-    ["kaggle", "modal", "local"].forEach(function (id) {
+    /* CLOUD-HIDE (27 Sep): Kaggle is the OWNER's build lane -- a user's
+       dropdown has two rows, Frank's cloud and this Mac, and 0 nodes of the
+       third; the owner keeps all three, Kaggle first. */
+    (isOwner() ? ["kaggle", "modal", "local"] : ["modal", "local"]).forEach(function (id) {
       var o = d[id];
       if (!o) { items.push({ id: id, text: id + " \u2014 this studio did not answer for it", off: true }); return; }
       var label = o.pill || o.label || o.id;
@@ -4916,8 +5885,7 @@
          disabled rather than greyed-off, because the connection IS there --
          the person needs to press Deploy in Settings, not re-sign-in. */
       if (id === "modal" && !o.render_deployed) {
-        items.push({ id: id, text: label, disabled: true,
-                     title: "Deploy the render lane in Settings \u25B8 Modal first" });
+        items.push({ id: id, text: label, disabled: true, title: CLOUD_NOT_UP });
         return;
       }
       items.push({ id: id, text: label, title: o.label || "" });
@@ -4939,6 +5907,10 @@
        twenty-two, G-DOOR4). `hours_left` null is not zero: it means nobody
        has asked yet, or this Mac is not signed in, and the line says
        nothing rather than "0 h left", which would read as a refusal. */
+    /* ...and the whole of it, with the credentials line under it, is the
+       OWNER's (CLOUD-HIDE): a user's row ends at the dropdown and the default
+       reason, and the readiness of Frank's cloud is Settings' to say. */
+    if (!isOwner()) { if (S.whereErr) line.appendChild(note(S.whereErr)); return prow("Where", box, line); }
     var kg = d.kaggle || {};
     var bits = [];
     var hl = kaggleHours(kg.hours_left);
@@ -5307,7 +6279,7 @@
      out of the same per-source report the list draws. */
   function best(list) {
     var out = list.map(function (c) {
-      return { c: c, s: match(c.title, c.author, S.q) + (SRCW[c.source] || 0) };
+      return { c: c, s: match(c.title, c.author, rankQ()) + (SRCW[c.source] || 0) + formBoost(c.title) };
     });
     out.sort(function (a, b) { return b.s - a.s; });
     return out.map(function (r) { return r.c; });
@@ -5320,15 +6292,14 @@
   /* everything else that is a page out there rather than a book to parse:
      an archive.org details page, a LibriVox recording page. Each one is a
      LINK TO ITSELF, which is what "a specific hit" means. */
+  /* THE RECORDINGS LANE DRAWS WHAT THE SERVER KEPT, NOTHING IT DROPPED (ASKS #127; SEARCH-2 §6c: the two rows the
+     title filter dropped -- "Lectures on Hamlet", an Esperanto "Hamleto" -- were drawn as links at the top of the lane,
+     above the LibriVox readings, on "Hamlet Shakespeare audiobook"). The dropped rows stay one press away under the
+     "filtered" chip, with their reasons; they are no longer offered as recordings. */
   function webHits() {
     return best(S.media.filter(function (c) {
       return !(c.source === "youtube" || /youtube\.com|youtu\.be/.test(c.url || ""));
-    }).concat(S.dropped.filter(function (c) {
-      /* the filter dropped these as not-this-book, and it is often right --
-         but they are real pages somebody may still want, so they are offered
-         as LINKS and never as books. Two, at most: this is a footnote. */
-      return c && c.url && /^https?:/.test(c.url);
-    }).slice(0, 2)));
+    }));
   }
   function mmss(sec) {
     if (!sec && sec !== 0) return "";
@@ -5368,7 +6339,7 @@
     var s = r.querySelector(".s");
     s.textContent = "";
     var src = el("span", "sf-src-tag");
-    src.textContent = SOURCE[c.source] || c.source || "out there";
+    src.textContent = srcOf(c);
     s.appendChild(src);
     var who = el("span", "sf-who");
     who.textContent = [c.author || "", shortHost(c.url)].filter(Boolean).join(" · ");
@@ -5536,7 +6507,10 @@
       var m = /[?&]book=books(?:%2F|\/)((?:[a-z0-9+-]|%[0-9A-Fa-f]{2})+)/i.exec(location.search || "");
       if (m) { try { return decodeURIComponent(m[1]); } catch (e) { return m[1]; } }
       var h = window.TTSTVHost;
-      if (h && typeof h.currentSlug === "function") return h.currentSlug() || null;
+      if (h && typeof h.currentSlug === "function" && h.currentSlug()) return h.currentSlug();
+      /* SURFACE-ONE: the reader's own door names its book too (reader.html) */
+      var B = window.TTSTVBook, bk = B && typeof B.book === "function" ? B.book() : null;
+      if (bk && bk.slug) return bk.slug;
     } catch (e) {}
     return null;
   }
@@ -5548,7 +6522,13 @@
     if (S.inBook) {
       var b = null;
       S.shelf.forEach(function (x) { if (x.slug === S.inBook) b = x; });
-      return b || { slug: S.inBook, title: S.inBook };
+      if (b) return b;
+      /* no shelf row yet (no studio behind the page): the reader's own book
+         names itself -- "A Doll's House", never its slug (Stranger, 28 Sep) */
+      var TB = window.TTSTVBook, ob = null;
+      try { ob = TB && TB.book && TB.book(); } catch (e) { ob = null; }
+      if (ob && ob.slug === S.inBook) return { slug: S.inBook, title: ob.title || S.inBook, author: ob.author || "" };
+      return { slug: S.inBook, title: S.inBook };
     }
     return null;
   }
@@ -5606,7 +6586,7 @@
       sources: (function () {
         if (!S.adapters) return null;
         var o = {};
-        Object.keys(S.adapters).forEach(function (k) { o[k] = sourceState(S.adapters[k]).word; });
+        srcKeys(S.adapters).forEach(function (k) { o[k] = sourceState(S.adapters[k]).word; });
         o.__tally = sourceTally();
         return o;
       })(),
@@ -5780,6 +6760,10 @@
                            state: S, STEPS: STEPS, hue: hue, webQuery: webQuery,
                            openBook: openBook, readerHref: readerHref, bar: bar,
                            feed: feed,
+                           /* SOURCE-DOOR (26 Sep): the book's origin as a door --
+                              a page with a book underneath can open the Surface
+                              on that origin's row: openOrigin({source,id,url}, slug) */
+                           openOrigin: openOrigin, normOrigin: normOrigin,
                            /* D5 shelf search (24 Sep): token-match the shelf */
                            shelfSearch: shelfSearch, shelfTokens: shelfTokens,
                            /* 8 Sep -- the driver and the bench press these

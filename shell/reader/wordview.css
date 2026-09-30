@@ -70,6 +70,40 @@
   /* and nothing else: no background, no box, no mark. */
 }
 
+/* ============ THE MARKER (D18, 28 Sep) ============
+   Apparatus is a marker, not a word. A heading, a unit number, a running
+   head, a section mark, a footnote number never enters the slot; the unit's
+   LABEL stands here instead, small, in the chrome face, --gap x 2 above the
+   word and centred on the pivot column (wordview.js::place writes the left
+   and top -- nothing here centres anything, for the same reason as the word).
+   Every number is a token: --ui-fine is a caption's size, --gap the spacing
+   unit, the ink and the dim are the page's own, the face is the chrome's. It
+   is drawn ONLY while it has a label (.on), and a change of unit re-stamps
+   data-ev="unit" -- the editor's own `unit` event -- so the crossing is seen
+   as a short fade and the word under it does not move. The float draws the
+   same element at its own size (float.css). */
+.wordview-mark{
+  --mark-gap: calc(var(--gap) * 2);
+  position:absolute; left:0; top:0;
+  display:none; align-items:baseline; gap:var(--gap);
+  font-family:var(--chrome-ui-font, var(--ui));
+  font-size:var(--ui-fine); font-weight:500; line-height:1.2;
+  letter-spacing:.08em; text-transform:uppercase;
+  color:var(--ink);
+  white-space:nowrap;
+  pointer-events:none;
+  /* a running head longer than the phone is cut, never wrapped: the marker
+     is one line in one place, and 80vw is what keeps it inside either side
+     of the 42% column */
+  max-width:80vw;
+}
+.wordview-mark.on{ display:flex; }
+.wordview-mark .label{ min-width:0; white-space:normal; text-align:center; overflow:hidden; display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:2; line-clamp:2; }   /* ASKS #110: two centred lines inside the margins, never off the glass */
+.wordview-mark .of{ flex:none; color:var(--dim); font-weight:400; }
+.wordview-mark .of:empty{ display:none; }
+.wordview-mark[data-ev="unit"]{ animation: wv-unit 160ms ease both; }
+@keyframes wv-unit{ from{ opacity:0; } }
+
 /* ============ THE RED LETTER ============
    The prototype's pivot colour (out/reader-oneword/proto.html: #c02c46 on
    light, #e0526a on dark), and it is a TOKEN so the page's own word can wear
@@ -109,3 +143,8 @@ html[data-theme="dark"], html[data-dark]{ --pivot:#e0526a; }
    own compositor layers it is an opacity and nothing else -- 16.6ms frames
    either side, measured. Two small layers, for the length of the session. */
 .runhead, .scrub{ will-change:opacity; }
+
+/* THE MARK STANDS FURTHER OFF THE WORD, in the Library's capitals (Osca, 29 Sep: "move in the one word view the chapter
+   heading and such slightly further away"): twice the gap it had, and the shelf's 600 11 px tracked .13 em, so the
+   one word's label is the same small voice as every other label in Frank. The float's own size stays its own. */
+.wordview-mark{ --mark-gap: 32px; font-weight:600; letter-spacing:.13em; }   /* a plain length: markGap() parseFloats it, and a calc() read as NaN, so it was always the 16 fallback */

@@ -120,6 +120,16 @@
     back:      { via: "transport", arg: "prev" },
     fwd:       { via: "transport", arg: "next" },
     close:     { via: "close",     arg: null },
+    /* §10 (FLOAT-HANDS stage 2): a vertical drag on a side band scrubs the
+       reading -- `scrub:N` steps N words through the transport's own
+       seekWordDelta; the feed brings the word back to the panel. */
+    scrub:     { via: "scrub",     arg: null },
+    /* §10's fan (stage 3): Speak is a TOGGLE on the voiceui road -- `speak:on`
+       arms and listens, `speak:off` disarms; `chapter:N` turns the chapter
+       when the transport can (it cannot today: route answers null and the
+       report says so). pace and sleep have no door yet -- null likewise. */
+    speak:     { via: "speak",     arg: null },
+    chapter:   { via: "chapter",   arg: null },
   };
 
   function host() {
@@ -159,6 +169,16 @@
         sentEnds.push(words.length);
       }
     }
+    /* D18 (28 Sep): APPARATUS IS A MARKER, NOT A WORD -- in the float too.
+       `skip` is the indices the panel never paints (a chapter numeral, a
+       sonnet's number, a heading), `marks` the unit crossings [{i, label, of}]
+       it paints ABOVE the word instead. Both come off wordview.js's ONE rule
+       (`chapterMarks`, walked over the same blocks in the same order as
+       `words` above), so the panel and the reader can never disagree about a
+       word. A page without wordview.js (the node test) sends neither. */
+    var ap = apparatusOf(o.chapter, o.structure);
+    var skip = [], marks = ap ? ap.marks : [];
+    if (ap) for (var s = 0; s < ap.ap.length && s < words.length; s++) if (ap.ap[s]) skip.push(s);
     return {
       payload: {
         label: o.label || "float",
@@ -168,8 +188,15 @@
         words: words,
         starts: [],          /* no timing -- the panel runs off `word`, not `t` */
         sentEnds: sentEnds,
+        skip: skip,
+        marks: marks,
       },
     };
+  }
+  function apparatusOf(chapter, structure) {
+    var WV = typeof window !== "undefined" ? window.WordView : null;
+    if (!WV || !WV.chapterMarks || !chapter) return null;
+    try { return WV.chapterMarks(chapter, structure || []); } catch (e) { return null; }
   }
 
   /* ------------------------------------------------------------- the payload
@@ -182,6 +209,7 @@
     o = o || {};
     var timings = o.timings, map = o.map;
     var words = [], starts = [], sentEnds = [], ids = [], dropped = 0;
+    var flats = [];       /* D18: each word's DOM index, for skip/marks below */
     var sents = (timings && timings.sentences) || [];
     for (var i = 0; i < sents.length; i++) {
       var ws = sents[i].words || [];
@@ -194,6 +222,7 @@
         if (text == null || text === "") { dropped++; continue; }
         words.push(text);
         starts.push(+ws[j].start || 0);
+        flats.push(typeof hit.flat === "number" ? hit.flat : -1);
         /* ★ AND THE WORD'S OWN ID, ALONGSIDE AND NEVER IN THE PAYLOAD (14 Sep).
            The panel paints an INDEX; the reader's cursor is an ID. Mapping one
            to the other is this walk's by-product -- it is the only place the
@@ -211,6 +240,19 @@
         if (words.length) sentEnds.push(words.length);
       }
     }
+    /* D18: the rule is walked over the book's blocks in DOM order; each
+       payload word carries its DOM index (`flat`), so a dropped word shifts
+       nothing -- skip and marks are re-keyed to the payload's own indices. */
+    var ap = apparatusOf(o.chapter, o.structure);
+    var skip = [], marks = [];
+    if (ap) {
+      for (var q = 0; q < words.length; q++) if (flats[q] >= 0 && ap.ap[flats[q]]) skip.push(q);
+      for (var m = 0; m < ap.marks.length; m++) {
+        var at = -1;
+        for (var r = 0; r < flats.length; r++) if (flats[r] >= ap.marks[m].i) { at = r; break; }
+        if (at >= 0) marks.push({ i: at, label: ap.marks[m].label, of: ap.marks[m].of });
+      }
+    }
     return {
       dropped: dropped,
       ids: ids,
@@ -222,6 +264,8 @@
         words: words,
         starts: starts,
         sentEnds: sentEnds,
+        skip: skip,
+        marks: marks,
       },
     };
   }
@@ -249,10 +293,40 @@
      page -- a book with no second language has no Translate, and saying so is
      better than translating nothing. */
   function route(cmd, doors) {
-    var r = ROUTES[String(cmd || "").toLowerCase()];
+    var name = String(cmd || "").toLowerCase(), arg = null;
+    var colon = name.indexOf(":");
+    if (colon > 0) { arg = name.slice(colon + 1); name = name.slice(0, colon); }
+    var r = ROUTES[name];
     if (!r) return null;
     doors = doors || {};
     switch (r.via) {
+      case "scrub": {
+        var n = parseInt(arg, 10);
+        if (!n) return null;
+        /* THE ONE-WORD VIEW'S OWN STEPPER FIRST (stage 5, pressed on the Air):
+           Transport.stepWord is a guarded no-op on a book read by the system
+           voice (no clock), so the reader's `nav.step` -- the view's word
+           step, the one cursor, announced on ttstv:cursor -- is the door, and
+           the transport's seek is the fallback where a clock exists. */
+        if (typeof doors.scrub === "function") { doors.scrub(n); return { via: "scrub", arg: n }; }
+        if (!doors.transport || typeof doors.transport.stepWord !== "function") return null;
+        doors.transport.stepWord(n);
+        return { via: "scrub", arg: n };
+      }
+      case "speak": {
+        var V = doors.voiceui;
+        if (!V) return null;
+        if (arg === "off") { if (typeof V.disarm !== "function") return null; V.disarm(); return { via: "speak", arg: "off" }; }
+        if (typeof V.listen !== "function") return null;
+        V.listen();
+        return { via: "speak", arg: "on" };
+      }
+      case "chapter": {
+        var k = parseInt(arg, 10);
+        if (!k || !doors.transport || typeof doors.transport.stepChapter !== "function") return null;
+        doors.transport.stepChapter(k);
+        return { via: "chapter", arg: k };
+      }
       case "quiet":
         if (!doors.voiceui || typeof doors.voiceui.quiet !== "function") return null;
         if (typeof doors.voiceui.isArmed === "function" && !doors.voiceui.isArmed()) return null;
@@ -338,8 +412,11 @@
     function chapterNow() {
       var control = pick(controlIn);
       if (control) {
+        var bkT = pick(bookIn), chT = null;
+        if (bkT && bkT.chapters && control.map) for (var c = 0; c < bkT.chapters.length; c++) if (bkT.chapters[c].id === control.map.id) { chT = bkT.chapters[c]; break; }
         var built = chapterPayload({
           timings: control.timings, map: control.map, slug: slug, label: "float",
+          chapter: chT, structure: bkT && bkT.structure,      /* D18: the marks */
         });
         if (built.payload.words.length) return built;
       }
@@ -356,6 +433,7 @@
       var sb = scrollChapterPayload({
         blocks: ch.blocks, slug: slug, label: "float",
         chapterId: ch.id || ("c" + at.chapter),
+        chapter: ch, structure: bk.structure,                 /* D18: the marks */
       });
       return sb.payload.words.length ? sb : null;
     }
@@ -474,7 +552,8 @@
       d = d || {};
       return {
         voiceui: pick(d.voiceui), transport: pick(d.transport),
-        define: d.define, translate: d.translate, close: d.close, said: d.said,
+        define: d.define, defineText: d.defineText, translate: d.translate, close: d.close, said: d.said,
+        scrub: d.scrub,
       };
     }
 
@@ -483,11 +562,20 @@
       if (typeof H.floatListen !== "function") return;
       H.floatListen(CMD_EVENT, function (d) {
         if (!d || d.from !== "float") return;
+        /* DEFINE ANSWERS ON THE FLOAT (ASKS #147): with a page that can say the entry, Define is asked here and the
+           answer fed to the HUD as {kind:"answer"}; the minimised reader opens no card. Without one, the old road. */
+        if (/^define\b/i.test(String(d.cmd || "")) && typeof doors.defineText === "function") {
+          Promise.resolve(doors.defineText()).then(function (a) {
+            if (a) feed({ label: "float", kind: "answer", verb: "define", word: a.word, lang: a.lang, head: a.head, lines: a.lines });
+          }, function () {});
+          return;
+        }
         var did = route(d.cmd, resolveDoors(doors));
         /* A QUIET ANSWER IS WRITTEN, NOT SPOKEN (QUIET.md), and on the float
            it is written in the PANEL's caption line -- the same `.wordsub`
            rect it lands in on this page. One element, every surface. */
         if (did && did.via === "quiet" && typeof doors.said === "function") {
+          /* ...and Explain's written answer is the HUD's answer card too (ASKS #147): a say the float draws */
           setTimeout(function () { feed(sayPayload(doors.said(), "float")); }, 0);
         }
       }).then(function (un) { stopListen = un; }, function () { stopListen = null; });
@@ -498,8 +586,12 @@
       ok: true,
       /* THE BUTTON. Resolves to what the panel IS after the press, which is
          what a latching button has to paint. */
-      toggle: function () {
-        return H.float().then(function (isOpen) {
+      toggle: function (rect) {
+        /* FLOAT-HANDS stage 1 (§9): the word's own rect goes through to the
+           host, so the HUD opens ON the word and the reader minimising
+           under it is the word leaving the page. No rect = the persisted
+           spot (the button road before the view is up). */
+        return H.float(rect || null).then(function (isOpen) {
           open = !!isOpen;
           if (open) {
             sentChapter = null; lastWord = null; pushChapter(true); tick(); start();

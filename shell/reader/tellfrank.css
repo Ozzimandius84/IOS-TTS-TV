@@ -1,0 +1,89 @@
+/* TELL FRANK (ASKS #134-#137, Osca 29 Sep: "Frank 1.0 ships with a way to report what went wrong, like the thumbs-down in
+   Claude's apps") -- the sheet, the thumbs-down and the failure card, in the Library's language: glass, a hairline of
+   ink at 12 %, the book serif for what a person says, the shelf's tracked capitals for what Frank adds. Colours read the
+   page's own tokens (the Library's --bg/--fg, the reader's --ground/--ink), so it is one object on every page. */
+.tf-scrim{ position:fixed; inset:0; z-index:9000; background:rgba(0,0,0,.28); -webkit-backdrop-filter:blur(6px); backdrop-filter:blur(6px); opacity:0; transition:opacity .16s ease; }
+.tf-scrim.on{ opacity:1; }
+.tf{ --tf-bg:var(--bg, var(--ground, #fbfaf6)); --tf-fg:var(--fg, var(--ink, #1d1d1b));
+  --tf-serif:var(--serif, "Iowan Old Style", Palatino, Georgia, serif);
+  --tf-ui:var(--ui-font, var(--ui, -apple-system, system-ui, sans-serif));
+  position:fixed; z-index:9001; left:50%; top:50%; transform:translate(-50%, -48%); opacity:0;
+  transition:opacity .16s ease, transform .16s ease;
+  width:min(440px, calc(100vw - 32px)); box-sizing:border-box; padding:22px 22px 18px;
+  color:var(--tf-fg); border-radius:18px;
+  border:1px solid color-mix(in srgb, var(--tf-fg) 12%, transparent);
+  background:color-mix(in srgb, var(--tf-bg) 97%, transparent);   /* nearly solid: over covers a 88 % glass let the art through the words */
+  -webkit-backdrop-filter:saturate(1.8) blur(22px); backdrop-filter:saturate(1.8) blur(22px);
+  box-shadow:0 24px 64px rgba(0,0,0,.22); font:400 15px/1.45 var(--tf-ui); }
+.tf.on{ opacity:1; transform:translate(-50%, -50%); }
+.tf *{ box-sizing:border-box; }
+.tf h2{ margin:0 0 12px; font:600 24px/1.2 var(--tf-serif); }
+.tf textarea{ display:block; width:100%; min-height:112px; resize:vertical; margin:0; padding:12px 14px;
+  font:400 17px/1.45 var(--tf-serif); color:var(--tf-fg); background:color-mix(in srgb, var(--tf-bg) 70%, transparent);
+  border:1px solid color-mix(in srgb, var(--tf-fg) 14%, transparent); border-radius:12px; outline:0; }
+.tf textarea:focus{ border-color:color-mix(in srgb, var(--tf-fg) 40%, transparent); }
+.tf-sent-h{ margin:16px 0 6px; font:600 11px/1.4 var(--tf-ui); letter-spacing:.13em; text-transform:uppercase; opacity:.62; }
+.tf dl{ margin:0; display:grid; grid-template-columns:auto 1fr; gap:3px 12px; font:400 13px/1.4 var(--tf-ui); }
+.tf dt{ font:600 11px/1.6 var(--tf-ui); letter-spacing:.13em; text-transform:uppercase; opacity:.62; }
+.tf dd{ margin:0; min-width:0; overflow-wrap:anywhere; }
+.tf label.tf-opt{ display:flex; align-items:center; gap:10px; margin-top:8px; font:400 14px/1.3 var(--tf-ui); cursor:pointer; }
+.tf label.tf-opt input{ width:18px; height:18px; margin:0; accent-color:var(--tf-fg); }
+.tf-acts{ display:flex; justify-content:flex-end; align-items:center; gap:8px; margin-top:18px; }
+.tf-send, .tf-cancel{ -webkit-appearance:none; appearance:none; height:40px; padding:0 18px; border-radius:20px; cursor:pointer;
+  font:600 12px/1 var(--tf-ui); letter-spacing:.13em; text-transform:uppercase; }
+.tf-send{ border:0; background:color-mix(in srgb, var(--tf-fg) 90%, transparent); color:var(--tf-bg); }
+.tf-send:disabled{ opacity:.35; cursor:default; }
+.tf-cancel{ border:0; background:none; color:var(--tf-fg); opacity:.62; }
+.tf-done{ padding:28px 0 18px; text-align:center; font:600 15px/1 var(--tf-ui); letter-spacing:.13em; text-transform:uppercase; }   /* read, not glimpsed (ASKS #187) */
+.tf[data-sent="kept"] .tf-done{ padding-bottom:10px; }
+.tf-kept{ margin:0 0 18px; text-align:center; font:400 13px/1.4 var(--tf-ui); opacity:.7; }
+html[data-phone] .tf{ top:auto; bottom:calc(var(--safe-bottom, env(safe-area-inset-bottom, 0px)) + 10px); transform:translate(-50%, 16px);
+  width:calc(100vw - 20px); border-radius:22px; }
+html[data-phone] .tf.on{ transform:translate(-50%, 0); }
+html[data-phone] .tf-send, html[data-phone] .tf-cancel{ height:48px; border-radius:24px; }
+/* the phone on its side (ASKS #83; measured in band 852 x 393: the sheet was the screen's whole width, under the
+   island, and 20 px taller than the screen, its title cut): between the two 59 px strips, at most 560 wide, never
+   taller than the glass -- it scrolls inside itself -- and a shorter field */
+@media (orientation: landscape){
+  html[data-phone] .tf{ width:min(560px, calc(100vw - var(--safe-left, env(safe-area-inset-left, 0px)) - var(--safe-right, env(safe-area-inset-right, 0px)) - 24px));
+    max-height:calc(100vh - var(--safe-bottom, env(safe-area-inset-bottom, 0px)) - 20px); overflow-y:auto; padding:16px 18px 12px; }
+  html[data-phone] .tf h2{ font-size:20px; margin-bottom:8px; }
+  html[data-phone] .tf textarea{ min-height:64px; }
+  html[data-phone] .tf-acts{ margin-top:10px; }
+  html[data-phone] .tf-send, html[data-phone] .tf-cancel{ height:40px; }
+}
+
+/* THE THUMBS-DOWN: a 28 glyph, no ground, at the end of what Frank made -- quiet (40 % ink) until the pointer is on
+   the thing it is about, never over the text; on the phone it is always there at 40 %, since a phone has no hover */
+.tf-thumb{ -webkit-appearance:none; appearance:none; flex:none; width:28px; height:28px; padding:0; margin:0 0 0 4px;
+  border:0; border-radius:50%; background:none; color:inherit; cursor:pointer; opacity:0; display:inline-grid; place-items:center;
+  transition:opacity .14s, background-color .14s; vertical-align:middle; }
+.tf-thumb svg{ width:16px; height:16px; fill:none; stroke:currentColor; stroke-width:1.3; stroke-linejoin:round; stroke-linecap:round; }
+:hover > .tf-thumb, :hover > * > .tf-thumb, .tf-thumb:focus-visible{ opacity:.4; }
+.tf-thumb:hover{ opacity:1 !important; background:color-mix(in srgb, currentColor 8%, transparent); }
+html[data-phone] .tf-thumb{ opacity:.4; }
+
+/* THE FAILURE CARD: what happened in one sentence (the serif), the one thing that fixes it (a capsule), and a quiet
+   TELL FRANK line under -- every failure Frank has, drawn the same way */
+.tf-fail{ --tf-bg:var(--bg, var(--ground, #fbfaf6)); --tf-fg:var(--fg, var(--ink, #1d1d1b));
+  box-sizing:border-box; width:min(420px, calc(100vw - 32px)); padding:18px 20px 14px; border-radius:16px; color:var(--tf-fg);
+  border:1px solid color-mix(in srgb, var(--tf-fg) 12%, transparent);
+  background:color-mix(in srgb, var(--tf-bg) 90%, transparent);
+  -webkit-backdrop-filter:saturate(1.8) blur(18px); backdrop-filter:saturate(1.8) blur(18px);
+  box-shadow:0 10px 34px rgba(0,0,0,.14); }
+.tf-fail .tf-k{ font:600 11px/1.4 var(--ui-font, var(--ui, system-ui)); letter-spacing:.13em; text-transform:uppercase; opacity:.62; }
+.tf-fail .tf-what{ margin:6px 0 0; font:600 19px/1.3 var(--serif, Georgia, serif); }
+.tf-fail .tf-why{ margin:4px 0 0; font:400 14px/1.4 var(--serif, Georgia, serif); opacity:.78; }
+.tf-fail .tf-row{ display:flex; align-items:center; justify-content:space-between; gap:10px; margin-top:14px; }
+.tf-fail .tf-fix{ -webkit-appearance:none; appearance:none; height:36px; padding:0 16px; border-radius:18px; border:0; cursor:pointer;
+  font:600 11px/1 var(--ui-font, var(--ui, system-ui)); letter-spacing:.13em; text-transform:uppercase;
+  background:color-mix(in srgb, var(--tf-fg) 90%, transparent); color:var(--tf-bg); }
+.tf-fail .tf-tell{ -webkit-appearance:none; appearance:none; border:0; background:none; padding:6px 0; cursor:pointer; color:var(--tf-fg);
+  font:600 11px/1 var(--ui-font, var(--ui, system-ui)); letter-spacing:.13em; text-transform:uppercase; opacity:.62; }
+.tf-fail .tf-tell:hover{ opacity:1; }
+.tf-failpage{ position:fixed; inset:0; z-index:8990; display:grid; place-items:center; padding:24px;
+  background:color-mix(in srgb, var(--bg, var(--ground, #fbfaf6)) 40%, transparent); }
+/* the roving thumb beside a translation line (tellfrank.js roving; ASKS #135): fixed in the page's right margin */
+.tf-thumb.tf-rove{ position:fixed; z-index:60; margin:0; opacity:.55; background:none; }
+.tf-thumb.tf-rove[hidden]{ display:none; }
+.tf-thumb.tf-rove:hover{ opacity:1; }

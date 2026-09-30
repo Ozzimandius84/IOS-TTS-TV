@@ -17,6 +17,15 @@
    toggles it on mouse-enter/leave (floatwin.rs host_float_cursor). */
 :root{
   --float-em:40px;
+  /* FLOAT.md §10 (28 Sep): the outer rect = the word + a margin, and the
+     margin IS the bands and corners -- the invisible box's hands. The dial
+     is 12 px AT THE DEFAULT EM (40): it is 0.3 em, so a corner drag scales
+     the bands with the word and the window's height and the font-size move
+     in ONE ratio (§10's bench number). The window is sized to card + 2 ×
+     margin by float.js (floatResize), so the card stands at (margin,
+     margin) and the strips around it are exactly this wide. floatwin.rs
+     holds the same 0.3 (MARGIN_RATIO) for the first frame. */
+  --float-margin:calc(var(--float-em) * .3);
 }
 
 html, body{
@@ -32,7 +41,12 @@ html, body{
 /* THE CARD — fit-content of the word, nothing else. No background, no
    border, no border-radius, no box-shadow, no --ground fill. */
 #card{
+  position:absolute;               /* §10: at the margin, the bands around it */
+  left:var(--float-margin);
+  top:var(--float-margin);
   display:inline-flex;
+  flex-direction:column;          /* D18: the marker above the word */
+  align-items:center;
   padding:0;
   background:transparent;
   border:none;
@@ -62,5 +76,88 @@ html, body{
 /* THE ONE STEP OF TRACKING, and then the ellipsis. Never a smaller type. */
 #word[data-long="1"]{ letter-spacing:-.03em; }
 
+/* THE MARKER (D18, 28 Sep) at the float's own size: the same element the
+   one-word view draws (wordview.css .wordview-mark -- the chrome face,
+   uppercase, letter-spaced, the unit in ink and its part dimmer), sized off
+   the float's one dial rather than the page's tokens -- 0.3 em of the word,
+   12px at the default 40 -- and standing --float-mark-gap above it. Drawn
+   only while it has a label (.on); a crossing re-stamps data-ev="unit". */
+:root{ --float-mark-gap: 6px; }
+#mark{
+  /* wordview.css is loaded here for --pivot (stage 1) and it positions
+     .wordview-mark absolutely at the view's top-left; in the float the
+     marker is a flex row ABOVE the word, so the id takes the box back. */
+  position:static; left:auto; top:auto;
+  display:none; align-items:baseline; gap:.5em;
+  margin-bottom:var(--float-mark-gap);
+  font-family:var(--chrome-ui-font, var(--ui));
+  font-size:calc(var(--float-em) * .3); font-weight:500; line-height:1.2;
+  letter-spacing:.08em; text-transform:uppercase;
+  color:var(--ink); white-space:nowrap;
+  max-width:40ch; overflow:hidden; text-overflow:ellipsis;
+}
+#mark.on{ display:flex; }
+#mark .of{ color:var(--dim); font-weight:400; }
+#mark .of:empty{ display:none; }
+#mark[data-ev="unit"]{ animation: fl-unit 160ms ease both; }
+@keyframes fl-unit{ from{ opacity:0; } }
+
 /* THE RED LETTER — same pivot token as wordview.css, same colour. */
 #word .pv{ color:var(--pivot); }
+
+/* ============ THE FAN (FLOAT.md §10, Osca 28 Sep) — the only chrome the float
+   ever shows, and only while a finger is there. Three or four circles fanned
+   from the press point, OUTSIDE the box, away from the nearer screen border
+   (float.js::openFan places them; this is what one looks like). A toggle
+   (Speak) shows its state as a filled circle. Tap one or slide onto it. */
+#fan{ position:absolute; left:0; top:0; width:0; height:0; pointer-events:none; }
+#fan .fc{
+  position:absolute; transform:translate(-50%,-50%);
+  width:var(--fan-size, 40px); height:var(--fan-size, 40px); border-radius:50%;
+  box-sizing:border-box; border:1.5px solid var(--ink);
+  background:var(--ground, #fff); color:var(--ink);
+  font:500 11px/1 var(--chrome-ui-font, var(--ui)); letter-spacing:.02em;
+  display:flex; align-items:center; justify-content:center; text-align:center;
+  pointer-events:auto; cursor:default; white-space:nowrap;
+  animation: fl-fan 140ms ease both;
+}
+#fan .fc .g{ font-size:15px; line-height:1; }
+#fan .fc[data-on="1"]{ background:var(--ink); color:var(--ground, #fff); }
+#fan .fc[data-hot="1"]{ outline:2px solid var(--pivot); outline-offset:2px; }
+@keyframes fl-fan{ from{ opacity:0; transform:translate(-50%,-50%) scale(.6); } }
+
+/* ============ THE RED LETTER BREATHES (§10) — the only state light. While
+   Speak is on the pivot moves on warmth, saturation and darkness ONLY, over
+   `--breathe-ms` (4 s), between `--pivot` and `--pivot-warm` (float.js
+   computes the warm one off the computed --pivot: +15 % saturation, +8 %
+   lightness, 3° toward orange). Never size, position, opacity or a blink. */
+#word.breathing .pv{ animation: fl-breathe var(--breathe-ms, 4000ms) ease-in-out infinite; }
+@keyframes fl-breathe{ 0%,100%{ color:var(--pivot); } 50%{ color:var(--pivot-warm, var(--pivot)); } }
+
+/* THE FLOAT'S LABEL IS FRANK'S SMALL VOICE (DESIGN, 29 Sep; the all-doors Stranger: three recipes for one label). The
+   shelf's 600 weight and .13 em tracking at the float's own size, in ink; it stands a little further off the word,
+   as the one-word view's now does. */
+:root{ --float-mark-gap: 12px; }
+#mark{ font-weight:600; letter-spacing:.13em; }
+
+/* A SMALL FROSTED-GLASS CARD BEHIND THE WORD (ASKS #145, Osca 29 Sep; supersedes §8's "no card" -- the bare word was
+   lost on a busy cover). It lives inside the margin bands (0.18 em of the 0.3 em), so the word's pixel, the window's
+   size and every hand are what they were. The blur is of this window's own content; on the Mac the real frost over
+   the desktop is the window's vibrancy (EXPORT: desktop/, NSVisualEffectView under a transparent webview). */
+#card{ isolation:isolate; }
+#card::before{ content:""; position:absolute; z-index:-1; inset:calc(var(--float-margin) * -0.6);
+  border-radius:calc(var(--float-em) * .26);
+  background:color-mix(in srgb, var(--ground, #fbfaf6) 74%, transparent);
+  -webkit-backdrop-filter:saturate(1.8) blur(20px); backdrop-filter:saturate(1.8) blur(20px);
+  border:1px solid color-mix(in srgb, var(--ink, #1d1d1b) 12%, transparent);
+  box-shadow:0 8px 28px rgba(0,0,0,.18); }
+
+/* THE ANSWER CARD BESIDE THE WORD (ASKS #147; float.js showAnswer): Define's entry or Explain's sentence, in the
+   Library's glass -- whose it is in the LABEL recipe, the words in the book serif */
+#answer{ position:absolute; z-index:3; box-sizing:border-box; padding:12px 14px 10px; border-radius:14px;
+  background:color-mix(in srgb, var(--ground, #fbfaf6) 92%, transparent);
+  -webkit-backdrop-filter:saturate(1.8) blur(20px); backdrop-filter:saturate(1.8) blur(20px);
+  border:1px solid color-mix(in srgb, var(--ink, #1d1d1b) 12%, transparent); box-shadow:0 10px 32px rgba(0,0,0,.2);
+  color:var(--ink, #1d1d1b); pointer-events:auto; -webkit-user-select:text; user-select:text; cursor:auto; }
+#answer .a-head{ font:600 11px/1.3 var(--ui, -apple-system, system-ui, sans-serif); letter-spacing:.13em; text-transform:uppercase; opacity:.62; margin-bottom:6px; }
+#answer p{ margin:4px 0 0; font:400 15px/1.4 var(--serif, "Iowan Old Style", Palatino, Georgia, serif); }

@@ -8,14 +8,32 @@
      The float is one word, painted, on nothing. No card, no caption, no
      chrome, no strip. The window is transparent; what the desktop shows
      behind the word is the desktop.
-     tokens.css: the palette (--ink, --serif, --ground, --pivot).
-     float.css:  the word's size and the window's fit. -->
+     tokens.css:   the palette (--ink, --serif, --ground).
+     wordview.css: THE RED LETTER -- `--pivot` and its dark hooks live there and
+                   nowhere else (FLOAT-HANDS stage 1, 28 Sep: the float said
+                   tokens.css carried --pivot; it never did, and the letter
+                   painted ink). One token, one file, the view's and ours.
+     float.css:    the word's size and the window's fit. -->
 <link rel="stylesheet" href="tokens.css">
+<link rel="stylesheet" href="wordview.css">
 <link rel="stylesheet" href="float.css">
+<!-- THE HOST, FIRST (LIBRARY-WEB, wave 9, 26 Sep): in Frank the app injects
+     TTSTVHost before any page script and host.js keeps it; on the WEB nothing
+     injects, and host.js's `kind === "web"` branch is where floatListen and
+     floatSend come from, so float.js below has a feed to listen to. Without
+     this line the panel opened on the web and painted nothing. -->
+<script src="../library/host.js"></script>
 <!-- the theme, before first paint, from the one store every surface reads -->
 <script src="../prefs/prefs.js"></script>
 </head>
-<body><div id="card"><span id="word"></span></div>
+<!-- D18 (28 Sep): apparatus is a marker, not a word -- the unit's label,
+     small, above the word, the same element the one-word view wears at its
+     own size (float.css #mark). Empty until the reader's feed names one. -->
+<body><div id="card"><span id="mark" class="wordview-mark"><span class="of"></span><span class="label"></span></span><span id="word"></span></div><div id="fan"></div>
+<!-- THE PIVOT'S RULE IS wordview.js's -- `WordView.pivotIndex` (letters only,
+     the prototype's table). Loaded here for that one pure function; nothing
+     is mounted. The float wraps the letter in `.pv` the way the view does. -->
+<script src="wordview.js"></script>
 <script src="wordclock.js"></script>
 <script src="float.js"></script>
 </body>

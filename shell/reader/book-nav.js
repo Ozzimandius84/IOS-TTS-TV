@@ -409,7 +409,7 @@ let OPEN=0.18, OPENS=1, PAST_AT=0.075, PANE_SNAP=7;
 /* HOW LONG THE ZOOM TAKES, in OUT_SNAP's units (higher is shorter). 6 is the
    word SWITCH's speed and far too quick for the zoom itself -- four frames,
    measured. 2 is ~600ms and is a zoom you can watch. */
-let WORD_SNAP=2;
+let WORD_SNAP=6;   /* ASKS #143 (Osca 29 Sep: "keep the glide into one-word mode, but make it much quicker"): 2 -> 6, one step ~708 ms -> ~236 ms */
 let OUT_SNAP_=6;         // how hard that switch throws, either way -- a
                          // DURATION since 8 Sep (see THE SWITCH IS A TRAVEL,
                          // by stepDx): higher = shorter. 9 was the old
@@ -482,7 +482,7 @@ let T = SPEEDS[speedName];
 const PHYS = {
   mac: {
     decay:null, coast:null, vmax:null, couple:null, snap:null, grace:null,
-    wordSnap:2, paneSnap:7, leaveSnap:3,
+    wordSnap:6, paneSnap:7, leaveSnap:3,
     stick:0.5, leaveCommit:0.5, leaveStep:0.12, leaveGain:1.15,
     /* the float rung, the leaving four mirrored (14 Sep). floatGain is the
        phone's alone, exactly as leaveGain is; it is written out here so the
@@ -495,7 +495,7 @@ const PHYS = {
        so there is nothing here for the phone to want yet. */
     decay:null, coast:null, vmax:null, couple:null, snap:null, grace:null,
     /* the zoom and the ladder are Osca's own, watched and kept (G-STOPS) */
-    wordSnap:2, paneSnap:7,
+    wordSnap:6, paneSnap:7,
     /* the exit slide, a touch quicker than the Mac's 28 frames: 21, ~350ms */
     leaveSnap:4,
     stick:0.5,
@@ -939,7 +939,20 @@ function mount(o){
       fresh=true;
       p.wheel=window.Wheel.mount({
         el:p.col,
-        items: level.items.map(it=>({ t: it.t||it.n||"—", s:(it.n&&it.t)?it.n:"" })),
+        /* THE ROW IS NAMED FOR THE HEADING THAT LINKS TO IT (READER-LINKS,
+           26 Sep). The nearest pane (i===0, the one that lists the reader's
+           own chapters) gives each chapter's FIRST row `id="toc-<chapter>"`
+           -- first, because a chapter with several units in this pane (the
+           parts of one long poem) has one heading in the text, and that
+           heading's door is the chapter's beginning. Deeper panes name
+           nothing: an act's row and its first scene's row reach the same
+           chapter, and an id is one element. */
+        items: (function(){ const seen = new Set(); return level.items.map(it=>{
+          const row = { t: it.t||it.n||"—", s:(it.n&&it.t)?it.n:"" };
+          if(i===0 && it.chapterIdx!=null && !seen.has(it.chapterIdx)){
+            seen.add(it.chapterIdx); row.id = "toc-" + it.chapterIdx;
+          }
+          return row; }); })(),
         onOpen: k=>{
           const it=level.items[k];
           if(!it) return;
@@ -1099,10 +1112,19 @@ function mount(o){
     const at = o.readerPane ? o.readerPane.scrollTop : 0;
     if(programmaticTop != null && Math.abs(at - programmaticTop) <= 4){
       /* ours -- the directory the click set stands */
+    }else if(doorChapter >= 0 && inputTick === doorTick && curChapterIdx === doorChapter){
+      /* THE HEADING'S DOOR STANDS while the page settles (READER-LINKS): the
+         stubs around the unit take their real heights over the next frames
+         and the browser's own anchoring moves scrollTop under us by more
+         than 4 px with no hand on it. No input has arrived and the reader
+         is still on the unit the door named, so the directory it opened is
+         kept -- a hand's own scroll (inputTick) or leaving the unit lets go. */
+      programmaticTop = at;
     }else{
       programmaticTop = null;
       focusPath = null;
       heldDepth = 0;                 // reading again releases the held depth
+      doorChapter = -1;
     }
     levelsCache = focusPath ? levelsFromPath(focusPath) : computeLevels(curChapterIdx);
     const pos = continuousReaderPos();
@@ -1378,17 +1400,73 @@ function mount(o){
     const sec = o.readerCol && o.readerCol.querySelector('.chapter[data-ch="'+idx+'"]');
     if(!sec) return [];
     const out=[];
+    /* D18 (28 Sep): APPARATUS IS A MARKER, NOT A WORD. Beside the index, and
+       carried ON it (so the keep/restore of the whole array carries them too):
+       `out.ap[i]` -- true when word i is apparatus and never enters the slot --
+       and `out.marks` -- [{i, label, of}], the unit crossings of this chapter,
+       the marker's text from word i on. The RULE is wordview.js's
+       (`apparatus`, `apparatusToken`), one rule for this walk and the float's
+       payload; what this walk adds is the page's own facts: `data-kind` off
+       the paragraph (page.js writes the parser's kind), verse off the line's
+       class, and the unit that starts on this paragraph off Book.structure's
+       `w` -- which is the index this very walk is counting. */
+    /* a harness's stub WordView (test-book-nav.js) has none of these: no rule
+       then, no marks -- the index is exactly what it was */
+    const WV = (window.WordView && window.WordView.apparatus) ? window.WordView : null;
+    const ch = book && book.chapters ? book.chapters[idx] : null;
+    const units = (WV && ch) ? WV.unitsIn(book.structure || [], ch.id) : [];
+    const label = (WV && ch) ? WV.chapterLabel(ch) : "";
+    const ap = [], marks = [{ i: 0, label, of: "" }];
+    let u = 0;
     sec.querySelectorAll("p.line").forEach(p=>{
       const tn=p.firstChild;
       if(!tn || tn.nodeType!==3) return;         // an empty line -- nothing to index
       const text=tn.nodeValue||"";
-      let pos=0;
+      const n0 = out.length;
+      while(u < units.length && units[u].w < n0) u++;
+      const unit = (u < units.length && units[u].w === n0) ? units[u] : null;
+      const kind = p.getAttribute("data-kind") || "";
+      const verse = !p.classList.contains("para");
+      const whole = WV ? WV.apparatus(text, kind, unit, verse) : false;
+      if(unit) marks.push({ i: n0, label: unit.title || label, of: label });
+      else if(kind === "heading") marks.push({ i: n0, label: text.trim(), of: label });
+      let pos=0, first=true;
       text.split(/(\s+)/).forEach(tok=>{
-        if(tok && !/^\s+$/.test(tok)) out.push({node:tn, start:pos, end:pos+tok.length, p});
+        if(tok && !/^\s+$/.test(tok)){
+          out.push({node:tn, start:pos, end:pos+tok.length, p});
+          ap.push(whole || (WV ? WV.apparatusToken(tok, first, unit) : false));
+          first=false;
+        }
         pos+=tok.length;
       });
     });
+    const byI = new Map(); marks.forEach(m => byI.set(m.i, m));
+    out.ap = ap;
+    out.marks = Array.from(byI.values()).sort((a, b) => a.i - b.i);
     return out;
+  }
+  /* THE SLOT'S WORD is the nearest BODY word at or after the cursor -- the
+     cursor itself may stand on a chapter numeral (the voice reads it, a click
+     landed on it), and the slot is not asked to. `dir` -1 walks back instead;
+     a chapter with no body word at all (a page of numbers) answers the cursor. */
+  function bodyIdx(i, dir){
+    const ap = wordDomIndex.ap; const n = wordTotal();
+    if(!ap || !n) return clamp(i, 0, Math.max(0, n-1));
+    dir = dir < 0 ? -1 : 1;
+    for(let k = clamp(i, 0, n-1); k >= 0 && k < n; k += dir) if(!ap[k]) return k;
+    for(let k = clamp(i, 0, n-1); k >= 0 && k < n; k -= dir) if(!ap[k]) return k;
+    return clamp(i, 0, Math.max(0, n-1));
+  }
+  function slotIdx(){ return bodyIdx(wordIdx, 1); }
+  /* the marker for the cursor's word: the last crossing at or before it */
+  function markAtCursor(){
+    const WV = window.WordView;
+    return (WV && WV.markAt && wordDomIndex.marks) ? WV.markAt(wordDomIndex.marks, wordIdx) : null;
+  }
+  function paintMark(){
+    if(!wordView || !wordView.setMark) return;
+    const m = markAtCursor();
+    wordView.setMark(m ? m.label : "", m ? m.of : "");
   }
   // Osca's own words: "I want it to zoom into the word it's on ON the
   // page". A chapter can run long, and the reader is routinely scrolled
@@ -1461,8 +1539,9 @@ function mount(o){
     if(w && w.node) return (w.node.nodeValue||"").slice(w.start, w.end);
     return wordWords[i] || "";
   }
-  function currentWordRange(){
-    const w=wordDomIndex[wordIdx];
+  function currentWordRange(){ return wordRangeAt(wordIdx); }
+  function wordRangeAt(i){
+    const w=wordDomIndex[i];
     if(!w) return null;
     try{
       const r=document.createRange();
@@ -1520,20 +1599,167 @@ function mount(o){
   let restLevel = 0, restWritten = 0;      // the axis position, and what is on disk
   function cursorKey(){ return "wordcursor:" + ((book && book.slug) || "?"); }
   function writeCursor(){
-    if(!cursor) return;
-    const rec = {ch: cursor.ch, wi: cursor.wi};
+    if(!cursor && !place) return;
+    const rec = cursor ? {ch: cursor.ch, wi: cursor.wi} : {};
     if(restLevel !== 0) rec.v = restLevel;
+    if(place) rec.at = place;
     try{ localStorage.setItem(cursorKey(), JSON.stringify(rec)); }catch(_){}
   }
   function loadCursor(){
-    cursor = null; restLevel = 0; restWritten = 0;
+    cursor = null; restLevel = 0; restWritten = 0; place = null;
     try{
       const raw = localStorage.getItem(cursorKey());
       if(raw){ const c = JSON.parse(raw);
         if(c && c.ch != null) cursor = {ch:+c.ch, wi:+c.wi||0};
         if(c && c.v != null && +c.v === +c.v){ restLevel = +c.v; restWritten = restLevel; }
+        if(c && c.at && c.at.s != null && +c.at.i === +c.at.i && +c.at.dy === +c.at.dy)
+          place = {s: String(c.at.s), i: +c.at.i, dy: +c.at.dy};
       }
     }catch(_){}
+  }
+  /* ================= THE LINE ON THE SCREEN (ASKS #159/#166, 30 Sep) =================
+     The Stranger, 30 Sep: ⚙ -> ⚙ on a book came back at the book's opening (phone
+     5738 -> 3338, Mac 3964 -> 2936). Osca (#159): the ⚙ is a toggle, pressing it again
+     goes back to where you were -- and "where you were" in a book is the line that was on
+     the screen, whether or not the voice ever played. The cursor above is where the VOICE
+     and one word are; a person who only scrolled has not moved it, so seating the page on
+     it (K24) put him back wherever the cursor was, not on his page.
+
+     So the page's own place rides on the cursor's key as `at` -- the same record, no
+     second position store, coalesced by cursor.js like every write to it, and flushed
+     on pagehide. It is NOT a scroll offset (POSITION IS SACRED): it names a thing in the
+     book -- the section (`s`: its data-ch, or "t" for the title page), the paragraph in
+     it (`i`, -1 for the section's own head) and how far the pane's top edge sits below
+     that paragraph's top (`dy`, px) -- so it lands on the same line however the
+     sections above it have laid out. Written as the reader scrolls (debounced), when
+     the book is left, and when the page goes; read by openBook, which seats it before
+     the cursor and falls back to the cursor when there is none. ▶ is not touched (#108):
+     it asks what is on screen, and this puts the same thing back on screen. */
+  let place = null;                        // {s, i, dy} or null
+  let placing = false, placeT = 0;
+  function placeNow(){
+    const pane = o.readerPane, col = o.readerCol;
+    if(!pane || !col || !pane.getBoundingClientRect) return null;
+    const line = pane.getBoundingClientRect().top;
+    const secs = col.querySelectorAll("section.chapter");
+    if(!secs.length) return null;
+    let lo = 0, hi = secs.length - 1, k = 0;
+    while(lo <= hi){ const m = (lo + hi) >> 1;
+      if(secs[m].getBoundingClientRect().top <= line){ k = m; lo = m + 1; } else hi = m - 1; }
+    const sec = secs[k];
+    const s = sec.hasAttribute("data-ch") ? sec.getAttribute("data-ch")
+            : (sec.classList.contains("titlepage") ? "t" : null);
+    if(s == null) return null;
+    const ps = sec.querySelectorAll("p");
+    let i = -1, el = sec;
+    lo = 0; hi = ps.length - 1;
+    while(lo <= hi){ const m = (lo + hi) >> 1;
+      if(ps[m].getBoundingClientRect().top <= line){ i = m; lo = m + 1; } else hi = m - 1; }
+    if(i >= 0) el = ps[i];
+    return { s, i, dy: Math.round((line - el.getBoundingClientRect().top) * 2) / 2 };
+  }
+  function placeEl(at){
+    const col = o.readerCol; if(!col || !at) return null;
+    /* under the window (K25a) the section may be mounted EMPTY: its text is asked for first */
+    if(at.s !== "t" && readerPage && readerPage.ensure){ try{ readerPage.ensure(+at.s); }catch(_){} }
+    const sec = at.s === "t" ? col.querySelector("section.chapter.titlepage")
+                             : col.querySelector('section.chapter[data-ch="' + at.s + '"]');
+    if(!sec) return null;
+    return at.i < 0 ? sec : (sec.querySelectorAll("p")[at.i] || null);
+  }
+  function recordPlace(){
+    clearTimeout(placeT); placeT = 0;
+    if(placing || leavingBook || !book || screen !== "open") return;
+    if(!(o.readerPane && o.readerPane.clientHeight > 0)) return;   // no size, no line
+    const at = placeNow();
+    if(!at) return;
+    if(place && place.s === at.s && place.i === at.i && place.dy === at.dy) return;
+    place = at;
+    writeCursor();
+  }
+  /* seated the way seatOnWord is, but aimed at a TOP rather than a middle, and without
+     scrollIntoView (inside the canvas's frame that also scrolls the page around it): the
+     gap is closed against live rectangles, again on each frame while revealing a
+     content-visibility section re-measures the ones before it, until it holds, and it
+     gives up the moment the reader scrolls. */
+  function seatOnPlace(at){
+    const pane = o.readerPane, el = placeEl(at);
+    if(!pane || !el || !el.getBoundingClientRect) return false;
+    const aim = () => pane.getBoundingClientRect().top - at.dy;
+    const close = () => {
+      const d = el.getBoundingClientRect().top - aim();
+      if(Math.abs(d) > 1){
+        const max = (pane.scrollHeight || 0) - (pane.clientHeight || 0);
+        let to = pane.scrollTop + d;
+        if(to < 0) to = 0;
+        if(max > 0 && to > max) to = max;
+        pane.scrollTop = to; programmaticTop = pane.scrollTop; arrived = null; markPaint();
+      }
+      return Math.abs(el.getBoundingClientRect().top - aim());
+    };
+    /* THE SECTION IS LAID OUT BEFORE IT IS MEASURED (#167: the phone came back 155 px off, and on a
+       second trip in another chapter). A chapter is `content-visibility: auto`; one the browser is
+       skipping is only its placeholder box (contain-intrinsic-size), and the rectangles of the
+       paragraphs inside it are STALE -- measured, in the container, ch6 ¶11 "at -79" while ch6's box
+       was 1087 px tall and ch7 ¶2 was what filled the screen. The seat closed its gap against that
+       stale number, said "held", and the reader saw the next chapter; the record written after it
+       then named ch7, so the line drifted again on every trip. So the target's own section is made
+       visible for the length of the seat (and let go once it holds, by which time it is on the screen
+       and the browser keeps it laid out). */
+    const box = el.closest ? el.closest("section.chapter") : null;
+    const heldCv = box ? box.style.contentVisibility : "";
+    if(box) box.style.contentVisibility = "visible";
+    let freed = false;
+    const free = () => { if(freed) return; freed = true; placing = false; if(box) box.style.contentVisibility = heldCv; };
+    /* a frame that never comes (a page drawn in the background runs no rAF) must not leave
+       `placing` up for ever -- while it is, no scroll is recorded at all */
+    const nextFrame = (fn) => {
+      let ran = false;
+      const run = () => { if(ran) return; ran = true; fn(); };
+      if(typeof requestAnimationFrame === "function") requestAnimationFrame(run);
+      setTimeout(run, 60);
+    };
+    placing = true;
+    const mine = inputTick;
+    const mineAt = () => inputTick === mine && el.isConnected && place === at;
+    const go = () => {
+      close();
+      let tries = 0, held = 0;
+      const settle = () => {
+        if(!mineAt()){ free(); return; }                       // your own scroll wins
+        if(close() <= 1){ if(++held >= 3){ free(); recordPlace(); return; } } else held = 0;
+        if(++tries < 60) nextFrame(settle);
+        else free();                                           // gave up: nothing is written
+      };
+      nextFrame(settle);
+      /* a web font arriving after the seat re-flows every paragraph above it */
+      try{ if(document.fonts && document.fonts.status !== "loaded")
+        document.fonts.ready.then(() => { if(mineAt()) close(); }); }catch(_){}
+    };
+    /* A FRAME WITH NO SIZE YET HAS NO LINES. The canvas (and a tab opened in the
+       background) can hand the book over before its pane is laid out; every rectangle is
+       0 then and the seat would aim at nothing -- so it waits for the pane to have a
+       height, recording nothing meanwhile. */
+    if(pane.clientHeight > 0) go();
+    else if(typeof ResizeObserver === "function"){
+      const ro = new ResizeObserver(() => {
+        if(!(pane.clientHeight > 0)) return;
+        ro.disconnect();
+        if(mineAt()) go(); else free();
+      });
+      ro.observe(pane);
+    } else free();
+    return true;
+  }
+  if(o.readerPane){
+    o.readerPane.addEventListener("scroll", () => {
+      if(placing) return;
+      clearTimeout(placeT); placeT = setTimeout(recordPlace, 150);
+    }, {passive:true});
+    addEventListener("pagehide", () => {
+      recordPlace();
+      try{ if(window.Cursor && Cursor.flush) Cursor.flush(); }catch(_){}
+    });
   }
   /* THE AXIS'S OWN WRITE, on the cursor's key. The frame loop calls it the
      moment the axis has come to rest (`atZoomRest`), and it writes only when
@@ -1575,7 +1801,10 @@ function mount(o){
     }
     wordIdx = useCursor ? clamp(cursor.wi, 0, Math.max(0, wordTotal()-1))
                         : wordIdxNearLine(ch);
-    if(!useCursor) setCursor(ch, wordIdx, "entered");
+    /* D18: the view never opens ON apparatus -- a cursor left on "II" or
+       "18" comes up on the unit's first body word, and the marker says "II". */
+    const body = bodyIdx(wordIdx, 1);
+    if(!useCursor || body !== wordIdx){ wordIdx = body; setCursor(ch, wordIdx, "entered"); }
     wordSlideX=0; arrived=null;
     paintWordHighlight();
     // THE READER GOES TO THE ENDPOINT FIRST. The cursor may be a hundred
@@ -1713,7 +1942,16 @@ function mount(o){
   function viewHasTheScreen(){ return !!(wordView && wordView.showing); }
 
   function stepWord(dir){
-    const next=clamp(wordIdx+dir, 0, wordTotal()-1);
+    /* D18: a step lands on the next BODY word; apparatus is stepped over,
+       and the marker changes as the crossing is made (paintMark, below). */
+    const n = wordTotal();
+    const nb = clamp(wordIdx+dir, 0, n-1);
+    let next = nb;
+    if(wordDomIndex.ap){
+      next = -1;
+      for(let k = nb; k >= 0 && k < n; k += dir) if(!wordDomIndex.ap[k]){ next = k; break; }
+      if(next < 0) next = wordIdx;          // only apparatus that way: the end
+    }
     if(next===wordIdx) return;      // at either end -- stop, don't hand off
     // A new word means a new measurement, and -- once the view is actually
     // zoomed -- a short lateral slide in the direction of travel, so reading
@@ -2688,12 +2926,13 @@ function mount(o){
       seek: subSeek,
       key: () => wordChapterIdx + ":" + wordIdx,
       line(){
-        const w = wordDomIndex[wordIdx];
+        const si = slotIdx();               /* D18: the slot's line, never a numeral's */
+        const w = wordDomIndex[si];
         const text = w && w.p ? (w.p.textContent || "") : "";
         if(w && text) return { before: text.slice(0, w.start),
                                word: text.slice(w.start, w.end),
                                after: text.slice(w.end) };
-        return { before: "", word: wordTextAt(wordIdx) || "", after: "" };
+        return { before: "", word: wordTextAt(si) || "", after: "" };
       },
     });
     return wordPane;
@@ -2798,7 +3037,7 @@ function mount(o){
     return (b && b.width > 0 && b.height > 0) ? b : null;
   }
   function wzPivotRange(){
-    const w = wordDomIndex[wordIdx];
+    const w = wordDomIndex[slotIdx()];
     if(!w || !w.node) return null;
     const text = (w.node.nodeValue || "").slice(w.start, w.end);
     const k = (window.WordView && window.WordView.pivotIndex) ? window.WordView.pivotIndex(text) : 0;
@@ -2826,21 +3065,49 @@ function mount(o){
      nothing about the cursor, which stays this file's. A page with no `lang`
      anywhere leaves the view without one, and lookup.js falls back to the
      book's. */
+  /* ...AND THE WORD'S OWN LANGUAGE WINS OVER THE PARAGRAPH'S (LANG-WORD, Osca
+     28 Sep: "Lang detection has to be per word, of course. Within context, of
+     course."). page.js carries core/bookdata.py's runs of `Word.lang` on the
+     line as `data-wl="20:,1:grc-Latn,10:"` -- count:code per run over the
+     line's whitespace tokens, an empty code meaning the paragraph's. The word's
+     index within its line is its index in wordDomIndex less the line's first;
+     the run it falls in names it. Absent on every line of every book whose
+     words carry no language, which leaves the paragraph rule exactly as it was. */
+  function wordLangAt(i){
+    const w = wordDomIndex[i];
+    if(!w || !w.p || !w.p.getAttribute) return "";
+    const wl = w.p.getAttribute("data-wl");
+    if(!wl) return "";
+    let first = i;
+    while(first > 0 && wordDomIndex[first-1] && wordDomIndex[first-1].p === w.p) first--;
+    let k = i - first;
+    const runs = wl.split(",");
+    for(let r = 0; r < runs.length; r++){
+      const at = runs[r].indexOf(":");
+      const n = +runs[r].slice(0, at);
+      if(k < n) return runs[r].slice(at+1);
+      k -= n;
+    }
+    return "";
+  }
   function wzMarkLang(){
     if(!wordView || !wordView.el) return;
-    const w = wordDomIndex[wordIdx];
+    const w = wordDomIndex[slotIdx()];
     const src = w && w.p && w.p.closest ? w.p.closest("[lang]") : null;
-    const lg = src ? (src.getAttribute("lang") || "") : "";
+    const lg = wordLangAt(slotIdx()) || (src ? (src.getAttribute("lang") || "") : "");
     if(lg) wordView.el.setAttribute("lang", lg); else wordView.el.removeAttribute("lang");
   }
   /* THE PAGE'S WORD, AT REST -- measured with nothing on the page but the page.
      `off` means it is not on the screen, which is not a map: a zoom about a
      point outside the view is a zoom into nothing. */
   function wzMeasure(){
-    const w = wordDomIndex[wordIdx];
+    /* the SLOT's word (D18): the zoom lands on the body word the view will
+       show, never on a numeral the cursor happens to stand on */
+    const si = slotIdx();
+    const w = wordDomIndex[si];
     const pane = o.readerPane;
     if(!w || !w.p || !pane) return null;
-    const wr = wzFirstRect(currentWordRange()), pr = wzFirstRect(wzPivotRange());
+    const wr = wzFirstRect(wordRangeAt(si)), pr = wzFirstRect(wzPivotRange());
     if(!wr || !pr) return { off: true };
     const pb = pane.getBoundingClientRect();
     const vw = window.innerWidth || 0;
@@ -2849,7 +3116,7 @@ function mount(o){
     if(!on) return { off: true, W: wr };
     const f = wzFontOf(w.p);
     return { W: wr, P: { x: pr.left + pr.width/2, y: pr.top + pr.height/2 }, Ph: pr.height,
-             f: f.px, font: f.font, text: wordTextAt(wordIdx) };
+             f: f.px, font: f.font, text: wordTextAt(si) };
   }
   /* THE MAP: where the view will draw this word, and the one scale that takes
      the page's word there. The view is laid out while hidden and ASKED -- the
@@ -2860,10 +3127,13 @@ function mount(o){
     if(!wordView || !o.readerBox) return null;
     const F = wordFontPx();
     wordView.set(pg.text, F, pg.font);
-    wzMarkLang();
+    wzMarkLang(); paintMark();
     const tr = wordView.pivotRect ? wordView.pivotRect() : null;
     if(!tr || !(tr.width > 0)) return null;
-    const s = pg.f > 0 ? F / pg.f : (tr.height / pg.Ph);
+    /* the em the view ACTUALLY drew: a word too long for the gutters is set smaller (wordview.js, ASKS #177), and
+       the page's word must travel to that size, not the told one, or it lands bigger than the word it hands to */
+    const Fd = (wordView.fitted > 0) ? wordView.fitted : F;
+    const s = pg.f > 0 ? Fd / pg.f : (tr.height / pg.Ph);
     if(!(s > 0) || !isFinite(s)) return null;
     // the box's own origin, with nothing on it -- its local pixels are the
     // viewport's less this, and the transform below is written in them.
@@ -3037,6 +3307,13 @@ function mount(o){
     wz.lastTop = null;
     return null;
   }
+  function wzViewWord(){
+    if(!wordView) return;
+    const si = slotIdx();
+    const w = wordDomIndex[si];
+    const face = w && w.p ? wzFontOf(w.p).font : null;
+    wordView.set(wordTextAt(si) || "", wordFontPx(), face); wzMarkLang(); paintMark();
+  }
   /* ONCE A FRAME, from applyDx. */
   function wzFrame(){
     const e = clamp(dx, 0, 1);
@@ -3077,8 +3354,14 @@ function mount(o){
            which the travel's last frame may have stopped a hair short of -- and
            on the next frame the view takes the screen and the page lets go. */
         if(!wz.exact){ wz.exact = true; wzApply(1); markPaint(); return; }
+        /* A VIEW THAT WAS NEVER MOUNTED IS MOUNTED HERE (ASKS #176, the Stranger: the button said One word over the
+           page). A book opened straight into one word travels with no map -- the page is not seated yet, so
+           wzMakeMap never ran and never mounted the view -- and arrived with nothing to show: dx 1, state "view",
+           the page on screen and the bar's key pressed. Measured on the web bench: 419 ms from load to "view",
+           .wordview never .on, its word "". Mounted and told the word on arrival, it is one word at once. */
+        if(!wordView) mountWordView();
         // no view surface on this page: the page stays -- never a frame of nothing
-        if(wordView){ wordView.show(); wzPage(false); }
+        if(wordView){ wzViewWord(); wordView.show(); wzPage(false); }
         wzTfS = ""; writeReaderTransform(); wzVeil(0); wzVeilOn(false); wzPivot(0);
         wz.state = "view"; wz.exact = false;
         paintWordSub(1);
@@ -3090,10 +3373,10 @@ function mount(o){
       return;
     }
     if(wz.state === "view"){
-      // the word you are reading, drawn at the one size, in its own face
-      const w = wordDomIndex[wordIdx];
-      const face = w && w.p ? wzFontOf(w.p).font : null;
-      if(wordView){ wordView.set(wordTextAt(wordIdx) || "", wordFontPx(), face); wzMarkLang(); }
+      // the word you are reading, drawn at the one size, in its own face --
+      // the SLOT's word (D18), with the cursor's unit in the marker above it
+      wzViewWord();
+      if(wordView && !wordView.showing){ wordView.show(); wzPage(false); }
       paintWordSub(1);
       if(e >= 1 - WZ.eps && wz.hold !== "out"){ wz.keep = null; return; }
       /* LEAVING. The page goes back under the view first, at the word. */
@@ -3138,6 +3421,8 @@ function mount(o){
   }
 
   function openBook(bk){
+    recordPlace();                   // the book being left keeps its line (#166)
+    placing=false;
     focusPath=null; programmaticTop=null; lastGoodLevels=null; lastGoodPath=null; heldDepth=0;
     book=bk; dx=0; dxVel=0; dxInput=0; dxIdle=0; wordWasOn=false; exitArmed=false;
     wz.state="page"; wz.map=null; wz.hold=null; wz.wait=0; wzTfS=""; wzClear();
@@ -3189,7 +3474,8 @@ function mount(o){
        than `setDx`: on the word side a position is reached by the zoom and
        never cut to (goPos's own rule, 10 Sep), and a contents stack is
        clamped to the trail this book actually has. */
-    if(cursor && wordDomIndex.length) seatOnWord();
+    /* THE LINE THAT WAS ON THE SCREEN FIRST (#166); the cursor only when there is none */
+    if(!(place && seatOnPlace(place)) && cursor && wordDomIndex.length) seatOnWord();
     if(restLevel !== 0){
       const p = Math.max(-currentMaxLeft(), Math.min(DX_MAX, restLevel));
       if(p !== 0) goPos(p);
@@ -3282,6 +3568,7 @@ function mount(o){
   function handOver(){ return clamp(-dx - currentMaxLeft(), 0, 1); }
   function closeToLibrary(){
     if(leavingBook) return;
+    recordPlace();                   // the line on screen, before the book leaves it (#166)
     if(!book || screen !== "open" || !o.onLibrary){ leaveNow(); return; }
     leavingBook = true;
     leaveT = 0;
@@ -3407,6 +3694,7 @@ function mount(o){
      told the truth by the page (`floatIs`) whichever road opened or closed the
      panel -- the button, the card's own X, or the scroll back. */
   function commitFloat(){
+    axisMark("float-commit");
     floatArmed = false;
     dxVel = 0; dxInput = 0; dxIdle = 0; snapCancel(); paneEnd(); wordEnd();
     wordGoal = DX_MAX; setDx(DX_MAX); markPaint();
@@ -3465,7 +3753,82 @@ function mount(o){
   }
   // move to a position: the axis goes there and the gesture state is cleared,
   // so the spring is carrying it and nothing is still pushing.
+  /* ======================= THE AXIS LOG (ONEWORD-JUMP, 28 Sep) =======================
+     Osca, 28 Sep: *"it KEEPS on pushing to one-word view randomly and starts
+     moving."* A ring of the last wheel events and a record of every change of
+     LEVEL (contents / reader / word / float) with the driver that caused it and
+     the wheel deltas that preceded it. OFF by default and inert: nothing here
+     runs unless `?axislog` is in the URL, localStorage `axislog` is "1", or
+     ⌥⇧L was pressed in the reader (which sets that key so Frank.app, whose
+     URL cannot be typed, can be switched on from the keyboard). `nav.axislog()`
+     returns the two lists; ⌥⇧C copies them as JSON to the clipboard; a small
+     counter bottom-right shows the number of transitions while it is on. */
+  let AXISLOG = false;
+  try{ AXISLOG = /[?&]axislog\b/.test(location.search) || localStorage.getItem("axislog") === "1"; }catch(_){}
+  const axisRing = [], axisTrans = [];
+  let axisLevel = null, axisDriver = "none", axisDriverAt = 0, axisBox = null;
+  const axisNow = () => Math.round((typeof performance !== "undefined" && performance.now) ? performance.now() : Date.now());
+  function axisMark(driver){ if(!AXISLOG) return; axisDriver = driver; axisDriverAt = axisNow(); }
+  function axisCaller(){
+    try{
+      const lines = String(new Error().stack || "").split("\n");
+      for(const l of lines){ if(l && !/book-nav\.js/.test(l) && !/^Error/.test(l)) return l.trim().slice(0, 120); }
+    }catch(_){}
+    return "";
+  }
+  function axisNote(e, branch){
+    if(!AXISLOG) return;
+    axisRing.push({ t: axisNow(), dX: Math.round((e.deltaX || 0) * 10) / 10, dY: Math.round((e.deltaY || 0) * 10) / 10,
+                    br: branch, dx: Math.round(dx * 1000) / 1000, reach: wordReach == null ? null : Math.round(wordReach * 1000) / 1000 });
+    if(axisRing.length > 96) axisRing.shift();
+  }
+  function axisLevelNow(){ return floatOpen ? "float" : levelOf(dx); }
+  function axisCheck(){
+    if(!AXISLOG) return;
+    const lvl = axisLevelNow();
+    if(axisLevel === null){ axisLevel = lvl; return; }
+    if(lvl === axisLevel) return;
+    const now = axisNow();
+    const rec = { t: now, from: axisLevel, to: lvl, driver: axisDriver, driverAgo: now - axisDriverAt,
+                  dx: Math.round(dx * 1000) / 1000, reach: wordReach == null ? null : Math.round(wordReach * 1000) / 1000,
+                  vel: Math.round(dxVel * 10000) / 10000, wheel: axisRing.slice(-24) };
+    axisLevel = lvl;
+    axisTrans.push(rec);
+    if(axisTrans.length > 200) axisTrans.shift();
+    try{ console.log("[axis] " + JSON.stringify({ t: rec.t, from: rec.from, to: rec.to, driver: rec.driver, driverAgo: rec.driverAgo, dx: rec.dx, reach: rec.reach, wheel: rec.wheel.slice(-8) })); }catch(_){}
+    axisPaintBox();
+  }
+  function axisPaintBox(){
+    if(!AXISLOG || !document.body) return;
+    if(!axisBox){
+      axisBox = document.createElement("div"); axisBox.id = "axislog";
+      axisBox.style.cssText = "position:fixed;right:6px;bottom:6px;z-index:2147483647;font:11px/1.3 -apple-system,system-ui,sans-serif;"
+        + "color:#fff;background:rgba(200,0,0,.85);padding:3px 7px;border-radius:4px;pointer-events:none;white-space:pre";
+      document.body.appendChild(axisBox);
+    }
+    const last = axisTrans[axisTrans.length - 1];
+    axisBox.textContent = "axislog " + axisTrans.length + (last ? "  " + last.from + "→" + last.to + " " + last.driver : "") + "  " + axisLevelNow();
+  }
+  function axisDump(){ return { on: AXISLOG, level: axisLevelNow(), ring: axisRing.slice(), transitions: axisTrans.slice() }; }
+  function axisCopy(){
+    const txt = JSON.stringify(axisDump());
+    try{ if(navigator.clipboard && navigator.clipboard.writeText){ navigator.clipboard.writeText(txt); return true; } }catch(_){}
+    try{
+      const ta = document.createElement("textarea"); ta.value = txt; ta.style.position = "fixed"; ta.style.opacity = "0";
+      document.body.appendChild(ta); ta.select(); document.execCommand("copy"); ta.remove(); return true;
+    }catch(_){ return false; }
+  }
+  function axisToggle(){
+    AXISLOG = !AXISLOG;
+    try{ localStorage.setItem("axislog", AXISLOG ? "1" : "0"); }catch(_){}
+    if(AXISLOG){ axisLevel = null; axisPaintBox(); }
+    else if(axisBox){ axisBox.remove(); axisBox = null; }
+    return AXISLOG;
+  }
+  if(AXISLOG){ try{ addEventListener("DOMContentLoaded", axisPaintBox); if(document.body) axisPaintBox(); }catch(_){} }
+
   function goPos(p){
+    axisMark("go(" + p + ") " + axisCaller());
     /* THERE IS NO +2 (10 Sep): a caller still asking for it -- reader.html's
        Settings "one word" view says nav.go(2) -- is asking for the view, which
        is +1 now. Past the end of the axis is the end of the axis. */
@@ -3727,9 +4090,16 @@ function mount(o){
      page LEFT at scale(16) to be read; nothing is read at scale any more: the
      view draws its own type and the page is only ever scaled in passing. */
   let wzTfS = "";
+  /* RAIL_OVER (READER-WIDE, Osca 28 Sep: "Contents can still just pull
+     over"). On the Mac and the web the contents rail slides OVER the page
+     from the left edge; the reader is never pushed, so the column stays
+     centred on the window and never re-wraps. readerRestLeft/readerShift
+     are still computed (the stack's own positions read them), only the
+     reader's box ignores them. The phone keeps its push. */
+  function railOver(){ return !document.documentElement.hasAttribute("data-phone"); }
   function writeReaderTransform(){
     if(!o.readerBox) return;
-    const t = wzTfS || (readerShift ? "translate(" + Math.round(readerShift) + "px,0px)" : "");
+    const t = wzTfS || (readerShift && !railOver() ? "translate(" + Math.round(readerShift) + "px,0px)" : "");
     if(o.readerBox.style.transform !== t) o.readerBox.style.transform = t;
     const og = wzTfS ? "0px 0px" : "";
     if(o.readerBox.style.transformOrigin !== og) o.readerBox.style.transformOrigin = og;
@@ -3746,7 +4116,7 @@ function mount(o){
     }
     readerRestLeft = px;
     readerShift = 0;
-    o.readerBox.style.left = px + "px";
+    o.readerBox.style.left = (railOver() ? 0 : px) + "px";
     writeReaderTransform();
     if(anchor && pane){
       const want = anchor.offsetTop + into;      // forces the one layout, on purpose
@@ -4336,7 +4706,7 @@ function mount(o){
     }
     if(o.small && book){
       if(lvl==="word"){
-        const label = chapterLabel(wordChapterIdx)+"  ·  one word";
+        const label = chapterLabel(wordChapterIdx);   /* no "· one word": the reader can see it is one word (Osca, 29 Sep) */
         if(o.small.textContent !== label) o.small.textContent = label;
       }
       else {
@@ -4351,6 +4721,7 @@ function mount(o){
   function chapterLabel(i){
     const ch = book && book.chapters && book.chapters[i];
     if(!ch) return "";
+    if(window.WordView && WordView.chapterLabel) return WordView.chapterLabel(ch) || window.WordView.chapterLabel({n:String(i+1)});   /* said once (wordview.js, 29 Sep) */
     return (ch.n?ch.n+" ":"")+(ch.t||"chapter "+(i+1));
   }
 
@@ -4597,6 +4968,7 @@ function mount(o){
     lastT=now;
     if(screen==="open") {
       stepDx(dt);
+      axisCheck();               // THE AXIS LOG: did the level change this frame, and who drove it
       crossStep();               // the second leg of a crossing, once home
       stepLeave(dt);
       if(levelOf(dx)==="word") coastWord(dt);
@@ -4708,6 +5080,71 @@ function mount(o){
     markPaint();
     return true;
   }
+  /* ============ THE HEADING IS A LINK TO CONTENTS (READER-LINKS, 26 Sep) ============
+     Osca's second press: "the chapter HEADING inside the book is not a link.
+     The contents pane links; the running chapter title in the text does not
+     (it should take you to contents / the unit)." page.js now writes
+     `<a class="unitlink" href="#toc-N">` on every opener's <h1> and on the
+     running head's chapter name, and wheel.js writes `id="toc-N"` on the
+     nearest pane's row for chapter N (ensurePane). The href is honest on its
+     own -- the id exists whenever that pane is drawn -- but the pane for a
+     chapter under another branch is not drawn until the reader stands there,
+     so the click is answered by this door and not by the hash: stand the
+     reader on the unit, rebuild the panes from it, and move the axis to the
+     nearest contents position. `#toc-N` then names exactly one row, live. */
+  function unitLinkOf(t){
+    while(t && t !== o.readerCol && t !== o.readerHead && t !== document){
+      if(t.tagName === "A" && t.classList && t.classList.contains("unitlink")){
+        const m = /^#toc-(\d+)$/.exec(t.getAttribute("href") || "");
+        return m ? +m[1] : null;
+      }
+      t = t.parentNode;
+    }
+    return null;
+  }
+  /* the deepest node that owns chapter `chapterId` -- a scene, not its act;
+     a poem's first part, not the poem -- so the pane the door opens is the one
+     that LISTS this unit (findOwnerPath stops at the first owner, which is
+     right for the reader's trail and one level short for a link's target) */
+  function deepestOwnerPath(nodes, chapterId, trail){
+    for(const n of (nodes||[])){
+      const here = trail.concat([n]);
+      if(n.children && n.children.length){
+        const r = deepestOwnerPath(n.children, chapterId, here);
+        if(r) return r;
+      }
+      if((n.chapters && n.chapters.indexOf(chapterId)!==-1) || n.chapter===chapterId) return here;
+    }
+    return null;
+  }
+  let doorChapter = -1, doorTick = 0;   // the unit a heading's door opened, and the input tick it opened on
+  function openContentsAt(idx){
+    if(!book || !book.chapters || !book.chapters[idx]) return false;
+    doorChapter = idx; doorTick = inputTick;
+    if(readerPage && readerPage.ensure) readerPage.ensure(idx);   // the unit's text, under the window (K25a)
+    scrollReaderTo(idx);
+    curChapterIdx = idx;
+    const path = deepestOwnerPath(book.structure||[], book.chapters[idx].id, []);
+    if(path && path.length){
+      focusPath = path;
+      levelsCache = levelsFromPath(path);
+      heldDepth = Math.min(MAX_LEFT_LEVELS, levelsCache.length);
+    }else{
+      focusPath = null; heldDepth = 0;
+      levelsCache = computeLevels(idx);
+    }
+    for(let L=0; L<currentMaxLeft(); L++)
+      if(levelsCache[L]) ensurePane(L, levelsCache[L], null, true);
+    goPos(-1);
+    markPaint();
+    return true;
+  }
+  if(o.readerHead){
+    o.readerHead.addEventListener("click", e => {
+      const door = unitLinkOf(e.target);
+      if(door != null){ e.preventDefault(); openContentsAt(door); }
+    });
+  }
   if(o.readerCol){
     // passive: this listener exists to REMEMBER, never to prevent
     o.readerCol.addEventListener("pointerdown", e => {
@@ -4716,13 +5153,28 @@ function mount(o){
 
     o.readerCol.addEventListener("click", e => {
       if(!book) return;
+      // THE HEADING'S DOOR (READER-LINKS): an in-text unit heading is a link
+      // to its contents entry, and the click is answered here, not by the
+      // browser's own hash jump -- the row may not be mounted yet.
+      const door = unitLinkOf(e.target);
+      if(door != null){ e.preventDefault(); openContentsAt(door); return; }
       if(e.button !== 0) return;                       // yield: not the primary button
       if(e.detail > 1) return;                         // the double-click's own handler owns this
       if(downAt && (Math.abs(e.clientX - downAt.x) > SEL_SLOP ||
                     Math.abs(e.clientY - downAt.y) > SEL_SLOP)) return;   // yield: a drag
       const sel = window.getSelection && window.getSelection();
       if(sel && sel.rangeCount && !sel.isCollapsed) return;               // yield: a selection
-      placeCursorAt(wordAt2(e), "click");
+      const hit = wordAt2(e);
+      placeCursorAt(hit, "click");
+      /* A PRESS ON A WORD LOOKS IT UP (ASKS #144, Osca 29 Sep: "Frank's own card, in that line's language, is primary;
+         Apple's Look Up is a small button inside it. Right-click / press-and-hold still gives the system menu"). The
+         press names the word and its LINE's language; the page (reader.html) opens the card. Double-click, the right
+         button and a held finger are untouched, so the system's menu is where it always was. */
+      if(hit && hit.ch === wordChapterIdx && wordDomIndex[hit.wi]){
+        const w = wordDomIndex[hit.wi], text = w.node.textContent.slice(w.start, w.end).replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, "");
+        const el = w.node.parentNode, lg = el && el.closest && el.closest("[lang]");
+        if(text) document.dispatchEvent(new CustomEvent("ttstv:wordpress", { detail: { text: text, lang: lg ? lg.getAttribute("lang") : null, ch: hit.ch, wi: hit.wi } }));
+      }
     });
 
     // DOUBLE-CLICK A WORD, ANYWHERE IN THE BOOK. Osca, 4 Sep: "Let me double
@@ -4754,7 +5206,9 @@ function mount(o){
   // one this file did not already have a listener for: it does nothing but
   // wake, it is passive, and it is on the window rather than on the subtitle
   // so that touching the PAGE wakes the line that says where you are.
-  addEventListener("pointerdown", () => { wakeSub(); }, {passive:true});
+  /* ...and a press is a person: whatever the page was still putting back (the #166
+     line, a jump's settle, a pull) lets go of the scroller now, not a second later. */
+  addEventListener("pointerdown", () => { inputTick++; wakeSub(); }, {passive:true});
 
   /* ====================== THE SWIPE IS THE WHEEL ===========================
      Osca, 8 September: *"the phone reader navigates panes the SAME way the Mac
@@ -5170,6 +5624,7 @@ function mount(o){
       else if(levelOf(dx) === "word") swipe.axis = "word";
       else { swipe = null; return false; }
       swipe.live = true; swipe.x = x; swipe.y = y;
+      axisMark("touch");
       inputTick++;
       wakeSub();
       if(swipe.axis === "word" || swipe.axis === "none") return true;
@@ -5371,7 +5826,7 @@ function mount(o){
     // preventDefault-ed here: until it has proved itself horizontal this is
     // still an ordinary touch on an ordinary page, and a page that scrolls
     // under it.
-    if(t.length === 1) swipeArm(t[0].clientX, t[0].clientY, e.timeStamp);
+    if(t.length === 1){ inputTick++; swipeArm(t[0].clientX, t[0].clientY, e.timeStamp); }   // a finger down ends any restore (#187)
   }, {passive:false});
   addEventListener("touchmove", e=>{
     const t = e.touches || [];
@@ -5388,10 +5843,42 @@ function mount(o){
   addEventListener("gesturechange", refusePinch, {passive:false});
 
   // ---------------------------------------------------------------- INPUT
+  /* ================= A WHEEL IS NEVER CAUGHT (ASKS #187, 30 Sep) =================
+     The web Stranger: "on a laptop the reader will not scroll past the top of any
+     chapter -- the title page included". Ten 100-px notches, a trackpad's 20x30,
+     PageDown and the arrow all read scrollTop back where they started.
+
+     THE CAUSE IS page.css's SNAP, not the #166 restore. The pane is
+     `scroll-snap-type: y proximity`, and every chapter carries two targets: the
+     opener's own top and the first text line under it (`.opener + .unit > snap`,
+     `scroll-snap-stop: always`). An opener is a full screen tall, so from its top the
+     nearest target after any scroll shorter than about half a screen is the one you
+     started on, and Chromium springs the pane home at the end of every notch (the
+     Stranger's trace 94, 77, 36, 0). A finger's throw is long enough to reach the
+     next target, which is why the phone never saw it; a wheel is not, ever.
+     Measured before this (container Chromium 141, Moby Dick, 1440x900, 10 x 100-px
+     page.mouse.wheel): from 0, 1098, 7880, 10645 -> moved 0 each.
+
+     A catch is for a thrown finger. A wheel, a trackpad and the keys scroll by as
+     much as the person asked for and stop there, so the first of them switches the
+     reader's snap off for good (inline, on the pane: it outranks page.css's rule and
+     every attribute that toggles it, and a jump's own `data-nosnap` settle still
+     works). Touch never sends a wheel, so the phone keeps its catch. */
+  let freeScroll = false;
+  function scrollFree(){
+    if(freeScroll || !o.readerPane || !o.readerPane.style) return;
+    freeScroll = true;
+    o.readerPane.style.scrollSnapType = "none";
+  }
+  /* a mouse or a trackpad moving over the page is the same person about to scroll:
+     off before the first notch, so that notch is not half-eaten by a catch */
+  addEventListener("pointermove", e => { if(e.pointerType === "mouse" && screen === "open") scrollFree(); }, {passive:true});
   addEventListener("wheel", e=>{
     inputTick++;
     wakeSub();                       // any wheel wakes the subtitle (job 24)
     if(screen!=="open") return;
+    if(!e.ctrlKey) scrollFree();
+    axisMark("wheel");
     // A CHROMIUM PINCH IS A WHEEL WITH CTRL HELD, and so is ctrl+scroll on a
     // mouse. It is taken first, at every level, and does nothing (A PINCH DOES
     // NOTHING, above): never the axis, never a word step, never the browser's
@@ -5404,25 +5891,30 @@ function mount(o){
       // a step there would change the target under a map already made.
       if(Math.abs(e.deltaY) >= Math.abs(e.deltaX)){
         if(Math.abs(e.deltaY)>0){ e.preventDefault(); if(wzReads()) bumpWord(e.deltaY); }
+        axisNote(e, "bump");
         return;
       }
       e.preventDefault();
-      axisPush(e.deltaX*T.gain);
+      axisNote(e, axisPush(e.deltaX*T.gain));
       return;
     }
-    if(Math.abs(e.deltaX) < Math.abs(e.deltaY)) return;   // vertical: the reader's own scroll
+    if(Math.abs(e.deltaX) < Math.abs(e.deltaY)){ axisNote(e, "vert"); return; }   // vertical: the reader's own scroll
     // THE AXIS IS BEING PUSHED. What that means -- the deliberate push past
     // the deepest pane, the exit -- is
     // axisPush's, and this handler no longer holds a second copy of it: the
     // finger on the glass makes the same call (THE SWIPE below).
     e.preventDefault();
-    axisPush(e.deltaX*T.gain);
+    axisNote(e, axisPush(e.deltaX*T.gain));
   }, {passive:false});
 
   addEventListener("keydown", e=>{
     inputTick++;
     wakeSub();                       // ...and any key
+    /* ⌥⇧L switches the axis log on and off; ⌥⇧C copies it (THE AXIS LOG, above) */
+    if(e.altKey && e.shiftKey && (e.code === "KeyL" || e.key === "L" || e.key === "l" || e.key === "Ò")){ e.preventDefault(); axisToggle(); return; }
+    if(e.altKey && e.shiftKey && AXISLOG && (e.code === "KeyC" || e.key === "C" || e.key === "c" || e.key === "Ç")){ e.preventDefault(); axisCopy(); return; }
     if(screen!=="open") return;
+    axisMark("key:" + e.key);
     const lvl=levelOf(dx);
     if(lvl==="word"){
       if(e.key==="ArrowDown"||e.key==="ArrowUp"){
@@ -5433,6 +5925,9 @@ function mount(o){
       // one position back: +2 to +1, +1 to the book. Never a fraction.
       if(e.key==="ArrowLeft"){ goPos(posStep(-1)); e.preventDefault(); }
       else if(e.key==="ArrowRight"){ goPos(posStep(1)); e.preventDefault(); }
+      /* ESC IN ONE WORD IS THE WAY BACK TO THE PAGE, not out of the book (ASKS #176,
+         the Stranger: "Esc leaves the BOOK, not the view"). One press, one place. */
+      else if(e.key==="Escape"){ goPos(0); e.preventDefault(); }
       return;
     }
     // ONE ARROW, ONE POSITION. The keys are how you move along the axis, so
@@ -5459,14 +5954,74 @@ function mount(o){
     }
     else if(e.key==="ArrowDown"||e.key==="ArrowUp"){
       if(lvl==="reader" && o.readerPane){
+        scrollFree();
         o.readerPane.scrollTop += (e.key==="ArrowDown"?80:-80); e.preventDefault();
       }
     }
-    else if(e.key==="Escape"){ closeToLibrary(); }
+    /* PAGE DOWN / PAGE UP / HOME / END (ASKS #187). The pane is a scroller inside
+       the page, and the browser gives these keys to the pane only once it has been
+       clicked -- a reader who arrives from the shelf has clicked READ, not the page,
+       so PageDown scrolled nothing at all. The reader takes them itself: a screen
+       less two lines, so the line you were on is still in view. Space stays the
+       play key (Settings > Hotkeys) and a field keeps all of them. */
+    else if(lvl==="reader" && o.readerPane && !e.metaKey && !e.ctrlKey && !e.altKey &&
+            (e.key==="PageDown"||e.key==="PageUp"||e.key==="Home"||e.key==="End") &&
+            !(e.target && (/^(input|textarea|select)$/i.test(e.target.tagName||"") || e.target.isContentEditable))){
+      scrollFree();
+      const pane = o.readerPane, pg = Math.max(80, pane.clientHeight - 74);
+      const to = e.key==="PageDown" ? pane.scrollTop + pg : e.key==="PageUp" ? pane.scrollTop - pg
+               : e.key==="Home" ? 0 : pane.scrollHeight;
+      try{ pane.scrollTo({ top: to, behavior: "smooth" }); }catch(_){ pane.scrollTop = to; }
+      e.preventDefault();
+    }
+    /* ...and mid-zoom (on the way into or out of one word) Esc lands on the page too */
+    else if(e.key==="Escape"){ if(dx > DX_REST){ goPos(0); e.preventDefault(); } else closeToLibrary(); }
   });
 
   return { openBook, closeToLibrary, speed:setSpeed,
     word: WORD,
+    /* the word at a point of the screen, in the book (ASKS #108: Play starts on the page you are looking at) */
+    wordAtPoint(x, y){ const c = caretAt(x, y); return c ? wordAt(c.node, c.offset) : null; },
+    /* WHERE ▶ STARTS (ASKS #108 / #187, the web Stranger: "Play starts at the front of the book"). The old
+       ask was a caret probe down the column's left edge, 24 px in -- which finds nothing on a chapter's
+       opener (one small centred word on a full screen) or the title page, so ▶ fell through to the cursor,
+       and a reader who had only scrolled had a cursor still at CONTENTS. This asks the page instead: the
+       first reading line whose bottom is below the pane's top edge (a line half under the band counts as on
+       screen), found by halving over the sections and then the lines, as the #166 place is. On an opener or
+       a title card that is the chapter's own first word, just under the screen: the chapter you are looking
+       at. Returns {ch, wi}, or null when the cursor's own word is already on screen (a pause resumes where it
+       stopped) or the page is not the one showing (one word, the contents). */
+    playStart(){
+      const pane = o.readerPane, col = o.readerCol;
+      if(!book || !pane || !col || levelOf(dx) !== "reader" || !pane.getBoundingClientRect) return null;
+      const pr = pane.getBoundingClientRect(), top = Math.max(pr.top, 0) + 8, bottom = Math.min(pr.bottom, innerHeight);
+      const secs = col.querySelectorAll("section.chapter[data-ch]");
+      if(!secs.length) return null;
+      let lo = 0, hi = secs.length - 1, k = -1;
+      while(lo <= hi){ const m = (lo + hi) >> 1;
+        if(secs[m].getBoundingClientRect().bottom > top){ k = m; hi = m - 1; } else lo = m + 1; }
+      for(let j = Math.max(0, k); j < secs.length && j <= Math.max(0, k) + 3; j++){
+        const sec = secs[j];
+        if(readerPage && readerPage.ensure){ try{ readerPage.ensure(+sec.getAttribute("data-ch")); }catch(_){} }
+        const ls = sec.querySelectorAll("p.line");
+        let a = 0, b = ls.length - 1, f = -1;
+        while(a <= b){ const m = (a + b) >> 1;
+          if(ls[m].getBoundingClientRect().bottom > top){ f = m; b = m - 1; } else a = m + 1; }
+        if(f < 0) continue;
+        let first = null;
+        for(let q = f; q < ls.length && !first; q++){ const tn = ls[q].firstChild; if(tn && tn.nodeType === 3 && /\S/.test(tn.nodeValue)) first = wordAt(tn, tn.nodeValue.search(/\S/)); }
+        if(!first) continue;
+        /* the cursor on screen: a pause resumes where it stopped, it is not moved to the top line */
+        if(cursor && cursor.ch === first.ch && cursor.wi >= first.wi){
+          const w = wordDomIndex[cursor.wi];
+          if(w && w.p && w.p.getBoundingClientRect){ const r = w.p.getBoundingClientRect(); if(r.top < bottom && r.bottom > top) return null; }
+        }
+        return first;
+      }
+      return null;
+    },
+    /* the heading's door, for a bench or a proof to press by index (READER-LINKS) */
+    contentsAt: openContentsAt,
     setWord(k,v){ if(k in WORD){ WORD[k]=v; markPaint();
       try{ localStorage.setItem("ttstv_word", JSON.stringify(WORD)); }catch(_){} } return WORD[k]; },
     /* kick every open wheel so a changed --pitch/--radius is picked up now
@@ -5581,6 +6136,12 @@ function mount(o){
        Read it, or set it from outside (a voice engine following along). */
     get cursor(){ return cursor ? {chapter:cursor.ch, word:cursor.wi} : null; },
     goTo(ch, wi){ return jumpTo(ch, wi, "goTo", false); },
+    /* §10's scrub door (FLOAT-HANDS stage 5c): one body word in `dir`, the
+       view's own step -- apparatus stepped over, the cursor announced. The
+       HUD's side-band drag arrives as `scrub:N`; reader.html's door calls
+       this N times. It was not on this object before, so the door's
+       `nav.step` threw, quietly, and the Air's scrub did nothing. */
+    step(dir){ stepWord(dir > 0 ? 1 : -1); return wordIdx; },
     /* ASK THE WINDOW FOR A CHAPTER'S TEXT (14 Sep, T-MAC2's A2c.28).
        K25(a) mounts a WINDOW of chapters, so a chapter outside it is a
        `<section>` with its height on it and NOTHING INSIDE. Anything that
@@ -5695,12 +6256,23 @@ function mount(o){
            get position(){return posNow();},
            get positions(){return positions();},
            go(p){ goPos(p); },
+           /* THE AXIS LOG, read-only (ONEWORD-JUMP): the ring, the transitions, and the switch */
+           axislog(){ return axisDump(); }, axislogOn(v){ if(v == null) return AXISLOG; if(!!v !== AXISLOG) axisToggle(); return AXISLOG; },
            /* THE TRANSITION'S OWN STATE, read-only, for design/reader/pixelcheck/gate.mjs */
            zoomProbe(){ return wzProbe(); },
            /* the one size every word is drawn at, in px -- WORD.height of the
               reference (the short side on a phone), for the view and the zoom */
            get wordPx(){ return wordFontPx(); },
-           get wordText(){ return wordTextAt(wordIdx) || ""; } };
+           get wordText(){ return wordTextAt(wordIdx) || ""; },
+           /* D18, read-only, for the proof: the slot's index (never apparatus),
+              the marker the cursor's word is under, and the chapter's own
+              apparatus flags and unit crossings as the index carries them */
+           get slotIndex(){ return slotIdx(); },
+           get slotText(){ return wordTextAt(slotIdx()) || ""; },
+           get marker(){ const m = markAtCursor(); return m ? { label: m.label, of: m.of, i: m.i } : null; },
+           apparatus(){ return (wordDomIndex.ap || []).slice(); },
+           marks(){ return (wordDomIndex.marks || []).map(m => ({ i: m.i, label: m.label, of: m.of })); },
+           step(d){ stepWord(d < 0 ? -1 : 1); } };
 }
 window.BookNav = {mount};
 })();

@@ -110,3 +110,7 @@ html[data-theme="dark"] .margrects i{ mix-blend-mode:screen; }
   -webkit-user-select:text; user-select:text;
 }
 .margedit-foot{ display:flex; gap:var(--gap); justify-content:flex-end; margin-top:var(--gap); }
+/* THE NOTE BAR'S FACES (ASKS #39: it inherited the page's default face for its buttons): the controls are the chrome's
+   UI face, what the person writes and the words the run holds are the book's */
+.marghand{ font-family: var(--chrome-ui-font, var(--ui)); }
+.marghand-say, .margarea{ font-family: var(--serif); }

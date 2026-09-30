@@ -15,12 +15,29 @@
 //   /state       the state object, /state-shaped where surface.js reads it
 //   /run         enqueue a parse (Kaggle key present) or refuse in words
 //   /book?slug=  the shelf's row for that slug, from TTSTVHost.books
-//   everything else -> Promise.reject(new Error("<path> — this phone has no Studio; see Settings ▸ Kaggle"))
+//   everything else -> Promise.reject(new Error("<path> — this phone has no Studio; see Settings ▸ Frank's cloud"))
+//                    (the owner reads "Settings ▸ Kaggle" -- `_owner()`, CLOUD-WORDS)
 //
 // It is NOT a `GET /state` server: it never answers /search, /book (without
 // slug), /log, /stop, /hold, /queue-row, or anything that needs a machine.
 
 const TTSTVWorks = (function () {
+  // ------------------------------------------------------- the cloud's words
+  // CLOUD-WORDS (27 Sep): a person on a phone with no Studio is told about
+  // FRANK'S CLOUD and never a provider. The owner's sentences (Kaggle, the
+  // kernel, kaggle.json) stay behind `owner`, the phone's counterpart of
+  // `/state`.settings.owner (studio/settings.py::Settings.owner): the host
+  // injects `TTSTVHost.owner = true` on Osca's own phone; a stranger's host
+  // never sets it and reads a user's words. The stand-in `/state` this file
+  // answers carries the same flag as `settings.owner`, so surface.js's
+  // `isOwner()` reads one gate on both hosts.
+  function _owner() {
+    return typeof TTSTVHost !== "undefined" && !!TTSTVHost && TTSTVHost.owner === true;
+  }
+  var CLOUD_NOT_UP = "Frank\u2019s cloud is not set up on this phone yet \u2014 Settings \u25B8 Frank\u2019s cloud";
+  function _noStudio(path) {
+    return path + " \u2014 this phone has no Studio; see Settings \u25B8 " + (_owner() ? "Kaggle" : "Frank\u2019s cloud");
+  }
   "use strict";
 
   const KEY = "ttstv.works.jobs";
@@ -235,7 +252,9 @@ const TTSTVWorks = (function () {
           row.kaggle.moved = true;
         } else if (Date.now() - row.kaggle.pushed_at > 600000) {
           // TOOK_GRACE_MS (600 s)
-          _finish(row, "failed", "Kaggle never started this job — open the kernel on kaggle.com");
+          _finish(row, "failed", _owner()
+            ? "Kaggle never started this job — open the kernel on kaggle.com"
+            : "Frank\u2019s cloud never started this job \u2014 try again, or check Settings \u25B8 Frank\u2019s cloud");
           return;
         }
       }
@@ -253,7 +272,9 @@ const TTSTVWorks = (function () {
           _finish(row, "failed", (e && e.why) || String(e));
         });
       } else if (word === "error") {
-        _finish(row, "failed", "Kaggle kernel failed — read the log on kaggle.com");
+        _finish(row, "failed", _owner()
+          ? "Kaggle kernel failed — read the log on kaggle.com"
+          : "Frank\u2019s cloud could not finish this job \u2014 try again, or check Settings \u25B8 Frank\u2019s cloud");
         return;
       } else {
         row.state = "running";
@@ -264,7 +285,9 @@ const TTSTVWorks = (function () {
     }, function (e) {
       var why = (e && e.why) || String(e);
       if (e && e.kind === "no-key") {
-        row.stage = "no Kaggle key on this phone — paste your kaggle.json in Settings ▸ Kaggle";
+        row.stage = _owner()
+          ? "no Kaggle key on this phone — paste your kaggle.json in Settings ▸ Kaggle"
+          : CLOUD_NOT_UP;
         row.state = "failed";
         _save(_rows);
         _emit({ reason: "failed", id: row.id, state: "failed", why: row.stage });
@@ -315,7 +338,8 @@ const TTSTVWorks = (function () {
       importing:  importing,
       reparsing:  [],
       reparses:   [],
-      settings:   { render: { where: _paired() ? "modal" : "kaggle" }, persisted: false, save_error: null },
+      settings:   { render: { where: _paired() ? "modal" : "kaggle" }, persisted: false, save_error: null,
+                    owner: _owner() },   // the phone's `/state`.settings.owner (CLOUD-WORDS)
       voice:      null,
       hold:       null,
       sources:    [],
@@ -406,14 +430,14 @@ const TTSTVWorks = (function () {
       }
       return Promise.reject(new Error("no book " + slug + " on this phone"));
     }
-    return Promise.reject(new Error(path + " — this phone has no Studio; see Settings ▸ Kaggle"));
+    return Promise.reject(new Error(_noStudio(path)));
   }
 
   function post(path, body) {
     if (path === "/run") {
       return _enqueueRun(body);
     }
-    return Promise.reject(new Error(path + " — this phone has no Studio; see Settings ▸ Kaggle"));
+    return Promise.reject(new Error(_noStudio(path)));
   }
 
   // -------------------------------------------------------------- enqueue

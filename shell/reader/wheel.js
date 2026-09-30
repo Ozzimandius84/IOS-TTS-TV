@@ -390,6 +390,10 @@ function mount(opts){
     (items||[]).forEach((it,i)=>{
       const b=document.createElement("button");
       b.className="row"; b.dataset.i=i;
+      /* a row may be NAMED by its caller (READER-LINKS, 26 Sep): the reader's
+         contents rows carry `id="toc-<chapter>"`, the target the in-text
+         heading's href resolves to. An item with no id gets none. */
+      if(it.id) b.id = it.id;
       b.innerHTML='<span class="rt">' + esc(it.t || "—")
         + (it.s ? '<span class="s">'+esc(it.s)+'</span>' : '') + '</span>';
       b._a=0; b._v=0;

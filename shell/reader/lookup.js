@@ -211,6 +211,9 @@ const CSS = [
   '.lookupcard-apple:hover, .lookupcard-apple:focus-visible{ background:var(--rule); outline:none; }',
   '.lookupcard-apple[disabled]{ color:var(--dim); cursor:default; background:transparent; }',
   '.lookupcard-apple .mark{ color:var(--dim); margin-left:6px; }',
+  /* the next step on a word with no entry sits in the same foot, drawn the same way */
+  '.lookupcard-foot .lookupcard-apple + .lookupcard-apple{ border-top:1px solid var(--rule); border-radius:0 0 13px 13px; }',
+  '.lookupcard-foot .lookupcard-apple:not(:last-child){ border-radius:0; }',
   /* A PHONE ON ITS SIDE has 390px of height and the word takes most of it, so
      the card gets the strip and the scroll, the same decision wordpane.css
      takes for the caption at the same breakpoint. */
@@ -259,9 +262,40 @@ function langName(code) {
    that belongs to the book on screen rather than the first one ever made. */
 let current = null;
 const armed = new WeakSet();
+/* THE CURSOR'S WORD, for D on the reading page (FLOAT-HANDS stage 1, 28 Sep;
+   Osca: "look-up with D works only in the one-word view, not in the book").
+   The key map was armed by the view alone -- `.wordview.on` or nothing --
+   so on the page the same key fell through. book-nav.js announces every
+   cursor move on `ttstv:cursor` with the word's TEXT (wordTextAt), so the
+   page's word is one listener away and no second index is cut: on the view
+   the view's word, on the page the cursor's, one door (`current.open`). */
+let cursorWord = "";
 function arm(doc) {
   if (!doc || !doc.addEventListener || armed.has(doc)) return;
   armed.add(doc);
+  /* THE FAN'S DEFINE (FLOAT.md §10, stage 3): the float's Define arrives as
+     reader.html's `ttstv:float-define` on the window; it is D on the page --
+     the cursor's word through the one door. (Before this line the event was
+     dispatched and nobody listened.) */
+  const win = doc.defaultView || (typeof window !== "undefined" ? window : null);
+  if (win && win.addEventListener) win.addEventListener("ttstv:float-define", () => {
+    if (!current) return;
+    const w = bare(cursorWord);
+    if (!w) return;
+    if (current.showing) { current.close(); return; }
+    current.open(w);
+    current.fromPage = true;
+  }, false);
+  doc.addEventListener("ttstv:cursor", (ev) => {
+    const d = ev && ev.detail;
+    const t = d && typeof d.text === "string" ? d.text : "";
+    if (t !== cursorWord) {
+      cursorWord = t;
+      /* the card is about ONE word: on the page the cursor moving on closes
+         it, as the view's observer does on the view */
+      if (current && current.showing && current.fromPage) current.close();
+    }
+  }, false);
   doc.addEventListener("click", (ev) => {
     if (current && current.press) current.press(ev);
   }, false);
@@ -292,12 +326,13 @@ function arm(doc) {
       if (tag === "INPUT" || tag === "TEXTAREA" || ae.isContentEditable) return;
     }
     var view = doc.querySelector && doc.querySelector(".wordview");
-    if (!view || !view.classList.contains("on")) return;
-    var wEl = view.querySelector(".wordview-word");
-    var w = bare((wEl && wEl.textContent) || "");
+    var onView = !!(view && view.classList.contains("on"));
+    var wEl = onView ? view.querySelector(".wordview-word") : null;
+    var w = onView ? bare((wEl && wEl.textContent) || "") : bare(cursorWord);
     if (!w) return;
     if (current.showing) { current.close(); ev.stopPropagation(); ev.preventDefault(); return; }
     current.open(w);
+    current.fromPage = !onView;
     ev.stopPropagation();
     ev.preventDefault();
   }, false);
@@ -480,7 +515,7 @@ function mount(o) {
   const doc = (typeof document !== "undefined") ? document : null;
   let card = null, wordEl = null, whoseEl = null, posEl = null, phonEl = null,
       formEl = null, glossEl = null, etymEl = null, relEl = null, noteEl = null,
-      footEl = null, appleBtn = null;
+      footEl = null, appleBtn = null, webBtn = null;
   let showing = null;           // the word the card is about, or null
   let poll = null;              // the one timer, never a stack
   let watching = null;          // the MutationObserver on the view
@@ -508,6 +543,24 @@ function mount(o) {
     appleBtn.type = "button";
     appleBtn.className = "lookupcard-apple";
     footEl.appendChild(appleBtn);
+    /* A WORD WITH NO ENTRY GETS A NEXT STEP, NOT AN EXCUSE (ASKS #187, the web Stranger: "Word look-up
+       on the web talks about iOS", on "candidates", "hurricane"). One quiet line says Frank has nothing
+       yet, and the foot offers the web: the host's own search where there is one (the app's search
+       window), a new tab on the web edition. Nothing about what any OS has or lacks. */
+    webBtn = doc.createElement("button");
+    webBtn.type = "button";
+    webBtn.className = "lookupcard-apple lookupcard-web";
+    webBtn.hidden = true;
+    footEl.appendChild(webBtn);
+    webBtn.addEventListener("click", (ev) => {
+      if (ev && ev.stopPropagation) ev.stopPropagation();
+      const q = "define " + (showing || "");
+      const H = window.TTSTVHost;
+      try {
+        if (H && typeof H.search === "function") { H.search(q); return; }
+      } catch (_) {}
+      try { window.open("https://duckduckgo.com/?q=" + encodeURIComponent(q), "_blank", "noopener"); } catch (_) {}
+    });
     card.append(whoseEl, head, formEl, glossEl, etymEl, relEl, noteEl, footEl);
     /* THE PRESS ON THE CONTROL IS THE SECOND PRESS AND THE LAST ONE. It is
        bound here, on the button, rather than read out of the document
@@ -595,17 +648,24 @@ function mount(o) {
       /* A WORD NEITHER HAS IS A SENTENCE, and it is a different sentence from
          "not yet". Both are ours and neither pretends to be an answer. */
       setText(noteEl, done
-        ? (appleOK
-            ? ("No entry for “" + text + "” in Frank's " + (name || lang) + " dictionary.")
-            : ("No entry for “" + text + "” in Frank's " + (name || lang) +
-               " dictionary, and iOS has no dictionary for " + (name || lang) + "."))
+        ? ("Frank's " + (name || lang) + " dictionary has nothing for “" + text + "” yet.")
         : "Looking it up…");
     }
 
     /* THE FOOT. Absent until the host has answered, absent for good where the
        answer is no -- never a dimmed control that leads to "No Content
-       Found", which is the dead press the whole shape exists to remove. */
-    footEl.hidden = (appleOK !== true);
+       Found", which is the dead press the whole shape exists to remove.
+       A word with no entry gets the web instead (#187), on every host. */
+    const webOK = !e && done;
+    webBtn.hidden = !webOK;
+    if (webOK) {
+      webBtn.textContent = "";
+      webBtn.append(doc.createTextNode("Search the web for “" + text + "”"), (() => {
+        const s = doc.createElement("span"); s.className = "mark"; s.textContent = "▸"; return s;
+      })());
+    }
+    appleBtn.hidden = (appleOK !== true);
+    footEl.hidden = (appleOK !== true) && !webOK;
     if (appleOK === true) {
       appleBtn.textContent = "";
       appleBtn.append(doc.createTextNode("Apple"), (() => {
@@ -677,7 +737,7 @@ function mount(o) {
   }
 
   /* ---- open / close. Two clean states and the second one is "not there". */
-  function open(text, lg) {
+  function open(text, lg, opts) {
     const w = bare(text);
     if (!w) return null;
     build();
@@ -686,7 +746,9 @@ function mount(o) {
     card.hidden = false;
     draw();
     startPoll(w);
-    watch();
+    /* a card opened ON THE PAGE (ASKS #144, a press on a word) is not the view's: the view's watcher would close it
+       at once, the view being off. The cursor moving on closes it instead (fromPage, above), and Esc, and a press. */
+    if (!(opts && opts.page)) watch();
     return w;
   }
   function close() {
@@ -732,6 +794,7 @@ function mount(o) {
 
   const handle = {
     entry, load, settled, open, close, press, draw,
+    fromPage: false,        /* D on the reading page: the cursor's word, not the view's */
     get loaded() { return !!dict || doorAnswered; },
     get viaPack() { return viaDoor; },
     get failed() { return failed; },

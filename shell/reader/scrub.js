@@ -61,7 +61,7 @@
        takes a bigger shift than the desk does -- one number each, decided by
        the same `phoneAt` test the label sizes already use. */
     shift:       6,    // px the rail moves right, on the desk
-    shiftPhone: 10,    // px it moves right at or below `phoneAt`
+    shiftPhone:  6,    // px it moves right at or below `phoneAt` (10 -> 6, 29 Sep: the rail further in, the margins 32 and even)
     top:        10,    // vh of empty above the rail
     bottom:     10,    // vh below it
     // the capsules
@@ -107,6 +107,23 @@
     hold:       100,      // ms it stays up after a scroll
     jump:       true,      // a capsule takes you to its chapter
     drag:       true,      // and dragging the rail scrubs the book
+    /* SCRUBBING SPEED (ASKS #170 #171, 30 Sep). Osca: "if you click on the bar,
+       THEN move further away from it horizontally, the scrub slows down, so
+       it's more specific". iOS's own (Music, Podcasts): once a drag has
+       started, the hand's distance OUT from the rail picks how much book a
+       pixel of travel along it is worth. Three edges, px from the rail's own
+       line: inside the first it is the whole book under the rail (1); past it
+       half, past the second a quarter, past the third fine (1/8). A change of
+       speed RE-BASES the drag where it stands, so the page never leaps --
+       going back toward the rail brings the speed back, not the old place.
+       The same numbers for a mouse and for a finger, desk and phone. */
+    slowAt:     [40, 90, 150],   // px out from the rail: half, quarter, fine
+    /* THE EDGE IS THE RAIL'S (ASKS #178, Osca 30 Sep: "when I'm in a reader like this I should just be able to
+       tap and drag from the right side of the screen to interact with the scrub bar"). The right `edge` px of
+       the screen take a press for the rail on every host -- the rail's own band on the desk, the thumb's strip
+       on the phone -- and they keep taking it while the rail is away (the phone's bars go as you read,
+       html[data-away]): the rail comes up under the finger once the press moves, at the 12b9b07 speeds. */
+    edge:       24,    // px from the screen's right edge that always belong to the rail
   };
 
   function clamp(v,a,b){ return v<a?a:(v>b?b:v); }
@@ -116,7 +133,7 @@
     const pane = o.pane, col = o.column, host = o.host;
     if(!pane || !col || !host) return null;
     const cfg = Object.assign({}, DEFAULTS, o.cfg || {});
-    let segs = [], hideT = null, dragging = false, track = null;
+    let segs = [], hideT = null, dragging = false, track = null, speedEl = null;
     /* the book's own chapter list, kept from build() for chapterName(), and
        which capsule the last paint filled (-1 = nothing written yet, which is
        how a fresh build gets its one full pass -- see paint) */
@@ -141,6 +158,11 @@
       track = document.createElement("b");
       track.className = "track";
       host.appendChild(track);
+      /* the speed, said quietly while it is below full (see SCRUBBING SPEED) */
+      speedEl = document.createElement("em");
+      speedEl.className = "speed";
+      speedEl.setAttribute("aria-live", "polite");
+      host.appendChild(speedEl);
       /* THE TITLE PAGE IS NOT A CHAPTER, AND SINCE 9 Sep IT IS NOT A CAPSULE
          (Osca: "look at the radius AT THE START -- it's different to all
          others... the blue radius BEGINNING is wrong").
@@ -268,7 +290,7 @@
         lab.textContent = chapterName(ch, i);
         g.append(bar, lab);
         g.onclick = e => {
-          if(!cfg.jump || dragging) return;
+          if(!cfg.jump || dragging || hiddenDown) return;
           e.stopPropagation();
           goTo(ch);
         };
@@ -529,9 +551,11 @@
        near. Now the y is read as a fraction OF THE BOOK, the capsule holding
        that fraction is found, and the scroll goes to that far into that
        chapter. Same units in both directions; the thumb lands where it looks. */
-    function seek(clientY){
+    function fracAt(clientY){
       const r = host.getBoundingClientRect();
-      const f = clamp((clientY - r.top) / Math.max(1, r.height), 0, 1);
+      return clamp((clientY - r.top) / Math.max(1, r.height), 0, 1);
+    }
+    function seekF(f){
       if(!segs.length){
         if(offPage()) return;
         pane.scrollTop = f * Math.max(1, pane.scrollHeight - pane.clientHeight);
@@ -579,23 +603,113 @@
        nothing happens until the pointer has moved far enough to mean it, and
        if it never does, the capsule's own click takes you to its chapter. */
     const DRAG_SLOP = 4;                 // px before a press becomes a drag
-    let downY = null, downId = null;
+    let downY = null, downX = null, downId = null;
+    /* A PRESS THAT BEGAN ON A RAIL NOBODY COULD SEE is a grab, never a click: an invisible capsule must not
+       take a tap to its chapter (#178). */
+    let hiddenDown = false;
+    function railHidden(){
+      try { return parseFloat(getComputedStyle(host).opacity) < 0.05; } catch(_) { return false; }
+    }
+
+    /* ---- SCRUBBING SPEED (ASKS #170 #171). The drag is RELATIVE from its
+       first move: `base` is the book fraction and `baseY` the pointer's y when
+       the current speed began, and the place is base + travel x speed. At full
+       speed from the start that is exactly the old absolute drag (base is the
+       rail's y where the drag began), so nothing changes for a hand that stays
+       on the rail. When the distance out from the rail crosses an edge of
+       `slowAt`, the place is taken where it stands and a new base starts there:
+       the transition moves the book by nothing, whichever way it is crossed.
+       A place held against either end of the book re-bases too, so turning
+       back answers at once rather than after the overshoot is paid back. */
+    let base = 0, baseY = 0, speed = 1, scrubF = 0;
+    const SPEEDS = [1, 1/2, 1/4, 1/8];
+    const SAY = ["", "Half-speed scrubbing", "Quarter-speed scrubbing", "Fine scrubbing"];
+    function railX(){
+      const r = host.getBoundingClientRect();
+      return r.right - Math.max(1, cfg.awakeWidth) / 2;   // the capsules' own line
+    }
+    /* where "out" is measured from: the rail, or -- for a press that began in the strip RIGHT of it, the edge zone
+       (#178) -- the press itself, so a drag from the glass's edge starts at full speed wherever the rail stands
+       (62 px in from the edge on the phone on its side) and slows as the finger comes LEFT, away from the edge. */
+    let refX = null;
+    function bandAt(clientX){
+      const d = Math.abs(clientX - (refX != null ? refX : railX())), e = cfg.slowAt || [];
+      let b = 0;
+      while(b < e.length && b < SPEEDS.length - 1 && d >= e[b]) b++;
+      return b;
+    }
+    function sayBand(b){
+      if(!speedEl) return;
+      host.setAttribute("data-speed", String(SPEEDS[b]));
+      speedEl.textContent = SAY[b];
+      host.classList.toggle("slowed", b > 0);
+      speedEl.style.top = (scrubF * 100).toFixed(3) + "%";
+    }
+    function scrubTo(clientX, clientY){
+      const r = host.getBoundingClientRect(), H = Math.max(1, r.height);
+      // this move is still at the speed it was made at...
+      let f = base + (clientY - baseY) / H * speed;
+      const held = f < 0 || f > 1;
+      f = clamp(f, 0, 1);
+      // ...and the new speed, if there is one, starts from where it landed
+      const b = bandAt(clientX);
+      if(SPEEDS[b] !== speed || held){ speed = SPEEDS[b]; base = f; baseY = clientY; }
+      scrubF = f;
+      seekF(f);
+      sayBand(b);
+    }
+    function scrubEnd(){
+      host.classList.remove("slowed");
+      host.removeAttribute("data-speed");
+      if(speedEl) speedEl.textContent = "";
+      speed = 1;
+    }
+
     host.addEventListener("pointerdown", e => {
+      /* inside one word the rail is not the page's (the view has its own scrub, .wordsubrail) */
+      if(offPage()){ downY = null; return; }
+      hiddenDown = railHidden();
       if(!cfg.drag){ wake(); return; }
-      downY = e.clientY; downId = e.pointerId; dragging = false; wake();
+      downY = e.clientY; downX = e.clientX; downId = e.pointerId; dragging = false; wake();
     });
     host.addEventListener("pointermove", e => {
       wake();
       if(downY == null) return;
-      if(!dragging && Math.abs(e.clientY - downY) > DRAG_SLOP){
-        dragging = true;
-        try{ host.setPointerCapture(downId); }catch(_){}
+      if(!dragging){
+        const dy = Math.abs(e.clientY - downY), dx = Math.abs(e.clientX - downX);
+        /* a press that goes SIDEWAYS first is not the rail's: on the phone
+           it is the reading axis's swipe (book-nav.js), and it is left to it. */
+        if(dx > DRAG_SLOP && dx > dy){ downY = null; return; }
+        if(dy > DRAG_SLOP){
+          dragging = true;
+          host.classList.add("held");
+          try{ host.setPointerCapture(downId); }catch(_){}
+          // the drag begins where the old absolute drag would have put it
+          base = scrubF = fracAt(downY); baseY = downY; speed = 1;
+          refX = Math.max(railX(), downX);
+        }
       }
-      if(dragging) seek(e.clientY);
+      if(dragging) scrubTo(e.clientX, e.clientY);
     });
+    /* ...AND ON THE PHONE THE FINGER IS THE RAIL'S ONCE IT IS SCRUBBING. The
+       reading axis listens for touches on the window and claims any that go
+       sideways past 10 px -- which a finger moving OUT to slow the scrub
+       does. Once the drag is live the touch stops here. Before it is live
+       nothing is stopped, so a sideways swipe from the rail is still the axis's. */
+    /* THE RAIL IS NOT READING (30 Sep, found proving #171). On the phone a
+       forward scroll by a hand sets html[data-away] (reader.html, ASKS #81)
+       and shell.css then takes the rail away with the bars -- opacity 0 and
+       no presses. A scrub forward IS a forward scroll by a hand, so the rail
+       went out from under the finger holding it, and the next press on it
+       landed on the page. `held` keeps it (scrub.css): from the start of a
+       drag until a hand next moves the PAGE, which is reading again. */
+    const own = e => { if(dragging) e.stopPropagation(); };
+    host.addEventListener("touchmove", own, { passive:true });
+    host.addEventListener("touchend", own, { passive:true });
     const release = e => {
       if(dragging){ try{ host.releasePointerCapture(downId); }catch(_){} }
-      downY = null; downId = null;
+      scrubEnd();
+      downY = null; downX = null; downId = null; refX = null;
       // let the click through only if this was a click
       setTimeout(() => { dragging = false; wake(); }, 0);
     };
@@ -623,13 +737,37 @@
        is up because a hand is moving, so the hand is what it listens to. Both
        are passive -- nothing here may sit in front of the reading scroll -- and
        neither reads or writes layout. */
-    const handMoved = () => { lastMoved = now(); wake(); };
+    /* ...and a hand on the PAGE is also what lets the phone's rail go again
+       after a scrub (`held`, see "THE RAIL IS NOT READING" below). The drag's
+       own touches never get here -- they stop at the host once it is live. */
+    const handMoved = () => { lastMoved = now(); host.classList.remove("held"); wake(); };
     addEventListener("wheel", handMoved, { passive:true });
     addEventListener("touchmove", handMoved, { passive:true });
-    addEventListener("resize", () => { build(); apply(); });
+    addEventListener("resize", () => { build(); apply(); requestAnimationFrame(fitEdge); });
 
     /* ---- THE SETTINGS, as custom properties on the host, so a bench moves one
        number and nothing here has to know a bench exists. */
+    /* THE EDGE ZONE, measured off the rail's real box (ASKS #178). Right of the rail the strip runs all the way to
+       the glass, whoever stood the rail in from it (the phone on its side stands it inside the 59 px safe inset:
+       71 px of screen right of it took no press); where the rail stands nearer the edge than `edge`, the strip also
+       reaches LEFT of it. Re-measured whenever the root's attributes change (data-land, data-phone, the theme's
+       style) and on resize -- the landscape rule moves the rail AFTER the first apply(), and a width measured then
+       was 20 px where 71 were owed. */
+    function fitEdge(){
+      try {
+        const hr = host.getBoundingClientRect();
+        if(!(hr.width > 0)) return;
+        const s = host.style, inset = parseFloat(s.getPropertyValue("--sc-inset")) || 0;
+        const out = Math.max(inset, innerWidth - hr.right);
+        const reach = Math.max(0, cfg.edge - (innerWidth - hr.left));
+        if(s.getPropertyValue("--sc-out") !== px(out)) s.setProperty("--sc-out", px(out));
+        if(s.getPropertyValue("--sc-reach") !== px(reach)) s.setProperty("--sc-reach", px(reach));
+      } catch(_) {}
+    }
+    try {
+      new MutationObserver(() => requestAnimationFrame(fitEdge))
+        .observe(document.documentElement, { attributes: true, attributeFilter: ["data-land", "data-phone", "data-rail", "class", "style"] });
+    } catch(_) {}
     function apply(){
       const s = host.style;
       /* THE PHONE TEST COMES FIRST NOW -- the shift needs it (14 Sep). Decided
@@ -640,6 +778,10 @@
       const shift = phone ? cfg.shiftPhone : cfg.shift;
       const inset = Math.max(0, cfg.inset - shift);
       s.setProperty("--sc-inset",  px(inset));
+      /* the strip out to the edge is `inset` wide already; where the rail stands nearer the edge than `edge`
+         (the phone on its side, reader.html's landscape rule) the strip also reaches LEFT of the rail, so the
+         zone is never narrower than `edge`. Measured off the rail's real box, whoever placed it. */
+      fitEdge();
       /* ---- AND THE PAGE'S MARGIN IS DERIVED FROM IT, which is the whole of
          Osca's sentence: "It's a relationship with the size on the scrub bar."
          `--sc-band` is the width the rail actually occupies off the right edge
@@ -680,7 +822,7 @@
     apply();
 
     return {
-      render(book){ if(book) o.book = book; build(); apply(); },
+      render(book){ if(book) o.book = book; build(); apply(); requestAnimationFrame(fitEdge); },
       paint, wake, apply, progress,
       set(k, v){ cfg[k] = v; apply();
         if(k === "gap" || k === "minSeg") build();

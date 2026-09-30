@@ -1,8 +1,9 @@
 /* THE SETTINGS FORM -- this surface's own half, and the only page that loads
  * it is `settings/settings.html`.
  *
- * The tab strip and the six tabs, every field in them, the Cloud GPU cards
- * (Kaggle and Modal), the Models section, the Languages tab, the Hotkeys
+ * The tab strip and the six tabs, every field in them, the Cloud tab (Frank's
+ * cloud -- one section a user reads; the Kaggle and Modal cards under it are
+ * the owner's, CLOUD-HIDE 27 Sep), the Models section, the Languages tab, the Hotkeys
  * tab, this window's own CSS, and the measure that makes the window fit the
  * open tab.  Cut out of `reader/settings.js` by module-split Stage 4, 5 Sep,
  * which found 203 KB doing two jobs: this one, and the application-wide
@@ -747,12 +748,19 @@
         + ' stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>'
         + '<path d="M6.4 2.6H20v19.2H6.4A2.4 2.4 0 0 1 4 19.4V5A2.4 2.4 0 0 1 6.4 2.6z"'
         + ' fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>' },
-    /* ONE TAB, TWO CARDS (Osca, 2 Sep): *"once it's connected in the
-     * settings/kaggle tab, which should be renamed, simply like cloud GPU
-     * (settings tab) -- and we just add Modal, like we've added Kaggle, put
-     * your key in etc."* `buildCloudPanel` is the two builders and nothing
-     * else; the cards do not know about each other. */
-    { id: "cloud", label: "Cloud GPU", sub: "where renders run",
+    /* FRANK'S CLOUD (CLOUD-HIDE, wave 10 round 4 -- Osca, 27 Sep: *"we will
+     * remove them from the user experience. It will just be simpler for the
+     * user, they can do everything but don't know where exactly things get
+     * done, that's our cloud backend"*). The tab was "Cloud GPU", two
+     * provider cards (2 Sep: *"we just add Modal, like we've added Kaggle"*);
+     * it is now ONE section a user reads -- signed in as, credits, rendering
+     * now, done -- and the two provider cards are the OWNER's build tools,
+     * drawn under it only when `GET /cloud` says `owner` (0 nodes otherwise).
+     * The id stays `cloud`: it is what `TAB_KEY` remembers and the key
+     * `panels` files it under (test_cloud_gpu's own rule). The tab reads
+     * "Cloud" -- the strip's tabs are 62px and "Frank's cloud" is a second
+     * line there; the head inside the panel says it in full. */
+    { id: "cloud", label: "Cloud", sub: "Frank\u2019s cloud \u00b7 where renders run",
       cards: [], build: buildCloudPanel, needsStudio: true,
       icon: '<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">'
         + '<path d="M17.4 19a4.5 4.5 0 0 0 .9-8.9A7 7 0 0 0 5 9.2 4 4 0 0 0 6 17h11.4z"'
@@ -904,6 +912,60 @@
     return e;
   }
 
+  /* ================================= THE PROVIDER WINDOW, from the card
+   * (MODAL-RENDER, 28 Sep). `providerHost()` is the shell's window API or
+   * null (a plain browser, the bench); `providerRun` is the one press: open
+   * the window, then poll studio's cheap stamp (`/provider-stamp/<id>`, the
+   * key files' mtimes and the window's last catch) once a second, and re-ask
+   * the slow route only when a stamp moves -- so the card flips on its own,
+   * with no second press. It stops on success, on a catch the window could
+   * not use (its sentence), when the window is closed with nothing caught,
+   * or after fifteen minutes. `h` carries the card's own words and asks. */
+  var PROVIDER_POLL_MS = 1000, PROVIDER_LIFE_MS = 15 * 60 * 1000;
+  function providerHost() {
+    var h = global.TTSTVHost;
+    return (h && typeof h.providerOpen === "function") ? h : null;
+  }
+  function stampKey(st) {
+    return JSON.stringify((st && st.files) || {});
+  }
+  function providerRun(ctx, host, id, url, h) {
+    var t0 = Date.now(), first = null, closedPolls = 0;
+    return ctx.getJSON("/provider-stamp/" + id).then(function (st) {
+      first = st;
+      return Promise.resolve(host.providerOpen(id, url));
+    }).then(function () {
+      h.say(h.opened);
+      return poll();
+    }, function (e) {
+      h.say("Frank could not open the window: " + String((e && e.message) || e) + ".");
+    });
+    function poll() {
+      if (Date.now() - t0 > PROVIDER_LIFE_MS) { h.say("Nothing was caught in fifteen minutes — press again when you are ready."); return null; }
+      return ctx.after(PROVIDER_POLL_MS).then(function () {
+        return ctx.getJSON("/provider-stamp/" + id);
+      }).then(function (st) {
+        var last = st && st.last, since = (t0 / 1000) - 2;
+        if (last && last.ok === false && Number(last.at) >= since && !(first && first.last && first.last.at === last.at)) {
+          h.say("Frank could not use what came back: " + (last.what || "no reason given") + ".");
+          return null;
+        }
+        if (st && stampKey(st) !== stampKey(first)) {
+          h.say(h.caught);
+          return h.ask().then(function (d) {
+            h.say(h.done(d) ? h.ok(d) : h.refused(d));
+            return d;
+          });
+        }
+        return Promise.resolve(host.providerIsOpen ? host.providerIsOpen() : true).then(function (open) {
+          closedPolls = open === false ? closedPolls + 1 : 0;
+          if (closedPolls >= 3) { h.say("The window was closed before anything was caught."); return null; }
+          return poll();
+        });
+      });
+    }
+  }
+
   /* Pure, and the reason the panel's wording is testable without a studio:
    * studio's `GET /kaggle` document in, the four lines the panel says out. */
   function kaggleLines(d) {
@@ -912,7 +974,7 @@
     var who = d.connected
       ? ("Connected as " + (d.username || "an unnamed account") + ".")
       : (d.credentials_present
-          ? "A key is on this Mac but Kaggle did not accept it."
+          ? (d.rejected ? "Kaggle refused the key on this Mac." : "A key is on this Mac but Kaggle did not accept it.")
           : "Not connected.");
     var quota = (q.hours_left == null)
       ? "Quota unknown."
@@ -946,9 +1008,15 @@
      * said where there is no live number to say instead -- a connected account
      * has `quota` above, which is the same fact measured rather than quoted. */
     var door = d.door || null;
-    return { who: who, quota: quota, slots: slots,
+    /* THE DEAD KEY'S REASON (MODAL-RENDER, 28 Sep): studio's one sentence --
+     * 401 = replaced or revoked, a file that is not JSON names its line --
+     * and it ends in the press that fixes it. */
+    var rejected = (d.rejected && d.rejected.why) ? String(d.rejected.why) : "";
+    return { who: who, quota: quota, slots: slots, rejected: rejected,
              quotaShort: quotaShort, slotsShort: slotsShort,
-             where: (d.settings && d.settings.render && d.settings.render.where) || "here",
+             where: (d.destinations && d.destinations["default"])
+               || (d.settings && d.settings.render && d.settings.render.where) || "local",
+             whereWhy: (d.destinations && d.destinations.default_reason) || "",
              canType: !!d.accepts_credentials,
              door: door,
              settingsUrl: door && door.settings_url ? door.settings_url : null,
@@ -1049,7 +1117,7 @@
    * button. It is the reader's word for a fact studio states (`kaggle_only`),
    * the same way "on Kaggle" is the reader's word for `on_kaggle` -- no
    * engine is named here and none is decided here. */
-  var KAGGLE_ONLY_LINE = "runs on Kaggle only";
+  var KAGGLE_ONLY_LINE = "runs on Frank\u2019s cloud only";
 
   /* WHAT THE RIGHT COLUMN SAYS WHEN THERE IS NO BUTTON (Osca, 1 Sep: "the
    * right column tells the truth"). "Not added" was one phrase doing two
@@ -1064,7 +1132,7 @@
    *     and not the door.
    * Neither string names an engine: which row gets which is studio's
    * `kaggle_only` / `installable`, exactly as before. */
-  var NO_INSTALL_LINE = "No install \u00b7 runs on Kaggle";
+  var NO_INSTALL_LINE = "No install \u00b7 runs on Frank\u2019s cloud";
   var BYO_WEIGHTS_LINE = "Not added \u00b7 bring your own weights";
 
   function modelRows(d, engines) {
@@ -1140,7 +1208,7 @@
       canInstall = state.canInstall;
       list.innerHTML = "";
       note.textContent = state.canInstall
-        ? "Downloading a model lets you render on this Mac. Kaggle works without any of them."
+        ? "Downloading a model lets you render on this Mac. Frank\u2019s cloud works without any of them."
         : (state.rows.length
             ? "This studio lists the voices but cannot install one yet, so there is nothing to download from here."
             : TTSTVHost.WHY_STUDIO);
@@ -1154,7 +1222,7 @@
         // the person at the window is that it is there to choose on Kaggle
         // without installing anything (CLAUDE.md, the inversion) -- "shipped"
         // is our word for our decision, not a fact about their machine.
-        if (m.onKaggle) top.appendChild(kEl(doc, "span", "kag-chip", "on Kaggle"));
+        if (m.onKaggle) top.appendChild(kEl(doc, "span", "kag-chip", "on Frank\u2019s cloud"));
         left.appendChild(top);
         var line = [];
         if (m.purpose) line.push(m.purpose);
@@ -2208,7 +2276,21 @@
       phone ? "Renders run on Kaggle." : "Renders run on Kaggle unless you install a model on this Mac."));
     // ...and what this lane IS, beside the card that connects it (2 Sep)
     whoL.appendChild(kEl(doc, "small", "kag-why-here kag-lane", KAGGLE_LANE_LINE));
+    var deadLine = kEl(doc, "small", "kag-why-here kag-dead", "");
+    deadLine.hidden = true;
+    whoL.appendChild(deadLine);
     var acts = kEl(doc, "div", "set-c kag-row kag-acts");
+    /* GET A NEW KEY -- THE PROVIDER WINDOW (MODAL-RENDER, 28 Sep; Osca: "it
+     * can't fix the problem"). One press opens kaggle.com/settings in a Frank
+     * window (desktop/src-tauri/src/providerwin.rs, cloud/providers/kaggle.js);
+     * the person makes a key there, Frank catches it and writes it, and this
+     * card flips to Connected with no second press. Drawn only where the host
+     * has the window -- in a plain browser the Connect door below stays. */
+    var newKeyBtn = doc.createElement("button");
+    newKeyBtn.type = "button"; newKeyBtn.className = "kag-btn kag-primary kag-newkey";
+    newKeyBtn.textContent = "Get a new key";
+    newKeyBtn.hidden = true;
+    acts.appendChild(newKeyBtn);
     var connectBtn = doc.createElement("button");
     connectBtn.type = "button"; connectBtn.className = "kag-btn"; connectBtn.textContent = "Connect…";
     var revokeBtn = doc.createElement("button");
@@ -2266,7 +2348,11 @@
     var whereOpts = kEl(doc, "div", "set-c kag-opts set-seg");
     whereOpts.setAttribute("role", "group");
     var whereBtns = {};
-    [["here", "This Mac"], ["kaggle", "Kaggle"]].forEach(function (o) {
+    /* This Mac · Kaggle · Modal (MODAL-RENDER, 28 Sep). This card is the
+     * OWNER's (buildCloudPanel builds it only for him), so Modal -- his own
+     * workspace -- is the third lane here and on no user's page. `local` is
+     * the value studio stores (settings.py LOCAL); `here` was never one. */
+    [["local", "This Mac"], ["kaggle", "Kaggle"], ["modal", "Modal"]].forEach(function (o) {
       var b = doc.createElement("button");
       b.type = "button"; b.dataset.where = o[0];
       b.setAttribute("aria-pressed", "false");
@@ -2274,6 +2360,10 @@
       whereOpts.appendChild(b); whereBtns[o[0]] = b;
     });
     whereRow.appendChild(whereOpts);
+    // WHICH ONE A RUN WILL USE, in one plain line (studio's default_reason)
+    var whereSay = kEl(doc, "small", "kag-why-here kag-wheresay", "");
+    whereSay.hidden = true;
+    whereL.appendChild(whereSay);
     // the row exists either way (paint() writes to it); on a phone it is
     // never on the card, because there is no "here" for a render to run
     if (!phone) card.appendChild(whereRow);
@@ -2397,6 +2487,16 @@
       // the dot is CSS's, off the row's own class -- green when studio says
       // connected, grey when it does not, and never a claim of its own
       head.classList.toggle("kag-on", !!(d && d.connected));
+      deadLine.textContent = L.rejected;
+      deadLine.hidden = !L.rejected;
+      var host = providerHost();
+      newKeyBtn.hidden = !host || !!(d && d.connected);
+      newKeyBtn.textContent = (d && d.credentials_present) ? "Get a new key" : "Get a key";
+      var mdest = d && d.destinations && d.destinations.modal;
+      whereBtns.modal.disabled = !(mdest && mdest.ok);
+      whereBtns.modal.title = (mdest && !mdest.ok) ? (mdest.short || mdest.why || "") : "";
+      whereSay.textContent = L.whereWhy;
+      whereSay.hidden = !L.whereWhy;
       quota.textContent = L.quotaShort;
       quotaLong.textContent = L.quota;
       quotaRow.title = L.quota;
@@ -2470,7 +2570,7 @@
       say.textContent = "Saving…";
       ctx.postJSON(KAGGLE.SETTINGS, { render: { where: b.dataset.where } }).then(function (r) {
         say.textContent = r.ok
-          ? ("Renders start on " + (b.dataset.where === "kaggle" ? "Kaggle" : "this Mac") + ".")
+          ? ("Renders start on " + ({ kaggle: "Kaggle", modal: "Modal" }[b.dataset.where] || "this Mac") + ".")
           : ("studio would not take it: " + r.why + ".");
         return ask();
       });
@@ -2607,6 +2707,23 @@
       });
     }
 
+    newKeyBtn.addEventListener("click", function () {
+      var host = providerHost();
+      if (!host) return;
+      newKeyBtn.disabled = true;
+      say.textContent = "Opening Kaggle in a Frank window…";
+      providerRun(ctx, host, "kaggle", null, {
+        say: function (t) { say.textContent = t; },
+        ask: function () { return ctx.getJSON(KAGGLE.GET + "?force=1").then(function (d) { if (d) paint(d); return d; }); },
+        done: function (d) { return !!(d && d.connected); },
+        opened: "Kaggle is open in a Frank window. Sign in if it asks, then press "
+          + "“Create Legacy API Key” (or “Generate New Token”) under API — Frank does the rest.",
+        caught: "Key caught — checking it with Kaggle…",
+        ok: function (d) { return "Connected as " + (d.username || "your account") + "."; },
+        refused: function (d) { return (d && d.rejected && d.rejected.why) || "Kaggle still refuses the key."; },
+      }).then(function () { newKeyBtn.disabled = false; });
+    });
+
     revokeBtn.addEventListener("click", function () {
       say.textContent = "Disconnecting…";
       ctx.postJSON(KAGGLE.REVOKE, {}).then(function (r) {
@@ -2616,7 +2733,7 @@
     });
 
     ask();
-    return { paint: paint, ask: ask, lines: kaggleLines,
+    return { paint: paint, ask: ask, lines: kaggleLines, newKey: newKeyBtn, deadLine: deadLine,
              get credsOpen() { return credsOpen; },
              els: { head: head, quota: quota, slots: slots, creds: creds,
                     quotaRow: quotaRow, slotRow: slotRow,
@@ -2676,6 +2793,16 @@
     whoL.appendChild(head);
     whoL.appendChild(kEl(doc, "small", "kag-why-here kag-lane", MODAL_LANE_LINE));
     var acts = kEl(doc, "div", "set-c kag-row kag-acts");
+    /* SIGN IN WITH MODAL -- the same provider window (MODAL-RENDER, 28 Sep).
+     * Modal's sign-in is a token flow: studio starts `modal token new` with
+     * the browser suppressed (`POST /modal-token-flow`), the window opens the
+     * one-time page it prints, the person presses Authorize, and the CLI
+     * writes ~/.modal.toml itself -- which /provider-stamp/modal sees. */
+    var signInBtn = doc.createElement("button");
+    signInBtn.type = "button"; signInBtn.className = "kag-btn kag-primary mod-signin";
+    signInBtn.textContent = "Sign in with Modal";
+    signInBtn.hidden = true;
+    acts.appendChild(signInBtn);
     var revokeBtn = doc.createElement("button");
     revokeBtn.type = "button";
     revokeBtn.className = "kag-btn danger";
@@ -2808,6 +2935,7 @@
       doorSayEl.textContent = phone ? L.phoneLine : L.doorLine;
       revokeBtn.disabled = !L.connected;
       revokeBtn.title = revokeBtn.disabled ? "Nothing is connected" : "";
+      signInBtn.hidden = phone || !providerHost() || L.connected || !L.installed;
       note.hidden = !L.file;
       note.textContent = L.file
         ? ("Your id and secret are written once to " + L.file
@@ -2838,6 +2966,29 @@
 
     /* READ AND CLEAR IN ONE STATEMENT -- card one's `take`, and its reason. */
     function take(input) { var v = input.value; input.value = ""; return v; }
+
+    signInBtn.addEventListener("click", function () {
+      var host = providerHost();
+      if (!host) return;
+      signInBtn.disabled = true;
+      say.textContent = "Asking Modal for a sign-in page…";
+      ctx.postJSON("/modal-token-flow", {}).then(function (r) {
+        var url = r && r.body && r.body.url;
+        if (!r.ok || !url) {
+          say.textContent = "Modal gave no sign-in page: " + ((r && r.why) || "no reason given") + ".";
+          return null;
+        }
+        return providerRun(ctx, host, "modal", url, {
+          say: function (t) { say.textContent = t; },
+          ask: function () { return ask(true); },
+          done: function (d) { return !!(d && d.connected); },
+          opened: "Modal is open in a Frank window. Sign in if it asks, then press Authorize — Frank does the rest.",
+          caught: "Signed in — checking with Modal…",
+          ok: function (d) { return d.workspace ? ("Connected to " + d.workspace + ".") : "Connected."; },
+          refused: function () { return "Modal wrote a sign-in, but it does not answer yet — press again."; },
+        });
+      }).then(function () { signInBtn.disabled = false; });
+    });
 
     saveBtn.addEventListener("click", function () {
       var id = take(idIn), secret = take(secretIn);
@@ -2919,23 +3070,221 @@
                     pairRow: pairRow, pair: pairOut } };
   }
 
-  /* ============================================ AND THE TAB IS THE TWO OF THEM
-   * One panel, two builders, in the order Osca named them -- Kaggle first
-   * because it is the standard route (CLAUDE.md: *"Kaggle is the standard
-   * route"*), Modal under it. Neither knows the other exists: they share a
-   * panel and nothing else, each asks its own route, each owns its own status
-   * line. Adding a third box is one more line here.
+  /* ====================================== FRANK'S CLOUD -- THE ONE SECTION
+   * (CLOUD-HIDE, 27 Sep.) Every fact is studio's, served by `GET /cloud`
+   * (settings/routes.py::serve_cloud) and nothing else: who is signed in
+   * (Google IS the account, 6 Sep), what renders cost (nothing is metered
+   * until SERVER-0's meter exists, and the row says so), what is rendering
+   * on the cloud right now, and what it has finished. No provider's name, no
+   * token, no kernel, no workspace reaches this card -- a user does not know
+   * where exactly things get done, and that is the design.
    *
-   * The return value is the two BY NAME -- `panels.cloud.kaggle` and
-   * `panels.cloud.modal`. Card one kept every member it had, so what moved
-   * for its existing callers is one word in the path to it.                */
-  function buildCloudPanel(panel, ctx, opts) {
-    var kaggle = buildKagglePanel(panel, ctx, opts);
-    var modal = buildModalCard(panel, ctx, opts);
+   * `cloudLines` is the pure half: the route's document in, the card's words
+   * out, testable with no DOM. */
+  var CLOUD = { GET: "/cloud" };
+  var CLOUD_HEAD = "Frank\u2019s cloud";
+  var CLOUD_NOTHING_NOW = "Nothing is rendering right now.";
+  var CLOUD_NOTHING_DONE = "Nothing rendered yet.";
+  var CLOUD_NO_ANSWER = "This studio does not answer for Frank\u2019s cloud yet.";
+  var CLOUD_SIGNIN_BUTTON = "Sign in\u2026";
+
+  function cloudWhen(sec) {
+    /* One word a person reads, never a timestamp: the render list is a
+     * glance down, not a log. */
+    if (!sec) return "";
+    var d = Date.now() / 1000 - Number(sec);
+    if (d < 90) return "just now";
+    if (d < 3600) return Math.round(d / 60) + " min ago";
+    if (d < 86400) return Math.round(d / 3600) + " h ago";
+    if (d < 172800) return "yesterday";
+    return Math.round(d / 86400) + " days ago";
+  }
+
+  function cloudRenderLine(r) {
+    var name = (r.titles && r.titles.length ? r.titles
+                : (r.slugs || []).map(function (x) { return String(x).replace(/-/g, " "); })).join(" + ") || "a book";
+    var n = Number(r.chapters) || 0;
+    var parts = [name, n === 1 ? "1 chapter" : (n ? n + " chapters" : null)];
+    if (r.state === "held") parts.push("waiting");
+    else if (r.state === "queued") parts.push("queued");
+    else if (r.state === "failed") parts.push(r.error ? "failed \u2014 " + r.error : "failed");
+    else if (r.state === "stopped") parts.push("stopped");
+    else if (r.state !== "running") parts.push(cloudWhen(r.ended || r.started));
+    return parts.filter(Boolean).join(" \u00b7 ");
+  }
+
+  function cloudLines(d) {
+    var acct = (d && d.account) || {};
+    var email = acct.email || null;
+    var rendering = (d && d.rendering) || [];
+    var done = (d && d.done) || [];
     return {
-      kaggle: kaggle, modal: modal,
-      ask: function () { return Promise.all([kaggle.ask(), modal.ask()]); },
+      who: email ? "Signed in as " + email : "Not signed in",
+      on: !!email,
+      /* the line under the name is the CLOUD's state either way -- "Not
+       * signed in" twice, once as the name and once as the line, is a label
+       * nobody needs to read; the verb at the right says what to do */
+      whoLine: (d && d.ready_line) || "",
+      readyLine: d && d.ready_line || "",
+      ready: !!(d && d.ready),
+      credits: (d && d.credits && d.credits.line) || "",
+      creditsWord: d && d.credits && d.credits.metered ? "" : "Free",
+      nowLines: rendering.length ? rendering.map(cloudRenderLine) : [CLOUD_NOTHING_NOW],
+      nowCount: rendering.length,
+      doneLines: done.length ? done.map(cloudRenderLine) : [CLOUD_NOTHING_DONE],
+      doneCount: Number(d && d.done_total) || done.length,
+      owner: !!(d && d.owner),
     };
+  }
+
+  function buildFranksCloudCard(panel, ctx, opts) {
+    var doc = panel.ownerDocument;
+    panel.appendChild(kEl(doc, "div", "set-head", CLOUD_HEAD));
+    var card = kEl(doc, "div", "set-card cloud-card");
+    panel.appendChild(card);
+
+    function row(r, name) {
+      var l = kEl(doc, "div", "set-l");
+      var c = kEl(doc, "div", "set-c");
+      if (name) l.appendChild(kEl(doc, "div", "set-name", name));
+      r.appendChild(l); r.appendChild(c); card.appendChild(r);
+      return { el: r, l: l, c: c };
+    }
+
+    // 1. who -- the account line with its dot, the Kaggle card's own shape
+    var whoRow = row(kEl(doc, "div", "set-row cloud-who"), null);
+    var who = kEl(doc, "div", "kag-line kag-who st", "");
+    var whoLine = kEl(doc, "small", "kag-why-here cloud-wholine", "");
+    whoRow.l.appendChild(who); whoRow.l.appendChild(whoLine);
+    var signIn = kEl(doc, "button", "kag-btn kag-primary cloud-signin", CLOUD_SIGNIN_BUTTON);
+    signIn.type = "button";
+    signIn.title = "Google is the account \u2014 this opens the Transfer tab, where the sign-in is.";
+    signIn.addEventListener("click", function () {
+      var b = doc.querySelector('.set-tab[data-tab="transfer"]');
+      if (b && b.click) b.click();
+    });
+    whoRow.c.appendChild(signIn);
+
+    // 2. credits
+    var credRow = row(kEl(doc, "div", "set-row cloud-credits"), "Credits");
+    var credLine = kEl(doc, "small", "kag-why-here cloud-creditline", "");
+    credRow.l.appendChild(credLine);
+    var credWord = kEl(doc, "span", "st kag-here cloud-creditword", "");
+    credRow.c.appendChild(credWord);
+
+    // 3. rendering now / 4. done -- one line per render, a count at the right
+    function listRow(el, name) {
+      var r = row(el, name);
+      var list = kEl(doc, "div", "cloud-list");
+      r.l.appendChild(list);
+      var count = kEl(doc, "span", "kag-notadded cloud-count", "");
+      r.c.appendChild(count);
+      return { row: r, list: list, count: count };
+    }
+    var now = listRow(kEl(doc, "div", "set-row cloud-now"), "Rendering now");
+    var done = listRow(kEl(doc, "div", "set-row cloud-done"), "Done");
+
+    function fill(list, lines) {
+      list.innerHTML = "";
+      lines.forEach(function (t) { list.appendChild(kEl(doc, "small", "kag-why-here cloud-line", t)); });
+    }
+
+    var last = null;
+    function paint(d) {
+      last = d;
+      var L = cloudLines(d);
+      who.textContent = L.who;
+      who.classList.toggle("kag-on", L.on);
+      whoLine.textContent = L.whoLine;
+      signIn.hidden = L.on;
+      credLine.textContent = L.credits;
+      credWord.textContent = L.creditsWord;
+      fill(now.list, L.nowLines);
+      now.count.textContent = L.nowCount ? String(L.nowCount) : "";
+      fill(done.list, L.doneLines);
+      done.count.textContent = L.doneCount ? String(L.doneCount) : "";
+      return L;
+    }
+
+    /* FRANK'S CLOUD ACCOUNT (SERVER-1, 27 Sep). On the Mac the shell holds
+     * the account's session in the Keychain (desktop/src-tauri/src/cloud.rs)
+     * and `cloud_me` is `GET /me` on Frank's server. When it answers an
+     * email, the who line is THAT email -- the account is Frank's, not
+     * Google's -- and the verb hides. No shell, or a shell with no host or
+     * no token: nothing changes, the route's words stand. `cloud:signedin`
+     * (the frank://signin?t= door, or a code typed) re-asks. */
+    function cloudMe() {
+      var T = global.__TAURI__;
+      if (!T || !T.core || typeof T.core.invoke !== "function") return Promise.resolve(null);
+      return Promise.resolve(T.core.invoke("cloud_me"))
+        .then(function (m) { return m && m.signed_in && m.email ? m : null; },
+              function () { return null; });
+    }
+    function ask() {
+      return ctx.getJSON(CLOUD.GET).then(function (d) {
+        if (!d || d.__status === 404) {
+          who.textContent = CLOUD_NO_ANSWER; signIn.hidden = true;
+          return null;
+        }
+        var L = paint(d);
+        return cloudMe().then(function (m) {
+          if (!m) return L;
+          who.textContent = L.who = "Signed in as " + m.email;
+          who.classList.add("kag-on"); L.on = true; L.me = m;
+          signIn.hidden = true;
+          return L;
+        });
+      });
+    }
+    if (global.__TAURI__ && global.__TAURI__.event && typeof global.__TAURI__.event.listen === "function") {
+      try { global.__TAURI__.event.listen("cloud:signedin", function () { ask(); }); } catch (e) {}
+    }
+
+    return { paint: paint, ask: ask, lines: cloudLines, me: cloudMe,
+             els: { card: card, who: who, whoLine: whoLine, signIn: signIn,
+                    credits: credLine, creditsWord: credWord,
+                    now: now.list, nowCount: now.count, done: done.list, doneCount: done.count },
+             get last() { return last; } };
+  }
+
+  /* ============================================ AND THE TAB IS THE SECTION
+   * ...plus, for the OWNER only, the two provider cards under it, in the
+   * order Osca named them -- Kaggle first (his own build tool, CLAUDE.md:
+   * *"Kaggle is the standard route"*), Modal under it. Neither knows the
+   * other exists: they share a panel and nothing else, each asks its own
+   * route, each owns its own status line.
+   *
+   * THE OWNER FLAG is studio's word (`GET /cloud`.owner -- `TTSTV_OWNER=1`
+   * in the environment or `owner: true` in studio's settings.json; no route
+   * writes it) or the bench's (`opts.owner`, for `settings.html?owner` and a
+   * test). With it false the two cards are NOT BUILT: 0 DOM nodes, not
+   * `hidden`, so no user-facing string of theirs is on the page at all.
+   *
+   * The return value keeps its old members BY NAME -- `panels.cloud.kaggle`
+   * and `panels.cloud.modal` -- filled in once the owner answer is back
+   * (`null` for a user), plus `franks` (the section) and `ownerReady`, the
+   * promise a test awaits. */
+  function buildCloudPanel(panel, ctx, opts) {
+    var doc = panel.ownerDocument;
+    var franks = buildFranksCloudCard(panel, ctx, opts);
+    var out = { franks: franks, kaggle: null, modal: null, owner: false,
+                ask: function () { return franks.ask(); } };
+    function buildOwner() {
+      if (out.kaggle) return;
+      out.owner = true;
+      panel.appendChild(kEl(doc, "div", "set-head cloud-ownerhead", "Build tools \u00b7 owner"));
+      panel.appendChild(kEl(doc, "div", "set-note cloud-ownernote",
+        "Your own render lanes. A user of Frank never sees this section \u2014 they see Frank\u2019s cloud above, and nothing else."));
+      out.kaggle = buildKagglePanel(panel, ctx, opts);
+      out.modal = buildModalCard(panel, ctx, opts);
+      out.ask = function () { return Promise.all([franks.ask(), out.kaggle.ask(), out.modal.ask()]); };
+    }
+    if (opts && opts.owner) buildOwner();
+    out.ownerReady = franks.ask().then(function (L) {
+      if (L && L.owner) buildOwner();
+      return out.owner;
+    });
+    return out;
   }
 
   /* A destination is one row: what it is called, whether it can be used, and
@@ -3844,8 +4193,19 @@
     leadL.appendChild(kEl(doc, "div", "set-name", "Your books, wherever you read them"));
     leadL.appendChild(kEl(doc, "small", "kag-why-here", "The shelf, where you are in each book, and every mark you have made."));
     lead.appendChild(leadL); card.appendChild(lead);
-    row("google", "Sign in with Google", "The account \u2014 and the first place to sync through.", "Sign in", true, onGoogle, googleWhy);
-    row("device", "Skip \u2014 this device only", "Nothing leaves this device. You can sign in later, here.", "Skip", false, onSkip);
+    /* A DEAD BUTTON IS NOT DRAWN (STRANGER-FIX, 28 Sep). Where this device
+     * has no Google client the red Sign in was `disabled` at 45 %, its reason
+     * a tooltip a mouse had to find -- "the page's primary action cannot be
+     * taken, and nothing on the page says why" (three Strangers of three).
+     * So the row is drawn only where the press is live; without it the one
+     * remaining choice is the card's action and says so: This device only ·
+     * Start. Signing in later is Settings' Account row, which says why. */
+    if (!googleWhy) {
+      row("google", "Sign in with Google", "The account \u2014 and the first place to sync through.", "Sign in", true, onGoogle, null);
+      row("device", "Skip \u2014 this device only", "Nothing leaves this device. You can sign in later, here.", "Skip", false, onSkip);
+    } else {
+      row("device", "This device only", "Nothing leaves this device. You can sign in later, in Settings.", "Start", true, onSkip);
+    }
     return { head: head, card: card, buttons: buttons };
   }
 
@@ -3900,14 +4260,16 @@
    * (`test_mock_settings.py`), and the gate is not the Settings window's
    * picture -- it is the card, placed. `position: fixed; inset: 0` is the
    * whole of the gating; the sheet is the Settings window's own 560 and
-   * sits high rather than centred, the way a first screen does; the ground
-   * is the page's own `--bg`, so the theme is whichever the page is. */
+   * sits CENTRED in the window (STRANGER-FIX, 28 Sep -- three Strangers of
+   * three: a 200-px card pinned to the top of a 900-px page "sits at the top
+   * like a notification, not a welcome"); the ground is the page's own
+   * `--bg`, so the theme is whichever the page is. */
   var GATE_STYLE_ID = "ttstv-firstrun-style";
   var GATE_CSS = [
     '.ttstv-settings.fr-gate {',
     '  position: fixed; inset: 0; z-index: 60; overflow: auto;',
     '  background: var(--bg); color: var(--fg);',
-    '  display: flex; justify-content: center; align-items: flex-start;',
+    '  display: flex; justify-content: center; align-items: center;',
     '  padding: calc(env(safe-area-inset-top, 0px) + 16px) 16px 24px; box-sizing: border-box;',
     '}',
     '.ttstv-settings.fr-gate .fr-sheet { width: 100%; max-width: 560px; }',
@@ -4231,8 +4593,11 @@
       lanRow.c.appendChild(lanPick);
     }
 
-    var kg = destRow("kaggle", "Kaggle", "the key Cloud GPU uses · not a transport yet", false);
-    kg.c.appendChild(pick("Use", "kaggle", false)).disabled = true;
+    /* The Kaggle destination row ("not a transport yet", a disabled Use) is
+     * GONE (CLOUD-HIDE, 27 Sep): a provider's name on a user's page, under a
+     * control that did nothing. Kaggle is the owner's build tool and lives
+     * behind `owner` on Frank's cloud; sync's destinations are Drive and
+     * this network. */
 
     /* ---- Your door (23d; Osca, 6 Sep): the Pair field, the second writer
      * of `transfer.pairing`. One row: the dot and the line on the left, the
@@ -6439,7 +6804,8 @@
     LANGUAGES: LANGUAGES,
     languageRows: languageRows, languageAnswer: languageAnswer,
     languageLine: languageLine, languageJob: languageJob, packDate: packDate,
-    kaggleLines: kaggleLines, modalLines: modalLines,
+    kaggleLines: kaggleLines, modalLines: modalLines, cloudLines: cloudLines, CLOUD: CLOUD,
+    CLOUD_HEAD: CLOUD_HEAD, CLOUD_NOTHING_NOW: CLOUD_NOTHING_NOW, CLOUD_NOTHING_DONE: CLOUD_NOTHING_DONE,
     // the two lines that say what each lane IS, exported for the one test
     // that asserts the page carries them rather than re-typing them
     KAGGLE_LANE_LINE: KAGGLE_LANE_LINE, MODAL_LANE_LINE: MODAL_LANE_LINE,

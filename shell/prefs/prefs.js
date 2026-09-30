@@ -83,7 +83,8 @@
    * that device the option is not offered at all, so the stack is the belt
    * under the braces. */
   var FAMILIES = [
-    { id: "serif",  label: "Serif",  note: "Charter",        stack: '"Tiempos Text", Charter, "Iowan Old Style", "Source Serif 4", "Palatino Linotype", Georgia, serif' },
+    // THE BOOK'S FACE IS IOWAN (ASKS #140, Osca 29 Sep; settings-scales.js): the first face is the page's own, by name
+    { id: "serif",  label: "Serif",  note: "Iowan",          stack: '"Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif' },
     { id: "times",  label: "Times",  note: "Times New Roman", probe: "Times New Roman",
       stack: '"Times New Roman", Times, "Liberation Serif", "Nimbus Roman", "Tinos", serif' },
     { id: "baskerville", label: "Baskerville", note: "Baskerville", probe: "Baskerville",
@@ -173,13 +174,17 @@
     });
   }
   // Percentages of whatever size the layout is already using.
-  var SIZES = [85, 92, 100, 115, 130, 150];
+  // EVERY SLIDER'S DEFAULT IN THE MIDDLE (Osca, 29 Sep: "EVERYTHING essentially is at one extreme, on all the
+  // settings"). EXPORT 30 Sep: the three scales below are design/reader/settings-scales.js's, written in here
+  // as its own note asks ("EXPORT: these three arrays replace prefs.js's own"); a stored value no longer on a
+  // scale falls back to the default at read, the same rule as ever.
+  var SIZES = [80, 88, 94, 100, 108, 118, 130];
 
   /* THE GUTTER -- the proportion of the viewport's width given to each margin.
    * `--gutter-pc` in page.css, clamped between a floor and a ceiling. 7.5% is
    * the as-shipped value, so 0 means leave the layout's own `--gutter-pc`
    * alone (apply nothing, the way 100 does for size and 0 does for line). */
-  var GUTTERS = [0, 5, 6, 7.5, 9, 11, 14];
+  var GUTTERS = [3, 4.5, 6, 0, 9, 11, 14];   // 0 = the page's own 7.5 %, the middle
 
   /* THE FIVE PAPERS. Warmth is one number and it moves ground and ink
    * TOGETHER -- paper and ink never drift apart in temperature, which is the
@@ -195,9 +200,9 @@
   ];
   // 0 = leave the layout's own line-height alone (1.75 desktop, 1.7 phone).
   var LINES = [
-    { value: 0,    label: "Default" },
     { value: 1.45, label: "Tight" },
     { value: 1.6,  label: "Snug" },
+    { value: 0,    label: "Default" },
     { value: 1.9,  label: "Roomy" },
     { value: 2.15, label: "Airy" }
   ];
@@ -280,7 +285,7 @@
    * it both ways -- it enters when this turns true, and it writes it back
    * false when the hold lets somebody out, so the toggle can never say
    * "on" over a screen that is not.                                         */
-  var LISTEN_WINDOWS = [1.5, 2, 2.5, 3, 4, 5];
+  var LISTEN_WINDOWS = [1, 1.5, 2, 2.5, 3, 4, 5];   // 2.5 the middle of seven (settings-scales.js, ASKS #78)
 
   /* ------------------------------------------------------------- the theme
    * Osca, 30 August: "The light/dark mode should be a universal button, and

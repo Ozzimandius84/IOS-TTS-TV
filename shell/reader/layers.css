@@ -1,0 +1,407 @@
+/* THE LAYERS -- the picture (design/reader/layers.css is the master; wave 10
+   round 3 LAYERS-DESIGN, 27 Sep 2026; PROMPTS/LAYERS.md).
+
+   ONE TEXT, FOUR LAYERS. The text is set once (.text) and every layer is
+   paint on top of it: a word's background, an underline drawn as a
+   box-shadow, an absolutely placed card in the margin. NOTHING here changes
+   a word's box -- no padding, no border, no font change on .w -- so the
+   first word's rectangle is the same in all four layers (the proof).
+
+   Tokens only (rule 2): --gap 8 · --pad 12 · --tap 44 · --r-ui 10 ·
+   --ui-fine 13 · --ui-act 15 · the --chrome-* colours · the --mg-* marks
+   (the marginalia palette, already both themes). The reading face is the
+   reader's own: --serif at 20/1.5 (page.css: line-height 1.5 exactly).
+
+   Colour: a window's tint is its token at 22 % over the paper
+   (color-mix), so the same four tokens read on both themes. */
+
+.read{ position: relative; }
+.text{
+  max-width: 30em; margin: 0 auto; padding: 0;   /* LARGER AND WIDER (Osca, 28 Sep: "the margins are still small"): 23 px, a 690 column, ~66 characters a line, centred */
+  font: 23px/1.55 var(--serif); color: var(--chrome-fg);
+}
+.text .chap{ font: 400 var(--ui-act) / 1.5 var(--chrome-ui-font); letter-spacing: .08em; text-transform: uppercase; color: var(--chrome-fg-dim); margin: 0 0 calc(var(--gap) * 3); }
+.text .para{ margin: 0; text-indent: var(--indent); }
+.text .para:first-of-type{ text-indent: 0; }
+.w{ position: relative; border-radius: var(--gap-hair); transition: background-color .14s, box-shadow .14s; }
+.page{ padding: calc(var(--gap) * 5) calc(var(--pad) * 2 + var(--gap)) calc(var(--gap) * 8); }
+
+/* ---- THE SWITCH: one control, four positions --------------------------
+   A segmented radio group in the band's right cluster, the height of a
+   door (32 in a 44 band), its chosen position ink on the control ground
+   (rule 3: the state, no label). */
+.layers{
+  display: inline-flex; align-items: center; gap: var(--gap-hair);
+  height: calc(var(--tap) - var(--pad)); padding: var(--gap-hair);
+  border-radius: var(--r-ui); background: var(--chrome-control-bg);
+  margin-right: var(--gap);
+  font: 400 var(--ui-fine) / 1 var(--chrome-ui-font);
+}
+.layers button{
+  height: 100%; padding: 0 calc(var(--gap) + var(--gap-hair)); margin: 0; border: 0;
+  border-radius: calc(var(--r-ui) - var(--gap-hair)); background: transparent;
+  color: var(--chrome-fg-dim); font: inherit; line-height: 1; cursor: pointer;
+  -webkit-appearance: none; appearance: none; -webkit-tap-highlight-color: transparent;
+  transition: color .14s, background-color .14s, box-shadow .14s;
+}
+.layers button:hover{ color: var(--chrome-fg); }
+.layers button:focus-visible{ outline: 0; box-shadow: 0 0 0 2px var(--chrome-accent); }
+.layers button[aria-checked="true"]{ color: var(--chrome-accent); background: var(--chrome-bg); box-shadow: 0 0 0 var(--hair) var(--chrome-border), 0 1px 2px var(--shadow-sm); }   /* the chosen layer: the accent, like every "you are here" (band Stranger 3: the chip alone was 1.06:1) */
+
+/* ---- THE MARGIN: what a layer says beside the text --------------------
+   A 300 column to the right of the text, absolute, so it costs the text
+   nothing. Each card is placed at its sentence's top by layers.js. */
+.margin{ position: absolute; top: 0; left: calc(50% + 310px + var(--pad) * 2); width: 300px; }
+.card, .count, .legend{ position: absolute; left: 0; width: 100%; box-sizing: border-box; font: 400 var(--ui-fine) / 1.45 var(--chrome-ui-font); color: var(--chrome-fg); }
+.card{
+  padding: var(--pad); border-radius: var(--r-ui);
+  background: var(--chrome-panel-bg); border: 1px solid var(--chrome-border);
+  box-shadow: 0 1px 2px var(--shadow-light);
+}
+.card .body{ margin: 0; outline: 0; font-family: var(--serif); font-size: calc(var(--ui-fine) + var(--gap-hair)); }   /* an annotation is writing about the book, set in the book's face (PHONE-PASS: "annotations fell back to the default font") */
+.card .body[contenteditable]:focus{ box-shadow: 0 0 0 2px var(--chrome-accent); border-radius: var(--gap-hair); }
+.card .foot{ display: flex; align-items: center; gap: var(--gap); margin-top: var(--gap); position: relative; }
+.card .who{ display: flex; align-items: baseline; gap: var(--gap); font-weight: 600; margin-bottom: calc(var(--gap) / 2); }
+.card .when, .card .signin{ margin-left: auto; font-weight: 400; color: var(--chrome-fg-dim); white-space: nowrap; }
+.card.hint{ background: transparent; border-color: transparent; box-shadow: none; color: var(--chrome-fg-dim); font-style: italic; }
+.card.own{ border-color: var(--chrome-accent); }
+.card.kind-question .body::before{ content: "? "; color: var(--chrome-fg-dim); }
+.card.kind-link .body::before{ content: "↗ "; color: var(--chrome-fg-dim); }
+
+/* a verb is a quiet button; ONE thing is loud (rule 9): the Re-run */
+.verb, .vis, .pick{
+  height: calc(var(--tap) - var(--pad) - var(--gap)); padding: 0 var(--gap); margin: 0; border: 0;
+  border-radius: calc(var(--r-ui) - var(--gap-hair)); background: var(--chrome-control-bg);
+  color: var(--chrome-fg); font: 400 var(--ui-fine) / 1 var(--chrome-ui-font); cursor: pointer;
+  -webkit-appearance: none; appearance: none; -webkit-tap-highlight-color: transparent;
+}
+.verb i{ font-style: normal; color: var(--chrome-fg-dim); }
+.verb:hover, .vis:hover, .pick:hover{ background: var(--chrome-border); }
+.act{
+  height: calc(var(--tap) - var(--pad) - var(--gap)); padding: 0 var(--pad); margin: 0; border: 0;
+  border-radius: calc(var(--r-ui) - var(--gap-hair)); background: var(--chrome-accent); color: var(--chrome-bg);
+  font: 600 var(--ui-fine) / 1 var(--chrome-ui-font); cursor: pointer; -webkit-appearance: none; appearance: none;
+}
+.act:disabled{ opacity: .35; cursor: default; }
+.act:focus-visible, .verb:focus-visible, .vis:focus-visible, .pick:focus-visible, .sw:focus-visible{ outline: 0; box-shadow: 0 0 0 2px var(--chrome-accent); }
+.vis[data-vis="public"]{ color: var(--chrome-accent); }
+.menu{
+  position: absolute; left: 0; top: 100%; margin-top: var(--gap-hair); z-index: 3; min-width: 140px;
+  padding: calc(var(--gap) / 2); border-radius: var(--r-ui);
+  background: var(--chrome-panel-bg); border: 1px solid var(--chrome-border); box-shadow: 0 8px 24px var(--shadow-md);
+  display: flex; flex-direction: column;
+}
+.menu button{ text-align: left; height: calc(var(--tap) - var(--pad) - var(--gap)); padding: 0 var(--gap); border: 0; border-radius: calc(var(--r-ui) - var(--gap-hair)); background: transparent; color: var(--chrome-fg); font: 400 var(--ui-fine) / 1 var(--chrome-ui-font); cursor: pointer; -webkit-appearance: none; appearance: none; }
+.menu button:hover{ background: var(--chrome-control-bg); }
+.menu button.on::before{ content: "✓ "; }
+
+/* ---- MINE: the highlight ----------------------------------------------
+   The person's mark is the marginalia gold under the words -- a background
+   on the word, not a wrapper, so the run keeps its line breaks. */
+.run{ -webkit-box-decoration-break: clone; box-decoration-break: clone; border-radius: var(--gap-hair); }
+[data-layer="mine"] .hl, [data-layer="everyone"] .hl{ background: color-mix(in srgb, var(--mg-gold) 32%, transparent); box-shadow: 0 0 0 var(--gap-hair) color-mix(in srgb, var(--mg-gold) 32%, transparent); }
+
+/* ---- EVERYONE: others' marks and the count ----------------------------
+   A public passage is underlined faintly (a box-shadow under the word, no
+   border); the count stands in the margin at the passage's top, dim. */
+[data-layer="everyone"] .s.pub, [data-layer="everyone"] .pubrun{ box-shadow: inset 0 -2px 0 color-mix(in srgb, var(--chrome-fg-dim) 28%, transparent); -webkit-box-decoration-break: clone; box-decoration-break: clone; }
+.count{ color: var(--chrome-fg-dim); padding: var(--gap-hair) 0; }
+.count b{ font-weight: 600; color: var(--chrome-fg); }
+.card.pub .who{ font-weight: 600; }
+.card.pub .body{ color: var(--chrome-fg); }
+
+/* ---- VOICE: the passage painted by window -----------------------------
+   Each word carries --win (its window's token); the tint is 22 % of it. A
+   run in one window reads as one band of colour across the lines. */
+[data-layer="voice"] .s[data-win]{ background: color-mix(in srgb, var(--win) 22%, transparent); box-shadow: 0 0 0 var(--gap-hair) color-mix(in srgb, var(--win) 22%, transparent); -webkit-box-decoration-break: clone; box-decoration-break: clone; border-radius: var(--gap-hair); }
+[data-layer="voice"] .selrun{ background: color-mix(in srgb, var(--win) 30%, transparent); box-shadow: 0 0 0 var(--gap-hair) color-mix(in srgb, var(--win) 30%, transparent), inset 0 -2px 0 var(--chrome-fg); }
+/* a direction a PERSON added: a small italic in the margin at the run's line, never on every word */
+.dir{ position: absolute; left: 0; width: 100%; font: 400 var(--ui-fine) / 1.45 var(--chrome-ui-font); color: var(--chrome-fg-dim); padding: var(--gap-hair) 0; }
+.dir i{ font-style: italic; }
+.realised{ color: var(--chrome-fg-dim); font-size: calc(var(--ui-fine) - var(--gap-hair)); }
+.dir .realised{ margin-left: var(--gap); }
+.dir::before{ content: "direction · "; font-style: normal; }
+/* a reading (homograph): a dotted line under the one word; set by a person, the accent */
+[data-layer="voice"] .rd{ box-shadow: 0 0 0 var(--gap-hair) color-mix(in srgb, var(--win) 22%, transparent), inset 0 -2px 0 var(--chrome-fg-dim); }
+[data-layer="voice"] .rd.rd-set{ box-shadow: 0 0 0 var(--gap-hair) color-mix(in srgb, var(--win) 22%, transparent), inset 0 -2px 0 var(--chrome-accent); }
+[data-layer="voice"] .rd::after{ content: ""; }
+/* the legend: the book's windows, as rows a person can press to recolour the selected run */
+.legend{ padding: calc(var(--gap) / 2) 0; }
+.legend .lhead{ font-weight: 600; padding: var(--gap-hair) var(--gap); display: flex; justify-content: space-between; }
+.legend .lhead span{ font-weight: 400; color: var(--chrome-fg-dim); }
+.legend .row{
+  display: flex; align-items: center; gap: var(--gap); width: 100%; height: calc(var(--tap) - var(--pad));
+  padding: 0 var(--gap); margin: 0; border: 0; border-radius: calc(var(--r-ui) - var(--gap-hair)); background: transparent;
+  color: var(--chrome-fg); font: 400 var(--ui-fine) / 1 var(--chrome-ui-font); text-align: left; cursor: pointer; -webkit-appearance: none; appearance: none;
+}
+.legend .row:hover{ background: var(--chrome-control-bg); }
+.legend .row span{ margin-left: auto; color: var(--chrome-fg-dim); font-size: calc(var(--ui-fine) - var(--gap-hair)); }
+.legend .act{ margin: var(--gap) var(--gap) 0; }
+.sw{ display: inline-block; width: var(--ui-field); height: var(--ui-field); border-radius: 50%; background: color-mix(in srgb, var(--win) 60%, var(--chrome-bg)); border: 1px solid color-mix(in srgb, var(--win) 80%, var(--chrome-fg)); flex: none; }
+/* the run card: three marks, one row each -- window · direction · reading */
+.card.run .mark{ display: grid; grid-template-columns: 72px 1fr; align-items: center; gap: var(--gap); margin-top: var(--gap); }
+.card.run label{ color: var(--chrome-fg-dim); }
+.card.run .sws{ display: flex; align-items: center; gap: calc(var(--gap) / 2); }
+.card.run .sws span{ margin-left: calc(var(--gap) / 2); color: var(--chrome-fg-dim); }
+.card.run button.sw{ padding: 0; margin: 0; cursor: pointer; -webkit-appearance: none; appearance: none; }
+.card.run button.sw.on{ box-shadow: 0 0 0 2px var(--chrome-bg), 0 0 0 4px var(--chrome-fg); }
+.card.run .pick{ justify-self: start; position: relative; }
+.card.run .pick i{ font-style: italic; color: var(--chrome-fg-dim); }
+.card.run .mark.reading{ align-items: start; }
+.card.run .rds{ display: flex; flex-direction: column; gap: calc(var(--gap) / 2); }
+.card.run .rds b{ font: 600 var(--ui-fine) / 1.45 var(--serif); }
+.rd-opt{ text-align: left; height: calc(var(--tap) - var(--pad) - var(--gap)); padding: 0 var(--gap); border: 0; border-radius: calc(var(--r-ui) - var(--gap-hair)); background: var(--chrome-control-bg); color: var(--chrome-fg); font: 400 var(--ui-fine) / 1 var(--chrome-ui-font); cursor: pointer; -webkit-appearance: none; appearance: none; }
+.rd-opt span{ color: var(--chrome-fg-dim); margin-left: var(--gap); }
+.rd-opt.on{ background: var(--chrome-fg); color: var(--chrome-bg); }
+.rd-opt.on span{ color: var(--chrome-bg); opacity: .7; }
+.card.run .foot{ justify-content: space-between; }
+
+/* ---- THE RE-RUN SHEET ----------------------------------------------------
+   Over the page (the scrim), one card: what changed, on which engine, and
+   the one loud button. Queued is the same sheet with one sentence. */
+.scrim{ position: absolute; inset: 0; background: var(--sf-scrim-faint); z-index: 4; }
+.rerun{
+  position: absolute; z-index: 5; left: 50%; top: calc(var(--gap) * 12); transform: translateX(-50%); width: 420px; box-sizing: border-box;
+  padding: var(--pad) var(--pad) var(--pad); border-radius: var(--r-ui);
+  background: var(--chrome-panel-bg); border: 1px solid var(--chrome-border); box-shadow: 0 20px 60px var(--shadow-xl);
+  font: 400 var(--ui-fine) / 1.45 var(--chrome-ui-font); color: var(--chrome-fg);
+}
+.rerun .shead{ font: 600 var(--ui-act) / 1.45 var(--chrome-ui-font); margin-bottom: var(--gap); }
+.rerun ul{ list-style: none; margin: 0 0 var(--gap); padding: 0; }
+.rerun li{ display: flex; gap: var(--gap); padding: calc(var(--gap) / 2) 0; border-bottom: 1px solid var(--chrome-border); }
+.rerun li span{ font: 400 var(--ui-fine) / 1.45 ui-monospace, Menlo, monospace; }
+.rerun li i{ font-style: normal; color: var(--chrome-fg-dim); margin-left: auto; text-align: right; }
+.rerun p{ margin: 0 0 var(--gap); color: var(--chrome-fg-dim); }
+.rerun .foot{ display: flex; gap: var(--gap); align-items: center; }
+.rerun .foot .close{ margin-left: auto; }
+
+/* ---- THE PHONE: the same page, answering html[data-phone] ------------
+   The strip under the safe area carries the switch; the margin becomes a
+   sheet above the band (the text never moves); the run card and the
+   legend live in that sheet; the re-run sheet rises from the foot. */
+html[data-phone] .page{ padding: var(--safe-top, 54px) calc(var(--pad) + var(--gap)) calc(var(--tap) * 3); }
+/* THE PHONE'S STRIP (Osca, 28 Sep: "WAYYY too big ... it should be tiny, and it
+   should scroll out as you read"): four glyphs, 28 tall (--tap - 2 --gap), and it
+   rides the page like the Mac's book band (band.js Band.ride) -- up with the
+   text, back on a scroll up */
+/* SHORTER AND WIDER (Osca, 28 Sep: "the tabs in the phone … should be shorter and WIDER … use the width,
+   what's very important is height"): 28 tall (--tap - 2 --gap), the switch runs the page's width, four equal cells */
+html[data-phone] .lstrip{ position: sticky; top: 0; z-index: 2; display: flex; align-items: center; height: calc(var(--tap) - 2 * var(--gap)); padding: 0 var(--pad); background: var(--chrome-bg); margin: 0 calc(0px - var(--pad) - var(--gap)); transform: translateY(calc(0px - var(--band-off, 0px))); }
+html[data-phone] .layers{ margin: 0; flex: 1; display: flex; height: calc(var(--tap) - 2 * var(--gap) - var(--gap)); padding: var(--hair); }
+html[data-phone] .layers button{ flex: 1; padding: 0; display: grid; place-items: center; position: relative; }
+/* 28 to SEE, 44 to HIT (the PHONE-PASS Stranger: "too small to hit in bed"; Osca: height is what invades): each cell's
+   press area reaches 8 above and 8 below the strip, invisibly, so the strip stays 28 on the screen */
+html[data-phone] .layers button::after{ content: ""; position: absolute; left: 0; right: 0; top: calc(0px - var(--gap)); bottom: calc(0px - var(--gap)); }
+html[data-phone] .layers button svg{ width: var(--ui-field); height: var(--ui-field); display: block; }
+html[data-phone] .text{ font-size: 19px; max-width: none; padding: calc(var(--gap) * 2) var(--gap) 0; }   /* the phone: 19 px and 8 more at each side than the page gives */
+html[data-phone] .margin{
+  position: fixed; left: 0; right: 0; top: auto; bottom: var(--band-foot, calc(var(--tap) + var(--safe-bottom, 0px))); width: auto; max-height: 42%; overflow: auto; z-index: 3;
+  padding: var(--gap) var(--pad) var(--gap); display: flex; flex-direction: column; gap: var(--gap);
+  background: var(--chrome-bg); border-top: 1px solid var(--chrome-border);
+}
+html[data-phone] .margin:empty{ display: none; }
+html[data-phone] .card, html[data-phone] .count, html[data-phone] .legend, html[data-phone] .dir{ position: static; width: auto; }
+html[data-phone] .count{ padding: 0; }
+html[data-phone] .rerun{ top: auto; bottom: 0; left: 0; transform: none; width: 100%; border-radius: var(--r-ui) var(--r-ui) 0 0; padding-bottom: calc(var(--pad) + var(--safe-bottom, 0px)); }
+html[data-phone] .scrim{ position: fixed; }
+
+html[data-phone] .margin .card.run{ order: -1; }   /* the run first in the sheet; the legend after */
+
+/* once it has ridden away it is gone, not a strip floating over the text (band Stranger 4) */
+html[data-phone] .lstrip[data-shown="off"]{ visibility: hidden; }
+
+/* the Mac and web switch as glyphs: four 32 cells, the glyph 16 */
+html:not([data-phone]) .layers button{ width: calc(var(--tap) - var(--pad)); padding: 0; display: grid; place-items: center; }
+html:not([data-phone]) .layers button svg{ width: var(--ui-field); height: var(--ui-field); display: block; }
+
+/* THE LAYERS IN THE LIBRARY'S GLASS (DESIGN, 29 Sep): a 32 capsule like the Library head's Select and the band's
+   search, the chosen layer a round chip inside it. One object family on every host. */
+.band .layers{
+  height: 32px; padding: 3px; border-radius: 16px;
+  border: var(--hair) solid color-mix(in srgb, var(--chrome-fg) 12%, transparent);
+  background: color-mix(in srgb, var(--chrome-bg) 62%, transparent);
+  -webkit-backdrop-filter: saturate(1.8) blur(18px); backdrop-filter: saturate(1.8) blur(18px);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
+}
+.band .layers button{ border-radius: 13px; }
+
+/* ======================================================================
+   THE LAYERS ARE A WHOLE EXPERIENCE (ASKS #178, 30 Sep 2026)
+   Osca: "I'm not sure the whole green thing works well ... at least no green
+   ... I want to see all the other layers." So:
+   · A LAYER NEVER TINTS THE PAGE. The page ground is the reader's paper
+     (--ground, which warmth moves) in every layer; a layer is only its marks
+     on the words and its cards beside them. The only colours a layer adds are
+     the reader's own four highlight inks (the person chose them) and, as the
+     one loud thing, Frank's red (--chrome-accent): the chosen layer, the
+     person's own public note, the one action.
+   · Cards are the page's own glass: the paper at 86 % with a hairline of ink,
+     so they follow warmth (warm yellow-white by day, warm brown-black by
+     night) and never bring a hue of their own.
+   The ly- classes are the overlay drawn over a LIVE page (layers.js over());
+   the bench's c003 master (mount) shares the share sheet, the dots and the
+   colours. */
+:root{
+  --ly-paper: var(--ground, var(--chrome-bg));
+  --ly-ink: var(--ink, var(--chrome-fg));
+  --ly-dim: color-mix(in srgb, var(--ly-ink) 58%, var(--ly-paper));
+  --ly-glass: color-mix(in srgb, var(--ly-paper) 86%, transparent);
+  --ly-line: color-mix(in srgb, var(--ly-ink) 12%, transparent);
+  --ly-well: color-mix(in srgb, var(--ly-ink) 7%, var(--ly-paper));
+}
+/* the four inks, in the bench's words and over the live page */
+[data-layer="mine"] .hl-yellow, [data-layer="everyone"] .hl-yellow{ background: color-mix(in srgb, var(--mg-gold) 32%, transparent); box-shadow: 0 0 0 var(--gap-hair) color-mix(in srgb, var(--mg-gold) 32%, transparent); }
+[data-layer="mine"] .hl-red,    [data-layer="everyone"] .hl-red{    background: color-mix(in srgb, var(--mg-red) 24%, transparent);  box-shadow: 0 0 0 var(--gap-hair) color-mix(in srgb, var(--mg-red) 24%, transparent); }
+[data-layer="mine"] .hl-pink,   [data-layer="everyone"] .hl-pink{   background: color-mix(in srgb, var(--mg-pink) 24%, transparent); box-shadow: 0 0 0 var(--gap-hair) color-mix(in srgb, var(--mg-pink) 24%, transparent); }
+[data-layer="mine"] .hl-green,  [data-layer="everyone"] .hl-green{  background: color-mix(in srgb, var(--mg-green) 24%, transparent); box-shadow: 0 0 0 var(--gap-hair) color-mix(in srgb, var(--mg-green) 24%, transparent); }
+[data-layer="mine"] .mselrun{ background: color-mix(in srgb, currentColor 14%, transparent); box-shadow: inset 0 -2px 0 var(--chrome-accent); }
+::highlight(ly-hl-yellow){ background-color: color-mix(in srgb, var(--mg-gold) 34%, transparent); }
+::highlight(ly-hl-red){    background-color: color-mix(in srgb, var(--mg-red) 26%, transparent); }
+::highlight(ly-hl-pink){   background-color: color-mix(in srgb, var(--mg-pink) 26%, transparent); }
+::highlight(ly-hl-green){  background-color: color-mix(in srgb, var(--mg-green) 26%, transparent); }
+::highlight(ly-noted){ text-decoration: underline dotted 1.5px; text-underline-offset: 4px; }
+::highlight(ly-pub){ text-decoration: underline 1.5px color-mix(in srgb, currentColor 30%, transparent); text-underline-offset: 5px; }
+::highlight(ly-pubnote){ background-color: color-mix(in srgb, currentColor 8%, transparent); }
+::highlight(ly-own){ background-color: color-mix(in srgb, var(--chrome-accent) 16%, transparent); text-decoration: underline 1.5px var(--chrome-accent); text-underline-offset: 5px; }
+::highlight(ly-rd){ text-decoration: underline dotted 2px; text-underline-offset: 5px; }
+::highlight(ly-rd-set){ text-decoration: underline dotted 2px var(--chrome-accent); text-underline-offset: 5px; }
+
+/* ---- the overlay: a margin beside the column (Mac, web) or a sheet (phone) ---- */
+.ly-over{ position: fixed; z-index: 40; font: 400 var(--ui-fine) / 1.45 var(--chrome-ui-font); color: var(--ly-ink); }
+.ly-over[hidden], .ly-selbar[hidden], .ly-over [hidden]{ display: none !important; }
+.ly-over[data-mode="side"]{ top: 0; bottom: 0; pointer-events: none; }
+.ly-over[data-mode="side"] > *{ pointer-events: auto; }
+.ly-over[data-mode="side"] .ly-head{ position: absolute; left: 0; right: 0; top: calc(var(--band-h, 44px) + var(--pad) + var(--gap)); }
+.ly-over[data-mode="side"] .ly-list > *{ position: absolute; left: 0; right: 0; }
+.ly-over[data-mode="side"] .ly-go-to{ position: absolute; left: 0; top: calc(var(--band-h, 44px) + var(--tap) * 2); }
+.ly-over[data-mode="side"][data-layer="voice"] .ly-head, .ly-over[data-mode="side"] .ly-head:empty{ }
+.ly-head{ display: flex; flex-wrap: wrap; align-items: baseline; gap: calc(var(--gap) / 2) var(--gap); padding: 0 var(--gap-hair) var(--gap); }
+.ly-head:empty{ display: none; }
+.ly-head > b{ font-weight: 600; }
+.ly-head > span{ color: var(--ly-dim); }
+.ly-head .ly-legend{ flex-basis: 100%; display: flex; flex-wrap: wrap; gap: calc(var(--gap) / 2) var(--pad); }
+.ly-win{ display: inline-flex; align-items: center; gap: calc(var(--gap) / 2); color: var(--ly-ink); }
+.ly-win i{ width: var(--pad); height: var(--pad); border-radius: 50%; background: color-mix(in srgb, var(--win) 55%, var(--ly-paper)); box-shadow: 0 0 0 var(--hair) color-mix(in srgb, var(--win) 80%, var(--ly-ink)); }
+.ly-hint, .ly-queued{ flex-basis: 100%; margin: 0; color: var(--ly-dim); }
+.ly-head .ly-act{ margin-top: calc(var(--gap) / 2); }
+.ly-card, .ly-selbar, .ly-share{
+  box-sizing: border-box; border: var(--hair) solid var(--ly-line); background: var(--ly-glass);
+  -webkit-backdrop-filter: saturate(1.4) blur(18px); backdrop-filter: saturate(1.4) blur(18px);
+  box-shadow: 0 4px 18px var(--shadow-bench); color: var(--ly-ink);
+}
+.ly-card{ padding: var(--pad); border-radius: var(--r-ui); transition: box-shadow .2s ease, top .12s ease; }
+.ly-card.ly-lit{ box-shadow: 0 0 0 2px var(--chrome-accent); }
+.ly-card.ly-own{ border-left: 2px solid var(--chrome-accent); }
+.ly-who{ display: flex; align-items: center; gap: var(--gap); font-weight: 600; margin-bottom: calc(var(--gap) / 2); }
+.ly-when{ margin-left: auto; font-weight: 400; color: var(--ly-dim); white-space: nowrap; }
+.ly-body{ font: 400 calc(var(--ui-fine) + var(--gap-hair)) / 1.45 var(--serif, Georgia, serif); outline: 0; min-height: 1.45em; }
+.ly-body[contenteditable]:empty::before{ content: "Write a note"; color: var(--ly-dim); }
+.ly-body[contenteditable]:focus{ box-shadow: 0 0 0 2px var(--chrome-accent); border-radius: var(--gap-hair); }
+.kind-question .ly-body::before{ content: "? "; color: var(--ly-dim); }
+/* a link says its own arrow (the fixture writes →), so no second one */
+.ly-foot{ display: flex; align-items: center; gap: calc(var(--gap) / 2); margin-top: var(--gap); flex-wrap: wrap; }
+.ly-swatch{ width: calc(var(--gap) + var(--gap-hair)); height: calc(var(--gap) + var(--gap-hair)); border-radius: 50%; flex: none; }
+.ly-swatch[data-colour="yellow"], .ly-dot[data-colour="yellow"]{ background: var(--mg-gold); }
+.ly-swatch[data-colour="red"], .ly-dot[data-colour="red"]{ background: var(--mg-red); }
+.ly-swatch[data-colour="pink"], .ly-dot[data-colour="pink"]{ background: var(--mg-pink); }
+.ly-swatch[data-colour="green"], .ly-dot[data-colour="green"]{ background: var(--mg-green); }
+.ly-av{ display: inline-grid; place-items: center; width: calc(var(--pad) * 2); height: calc(var(--pad) * 2); border-radius: 50%; flex: none;
+  background: var(--ly-well); color: var(--ly-ink); font: 600 var(--ui-fine) / 1 var(--chrome-ui-font); font-style: normal; }
+.ly-own .ly-av{ background: var(--chrome-accent); color: var(--chrome-bg); }
+.ly-count{ color: var(--ly-dim); padding: var(--gap-hair) var(--gap-hair); }
+.ly-count b{ color: var(--ly-ink); font-weight: 600; }
+.ly-dir{ color: var(--ly-dim); padding: var(--gap-hair); }
+.ly-dir i{ color: var(--ly-ink); }
+.ly-dir span{ margin-left: var(--gap); font-size: calc(var(--ui-fine) - var(--gap-hair)); }
+.ly-replies p{ margin: calc(var(--gap) / 2) 0 0; padding-left: var(--gap); border-left: var(--hair) solid var(--ly-line); }
+.ly-replyf textarea{ width: 100%; box-sizing: border-box; margin-top: var(--gap); padding: var(--gap); border: var(--hair) solid var(--ly-line); border-radius: calc(var(--r-ui) - var(--gap-hair));
+  background: var(--ly-paper); color: var(--ly-ink); font: 400 var(--ui-fine) / 1.45 var(--chrome-ui-font); resize: none; outline: 0; }
+.ly-replyf textarea:focus{ box-shadow: 0 0 0 2px var(--chrome-accent); }
+
+/* the quiet verbs, the one loud act, the four dots */
+.ly-verb, .ly-act, .ly-dot, .ly-x, .ly-sw, .ly-seg button{ -webkit-appearance: none; appearance: none; margin: 0; border: 0; cursor: pointer; font: inherit; -webkit-tap-highlight-color: transparent; }
+.ly-verb{ display: inline-flex; align-items: center; gap: calc(var(--gap) / 2); height: calc(var(--tap) - var(--pad) - var(--gap-hair)); padding: 0 var(--gap);
+  border-radius: calc(var(--r-ui) - var(--gap-hair)); background: var(--ly-well); color: var(--ly-ink); font: 400 var(--ui-fine) / 1 var(--chrome-ui-font); }
+.ly-verb i{ font-style: normal; color: var(--ly-dim); }
+.ly-verb:hover{ background: color-mix(in srgb, var(--ly-ink) 12%, var(--ly-paper)); }
+.ly-verb svg, .verb svg{ width: var(--pad); height: var(--pad); fill: none; stroke: currentColor; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+.verb.ly-share-b, .verb.ly-bshare, .verb.ly-bnote{ display: inline-flex; align-items: center; gap: calc(var(--gap) / 2); }
+.ly-verb[aria-pressed="true"]{ box-shadow: inset 0 0 0 1.5px var(--chrome-accent); }
+.ly-vis[data-vis="public"]{ color: var(--chrome-accent); }
+.ly-act{ height: calc(var(--tap) - var(--pad) - var(--gap-hair)); padding: 0 var(--pad); border-radius: calc(var(--r-ui) - var(--gap-hair));
+  background: var(--chrome-accent); color: var(--chrome-bg); font: 600 var(--ui-fine) / 1 var(--chrome-ui-font); }
+.ly-act:disabled{ opacity: .35; cursor: default; }
+.ly-verb:focus-visible, .ly-act:focus-visible, .ly-dot:focus-visible, .ly-sw:focus-visible, .ly-seg button:focus-visible, .ly-x:focus-visible{ outline: 0; box-shadow: 0 0 0 2px var(--chrome-accent); }
+.ly-dots{ display: inline-flex; align-items: center; gap: calc(var(--gap) / 2); margin-right: calc(var(--gap) / 2); }
+.ly-dot{ width: calc(var(--pad) * 2); height: calc(var(--pad) * 2); border-radius: 50%; padding: 0; box-shadow: inset 0 0 0 var(--hair) color-mix(in srgb, var(--ly-ink) 20%, transparent); }
+.ly-dot[aria-pressed="true"]{ box-shadow: 0 0 0 2px var(--ly-paper), 0 0 0 3.5px var(--ly-ink); }
+.ly-go-to{ height: auto; min-height: calc(var(--tap) - var(--pad)); padding: var(--gap) var(--pad); text-align: left; }
+
+/* the run card (Voice, over the live page) */
+.ly-mark{ display: grid; grid-template-columns: 64px 1fr; align-items: center; gap: var(--gap); margin-top: var(--gap); }
+.ly-mark label{ color: var(--ly-dim); }
+.ly-mark em{ grid-column: 2; font-style: normal; color: var(--ly-dim); }
+.ly-sws{ display: flex; flex-wrap: wrap; align-items: center; gap: calc(var(--gap) / 2); }
+.ly-sw{ width: calc(var(--pad) * 2); height: calc(var(--pad) * 2); border-radius: 50%; padding: 0; background: color-mix(in srgb, var(--win) 55%, var(--ly-paper)); box-shadow: inset 0 0 0 var(--hair) color-mix(in srgb, var(--win) 80%, var(--ly-ink)); }
+.ly-sw[aria-pressed="true"]{ box-shadow: 0 0 0 2px var(--ly-paper), 0 0 0 3.5px var(--ly-ink); }
+.ly-dirsel{ height: calc(var(--tap) - var(--pad) - var(--gap-hair)); padding: 0 var(--gap); border: 0; border-radius: calc(var(--r-ui) - var(--gap-hair)); background: var(--ly-well); color: var(--ly-ink); font: 400 var(--ui-fine) / 1 var(--chrome-ui-font); -webkit-appearance: none; appearance: none; }
+.ly-run .ly-foot{ justify-content: space-between; }
+
+/* the selection bar: a glass capsule over the words just chosen */
+.ly-selbar{ position: fixed; z-index: 60; display: flex; align-items: center; gap: calc(var(--gap) / 2); padding: calc(var(--gap) / 2) calc(var(--gap) / 2) calc(var(--gap) / 2) var(--gap); border-radius: calc(var(--tap) / 2); }
+
+/* ---- THE SHARE MODE ----------------------------------------------------- */
+.ly-scrim{ position: fixed; inset: 0; z-index: 69; background: var(--sf-scrim-faint); }
+.ly-share{ position: fixed; z-index: 70; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(440px, calc(100% - 2 * var(--pad))); max-height: calc(100% - 4 * var(--pad)); overflow: auto;
+  padding: var(--pad) calc(var(--pad) + var(--gap-hair)) calc(var(--pad) + var(--gap-hair)); border-radius: calc(var(--r-ui) * 1.6);
+  background: color-mix(in srgb, var(--ly-paper) 94%, transparent); font: 400 var(--ui-fine) / 1.45 var(--chrome-ui-font); }
+[data-layer] > .ly-scrim, [data-layer] > .ly-share{ position: absolute; }
+.ly-sh-head{ display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--gap); }
+.ly-sh-head b{ font: 600 var(--ui-act) / 1.3 var(--chrome-ui-font); }
+.ly-x{ width: calc(var(--tap) - var(--pad)); height: calc(var(--tap) - var(--pad)); border-radius: 50%; background: var(--ly-well); color: var(--ly-dim); font-size: var(--ui-act); line-height: 1; }
+.ly-sh-card{ margin: 0 0 var(--pad); padding: var(--pad) calc(var(--pad) + var(--gap-hair)); border-radius: var(--r-ui); background: var(--ly-paper); border: var(--hair) solid var(--ly-line); }
+.ly-sh-card blockquote{ margin: 0; font: 400 calc(var(--ui-act) + var(--gap-hair)) / 1.45 var(--serif, Georgia, serif); }
+.ly-sh-card p{ margin: var(--gap) 0 0; font: italic 400 var(--ui-fine) / 1.45 var(--serif, Georgia, serif); }
+.ly-sh-card figcaption{ display: flex; justify-content: space-between; gap: var(--gap); margin-top: var(--gap); color: var(--ly-dim); font-size: calc(var(--ui-fine) - var(--gap-hair)); }
+.ly-seg{ display: flex; padding: var(--gap-hair); border-radius: calc(var(--r-ui) + var(--gap-hair)); background: var(--ly-well); }
+.ly-seg button{ flex: 1; height: calc(var(--tap) - var(--pad) - var(--gap-hair)); border-radius: var(--r-ui); background: transparent; color: var(--ly-dim); font: 400 var(--ui-fine) / 1 var(--chrome-ui-font); }
+.ly-seg button[aria-checked="true"]{ background: var(--ly-paper); color: var(--chrome-accent); box-shadow: 0 1px 2px var(--shadow-sm); }
+.ly-sh-say{ margin: var(--gap) 0 var(--pad); color: var(--ly-dim); }
+.ly-sh-acts{ display: flex; gap: var(--gap); }
+.ly-sh-acts > *{ flex: 1; justify-content: center; }
+.ly-sh-link{ margin: var(--gap) 0 0; color: var(--ly-dim); font-size: calc(var(--ui-fine) - var(--gap-hair)); overflow-wrap: anywhere; }
+.ly-share[data-done] .ly-sh-link{ color: var(--ly-ink); }
+.ly-rerun ul{ list-style: none; margin: 0; padding: 0; }
+.ly-rerun li{ display: flex; gap: var(--gap); padding: calc(var(--gap) / 2) 0; border-bottom: var(--hair) solid var(--ly-line); }
+.ly-rerun li i{ margin-left: auto; font-style: normal; color: var(--ly-dim); text-align: right; }
+
+/* ---- the phone: a sheet over the foot, the share mode rising from it ---- */
+.ly-over[data-mode="sheet"]{ left: var(--gap); right: var(--gap); bottom: calc(var(--pbar-h, var(--band-foot, 96px)) + var(--gap)); max-height: 36vh; overflow: auto; overscroll-behavior: contain;
+  padding: var(--gap); border-radius: calc(var(--r-ui) * 1.8); border: var(--hair) solid var(--ly-line); background: var(--ly-glass);
+  -webkit-backdrop-filter: saturate(1.4) blur(18px); backdrop-filter: saturate(1.4) blur(18px); box-shadow: 0 4px 18px var(--shadow-md); }
+.ly-over[data-mode="sheet"][data-empty]:not(:has(.ly-go-to:not([hidden]))){ display: none; }
+.ly-over[data-mode="sheet"] .ly-list{ display: flex; flex-direction: column; gap: var(--gap); }
+.ly-over[data-mode="sheet"] .ly-card{ background: color-mix(in srgb, var(--ly-paper) 70%, transparent); box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; }
+.ly-over[data-mode="sheet"] .ly-go-to{ width: 100%; }
+@media (orientation: landscape) and (max-height: 520px){
+  /* the phone on its side: the sheet stands at the right, the text keeps the width */
+  .ly-over[data-mode="sheet"]{ left: auto; right: var(--gap); top: calc(var(--safe-top, 0px) + var(--tap) + var(--gap)); width: min(300px, 38vw); max-height: none; }
+}
+/* the phone's share rises as a glass sheet that floats ABOVE the foot (the ⚙ · book · mic stay reachable, Photos' own sheets do the same) */
+html[data-phone] .ly-share{ left: var(--gap); right: var(--gap); top: auto; bottom: calc(var(--pbar-h, var(--band-foot, 96px)) + var(--gap)); transform: none; width: auto; max-height: calc(100% - var(--pbar-h, 96px) - var(--safe-top, 54px) - 2 * var(--gap)); }
+@media (orientation: landscape) and (max-height: 520px){ html[data-phone] .ly-share{ left: auto; width: min(420px, 60vw); top: calc(var(--safe-top, 0px) + var(--gap)); } html[data-phone] .ly-sh-acts{ flex-direction: row; } html[data-phone] .ly-sh-acts > *{ flex: 1; } }
+html[data-phone] .ly-sh-acts{ flex-direction: column; }
+html[data-phone] .ly-sh-acts > *{ flex: none; height: var(--tap); }
+html[data-phone] .ly-seg button, html[data-phone] .ly-x{ height: calc(var(--tap) - var(--gap)); }
+html[data-phone] .ly-x{ width: calc(var(--tap) - var(--gap)); }
+html[data-phone] .ly-selbar .ly-dot{ width: calc(var(--tap) - var(--pad)); height: calc(var(--tap) - var(--pad)); }
+html[data-phone] .ly-selbar .ly-verb{ height: calc(var(--tap) - var(--pad)); }
+/* the reader sets its own <p> (page.css); the overlay's sentences say their size themselves */
+.ly-over p.ly-hint, .ly-over p.ly-queued, .ly-share p.ly-sh-say, .ly-share p.ly-sh-link, .ly-replies p{ font: 400 var(--ui-fine) / 1.45 var(--chrome-ui-font); text-indent: 0; }
+.ly-share p.ly-sh-link{ font-size: calc(var(--ui-fine) - var(--gap-hair)); }
+.ly-share .ly-sh-card p{ font: italic 400 var(--ui-fine) / 1.45 var(--serif, Georgia, serif); text-indent: 0; }
+
+/* THE SELECTION IS THE PAGE'S, NOT THE BROWSER'S BLUE (ASKS #187, the web Stranger; POLISH 1). The words a person
+   drags across wear the Mine layer's own first colour, lighter than a kept highlight, so choosing reads as the start
+   of marking; the selection bar (Highlight · Note · Share) rises over them in every layer, Book included. */
+#readercol ::selection, .ly-over ::selection{ background-color: color-mix(in srgb, var(--mg-gold) 26%, transparent); color: inherit; }

@@ -16,8 +16,17 @@
      together, so paper and ink never drift apart in temperature.
      0 = the Archive's own near-neutral. Raise it toward candlelight.        */
   --warm: 0;
-  --ground: hsl(48 calc(14% + var(--warm) * 9%) calc(98.5% - var(--warm) * 0.6%));
-  --ink:    hsl(42 calc(18% + var(--warm) * 6%) calc(7% + var(--warm) * 1%));
+  /* CONTRAST IS ONE NUMBER TOO (ASKS #172, Osca 30 Sep: "I'd also like a contrast setting in there").
+     -2 .. 2, 0 = the page as it has always been (Settings' middle stop). It moves ink and ground APART
+     (up) or TOGETHER (down), in both themes, and never their hue -- so warmth and contrast are two
+     independent dials on the same two colours. Written on <html> the way --warm is (settings-look.js;
+     EXPORT: prefs.js `contrast` -> cssVars "--contrast", absent at 0). */
+  --contrast: 0;
+  /* the saturation is CAPPED (30 Sep, ASKS #172): 14 + 9 x warmth passed 100 % at Cream, so Amber and Candle
+     clipped to a lemon (255, 255, 190 -- hue 60) and the ink to an orange (98, 65, 0). At 70 % / 45 % the warm
+     end is candlelight on cream, hue 48 held; Paper and Ivory are exactly what they were. */
+  --ground: hsl(48 min(calc(14% + var(--warm) * 9%), 70%) calc(98.5% - var(--warm) * 0.6% + var(--contrast) * 1.5%));
+  --ink:    hsl(42 min(calc(18% + var(--warm) * 6%), 45%) calc(7% + var(--warm) * 1% - var(--contrast) * 4%));
   --dim:    #7a776d;
   --rule:   #dedcd4;
 
@@ -282,13 +291,13 @@ html{ font-size: calc((14.5px + 0.75vw) * var(--optical)); }
    Note what the media query means for those benches on a machine set to dark:
    they now open dark, the way the app does. That is the point of it. */
 html[data-theme="dark"], html[data-dark]{
-  --ground: hsl(calc(240 - var(--warm) * 10.667) calc(7.3% + var(--warm) * 1.8%) calc(8.04% + var(--warm) * 0.28%));
-  --ink:    hsl(30 calc(4.17% + var(--warm) * 2.2%) calc(90.59% - var(--warm) * 0.25%));
+  --ground: hsl(240 calc(7.3% - var(--warm) * 0.4%) calc(8.04% + var(--warm) * 0.28% - var(--contrast) * 2.5%));
+  --ink:    hsl(30 calc(4.17% + var(--warm) * 2.2%) calc(90.59% - var(--warm) * 0.25% + var(--contrast) * 4%));
   --dim:#8c8a83; --rule:#2e2e33;
 
   /* chrome dark */
   --chrome-bg: #131316; --chrome-fg: #e8e7e6; --chrome-fg-dim: #98979b;
-  --chrome-accent: #c9c4bb; --chrome-border: #2c2c32; --chrome-panel-bg: #1a1a1f;
+  --chrome-accent: #d9736a; --chrome-border: #2c2c32; --chrome-panel-bg: #1a1a1f;
   --chrome-link: #c9c4bb; --chrome-control-bg: #1a1a1f;
   --chrome-ok: #7fc08a; --chrome-bad: #d98a7a;
   --chrome-paper-warm: #1b1610; --chrome-ink-warm: #efe6d5;
@@ -297,17 +306,68 @@ html[data-theme="dark"], html[data-dark]{
 }
 @media (prefers-color-scheme: dark){
   html:not([data-theme="light"]){
-    --ground: hsl(calc(240 - var(--warm) * 10.667) calc(7.3% + var(--warm) * 1.8%) calc(8.04% + var(--warm) * 0.28%));
-    --ink:    hsl(30 calc(4.17% + var(--warm) * 2.2%) calc(90.59% - var(--warm) * 0.25%));
+    --ground: hsl(240 calc(7.3% - var(--warm) * 0.4%) calc(8.04% + var(--warm) * 0.28% - var(--contrast) * 2.5%));
+    --ink:    hsl(30 calc(4.17% + var(--warm) * 2.2%) calc(90.59% - var(--warm) * 0.25% + var(--contrast) * 4%));
     --dim:#8c8a83; --rule:#2e2e33;
 
     /* chrome dark */
     --chrome-bg: #131316; --chrome-fg: #e8e7e6; --chrome-fg-dim: #98979b;
-    --chrome-accent: #c9c4bb; --chrome-border: #2c2c32; --chrome-panel-bg: #1a1a1f;
+    --chrome-accent: #d9736a; --chrome-border: #2c2c32; --chrome-panel-bg: #1a1a1f;
     --chrome-link: #c9c4bb; --chrome-control-bg: #1a1a1f;
     --chrome-ok: #7fc08a; --chrome-bad: #d98a7a;
     --chrome-paper-warm: #1b1610; --chrome-ink-warm: #efe6d5;
     --ask-dark-bad: #e0736a;
     --ask-dark-bg: #17171a; --ask-dark-fg: #e8e7e6; --ask-dark-border: #2a2a2e;
+  }
+}
+
+/* WARMTH IN DARK NEVER PASSES THROUGH GREEN, AND THE CHROME WEARS THE PAPER (ASKS #172 + #179, Osca 30 Sep:
+   "if you do want to use colours in dark mode, it'd only either be from warmth inverted OR from the frank red";
+   "the reading settings etc, aren't effecting settings either, they should"; "the general settings aren't
+   effecting library really, but they should").
+   1. THE DARK GROUND. It used to TURN its hue 240 -> 48 with warmth, a straight line round the wheel (the note
+      above the dark block) -- and the stops between were cyan (Ivory, 192), GREEN (Cream, 144) and
+      yellow-green (Amber, 96): three of the five papers were green-black. Now it is a MIX, in oklab, of the
+      neutral blue-black (#131316 at warmth 0, exactly as before) and a brown-black (warmth 18): a straight
+      line in a perceptual space from a near-grey to a brown crosses no green. The whites warm the way they
+      always did (ink, hue 30). An engine without color-mix keeps the hsl above: the same blue-black, going
+      greyer with warmth, never green.
+   2. THE CHROME IS THE PAPER. --chrome-bg / --chrome-fg ARE --ground / --ink, and the other chrome colours
+      are mixed from those two -- so every page drawn in the chrome palette (Settings, the Library, the band,
+      the Surface) takes warmth, contrast and light/dark from the same numbers as the page of a book. At
+      warmth 0 and contrast 0 each lands within a few units of the literal it replaces.
+   3. THE ACCENT IN DARK IS FRANK'S RED (ASKS #7, e752409 -- #d9736a, held till now only in tokens.design.json).
+   Behind @supports for the reason library.css gives: a custom property takes any tokens, and an engine that
+   cannot compute color-mix would otherwise paint `unset`. */
+@supports (color: color-mix(in oklab, #000, #fff 50%)){
+  :root{
+    --chrome-bg: var(--ground);
+    --chrome-fg: var(--ink);
+    --chrome-fg-dim: color-mix(in oklab, var(--ink) 70%, var(--ground));
+    --chrome-panel-bg: color-mix(in oklab, var(--ground), #fff 70%);
+    --chrome-control-bg: color-mix(in oklab, var(--ground) 96%, var(--ink));
+    --chrome-border: color-mix(in oklab, var(--ground) 88%, var(--ink));
+  }
+  html[data-theme="dark"], html[data-dark]{
+    --ground: color-mix(in oklab, hsl(240 7.3% calc(8.04% - var(--contrast) * 2.5%)),
+      hsl(30 38% calc(12% - var(--contrast) * 2.5%)) calc(var(--warm) * 5.5556%));
+    --chrome-bg: var(--ground);
+    --chrome-fg: var(--ink);
+    --chrome-fg-dim: color-mix(in oklab, var(--ink) 62%, var(--ground));
+    --chrome-panel-bg: color-mix(in oklab, var(--ground) 95%, var(--ink));
+    --chrome-control-bg: color-mix(in oklab, var(--ground) 95%, var(--ink));
+    --chrome-border: color-mix(in oklab, var(--ground) 86%, var(--ink));
+  }
+  @media (prefers-color-scheme: dark){
+    html:not([data-theme="light"]){
+      --ground: color-mix(in oklab, hsl(240 7.3% calc(8.04% - var(--contrast) * 2.5%)),
+        hsl(30 38% calc(12% - var(--contrast) * 2.5%)) calc(var(--warm) * 5.5556%));
+      --chrome-bg: var(--ground);
+      --chrome-fg: var(--ink);
+      --chrome-fg-dim: color-mix(in oklab, var(--ink) 62%, var(--ground));
+      --chrome-panel-bg: color-mix(in oklab, var(--ground) 95%, var(--ink));
+      --chrome-control-bg: color-mix(in oklab, var(--ground) 95%, var(--ink));
+      --chrome-border: color-mix(in oklab, var(--ground) 86%, var(--ink));
+    }
   }
 }

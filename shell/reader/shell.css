@@ -410,10 +410,13 @@ html:not([data-phone]) .mplay{
   background:var(--ground);
   border:1px solid var(--rule); border-radius:999px;
   box-shadow:0 10px 28px rgba(0,0,0,.14);
-  opacity:var(--mplay-rest);
   transition:opacity .18s ease, transform .22s ease; }
-html:not([data-phone]) .mplay:hover,
-html:not([data-phone]) .mplay:focus-within{ opacity:1; }
+/* AT REST ITS CONTROLS FADE, NOT ITS GROUND (EXPORT, 28 Sep): the whole capsule at
+   .52 let the page's words show through it -- "signaled by square brackets" read
+   across the play button. The ground stays solid; only what is on it rests. */
+html:not([data-phone]) .mplay > *{ opacity:var(--mplay-rest); transition:opacity .18s ease; }
+html:not([data-phone]) .mplay:hover > *,
+html:not([data-phone]) .mplay:focus-within > *{ opacity:1; }
 /* NO CHAPTER, NO CAPSULE. `hidden` has to beat the display above, which is
    more specific than the UA's `[hidden]` rule and would otherwise draw an
    empty capsule over a book with no voice. */
@@ -599,7 +602,9 @@ html[data-phone] .mplay{ display:none; }
     --pplay-gap:4px;
     --pplay-rail-h:44px;      /* the rail is a tap target: 44, like the rest */
     --pplay-type:12px;
-    --pplay-autohide:1;       /* read by the mount, not by a rule here */
+    --pplay-autohide:0;       /* read by the mount. 0 since 29 Sep: the phone's bar floats and never hides (band.css,
+                                 THE PHONE'S BAR FLOATS), so the play row hid alone -- a listener pressed ▶ and Pause
+                                 left the screen (y 855 on an 852 phone, two Strangers). It stays with the bar. */
     --pplay-scrub:flex;       /* `none` -> the transport row alone */
     --pplay-speed:flex;       /* `none` -> no speed button on the phone */
     --pplay-skip:15;          /* read by the mount */
@@ -781,6 +786,32 @@ html[data-phone] .mplay{ display:none; }
                 + var(--pplay-h) + var(--pplay-rail-h) + 14px); }
 }
 
+/* ONE PLAYER, ONE GLASS, EVERY HOST (DESIGN, 29 Sep). Osca: "make sure they all look like the same app ... between the
+   band mac app, the browser and the phone app". The Library's language is glass floating over the page: a ground at
+   ~60 % with an 18 px blur, a hairline of ink at 12 %, a soft shadow, no rule across the width. The phone's player was
+   still a painted strip across the foot with a rule on top (the old bar's), sitting on a bar that now floats as three
+   glass pieces; the Mac's and the web's capsule was a solid ground. Now both are the same capsule: the phone's is the
+   width of the band's three (--pad each side), a --gap over them, its corners the band's; the Mac's/web's is the same
+   glass. The words under it blur, so nothing reads through the ▶ (the EXPORT 28 Sep reason for the solid ground). */
+html[data-phone] .pplay{
+  left:var(--pad, 12px); right:var(--pad, 12px);
+  bottom:calc(var(--pbar-h, 0px) + var(--safe-bottom, env(safe-area-inset-bottom, 0px)) + var(--gap, 8px));
+  padding:0 6px; border-top:0;
+  border:1px solid color-mix(in srgb, var(--ink) 12%, transparent);
+  border-radius:calc((var(--pplay-h) + 12px) / 2);
+  background:color-mix(in srgb, var(--ground) 62%, transparent);
+  -webkit-backdrop-filter:saturate(1.8) blur(18px); backdrop-filter:saturate(1.8) blur(18px);
+  box-shadow:0 4px 18px rgba(0,0,0,.14); }
+html[data-phone] .pplay-row{ height:calc(var(--pplay-h) - 4px); }
+html[data-phone] .pplay-go{ width:44px; height:44px; min-width:44px; }
+html[data-phone] .pplay[data-clock="on"]{ border-radius:24px; }
+html[data-phone] .pplay .pplay-b, html[data-phone] .pplay .pplay-speed{ border-radius:50%; }
+html:not([data-phone]) .mplay{
+  border:1px solid color-mix(in srgb, var(--ink) 12%, transparent);
+  background:color-mix(in srgb, var(--ground) 72%, transparent);
+  -webkit-backdrop-filter:saturate(1.8) blur(18px); backdrop-filter:saturate(1.8) blur(18px);
+  box-shadow:0 4px 18px rgba(0,0,0,.12); }
+
 
 /* ---- THE LAST PANE IS ITS OWN ASSET (6 Sep). The line the word came from and
    the rail under it moved out whole to wordpane.css, mounted by book-nav.js
@@ -789,3 +820,28 @@ html[data-phone] .mplay{ display:none; }
    get it. Not one rule of theirs is left in this file: every selector they
    used is now in wordpane.css and in no other stylesheet. */
 
+
+/* THE PHONE'S FOOT, SMALLER (EXPORT, 28 Sep; Osca: "real estate is SCARCE -- the foot
+   bar lower / less tall"). The transport row is 44, its play 44 (was a 56 disc in a 56
+   row), and the pace reads "300 wpm" on one line. */
+@media (max-width: 600px), (max-height: 500px){
+  html[data-phone] .pplay-go{ width:44px; height:44px; min-width:44px; }
+  html[data-phone] .pplay-go svg{ width:20px; height:20px; }
+  html[data-phone] .pplay-speed{ white-space:nowrap; }
+}
+
+/* ONE ROW AT THE PHONE'S FOOT (Osca, 29 Sep, a picture of the book on the phone: "things are going over each other
+   ... your new pill and buttons WHICH look great, are ON TOP of the old one, they haven't replaced it"). The player
+   capsule sat on the band's three as a second glass row with the page showing between them. Now, until the voice
+   plays, the player is only its ▶, and the ▶ sits INSIDE the band's pill at its left (band.js .band-play; band.css):
+   ⚙ · [▶  David Copperfield / I Am Born] · mic -- Photos' one row. The pace readout and Follow go from the rest state
+   (Follow does nothing until a voice plays: "what's this silly glyph? When I press it generally it does nothing").
+   Once it plays, the capsule rises over the band as the player it is -- rail, clock, the sentence arrows, Follow.
+   As you read, all of it goes (band.js data-away), and the book's scroll bar with it. */
+html[data-phone] .pplay[data-playing="off"]{ display:none !important; }   /* at rest the ▶ is the band's (band.js .band-play) */
+html[data-phone] .pplay, html[data-phone] .scrub2{ transition:transform .24s ease, opacity .24s ease; }
+html[data-phone][data-away] .pplay{ transform:translateY(calc(100% + 80px)); opacity:0; pointer-events:none; }
+html[data-phone][data-away] .scrub2{ opacity:0; pointer-events:none; }
+/* THE ONE-WORD DOOR (ASKS #120; reader.html oneb): a plain key beside FOLLOW, and FOLLOW's own "on" while the view is
+   one word. On the phone it is the row's seventh 44: 7 x 44 + 6 x 4 = 332 of the strip's 382. */
+.play-oneword[aria-pressed="true"]{ opacity:1; background:color-mix(in srgb, var(--ink) 13%, transparent); }

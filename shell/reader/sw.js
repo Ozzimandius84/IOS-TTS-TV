@@ -30,7 +30,9 @@
 // that is not the current SHELL_CACHE, so changing this string IS the eviction
 // -- and changing it changes sw.js's own bytes, which is the only thing that
 // makes a browser run `install` and `activate` at all.
-const SHELL_CACHE = "ttstv-shell-v60";   // 24 Sep: D2-D7 rebuild (v0.2.0) -- rename, apply-state,
+const SHELL_CACHE = "ttstv-shell-v62";   // 30 Sep, later: EXPORT (web) second pass -- chapter tops scroll, Play from the line, marks, web wording;
+                                         // 30 Sep: EXPORT (web) -- band, layers, hints, Tell Frank, settings look;
+                                         // 24 Sep: D2-D7 rebuild (v0.2.0) -- rename, apply-state,
                                          // name in SHELL_FILES is only fetched by an install, so the
                                          // string has to move or an installed app never caches
                                          // it (v37: the shell moved to shell/)
@@ -156,11 +158,27 @@ const SHELL_FILES = [
   "./float.css",             // strip. Its word is wordview.css's and its
                              // caption is wordpane.css's `.wordsub`, both
   "./float.js",              // already here -- these three are what is new.
+  "./float.design.json",     // THE FAN'S CONTENTS (FLOAT.md §10, 28 Sep): what
+                             // the 3-4 circles are; the editor writes it, the
+                             // panel reads it at open, the hands never change.
   "./surface.js",            // ...and the surface itself: the query, the one
                              // list, and the works. Both pages load it and the
                              // phone bar's search door calls into it, so an
                              // installed app that had not cached it would open
                              // its own search into nothing, offline.
+  // ===================== THE BAND, THE LAYERS, AND WHAT RIDES THEM =========
+  // EXPORT (web), 30 Sep: the design masters reader.html and library.html
+  // link these; shell/ had none of them, so every page asked for eight 404s.
+  "./band.css",              // THE BAND: the glass row on every page (design/reader/band.css)
+  "./band.js",               // ...its mount, and Band.chapterLabel
+  "./layers.css",            // THE FOUR LAYERS: Book, Mine, Everyone, Voice
+  "./layers.js",
+  "./hints.js",              // FIRST-TIME HINTS, once per page after first run
+  "./dismiss.js",            // pinch out / fling out of a book, back to the shelf
+  "./tellfrank.css",         // TELL FRANK: the sheet, the thumbs-down, the failure card
+  "./tellfrank.js",
+  "./settings-look.css",     // SETTINGS WEARS THE SETTINGS: settings/settings.html links both
+  "./settings-look.js",
   // ============================ THE BAR ===================================
   "../bar/askbar.js",        // the bar's answers; the field itself is the shell's (4 Sep)
   "../bar/askbar.css",       // ...and since 5 Sep they are `bar/`'s own, not the reader's:

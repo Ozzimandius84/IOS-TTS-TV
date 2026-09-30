@@ -1,11 +1,15 @@
-/* THIS FILE IS A MASTER, NOT A BENCH. design/library/ mirrors library/ and
-   `design/export.py --shell` builds clean/library/library.css from it
-   (design/LOOP.md). The Library's bench is design/reader/bench-library.html;
-   this file ships the numbers it settled on and carries none of its dials, so
-   there is nothing here to cut and the loop's own word for that is one
-   marker: */
+/* THIS FILE IS THE DESIGN MASTER OF THE SHELF'S PICTURE (LIBRARY-DESIGN,
+   wave 10, 26 Sep 2026) -- library/library.css, every rule of it, with the
+   palette taken from design/reader/tokens.css (the page links it first) and
+   THE SHELF, DRAWN as the last block. design/library/library.html dials the
+   block's seven properties; on Osca's yes `export.py --shell` carries this
+   file to shell/library/library.css byte for byte (design/ship.py, `library`
+   in DESIGN_MODULES). Until then library/library.css is what ships. */
   :root {
-    --bg: #fcfcfb;
+    /* ONE PALETTE (POLISH rule 12): every value is tokens.css's, light and
+       dark alike -- this sheet writes no colour of its own. The names the
+       rules below spend are kept; they point at the tokens now. */
+    --bg: var(--chrome-bg);
   /* ---- THE RADIUS SCALE (Osca, 30 Aug: "all boxes across all pages are just
      the wrong shape, wrong curve, not modern enough").
      Four files had grown ten different radii between them -- 3, 4, 6, 7, 8,
@@ -25,24 +29,13 @@
   --r-3: 22px;
   --r-pill: 999px;
   /* The chrome's font, not the book's -- see reader.html's own note. */
-  --ui-font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI Variable Text",
-             "Segoe UI", Inter, system-ui, "Helvetica Neue", Arial, sans-serif;
- --fg: #0b0b0b; --fg-dim: #52514f; --accent: #832f2b;
-    --border: #e4e3e0; --panel-bg: #ffffff; --link: #832f2b; --control-bg: #f5f5f3;
-    --ok: #3f7a45; --bad: #a03328;
+  --ui-font: var(--chrome-ui-font);
+    --fg: var(--chrome-fg); --fg-dim: var(--chrome-fg-dim); --accent: var(--chrome-accent);
+    --border: var(--chrome-border); --panel-bg: var(--chrome-panel-bg); --link: var(--chrome-link);
+    --control-bg: var(--chrome-control-bg); --ok: var(--chrome-ok); --bad: var(--chrome-bad);
+    --warn: var(--chrome-warn);
   }
-  [data-theme="dark"] {
-    --bg: #131316; --fg: #e8e7e6; --fg-dim: #98979b; --accent: #c9c4bb;
-    --border: #2c2c32; --panel-bg: #1a1a1f; --link: #c9c4bb; --control-bg: #1a1a1f;
-    --ok: #7fc08a; --bad: #d98a7a;
-  }
-  @media (prefers-color-scheme: dark) {
-    :root:not([data-theme="light"]) {
-      --bg: #131316; --fg: #e8e7e6; --fg-dim: #98979b; --accent: #c9c4bb;
-      --border: #2c2c32; --panel-bg: #1a1a1f; --link: #c9c4bb; --control-bg: #1a1a1f;
-      --ok: #7fc08a; --bad: #d98a7a;
-    }
-  }
+  /* dark is tokens.css's swap of the same names; nothing to repeat here */
   /* ---- THE PAPER'S WARMTH, the same one number the reading page takes
      (reader/reader.css's own block, and reader/settings.js writes it). The
      shelf is paper too: warming the book you are reading and leaving the room
@@ -50,11 +43,7 @@
      switch tabs. Mixed from the real colour, so warmth 0 IS the shelf that was
      always there, exactly. The CHROME does not warm and should not -- chrome
      belongs to the window, paper to the book. */
-  :root { --warm: 0; --paper-warm: #f4e6cb; --ink-warm: #2a2016; }
-  [data-theme="dark"] { --paper-warm: #1b1610; --ink-warm: #efe6d5; }
-  @media (prefers-color-scheme: dark) {
-    :root:not([data-theme="light"]) { --paper-warm: #1b1610; --ink-warm: #efe6d5; }
-  }
+  :root { --paper-warm: var(--chrome-paper-warm); --ink-warm: var(--chrome-ink-warm); }
   /* ---- AND THE WARMTH IS BEHIND @supports, which is not decoration
      (6 Sep, measured in a real WebKit).  A custom property takes ANY token
      stream: `--bg: color-mix(...)` parses in every engine ever written, so it
@@ -69,22 +58,12 @@
      doing its job.  `@supports` is the only construct that stops the override
      from being seen at all, because the alternative -- a second declaration
      after it -- is dropped by the same "any tokens are valid" rule. ---- */
-  @supports (color: color-mix(in oklab, #000, #fff 50%)) {
-    :root {
-      --bg: color-mix(in oklab, #fcfcfb, var(--paper-warm) calc(var(--warm) * 100%));
-      --fg: color-mix(in oklab, #0b0b0b, var(--ink-warm) calc(var(--warm) * 100%));
-    }
-    [data-theme="dark"] {
-      --bg: color-mix(in oklab, #131316, var(--paper-warm) calc(var(--warm) * 100%));
-      --fg: color-mix(in oklab, #e8e7e6, var(--ink-warm) calc(var(--warm) * 100%));
-    }
-    @media (prefers-color-scheme: dark) {
-      :root:not([data-theme="light"]) {
-        --bg: color-mix(in oklab, #131316, var(--paper-warm) calc(var(--warm) * 100%));
-        --fg: color-mix(in oklab, #e8e7e6, var(--ink-warm) calc(var(--warm) * 100%));
-      }
-    }
-  }
+  /* ...AND SINCE ASKS #172 (30 Sep) THE WARMTH IS THE TOKENS' OWN, NOT THIS FILE'S. The mix that stood here spent
+     `var(--warm) * 100%` -- but --warm is 0..18 (prefs.js writes warmth x 4.5; tokens.css is solved for 0..18), so
+     every paper past the first came out as 100 % candle: Ivory and Candle were the same shelf. tokens.css now makes
+     the chrome the paper (--chrome-bg / --chrome-fg ARE --ground / --ink, warmth and contrast in both themes), so
+     the shelf takes Settings' warmth and contrast from the same two numbers as the page of a book, and a second mix
+     here would warm it twice. */
 
   * { box-sizing: border-box; }
   html, body { margin: 0; padding: 0; background: var(--bg); color: var(--fg);
@@ -235,7 +214,7 @@
          no <h1> ON PURPOSE (see library.html): in the app the strip is the
          title bar and says Library. The bench needs a head because the bench
          has no strip. The theme lives in Settings.
-       * its `<img src="../../books/<slug>/cover.jpg">`. THE TYPESET COVER IS
+       * its `<img src="../books/<slug>/cover.jpg">`. THE TYPESET COVER IS
          THE COVER here (Osca, 1 Sep, and fifteen lines of why, above). The
          bench draws the jacket because the bench has no cover engine; this
          page has one hundred covers. §6 asks whether that should change.
@@ -369,8 +348,9 @@
      up with the first book's left edge instead of floating in the margin.
      `.shelfgrid` is `width: fit-content` centred on `margin: 4px auto`, so a
      band has to be the same or the two are centred on different boxes. */
-  .band { width: fit-content; max-width: 100%; margin: 0 auto; }
-  .band[hidden] { display: none; }
+  /* `.shelfband` since LIBRARY-DESIGN: `.band` is the doors' component (band.css) */
+  .shelfband { width: fit-content; max-width: 100%; margin: 0 auto; }
+  .shelfband[hidden] { display: none; }
   .bandhead { margin: 0; padding: 1.4rem 0 0; font: 600 12px/1.4 var(--ui-font);
     letter-spacing: 0.13em; text-transform: uppercase; color: var(--fg-dim); }
 
@@ -572,7 +552,7 @@
      `justify-content: flex-end`, `--sortsize: 12px`. */
   #shelf[data-zoom="16"] .shelfgrid { gap: 0.81rem 0.90rem; }
   #shelf[data-zoom="8"]  .shelfgrid { gap: 1.70rem 1.90rem; }
-  #shelf[data-zoom="4"]  .shelfgrid { gap: 4.30rem 6.45rem; }
+  #shelf[data-zoom="4"]  .shelfgrid { gap: 2px 2px; }   /* PHOTOS rule 1 (30 Sep): was 4.30rem 6.45rem, the card era; the seam */
   #shelf[data-zoom="2t"] .shelfgrid { gap: 3.40rem 4.00rem; }
   #shelf[data-zoom="2"]  .shelfgrid { gap: 2.80rem 3.20rem; }
   #shelf[data-zoom="1t"] .shelfgrid { gap: 0.00rem 0.00rem; }
@@ -632,7 +612,7 @@
     border-radius: 6px; border: 1px solid var(--border);
     box-shadow: 0 1px 2px rgba(0,0,0,0.06);
     background: var(--paper); color: var(--ink);
-    font-family: Charter, Georgia, "Times New Roman", serif;
+    font-family: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;   /* ASKS #140: the covers are set in the page's face, Iowan */
     transition: box-shadow 0.15s ease, border-color 0.15s ease;
   }
   /* THE JACKET IS MOUNTED, NOT CROPPED (Osca, 5 Sep: "the covers are fine,
@@ -743,26 +723,26 @@
   .l3 .t { -webkit-line-clamp: 3; }
   .l4 .t { -webkit-line-clamp: 2; }
   /* the twenty pairings, value for value from PROMPTS/mock/library.html */
-  .p1 { --paper: #efe7d6; --ink: #2a2521; }
-  .p2 { --paper: #2f3a45; --ink: #e9e4d8; }
-  .p3 { --paper: #7b2d26; --ink: #f2e8dc; }
-  .p4 { --paper: #4f6152; --ink: #eef0e6; }
-  .p5 { --paper: #c9a44a; --ink: #2b2418; }
-  .p6 { --paper: #1e1e1c; --ink: #e6e1d6; }
-  .p7 { --paper: #243f6b; --ink: #e9ecf3; }
-  .p8 { --paper: #5a3557; --ink: #f1e8f0; }
-  .p9 { --paper: #b84a3a; --ink: #fbeee6; }
-  .p10 { --paper: #2f5d5a; --ink: #e6f0ee; }
-  .p11 { --paper: #8a6f3c; --ink: #f6efe0; }
-  .p12 { --paper: #d9c7a3; --ink: #2b2418; }
-  .p13 { --paper: #3b3b6b; --ink: #ecebf5; }
-  .p14 { --paper: #6b7b3b; --ink: #f1f3e4; }
-  .p15 { --paper: #a3564e; --ink: #f7ebe8; }
-  .p16 { --paper: #1f3a2e; --ink: #e4efe8; }
-  .p17 { --paper: #e3d5c0; --ink: #3a2f24; }
-  .p18 { --paper: #4a4a4a; --ink: #f0ede8; }
-  .p19 { --paper: #c76b3b; --ink: #fdf1e6; }
-  .p20 { --paper: #6a5a8c; --ink: #f1eef7; }
+  .p1 { --paper: var(--cov-p1-paper); --ink: var(--cov-p1-ink); }
+  .p2 { --paper: var(--cov-p2-paper); --ink: var(--cov-p2-ink); }
+  .p3 { --paper: var(--cov-p3-paper); --ink: var(--cov-p3-ink); }
+  .p4 { --paper: var(--cov-p4-paper); --ink: var(--cov-p4-ink); }
+  .p5 { --paper: var(--cov-p5-paper); --ink: var(--cov-p5-ink); }
+  .p6 { --paper: var(--cov-p6-paper); --ink: var(--cov-p6-ink); }
+  .p7 { --paper: var(--cov-p7-paper); --ink: var(--cov-p7-ink); }
+  .p8 { --paper: var(--cov-p8-paper); --ink: var(--cov-p8-ink); }
+  .p9 { --paper: var(--cov-p9-paper); --ink: var(--cov-p9-ink); }
+  .p10 { --paper: var(--cov-p10-paper); --ink: var(--cov-p10-ink); }
+  .p11 { --paper: var(--cov-p11-paper); --ink: var(--cov-p11-ink); }
+  .p12 { --paper: var(--cov-p12-paper); --ink: var(--cov-p12-ink); }
+  .p13 { --paper: var(--cov-p13-paper); --ink: var(--cov-p13-ink); }
+  .p14 { --paper: var(--cov-p14-paper); --ink: var(--cov-p14-ink); }
+  .p15 { --paper: var(--cov-p15-paper); --ink: var(--cov-p15-ink); }
+  .p16 { --paper: var(--cov-p16-paper); --ink: var(--cov-p16-ink); }
+  .p17 { --paper: var(--cov-p17-paper); --ink: var(--cov-p17-ink); }
+  .p18 { --paper: var(--cov-p18-paper); --ink: var(--cov-p18-ink); }
+  .p19 { --paper: var(--cov-p19-paper); --ink: var(--cov-p19-ink); }
+  .p20 { --paper: var(--cov-p20-paper); --ink: var(--cov-p20-ink); }
   /* the ring is the selection mark on a tile -- `.railrow[aria-selected]`'s
      own background would only tint the caption */
   #shelf .railrow.tile[aria-selected="true"] { background: transparent; }
@@ -901,8 +881,12 @@
     letter-spacing: 0.09em; text-transform: uppercase; color: var(--fg-dim); }
   .menu button.off { opacity: 0.55; cursor: default; }
   .menu button .menuwhy { display: block; font-size: 0.72rem; color: var(--fg-dim);
-    white-space: normal; margin-top: 1px; }
-  .menu { position: fixed; z-index: 40; min-width: 200px; padding: 6px 0; border-radius: var(--r-1);
+    white-space: normal; margin-top: 1px;
+    /* a reason is one line under its item, never a paragraph (EXPORT, 28 Sep: the
+       Finder reason ran four lines and pushed the menu to the window's edge);
+       the whole sentence is the item's title */
+    overflow: hidden; display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; }
+  .menu { position: fixed; z-index: 40; min-width: 200px; max-width: 300px; padding: 6px 0; border-radius: var(--r-1);
     background: var(--panel-bg); border: 1px solid var(--border); box-shadow: 0 6px 20px rgba(0,0,0,0.18); }
   .menu[hidden] { display: none; }
   .menu button { display: block; width: 100%; text-align: left; font: inherit; font-size: 0.9rem; color: var(--fg);
@@ -1290,7 +1274,7 @@
   html[data-phone] #shelf[data-zoom] .railrow.tile { min-height: 0; padding: 0; justify-items: normal; align-content: normal; }
   html[data-phone] #shelf[data-zoom] .railrow.tile { grid-template-rows: auto 2.5em 1.4em; row-gap: 0.75rem; }
   html[data-phone] #shelf[data-zoom] .railrow.tile .tilecov { width: 100%; height: auto; }
-  html[data-phone] #shelf[data-zoom] .railrow.tile .railrow-title { display: block; }
+  html[data-phone] #shelf[data-zoom] .railrow.tile .railrow-title { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }   /* a clamp, not a block: a block cut the second line through its middle ("A Minor Collection of W…") */
   html[data-phone] #shelf[data-zoom] .railrow.tile .railrow-by { display: block; }
 }
 
@@ -1461,4 +1445,843 @@
   html[data-phone] #shelf[data-zoom="2"]  .shelfgrid { gap: 18px 14px; }
   html[data-phone] #shelf[data-zoom="1t"] .shelfgrid { gap: 0 0; }
   html[data-phone] #shelf[data-zoom="1"]  .shelfgrid { gap: 0 0; }
+}
+
+/* ==================================================================
+   THE SHELF, DRAWN (LIBRARY-DESIGN, wave 10, 26 Sep 2026). This block is the
+   design of the Library on EVERY host -- it takes what wave 9 drew for the
+   web alone (the band, the column, one quiet Sort, the tile's rhythm, the
+   foot) and makes it the one drawing (POLISH rule 6: the same thing looks
+   the same everywhere), with the phone as a state of it (rule 13). It comes
+   last so it wins; the app's older numbers above it (the rem gaps, the
+   fixed 2.5em title, ORDER as a pill) are what it replaces.
+
+   EVERY NUMBER IS A TOKEN OR A SUM OF TOKENS (rule 2), from
+   design/reader/tokens.css: --tap 44 · --gap 8 · --pad 12 · --hair 1 ·
+   --gap-hair 2 · --ui-fine 13 · --ui-act 15 · --ui-field 16 · --r-ui 10.
+   EVERY COLOUR IS A var(--chrome-*) (rule 12). No px literal below outside
+   the seven dials, no #hex anywhere in this block.
+
+   THE DIALS, dialled in design/library/library.html's bench, each one
+   property on :root, each rung a token sum (the bench prints the sum):
+     --shelf-tile      the book's width      default 36 gap  (288)
+     --shelf-gap       between books, both ways  default 4 gap (32)
+     --shelf-measure   the page's column     default 4 tile + 3 gap (1248)
+     --shelf-title     the title's size      default --ui-act (15)
+     html[data-author] the author line: caps (default) or plain
+     --shelf-foot-weight  the foot's weight  default 400
+     --shelf-foot-ink  the foot's ink        default --chrome-fg-dim
+   And the empty sentence is a dial in the page (EMPTY_SENTENCES).
+   ================================================================== */
+  /* THE PAGE'S REM IS 16 (--ui-field), as it always was: tokens.css sets the
+     READING page's fluid rem on <html>, and every rem this sheet spends was
+     written against the browser's 16. Pinned here, after the link. */
+  html { font-size: var(--ui-field); }
+  :root {
+    --shelf-tile: calc(36 * var(--gap));
+    --shelf-gap: calc(4 * var(--gap));
+    /* the column is four books wide by default, so the band's doors stand
+       over the first cover's edge and the last cover ends under the theme */
+    --shelf-measure: calc(4 * var(--shelf-tile) + 3 * var(--shelf-gap));
+    --shelf-title: var(--ui-act);
+    --shelf-foot-weight: 400;
+    --shelf-foot-ink: var(--chrome-fg-dim);
+    /* the band aligns its doors with the shelf's column (band.css) */
+    --band-measure: var(--shelf-measure);
+  }
+
+  /* THE HEADER IS THE BAND: nothing of the old header's box is left --
+     band.css draws the row, its height, its rule. */
+  header, html[data-phone] header { padding: 0; border: 0; display: block; height: auto; min-height: 0; gap: 0; }
+  header [hidden] { display: none !important; }   /* the two legacy nodes: `header button { display: inline-flex }` would show them */
+  header .band { --band-measure: var(--shelf-measure); padding: 0 calc(4 * var(--gap)); }   /* the shelf's own side padding, so the doors and the covers share an edge at every width */
+  .webnav, .sortface[hidden] { display: none; }
+
+  /* THE PAGE SITS IN THE WINDOW (rule 7): one measured column, centred,
+     equal gutters, a top margin on the scale. The column is every direct
+     child of the shelf; the grid keeps its own centring inside it. */
+  #shelf.rail { padding: calc(3 * var(--gap)) calc(4 * var(--gap)) calc(6 * var(--gap)); background: var(--bg); }
+  #shelf > * { max-width: var(--shelf-measure); margin-left: auto; margin-right: auto; }
+  #shelf .shelfband, #shelf .shelfgrid { margin-left: auto; margin-right: auto; }
+  #shelf .empty { padding: calc(6 * var(--gap)) 0 calc(2 * var(--gap)); font: 400 var(--ui-act) / 1.5 var(--serif); color: var(--chrome-fg-dim); text-align: center; }
+  /* THE EMPTY SHELF, DRAWN (STRANGER-FIX, 28 Sep): a lead, one line in
+     Frank's voice, one door (rules 3, 5, 11) -- every size on the scale. */
+  #shelf .empty .empty-lead { margin: 0 0 var(--gap); font: 500 var(--ui-field) / 1.4 var(--serif); color: var(--chrome-fg); }
+  #shelf .empty .empty-line { margin: 0 auto; max-width: 36em; font: 400 var(--ui-act) / 1.5 var(--serif); color: var(--chrome-fg-dim); }
+  #shelf .empty .emptydoor { display: inline-block; margin-top: calc(2 * var(--gap)); padding: var(--gap) calc(2 * var(--gap));
+    border: var(--hair) solid var(--chrome-fg-dim); border-radius: var(--r-ui); background: transparent; color: var(--chrome-fg);
+    font: 500 var(--ui-fine) / 1 var(--chrome-ui-font); cursor: pointer; text-decoration: none; -webkit-appearance: none; appearance: none; }
+  #shelf .empty .emptydoor:hover { border-color: var(--chrome-fg); }
+  #shelf .libline { padding: var(--gap) 0 var(--pad); }
+
+  /* THE ROW ABOVE THE GRID EARNS ITS HEIGHT (rule 4): the source line at
+     the left, Sort at the right -- a fact and a control, one tap tall. */
+  .sortbar { display: flex; align-items: center; justify-content: space-between; gap: var(--gap);
+    width: 100%; margin: 0 auto; padding: 0 0 calc(2 * var(--gap)); min-height: var(--tap); }
+  .sortbar label { display: none; }
+  .sourceline { font: 400 var(--ui-fine) / 1 var(--chrome-ui-font); color: var(--chrome-fg-dim); min-width: 0;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .sourceline .sourcedoor { color: var(--chrome-fg-dim); text-decoration: underline; text-underline-offset: calc(var(--gap-hair) + var(--hair)); text-decoration-thickness: var(--hair); }
+  .sourceline .sourcedoor:hover { color: var(--chrome-fg); }
+  /* SORT: one quiet word and a chevron; the menu is the page's own (#menu). */
+  .sortface { display: inline-flex; align-items: center; gap: calc(var(--gap) - var(--gap-hair)); height: calc(4 * var(--gap)); padding: 0 var(--pad);
+    font: 500 var(--ui-fine) / 1 var(--chrome-ui-font); color: var(--chrome-fg-dim);
+    background: transparent; border: var(--hair) solid transparent; border-radius: var(--r-ui); cursor: pointer;
+    -webkit-appearance: none; appearance: none; margin: 0; }
+  .sortface::after { display: none; /* the svg chevron in SORT_FACE is the one caret (two drew "Sort ⌄ ⌄") */ content: ""; width: calc(var(--gap) - var(--gap-hair) - var(--hair)); height: calc(var(--gap) - var(--gap-hair) - var(--hair)); margin-top: calc(-1 * var(--gap-hair) - var(--hair));
+    border-right: var(--hair) solid currentColor; border-bottom: var(--hair) solid currentColor; transform: rotate(45deg); }
+  .sortface:hover, .sortface[aria-expanded="true"] { background: var(--chrome-control-bg); color: var(--chrome-fg); }
+  .sortface:focus-visible { outline: var(--gap-hair) solid var(--chrome-accent); outline-offset: var(--hair); }
+  /* the menu's checked row: the current order, marked by a tick, never by a word */
+  .menu button[role="menuitemradio"] { padding-left: calc(3 * var(--gap) + var(--pad)); position: relative; }
+  .menu button[role="menuitemradio"][aria-checked="true"]::before { content: ""; position: absolute; left: var(--pad); top: 50%;
+    width: calc(var(--gap) - var(--gap-hair)); height: calc(var(--pad) - var(--gap-hair)); margin-top: calc(-1 * var(--gap));
+    border-right: var(--gap-hair) solid var(--chrome-fg); border-bottom: var(--gap-hair) solid var(--chrome-fg); transform: rotate(45deg); }
+
+  /* THE TILE, AT ONE RHYTHM: cover · pad · title · 2 hair · author. The
+     title's box is its text (one line or two); the author line wraps rather
+     than truncates where the book is wide enough (rule 8). */
+  #shelf .railrow.tile { grid-template-rows: auto auto auto; row-gap: 0; align-content: start; }
+  #shelf .railrow.tile .railrow-title { margin-top: var(--pad); height: auto; max-height: calc(2 * 1.3em);
+    font: 600 var(--shelf-title) / 1.3 var(--serif); color: var(--chrome-fg); }
+  #shelf .railrow.tile .railrow-by { margin-top: calc(2 * var(--gap-hair)); line-height: 1.35; color: var(--chrome-fg-dim);
+    font-family: var(--chrome-ui-font); font-size: var(--ui-fine); white-space: normal;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; text-overflow: clip;
+    text-transform: uppercase; letter-spacing: 0.04em; }
+  /* the author dial's other face: the same line in plain type */
+  html[data-author="plain"] #shelf .railrow.tile .railrow-by { text-transform: none; letter-spacing: 0; }
+  .tilecov { border-radius: calc(var(--gap) - var(--gap-hair)); border: var(--hair) solid var(--chrome-border); box-shadow: 0 var(--hair) var(--gap-hair) var(--shadow-light); }
+  #shelf .railrow.tile:hover .tilecov { box-shadow: 0 var(--pad) calc(3 * var(--gap) + var(--gap-hair) * 2) var(--shadow-md); }
+  #shelf .railrow.tile[aria-selected="true"] .tilecov { box-shadow: 0 0 0 var(--gap-hair) var(--chrome-fg); }
+
+  /* THE GRID: books of one width, as many across as the column holds (4 at
+     most at the shelf's own rung), row gap = column gap, centred. */
+  #shelf.rail[data-zoom] .shelfgrid { --bookw: var(--shelf-tile); gap: var(--shelf-gap); margin-top: 0; padding-bottom: 0;
+    grid-template-columns: repeat(auto-fill, var(--shelf-tile)); width: 100%; justify-content: center; }
+  #shelf.rail[data-zoom="4"] .shelfgrid { max-width: calc(4 * var(--shelf-tile) + 3 * var(--shelf-gap)); }
+  #shelf.rail[data-zoom="16"] .shelfgrid { gap: calc(var(--shelf-gap) / 2); --bookw: calc(var(--shelf-tile) / 4); grid-template-columns: repeat(auto-fill, calc(var(--shelf-tile) / 4)); max-width: none; }
+  #shelf.rail[data-zoom="8"]  .shelfgrid { gap: calc(var(--shelf-gap) * 3 / 4); --bookw: calc(var(--shelf-tile) / 2); grid-template-columns: repeat(auto-fill, calc(var(--shelf-tile) / 2)); max-width: none; }
+  #shelf.rail[data-zoom="2"]  .shelfgrid, #shelf.rail[data-zoom="2t"] .shelfgrid { gap: var(--shelf-gap); --bookw: calc(var(--shelf-tile) * 3 / 2); grid-template-columns: repeat(auto-fill, calc(var(--shelf-tile) * 3 / 2)); }
+  /* the two one-book rungs keep the ladder's own widths (1 ¶ 1180, 1 820 --
+     the reader-shaped views, not this drawing's): one column, no gap */
+  #shelf.rail[data-zoom="1t"] .shelfgrid { grid-template-columns: minmax(0, 1180px); --bookw: 1180px; max-width: none; gap: 0; }
+  #shelf.rail[data-zoom="1"]  .shelfgrid { grid-template-columns: minmax(0, 820px); --bookw: 820px; max-width: none; gap: 0; }
+  #shelf .shelfband + .shelfgrid { margin-top: calc(5 * var(--gap)); }
+  .bandhead { padding: 0 0 var(--pad); }
+
+  /* THE COVER'S AUTHOR LINE WRAPS (rule 8: "JORGE LUIS B…" on a cover wide
+     enough for the name is the fault named): two lines, then a clamp; the
+     line-height is the cover's own. */
+  .tilecov .a { white-space: normal; text-overflow: clip; line-height: 1.25;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+
+  /* THE FOOT: the counts of what is drawn, and Import bundle… as a link --
+     the one secondary action, quiet under the last row (rule 9: the covers
+     are the loud thing; nothing competes). */
+  .webfoot { display: block; padding: calc(3 * var(--gap) + var(--gap-hair) * 2) 0 0; font: var(--shelf-foot-weight) var(--ui-fine) / 1.5 var(--chrome-ui-font); color: var(--shelf-foot-ink); }
+  /* `#importBtn` was the raised button (0.85rem, 36 tall, 14 padding); the
+     link wears its id for the one delegated click and none of its box */
+  #importBtn.importlink { font: inherit; min-height: 0; padding: 0; margin: 0; background: transparent; border: 0; border-radius: 0; display: inline; }
+  .importlink { color: var(--shelf-foot-ink); text-decoration: underline; text-underline-offset: calc(var(--gap-hair) + var(--hair)); text-decoration-thickness: var(--hair); }
+  .importlink:hover { color: var(--chrome-fg); }
+  .importlink[aria-disabled="true"] { opacity: 0.5; pointer-events: none; }
+  /* a bundle being read is one loading row above the shelf, the app's own */
+  #shelf .railrow.loading[data-importing] { max-width: calc(70 * var(--gap)); margin: 0 auto calc(2 * var(--gap)); }
+
+  /* ==================================================================
+     THE PHONE IS A STATE OF THIS PAGE (rule 13). Keyed on html[data-phone]
+     ALONE so the bench proves it at any window; on a real phone the PHONE
+     FIT block above also fires and these win it, name for name. The band
+     is at the foot (band.css), so the shelf ends above it; two books
+     across, the gap 2 gap, the margin 2 gap; the tile's rhythm unchanged.
+     ================================================================== */
+  html[data-phone] #shelf.rail { padding: calc(2 * var(--gap) + var(--safe-top, 0px)) calc(2 * var(--gap) + var(--safe-right, 0px))
+    calc(var(--band-h, var(--tap)) + 4 * var(--gap) + var(--safe-bottom, 0px)) calc(2 * var(--gap) + var(--safe-left, 0px)); display: block; }
+  /* THE PINCH'S RUNGS ARE BACK (29 Sep, the Photos pass): this said `#shelf[data-zoom]` -- EVERY rung -- and so
+     drew two across at 16, 8 and 2 too; Frank's own phone shelf (shell/ at de55dd9) pinches to sixteen across,
+     which is Photos' own gesture and what Osca's recordings show. Two across is the default rung's, 4. */
+  html[data-phone] #shelf[data-zoom="4"] .shelfgrid { --cols: 2; --bookw: auto; grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: calc(2 * var(--gap)); max-width: none; width: 100%; }
+  html[data-phone] .sortbar { padding-bottom: var(--pad); min-height: var(--tap); }
+  html[data-phone] #shelf .railrow.tile .railrow-title { font-size: var(--ui-act); }
+  html[data-phone] .webfoot { padding-top: calc(3 * var(--gap)); }
+  html[data-phone] #shelf .empty { padding-top: calc(8 * var(--gap)); }
+
+/* the Sort face's chevron (28 Sep): a 12 glyph after the word, the word's ink */
+.sortface .sortchev{ width: calc(var(--ui-fine) - var(--hair)); height: calc(var(--ui-fine) - var(--hair)); margin-left: calc(var(--gap) / 2); vertical-align: -1px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+
+
+/* ==================================================================
+   THE PHONE'S SHELF, AFTER APPLE PHOTOS (Osca, 29 Sep, two screen recordings of Photos' Library on his iPhone:
+   "this is pretty much how I want the library in frank to look and interact"). What Photos does that this page
+   takes, in order:
+   · the word Library, large and bold at the top left, and under it what is on screen now, changing as you
+     scroll (library.html's phhead); the order is one glass circle at the right, not a row of its own;
+   · the shelf runs UNDER the head, which fades into the page -- no bar, no rule;
+   · at the covers-only rungs the grid goes edge to edge with a 2 px seam, like Photos' "All";
+   · the bar at the foot floats (band.css, THE PHONE'S BAR FLOATS).
+   Still to come, and written down in PROMPTS/lanes/design.md: the section chips at the dense rungs, a cover
+   that grows into its book on a tap, and a drag down on a book that shrinks it back into its place.
+   ================================================================== */
+.phhead { display: none; }
+@media (max-width: 600px), (max-height: 500px) {
+  html[data-phone] .phhead {
+    display: flex; position: fixed; z-index: 40; top: 0; left: 0; right: 0;
+    align-items: flex-start; justify-content: space-between; gap: 12px;
+    padding: calc(var(--safe-top, 0px) + 10px) 16px 32px;
+    pointer-events: none;
+    background: linear-gradient(to bottom,
+      color-mix(in srgb, var(--bg) 94%, transparent) 0%,
+      color-mix(in srgb, var(--bg) 72%, transparent) 58%,
+      color-mix(in srgb, var(--bg) 0%, transparent) 100%);
+  }
+  html[data-phone] .phhead-t { min-width: 0; }
+  /* FRANK'S TYPE, NOT APPLE'S (Osca, 29 Sep: "I don't like that font … stick with the frank font stuff … it looks
+     like apple BUT not real apple"): the word Library in the book serif the shelf's titles are set in, and the
+     line under it in the shelf's own small voice -- the tracked capitals of OPEN and of every byline */
+  html[data-phone] .phhead h1 { margin: 0; font: 600 30px / 1.15 var(--serif, "Iowan Old Style", Palatino, Georgia, serif); color: var(--fg); }
+  html[data-phone] .phrange { margin: 4px 0 0; min-height: 1.4em; font: 600 11px / 1.4 var(--ui-font); letter-spacing: 0.13em;
+    text-transform: uppercase; color: var(--fg); opacity: 0.78; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  html[data-phone] .phsort {
+    pointer-events: auto; flex: none; margin: 2px 0 0; padding: 0;
+    width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center;
+    color: var(--fg); border: 1px solid color-mix(in srgb, var(--fg) 12%, transparent);
+    background: color-mix(in srgb, var(--bg) 58%, transparent);
+    -webkit-backdrop-filter: saturate(1.8) blur(18px); backdrop-filter: saturate(1.8) blur(18px);
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.10);
+    -webkit-appearance: none; appearance: none; -webkit-tap-highlight-color: transparent;
+  }
+  html[data-phone] .phsort:active { transform: scale(0.94); }
+  /* THE RIGHT CLUSTER: ⋯ (only while books are chosen) · Select · the order. One height, 36 -- small, as Osca
+     asked -- one glass, one gap; Select is a word in a capsule sized by the word (15 semibold, 14 each side) */
+  html[data-phone] .phhead-r { display: flex; align-items: center; gap: 8px; margin-top: 4px; }
+  html[data-phone] .phhead-r .phsort { width: 36px; height: 36px; margin: 0; }
+  html[data-phone] .phhead-r .phsort svg { width: 18px; height: 18px; }
+  html[data-phone] .phsel, html[data-phone] .phact {
+    pointer-events: auto; flex: none; margin: 0; height: 36px; border-radius: 18px;
+    color: var(--fg); border: 1px solid color-mix(in srgb, var(--fg) 12%, transparent);
+    background: color-mix(in srgb, var(--bg) 58%, transparent);
+    -webkit-backdrop-filter: saturate(1.8) blur(18px); backdrop-filter: saturate(1.8) blur(18px);
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.10);
+    -webkit-appearance: none; appearance: none; -webkit-tap-highlight-color: transparent;
+  }
+  html[data-phone] .phsel { padding: 0 13px; font: 600 11px / 1 var(--ui-font); letter-spacing: 0.13em; text-transform: uppercase; }
+  html[data-phone] .phsel[aria-pressed="true"] { background: color-mix(in srgb, var(--fg) 88%, transparent); color: var(--bg); border-color: transparent; }
+  html[data-phone] .phact { width: 36px; padding: 0; display: grid; place-items: center; }
+  html[data-phone] .phact[hidden] { display: none; }
+  html[data-phone] .phact svg { width: 18px; height: 18px; fill: currentColor; }
+  html[data-phone] .phsel:active, html[data-phone] .phact:active { transform: scale(0.94); }
+  /* a chosen cover, Photos' way: a filled tick at its foot corner and the cover dimmed a little; the rest stay */
+  html[data-phone] #shelf[data-picking] .railrow.tile { position: relative; }
+  html[data-phone] #shelf[data-picking] .railrow.tile[aria-selected="true"] .tilecov { opacity: 0.72; }
+  html[data-phone] #shelf[data-picking] .railrow.tile[aria-selected="true"]::after {
+    content: ""; position: absolute; top: auto; left: auto; right: 6px; bottom: 6px; width: 22px; height: 22px; border-radius: 50%; border: 0; margin: 0;
+    background: var(--accent, #832f2b) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 22 22'%3E%3Cpath d='M6.5 11.5l3 3 6-6.5' fill='none' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / 22px no-repeat;
+    box-shadow: 0 0 0 1.5px #fff, 0 1px 4px rgba(0, 0, 0, 0.3); }
+  html[data-phone] #shelf.rail[data-zoom="16"][data-picking] .railrow.tile[aria-selected="true"]::after { width: 12px; height: 12px; right: 2px; bottom: 2px; background-size: 12px; }
+  html[data-phone] .phsort svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; }
+  /* the sort row's job is the circle's now */
+  html[data-phone] #shelf .sortbar { display: none; }
+  /* the first row starts under the head, and scrolls up behind it */
+  html[data-phone] #shelf.rail { padding-top: calc(var(--safe-top, 0px) + 96px); min-height: 100vh; box-sizing: border-box; }   /* the page is the shelf's paper to the foot, however few rows (at 16 across three rows left a grey half) */
+  /* THE LADDER, PHOTOS' OWN (one place, so no older rung rule decides it): a pinch walks it, out to in --
+       16   sixteen across, covers only, a 2 px seam, edge to edge          (Photos' furthest out)
+        8   six across, covers only, a 2 px seam, edge to edge
+        4   THE ONE THE SHELF OPENS ON: three across, covers only, a 2 px seam, edge to edge -- Photos' "All"
+        2   two across with the title and author under each, the page's margin
+       1 ¶ / 1  unchanged (one book, and its words / its jacket)
+     The covers carry their titles, so the covers-only rungs lose nothing a reader needs; the captions come back
+     one rung in. Every older phone rung rule above says a different thing -- this one comes last and is the
+     one a Stranger should judge. */
+  html[data-phone] #shelf.rail[data-zoom="16"], html[data-phone] #shelf.rail[data-zoom="8"],
+  html[data-phone] #shelf.rail[data-zoom="4"] { padding-left: 0; padding-right: 0; }
+  html[data-phone] #shelf.rail[data-zoom] .shelfgrid { width: 100%; max-width: none; --bookw: auto; }
+  html[data-phone] #shelf.rail[data-zoom="16"] .shelfgrid { --cols: 16; grid-template-columns: repeat(16, minmax(0, 1fr)); gap: 2px; }
+  html[data-phone] #shelf.rail[data-zoom="8"] .shelfgrid { --cols: 6; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 2px; }
+  html[data-phone] #shelf.rail[data-zoom="4"] .shelfgrid { --cols: 3; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 2px; }
+  html[data-phone] #shelf.rail[data-zoom="2"] .shelfgrid { --cols: 2; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px 12px; }
+  html[data-phone] #shelf.rail:is([data-zoom="16"], [data-zoom="8"], [data-zoom="4"]) .railrow.tile {
+    width: auto; min-width: 0; grid-template-rows: auto; row-gap: 0; padding: 0; }
+  html[data-phone] #shelf.rail:is([data-zoom="16"], [data-zoom="8"], [data-zoom="4"]) .railrow.tile :is(.railrow-title, .railrow-by, .railrow-lang, .railrow-verdict) { display: none; }
+  html[data-phone] #shelf.rail:is([data-zoom="16"], [data-zoom="8"], [data-zoom="4"]) .tilecov {
+    width: 100%; height: auto; border-radius: 0; border: 0; box-shadow: none; }
+  /* the books open right now are the first row, on the same grid (it was a 41 px box: fit-content with 1fr
+     columns) and its word sits on the page's margin, not on the seam */
+  html[data-phone] #shelf.rail .shelfband { width: 100%; max-width: none; margin: 0 0 2px; }
+  html[data-phone] #shelf.rail .shelfband .bandhead { padding: 0 16px 8px; margin: 0; }
+  /* THE COVERS FILL THEIR CELLS at the covers-only rungs, as Photos' squares do (the Photos Stranger: 26 jackets
+     sat `contain`ed inside a 7-11 px mount, so the 2 px seam became ragged frames); one rung in, the mount is back */
+  html[data-phone] #shelf.rail:is([data-zoom="16"], [data-zoom="8"], [data-zoom="4"]) .tilecov .covimg {
+    inset: 0; width: 100%; height: 100%; max-width: none; max-height: none; object-fit: cover; }
+  /* the order menu: the long-press sheet sat under the floating bar -- every menu rides above it now, and the
+     order's hangs from its circle at the top right, a glass card, as Photos' filter menu does */
+  html[data-phone] .menu { z-index: 70; }
+  html[data-phone] .menu.menu-head {
+    left: auto !important; right: calc(12px + var(--safe-right, 0px)) !important;
+    top: calc(var(--safe-top, 0px) + 60px) !important; bottom: auto !important;
+    width: 264px; max-width: calc(100vw - 24px); padding: 6px; border-radius: 16px;
+    background: color-mix(in srgb, var(--bg) 96%, var(--fg));   /* near-solid: at 84% the covers read through the words */
+    -webkit-backdrop-filter: saturate(1.8) blur(24px); backdrop-filter: saturate(1.8) blur(24px);
+    border: 1px solid color-mix(in srgb, var(--fg) 10%, transparent);
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.28);
+  }
+  html[data-phone] .menu.menu-head button { text-align: left; font-size: 1rem; min-height: 44px; }
+  /* the ✕ on an open book is a 28 disc -- bigger than a cover at 16 across (23 px); at the two dense rungs it goes,
+     as Photos draws no furniture on a thumbnail that small (closing a book is one rung in) */
+  html[data-phone] #shelf.rail:is([data-zoom="16"], [data-zoom="8"]) .railrow.tile .tile-close { display: none; }
+  html[data-phone] #shelf.rail[data-zoom="2"] { padding-left: 16px; padding-right: 16px; }
+  html[data-phone] #shelf.rail[data-zoom="2"] .shelfband .bandhead { padding-left: 0; }
+  html[data-phone] #shelf.rail[data-zoom="2"] .railrow.tile .tilecov { width: 100%; height: auto; }
+}
+
+
+/* ==================================================================
+   THE SAME LIBRARY ON THE MAC AND THE WEB (Osca, 29 Sep: "roughly it should be the same for the web and the desktop
+   app, all the same idea. It looks nice"). One idea on three hosts: the head (Library in the serif, what is on screen
+   in the shelf's small capitals, [⋯] Select [order]) laid over the top of the shelf and faded into it; the covers edge
+   to edge on a 2 px seam at the covers-only rungs; the captions one rung in. The phone's block above keeps the
+   phone's numbers; this is the window's. The head is `fixed` and library.html's hand lays it exactly over #shelf
+   (the shelf is the scroller here, so the covers pass under it). The sort row keeps its source line (the Mac's
+   door to Sources) and gives its order to the circle.
+   ================================================================== */
+html:not([data-phone]) .phhead {
+  display: flex; position: fixed; z-index: 40; top: 0; left: 0; width: 100%; box-sizing: border-box;
+  align-items: flex-start; justify-content: space-between; gap: 16px;
+  padding: 18px 24px 30px; pointer-events: none;
+  background: linear-gradient(to bottom,
+    color-mix(in srgb, var(--bg) 95%, transparent) 0%,
+    color-mix(in srgb, var(--bg) 74%, transparent) 60%,
+    color-mix(in srgb, var(--bg) 0%, transparent) 100%);
+}
+html:not([data-phone]) .phhead-t { min-width: 0; }
+html:not([data-phone]) .phhead h1 { margin: 0; font: 600 32px / 1.15 var(--serif, "Iowan Old Style", Palatino, Georgia, serif); color: var(--fg); }
+html:not([data-phone]) .phrange { margin: 4px 0 0; min-height: 1.4em; font: 600 11px / 1.4 var(--ui-font); letter-spacing: 0.13em;
+  text-transform: uppercase; color: var(--fg); opacity: 0.78; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+html:not([data-phone]) .phhead-r { display: flex; align-items: center; gap: 8px; margin-top: 4px; }
+html:not([data-phone]) :is(.phsort, .phsel, .phact) {
+  pointer-events: auto; flex: none; margin: 0; height: 32px; padding: 0; cursor: pointer;
+  color: var(--fg); border: 1px solid color-mix(in srgb, var(--fg) 12%, transparent);
+  background: color-mix(in srgb, var(--bg) 62%, transparent);
+  -webkit-backdrop-filter: saturate(1.8) blur(18px); backdrop-filter: saturate(1.8) blur(18px);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
+  -webkit-appearance: none; appearance: none; transition: background-color .14s, color .14s;
+}
+html:not([data-phone]) :is(.phsort, .phact) { width: 32px; border-radius: 50%; display: grid; place-items: center; }
+html:not([data-phone]) .phsel { border-radius: 16px; padding: 0 12px; font: 600 11px / 1 var(--ui-font); letter-spacing: 0.13em; text-transform: uppercase; }
+html:not([data-phone]) :is(.phsort, .phsel, .phact):hover { background: color-mix(in srgb, var(--fg) 8%, var(--bg)); }
+html:not([data-phone]) .phsel[aria-pressed="true"] { background: color-mix(in srgb, var(--fg) 88%, transparent); color: var(--bg); border-color: transparent; }
+html:not([data-phone]) .phact[hidden] { display: none; }
+html:not([data-phone]) .phsort svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; }
+html:not([data-phone]) .phact svg { width: 16px; height: 16px; fill: currentColor; }
+/* the order is the circle's; the row keeps where the books come from */
+html:not([data-phone]) #shelf #shelforder { display: none; }
+html:not([data-phone]) #shelf .sortbar:not(:has(> :not(#shelforder))) { display: none; }   /* nothing left in it (the web): no empty 44 */
+html:not([data-phone]) #shelf.rail { padding-top: 88px; }
+html:not([data-phone]) #shelf.rail .shelfband .bandhead { padding-top: 0; padding-bottom: 10px; }
+/* THE LADDER on a window, the phone's idea at the window's width: 16 · 10 · 6 (the one it opens on) covers only on
+   a 2 px seam, edge to edge; 2 is four across with title and author, on the page's margin; 1 ¶ and 1 as they were */
+html:not([data-phone]) #shelf.rail:is([data-zoom="16"], [data-zoom="8"], [data-zoom="4"]) { padding-left: 0; padding-right: 0; }
+html:not([data-phone]) #shelf.rail:is([data-zoom="16"], [data-zoom="8"], [data-zoom="4"], [data-zoom="2"]) .shelfgrid { width: 100%; max-width: none; --bookw: auto; }
+html:not([data-phone]) #shelf.rail[data-zoom="16"] .shelfgrid { --cols: 16; grid-template-columns: repeat(16, minmax(0, 1fr)); gap: 2px; }
+html:not([data-phone]) #shelf.rail[data-zoom="8"] .shelfgrid { --cols: 10; grid-template-columns: repeat(10, minmax(0, 1fr)); gap: 2px; }
+html:not([data-phone]) #shelf.rail[data-zoom="4"] .shelfgrid { --cols: 6; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 2px; }
+html:not([data-phone]) #shelf.rail[data-zoom="2"] .shelfgrid { --cols: 4; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 28px 20px; }
+html:not([data-phone]) #shelf.rail:is([data-zoom="16"], [data-zoom="8"], [data-zoom="4"]) .railrow.tile {
+  width: auto; min-width: 0; min-height: 0; grid-template-rows: auto; row-gap: 0; padding: 0; }
+html:not([data-phone]) #shelf.rail:is([data-zoom="16"], [data-zoom="8"], [data-zoom="4"]) .railrow.tile :is(.railrow-title, .railrow-by, .railrow-lang, .railrow-verdict, .railrow-status) { display: none; }
+html:not([data-phone]) #shelf.rail:is([data-zoom="16"], [data-zoom="8"], [data-zoom="4"]) .tilecov { width: 100%; height: auto; border-radius: 0; border: 0; box-shadow: none; }
+html:not([data-phone]) #shelf.rail:is([data-zoom="16"], [data-zoom="8"], [data-zoom="4"]) .tilecov .covimg {
+  inset: 0; width: 100%; height: 100%; max-width: none; max-height: none; object-fit: cover; }
+html:not([data-phone]) #shelf.rail:is([data-zoom="16"], [data-zoom="8"], [data-zoom="4"]) .railrow.tile:hover { transform: none; }
+html:not([data-phone]) #shelf.rail:is([data-zoom="16"], [data-zoom="8"], [data-zoom="4"]) .railrow.tile:hover .tilecov { filter: brightness(1.06); }
+html:not([data-phone]) #shelf.rail[data-zoom="2"] { padding-left: 24px; padding-right: 24px; }
+html:not([data-phone]) #shelf.rail[data-zoom="2"] .railrow.tile .tilecov { width: 100%; height: auto; }
+html:not([data-phone]) #shelf.rail .shelfband { width: 100%; max-width: none; margin: 0 0 2px; }
+html:not([data-phone]) #shelf.rail:is([data-zoom="16"], [data-zoom="8"], [data-zoom="4"]) :is(.shelfband .bandhead, .sortbar) { padding-left: 24px; padding-right: 24px; }
+html:not([data-phone]) #shelf.rail:is([data-zoom="16"], [data-zoom="8"]) .railrow.tile .tile-close { display: none; }
+/* picking on a window: the same tick */
+html:not([data-phone]) #shelf[data-picking] .railrow.tile { position: relative; }
+html:not([data-phone]) #shelf[data-picking] .railrow.tile[aria-selected="true"] .tilecov { opacity: 0.72; }
+html:not([data-phone]) #shelf[data-picking] .railrow.tile[aria-selected="true"]::after {
+  content: ""; position: absolute; top: auto; left: auto; right: 8px; bottom: 8px; width: 22px; height: 22px; border-radius: 50%; border: 0; margin: 0;
+  background: var(--accent, #832f2b) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 22 22'%3E%3Cpath d='M6.5 11.5l3 3 6-6.5' fill='none' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / 22px no-repeat;
+  box-shadow: 0 0 0 1.5px #fff, 0 1px 4px rgba(0, 0, 0, 0.3); }
+html:not([data-phone]) .menu.menu-head { z-index: 70; }
+
+
+/* ==================================================================
+   A BOOK, OPENED THE WAY PHOTOS OPENS A PHOTO (library.html's bkview; Osca, 29 Sep, "the scroll up for info, after
+   you click on it, we can do that too"). Every host, the same idea. The page goes to the paper; the cover stands in
+   the middle at the height of the view less the top and the foot; the capsule and the ⋯ at the top, the strip and
+   Read at the foot, all in the head's glass; scroll and the card rises under the cover. Frank's type: the title in
+   the serif, the small words in the tracked capitals.
+   ================================================================== */
+.bkview { position: fixed; inset: 0; z-index: 80; --bkv-fade: 1; }
+.bkview[hidden] { display: none; }
+.bkview::before { content: ""; position: absolute; inset: 0; background: var(--bg); opacity: var(--bkv-fade); transition: opacity .32s ease; }
+.bkv-scroll { position: absolute; inset: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none; }
+.bkv-stage { height: 100%; box-sizing: border-box; padding: 72px 16px 132px; display: grid; place-items: center; }
+.bkv-cover { all: unset; cursor: pointer; display: block; aspect-ratio: 88 / 120;
+  height: min(100%, calc((100vw - 32px) * 120 / 88)); width: auto; }   /* the tallest that is also no wider than the page */
+.bkv-cover .tilecov { width: 100% !important; height: 100% !important; border-radius: 6px; box-shadow: 0 18px 50px rgba(0,0,0,.28); transform-origin: center; }
+/* the whole jacket in the view, never cut (the Stranger: "THE" on Monte-Cristo sliced by `cover`) -- the grid fills
+   its cells, the view shows the book as it is */
+.bkv-cover .tilecov .covimg { inset: 0; width: 100%; height: 100%; max-width: none; max-height: none; object-fit: contain; }
+.bkv-info { position: relative; box-sizing: border-box; max-width: 640px; margin: 0 auto; padding: 22px 22px 150px;
+  border-radius: 18px 18px 0 0; background: color-mix(in srgb, var(--bg) 96%, var(--fg)); color: var(--fg);
+  box-shadow: 0 -10px 30px rgba(0,0,0,.08); opacity: var(--bkv-fade); display: flex; flex-direction: column; gap: 14px; }
+.bkv-info .bkv-title { margin: 0; font: 600 24px / 1.2 var(--serif, "Iowan Old Style", Palatino, Georgia, serif); }
+.bkv-info .bkv-by { margin: -8px 0 0; font: 600 11px / 1.4 var(--ui-font); letter-spacing: .13em; text-transform: uppercase; color: var(--fg-dim); }
+.bkv-info .tile-read { display: none; }
+.bkv-info .tile-slotrow { display: flex; gap: 24px; flex-wrap: wrap; }
+.bkv-info .tile-chapters > span { display: flex; flex-direction: column; gap: 4px; }
+.bkv-info .tile-slot.tile-blurb > span { -webkit-line-clamp: unset; display: block; font: 400 16px / 1.55 var(--serif, Georgia, serif); }
+.bkv-top, .bkv-foot { position: absolute; left: 0; right: 0; display: flex; align-items: center; gap: 10px; padding: 0 12px;
+  pointer-events: none; opacity: var(--bkv-fade); transition: opacity .32s ease; }
+.bkv-top { top: calc(var(--safe-top, 0px) + 14px); justify-content: space-between; }
+.bkv-foot { bottom: calc(var(--safe-bottom, 0px) + 14px); }
+.bkv-top > *, .bkv-foot > * { pointer-events: auto; }
+.bkv-glass, .bkv-cap, .bkv-read, .bkv-strip {
+  border: 1px solid color-mix(in srgb, var(--fg) 12%, transparent);
+  background: color-mix(in srgb, var(--bg) 64%, transparent);
+  -webkit-backdrop-filter: saturate(1.8) blur(18px); backdrop-filter: saturate(1.8) blur(18px);
+  box-shadow: 0 4px 18px rgba(0,0,0,.12); color: var(--fg); }
+.bkv-glass { -webkit-appearance: none; appearance: none; width: 40px; height: 40px; border-radius: 50%; padding: 0; margin: 0;
+  display: grid; place-items: center; cursor: pointer; flex: none; }
+.bkv-back svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.bkv-more svg { width: 18px; height: 18px; fill: currentColor; }
+.bkv-cap { min-width: 0; max-width: calc(100% - 120px); padding: 6px 16px; border-radius: 20px; text-align: center; display: flex; flex-direction: column; gap: 2px; }
+.bkv-cap b { font: 600 14px / 1.2 var(--serif, Georgia, serif); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bkv-cap i { font: 600 9.5px / 1.3 var(--ui-font); font-style: normal; letter-spacing: .13em; text-transform: uppercase; color: var(--fg-dim);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bkv-cap i:empty { display: none; }
+.bkv-strip { flex: 1 1 auto; min-width: 0; height: 52px; border-radius: 14px; padding: 5px; box-sizing: border-box;
+  display: flex; gap: 3px; overflow-x: auto; scrollbar-width: none; }
+.bkv-thumb { all: unset; cursor: pointer; flex: none; height: 100%; aspect-ratio: 88 / 120; opacity: .72; }
+.bkv-thumb[aria-selected="true"] { opacity: 1; outline: 2px solid var(--fg); outline-offset: 1px; border-radius: 2px; }
+.bkv-thumb .tilecov { width: 100% !important; height: 100% !important; border: 0; border-radius: 2px; box-shadow: none; }
+.bkv-thumb .tilecov .covimg { inset: 0; width: 100%; height: 100%; max-width: none; max-height: none; object-fit: cover; }
+.bkv-read { -webkit-appearance: none; appearance: none; flex: none; height: 52px; padding: 0 22px; border-radius: 26px; cursor: pointer;
+  font: 600 12px / 1 var(--ui-font); letter-spacing: .13em; text-transform: uppercase;
+  background: color-mix(in srgb, var(--fg) 90%, transparent); color: var(--bg); border-color: transparent; }
+body[data-bkview] .phhead { visibility: hidden; }   /* on <body>, not <html>: a flag on <html> woke the theme's own observer and turned a dark Library light (the Mac+web Stranger, 29 Sep) */
+body[data-bkview] .band { visibility: hidden; }
+/* on a window the view is the width of a reading page, not a phone stretched: the cover a little shorter, the card a
+   column, the strip no wider than it needs */
+html:not([data-phone]) .bkv-stage { padding: 80px 24px 120px; }
+html:not([data-phone]) .bkv-foot { justify-content: center; }
+html:not([data-phone]) .bkv-strip { flex: none; width: min(640px, 60vw); }   /* one width, so READ stands in one place whichever book (it rode the strip's end, x 913 or 1061) */
+html:not([data-phone]) .bkv-top { max-width: 760px; margin: 0 auto; }   /* ‹ and ⋯ beside the book, not at the window's far edges */
+/* no ✕ over a cover in Photos' grid (the open books are the Mac's tabs; closing one is a rung in, where the captions
+   are), on every host */
+#shelf.rail:is([data-zoom="16"], [data-zoom="8"], [data-zoom="4"]) .railrow.tile .tile-close { display: none; }
+/* the Mac's source line sits on the head's own margin, under the word Library */
+html:not([data-phone]) #shelf.rail .sortbar { padding: 0 24px 12px; min-height: 0; }
+html:not([data-phone]) #shelf.rail .sortbar > * { margin-left: 0; padding-left: 0; }
+
+/* THE FIRST RUN IN THE LIBRARY'S LANGUAGE (DESIGN, 29 Sep). Osca: "make sure they all look like the same app ... ALL
+   doors". The gate (settings.js) was the Settings window's grey rows on a blank ground. It keeps its words, its rows
+   and its centring (STRANGER-FIX 28 Sep); it gains the Library's shape: FIRST RUN in the shelf's tracked capitals,
+   the promise ("Your books, wherever you read them") as the page's name in the book serif at the Library's 30/32,
+   one glass card, and the buttons as capsules -- the primary the book view's dark READ capsule, the other glass.
+   The shelf behind blurs through the ground, as the Library's head does. */
+body .ttstv-settings.fr-gate{
+  background: color-mix(in srgb, var(--bg) 80%, transparent);
+  -webkit-backdrop-filter: saturate(1.6) blur(28px); backdrop-filter: saturate(1.6) blur(28px);
+}
+body .ttstv-settings.fr-gate .fr-sheet{ max-width: 460px; }
+body .ttstv-settings.fr-gate .set-head{ font: 600 11px / 1.4 var(--ui-font); letter-spacing: .13em; text-transform: uppercase;
+  color: var(--fg); opacity: .78; margin: 0 0 8px; padding: 0 2px; }
+body .ttstv-settings.fr-gate .set-card{ border-radius: 16px; overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--fg) 12%, transparent);
+  background: color-mix(in srgb, var(--bg) 62%, transparent);
+  -webkit-backdrop-filter: saturate(1.8) blur(18px); backdrop-filter: saturate(1.8) blur(18px);
+  box-shadow: 0 10px 34px rgba(0, 0, 0, 0.10); }
+body .ttstv-settings.fr-gate .set-row{ padding: 14px 18px; border-color: color-mix(in srgb, var(--fg) 9%, transparent); }
+body .ttstv-settings.fr-gate .tr-lead .set-name{ font: 600 30px / 1.15 var(--serif, "Iowan Old Style", Palatino, Georgia, serif); color: var(--fg); margin-bottom: 6px; }
+html:not([data-phone]) body .ttstv-settings.fr-gate .tr-lead .set-name{ font-size: 32px; }
+body .ttstv-settings.fr-gate .tr-lead{ padding-top: 22px; padding-bottom: 18px; }
+body .ttstv-settings.fr-gate .tr-name, body .ttstv-settings.fr-gate .set-row:not(.tr-lead) .set-name{ font: 600 16px / 1.3 var(--serif, Georgia, serif); }
+body .ttstv-settings.fr-gate .kag-btn{ -webkit-appearance: none; appearance: none; height: 36px; padding: 0 16px; border-radius: 18px; cursor: pointer;
+  font: 600 11px / 1 var(--ui-font); letter-spacing: .13em; text-transform: uppercase; color: var(--fg);
+  border: 1px solid color-mix(in srgb, var(--fg) 12%, transparent);
+  background: color-mix(in srgb, var(--bg) 62%, transparent); box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08); }
+body .ttstv-settings.fr-gate .kag-btn.kag-primary{ background: color-mix(in srgb, var(--fg) 90%, transparent); color: var(--bg); border-color: transparent; }
+html[data-phone] body .ttstv-settings.fr-gate .kag-btn{ height: 48px; border-radius: 24px; }
+
+/* FIRST RUN, SAID ONCE (library.html's .fr-look, 29 Sep): the gate's own rows hide; the word Frank in the product
+   face, the two ways in under it. The phone uses the whole width (its 20 px margins), the buttons the thumb's 50. */
+body .ttstv-settings.fr-gate.fr-drawn .fr-sheet > :not(.fr-look){ display: none; }
+body .ttstv-settings.fr-gate.fr-drawn .fr-sheet{ max-width: 360px; }
+.fr-look{ display: flex; flex-direction: column; align-items: center; text-align: center; }
+.fr-look .fr-name{ margin: 0 0 40px; font: 700 64px / 1 "Bodoni 72", "Bodoni 72 Book", "Bodoni MT", Didot, "Libre Bodoni", var(--serif, serif);
+  letter-spacing: -.01em; color: var(--fg); }
+/* K · Books made Frank IS the word (ASKS #156): the sentence in the product face, Frank in the accent red (black · red · white) */
+.fr-look{ --k-red: #c8102e; }
+html[data-theme="dark"] .fr-look{ --k-red: #e5334b; }
+@media (prefers-color-scheme: dark){ html:not([data-theme="light"]) .fr-look{ --k-red: #e5334b; } }
+.fr-look .fr-name{ font-size: 44px; line-height: 1.05; word-spacing: .12em; }
+.fr-look .fr-name em{ font-style: normal; color: var(--k-red); }
+.fr-look .fr-acts{ width: 100%; display: flex; flex-direction: column; gap: 10px; }
+.fr-look .fr-in{ -webkit-appearance: none; appearance: none; width: 100%; height: 48px; border-radius: 24px; border: 0; cursor: pointer;
+  font: 600 12px / 1 var(--ui-font); letter-spacing: .13em; text-transform: uppercase;
+  background: color-mix(in srgb, var(--fg) 90%, transparent); color: var(--bg); }
+.fr-look .fr-later{ -webkit-appearance: none; appearance: none; width: 100%; height: 44px; border: 0; background: none; cursor: pointer;
+  font: 600 11px / 1 var(--ui-font); letter-spacing: .13em; text-transform: uppercase; color: var(--fg); opacity: .62; }
+.fr-look .fr-later:hover{ opacity: 1; }
+.fr-look .fr-say{ margin: 14px 0 0; font: 400 13px / 1.4 var(--ui-font); color: var(--fg); opacity: .62; max-width: 30em; }
+html[data-phone] body .ttstv-settings.fr-gate.fr-drawn .fr-sheet{ max-width: none; padding-left: 20px; padding-right: 20px; }
+html[data-phone] .fr-look .fr-name{ font-size: 36px; }
+html[data-phone] .fr-look .fr-in{ height: 52px; border-radius: 26px; }
+body .ttstv-settings.fr-gate.fr-drawn{ background: var(--bg); -webkit-backdrop-filter: none; backdrop-filter: none; }   /* a welcome on the paper itself: the shelf blurred behind it read as a smudge */
+
+/* THE PHONE ON ITS SIDE (Osca, 29 Sep: "you have to do landscape on the phone, for everything"). Photos on its side
+   doubles the columns rather than blowing three covers up to fill 852 px: the ladder is 24 / 12 / 6 / 4 across. The
+   head, the shelf and the book view keep clear of the island's side and the other side alike (the safe areas the
+   device gives, 59 px each on an iPhone on its side). */
+@media (orientation: landscape){
+  html[data-phone] #shelf.rail[data-zoom="16"] .shelfgrid { --cols: 24; grid-template-columns: repeat(24, minmax(0, 1fr)); }
+  html[data-phone] #shelf.rail[data-zoom="8"] .shelfgrid { --cols: 12; grid-template-columns: repeat(12, minmax(0, 1fr)); }
+  html[data-phone] #shelf.rail[data-zoom="4"] .shelfgrid { --cols: 6; grid-template-columns: repeat(6, minmax(0, 1fr)); }
+  html[data-phone] #shelf.rail[data-zoom="2"] .shelfgrid { --cols: 4; grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  html[data-phone] #shelf.rail[data-zoom] { padding-left: var(--safe-left, env(safe-area-inset-left, 0px)) !important;
+    padding-right: var(--safe-right, env(safe-area-inset-right, 0px)) !important; }
+  html[data-phone] .phhead { padding-left: calc(var(--safe-left, env(safe-area-inset-left, 0px)) + 16px);
+    padding-right: calc(var(--safe-right, env(safe-area-inset-right, 0px)) + 16px); }
+}
+/* the phone on its side, the landscape Stranger's fix-firsts (29 Sep): the first run's buttons a phone's width, centred;
+   the book view's back, more, strip and READ clear of both 59 px strips, and the cover given the height */
+@media (orientation: landscape){
+  html[data-phone] body .ttstv-settings.fr-gate.fr-drawn .fr-sheet{ max-width: 360px; margin: 0 auto; }
+  html[data-phone] .fr-look .fr-name{ font-size: 32px; margin-bottom: 20px; }
+  html[data-phone] .bkv-top, html[data-phone] .bkv-foot{ padding-left: calc(var(--safe-left, env(safe-area-inset-left, 0px)) + 8px) !important;
+    padding-right: calc(var(--safe-right, env(safe-area-inset-right, 0px)) + 8px) !important; }
+  html[data-phone] .bkv-stage{ padding: 68px calc(var(--safe-right, 0px) + 16px) calc(var(--safe-bottom, 0px) + 86px) calc(var(--safe-left, 0px) + 16px);   /* ASKS #111: clear of the title above and the strip below (the cover ran 11 px under the strip) */ }
+  html[data-phone] .bkv-cover{ height: 100%; width: auto; }
+}
+
+/* THE HEAD IS THE ORDER CIRCLE AND NOTHING ELSE (library.html, "THE LIBRARY SAYS NOTHING ABOUT ITSELF", 29 Sep):
+   no word Library, no range line, no Select -- on every host. While choosing, Cancel, the ⋯ and the count come in. */
+.phhead .phhead-t h1, .phhead .phhead-t { display: none; }
+.phhead:has(.phsel[aria-pressed="true"]) .phhead-t { display: block; }
+.phhead:has(.phsel[aria-pressed="true"]) .phhead-t h1 { display: none; }
+.phhead .phsel:not([aria-pressed="true"]) { display: none; }
+html[data-phone] .phhead, html:not([data-phone]) .phhead { justify-content: flex-end; }
+html[data-phone] .phhead { padding-bottom: 12px;
+  background: linear-gradient(to bottom, color-mix(in srgb, var(--bg) 88%, transparent) 0%, color-mix(in srgb, var(--bg) 0%, transparent) 100%); }
+html:not([data-phone]) .phhead { background: none; padding-bottom: 8px; }
+/* and the Mac's "On this Mac · Sources…" line goes too: Sources… is in the order menu */
+html:not([data-phone]) .sortbar .shelfsource, html:not([data-phone]) .sortbar { display: none !important; }
+/* with the head gone the grid starts under the island (phone) / the window's top (Mac, web): the circle floats over it */
+html[data-phone] #shelf.rail { padding-top: calc(var(--safe-top, 0px) + 4px); }
+html:not([data-phone]) #shelf.rail { padding-top: 0; }
+/* the book view's ⓘ, beside READ */
+.bkv-info-btn { flex: none; }
+.bkv-info-btn svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.4; stroke-linecap: round; }
+.bkv-info-btn[aria-pressed="true"] { background: color-mix(in srgb, var(--fg) 88%, transparent); color: var(--bg); }
+/* ONE RECIPE FOR THE SMALL CAPITALS (ASKS #105; surface.css says the three): the book view's slot label ("languages")
+   is a LABEL, 11 / 600 / .13; the author under the title in the top capsule is the META line, 400 */
+#bkvInfo .tile-slot > b{ font-size:11px; }
+.bkv-cap i{ font-weight:400; }
+/* ...and the facts line under the byline ("EN · 66 chapters", 11.36 px at .03 em, a fourth recipe) is a LABEL */
+#bkvInfo .tile-facts{ font-size:11px; font-weight:600; letter-spacing:.13em; }
+/* ONE SIZE OF ROUND BUTTON PER HOST (ASKS #106, the Stranger: "round buttons not one size"; measured in band: Mac 26 /
+   32 / 40, phone 36 / 40 / 48). A free-standing round button is 32 on the Mac and the web, 40 on the phone; the
+   phone's foot doors (⚙, mic) are the 48 tap; what sits INSIDE a capsule (the player's small keys, the pill's ▶) is
+   part of that capsule. */
+html:not([data-phone]) .bkv-glass{ width:32px; height:32px; }
+html:not([data-phone]) .bkv-glass svg{ width:16px; height:16px; }
+html[data-phone] .phhead-r .phsort{ width:40px; height:40px; }
+/* THE GRID'S TAGS (ASKS #51; library.html says when they are drawn): the Library's glass in the LABEL recipe (11 / 600 /
+   .13), at the cover's top left, never taking a press */
+#shelf .railrow.tile{ position: relative; }
+#shelf .railrow.tile > .gridtag{ position: absolute; left: 4px; top: 4px; z-index: 2; pointer-events: none;
+  padding: 3px 7px; border-radius: 999px; max-width: calc(100% - 8px); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font: 600 11px/1.2 var(--ui-font); letter-spacing: .13em; text-transform: uppercase; color: var(--fg);
+  background: color-mix(in srgb, var(--bg) 70%, transparent); border: 1px solid color-mix(in srgb, var(--fg) 12%, transparent);
+  -webkit-backdrop-filter: saturate(1.8) blur(12px); backdrop-filter: saturate(1.8) blur(12px); }
+#shelf[data-zoom="16"] .railrow.tile > .gridtag{ left: 3px; top: 3px; padding: 2px 5px; }
+
+/* ==================================================================
+   PHOTOS RULES 1, 4 AND 7, ON EVERY HOST (DESIGN, 30 Sep; PROMPTS/lanes/design.md "PHOTOS, FROM FIRST PRINCIPLES").
+   Osca's pictures: the window's four across drew every cover in a card (a 1 px border, a 6 px radius, the paper
+   showing round a `contain`ed jacket, 28 / 20 px gaps and a 24 px margin); the phone's tiles still carried the old
+   `#shelf .railrow` card (1 px border, the 15 px radius, a shadow) under every rung; the book view stood the jacket
+   in a framed, shadowed box. Photos has none of it: the content edge to edge on a hairline seam, the thing itself.
+   ================================================================== */
+/* no card under any tile on the phone: the old list row's border, radius and shadow outlived the row */
+html[data-phone] #shelf .railrow.tile { border: 0; border-radius: 0; box-shadow: none; background: transparent; }
+/* the window's four across and the phone's two across are covers-only rungs like their neighbours: edge to edge,
+   the 2 px seam, no margin (their captions were already hidden -- the jacket says the title) */
+html:not([data-phone]) #shelf.rail[data-zoom="2"],
+html[data-phone] #shelf.rail[data-zoom="2"] { padding-left: 0; padding-right: 0; }
+html:not([data-phone]) #shelf.rail[data-zoom="2"] .shelfgrid, html[data-phone] #shelf.rail[data-zoom="2"] .shelfgrid { gap: 2px; }
+html:not([data-phone]) #shelf.rail[data-zoom="2"] .railrow.tile, html[data-phone] #shelf.rail[data-zoom="2"] .railrow.tile { width: auto; min-width: 0; min-height: 0; grid-template-rows: auto; row-gap: 0; padding: 0; }
+html #shelf.rail[data-zoom="2"] .railrow.tile :is(.railrow-title, .railrow-by, .railrow-lang, .railrow-verdict, .railrow-status) { display: none; }
+html:not([data-phone]) #shelf.rail[data-zoom="2"] .railrow.tile:hover { transform: none; }
+html:not([data-phone]) #shelf.rail[data-zoom="2"] .railrow.tile:hover .tilecov { filter: brightness(1.06); }
+html:not([data-phone]) #shelf.rail[data-zoom="2"] :is(.shelfband .bandhead, .sortbar) { padding-left: 24px; padding-right: 24px; }
+html[data-phone] #shelf.rail[data-zoom="2"] .shelfband .bandhead { padding-left: 16px; }
+/* the cover at every covers-only rung, both hosts: no border, no radius, no shadow, the jacket fills its cell */
+html #shelf.rail:is([data-zoom="16"], [data-zoom="8"], [data-zoom="4"], [data-zoom="2"]) .railrow.tile .tilecov {
+  width: 100%; height: auto; border: 0; border-radius: 0; box-shadow: none; transition: none; }
+html #shelf.rail:is([data-zoom="16"], [data-zoom="8"], [data-zoom="4"], [data-zoom="2"]) .railrow.tile .tilecov .covimg {
+  inset: 0; width: 100%; height: 100%; max-width: none; max-height: none; object-fit: cover; }
+/* THE BOOK VIEW: the jacket itself, the tallest the view gives it, centred -- no border, no radius, no shadow, and no
+   paper round a jacket narrower than the box (only a typeset cover, which IS its paper, keeps it) */
+.bkv-cover .tilecov { border: 0; border-radius: 0; box-shadow: none; }
+.bkv-cover .tilecov:has(.covimg) { background: transparent; }
+/* the long facts line wraps in the view instead of hiding behind a tooltip (rule 7) */
+#bkvInfo .tile-details { white-space: normal; overflow: visible; text-overflow: clip; }
+/* on the phone the jacket keeps clear of the island (--safe-top) and of the glass row under it (safe + 14 + 40) */
+@media (orientation: portrait){
+  html[data-phone] .bkv-stage { padding-top: calc(var(--safe-top, 0px) + 64px); }
+}
+
+/* ==================================================================
+   ALL THE WAY IN (ASKS #165, Osca 30 Sep: "Go all the the way in, the view should be consistent ... Keeping also the
+   one book view, which is just slide up and down - without the info"). The ladder is 16 · 8 · 4 · 2 · 1 on every host
+   (1 ¶ left it: a book's info lives only in the book view). Rung 1 is Photos pinched all the way in: one jacket a
+   screen, the tallest it can be, the book view's own drawing (no border, radius, shadow or card; the whole jacket,
+   `contain`, on the paper), the same room above and below as the book view gives it so a press there opens the view
+   with the jacket where it already is -- and the shelf snaps one book per screen. No words, no ✕, no pane.
+   ================================================================== */
+html #shelf.rail[data-zoom="1"] { padding-left: 0; padding-right: 0; scroll-snap-type: y mandatory; scroll-padding: 0; }
+html #shelf.rail[data-zoom="1"] .shelfgrid { grid-template-columns: minmax(0, 1fr); --cols: 1; --bookw: auto; width: 100%; max-width: none; gap: 0; }
+html #shelf.rail[data-zoom="1"] .railrow.tile {
+  width: auto; min-width: 0; height: 100vh; height: 100dvh; min-height: 0; box-sizing: border-box; margin: 0;
+  padding: 80px 24px 120px;                                           /* the book view's stage on a window */
+  display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); row-gap: 0;
+  place-items: center; justify-items: center; align-content: stretch;
+  scroll-snap-align: start; scroll-snap-stop: always;
+  border: 0; border-radius: 0; box-shadow: none; background: transparent; }
+html #shelf.rail[data-zoom="1"] .railrow.tile:is(:hover, :focus-visible) { transform: none; }
+html #shelf.rail[data-zoom="1"] .railrow.tile :is(.railrow-title, .railrow-by, .railrow-lang, .railrow-verdict, .railrow-status, .tile-pane, .tile-close, .gridtag) { display: none; }
+html #shelf.rail[data-zoom="1"] .railrow.tile .tilecov {
+  grid-column: 1; grid-row: 1; margin: 0; aspect-ratio: 88 / 120; width: auto; max-width: 100%;
+  height: min(100%, calc((100vw - 32px) * 120 / 88));
+  border: 0; border-radius: 0; box-shadow: none; transition: none; filter: none; }
+html #shelf.rail[data-zoom="1"] .railrow.tile .tilecov:has(.covimg) { background: transparent; }
+html #shelf.rail[data-zoom="1"] .railrow.tile .tilecov .covimg {
+  inset: 0; width: 100%; height: 100%; max-width: none; max-height: none; object-fit: contain; }
+/* the phone: the document is the scroller, so it is the document that snaps; the room is the phone book view's */
+html[data-phone]:has(#shelf.rail[data-zoom="1"]) { scroll-snap-type: y mandatory; }
+/* ...and neither body nor #shelf may be a scroll box of its own here (the phone gives both `overflow: auto`; the
+   nearest one became the tiles' snap container -- one that never scrolls -- so nothing snapped: tile top -40 after a
+   scroll, measured) */
+html[data-phone]:has(#shelf.rail[data-zoom="1"]) body,
+html[data-phone] #shelf.rail[data-zoom="1"] { overflow: visible; }
+html[data-phone] #shelf.rail[data-zoom="1"] .railrow.tile { padding: calc(var(--safe-top, 0px) + 64px) 16px 132px; }   /* the portrait stage's */
+@media (orientation: landscape) {
+  html[data-phone] #shelf.rail[data-zoom="1"] .railrow.tile {
+    padding: 68px calc(var(--safe-right, 0px) + 16px) calc(var(--safe-bottom, 0px) + 86px) calc(var(--safe-left, 0px) + 16px); }
+}
+/* the book view's walk (library.html, "LEFT AND RIGHT, BOOK TO BOOK"): the neighbour's jacket rides beside the one in
+   view, a screen along, drawn exactly as it is; the stage clips them so the page never scrolls sideways */
+.bkv-scroll { overflow-x: hidden; }
+.bkv-stage { position: relative; overflow: clip; touch-action: pan-y; }
+.bkv-cover { will-change: transform; }
+.bkv-peek { position: absolute; pointer-events: none; }
+.bkv-peek:empty { display: none; }
+.bkv-peek .tilecov { width: 100% !important; height: 100% !important; border: 0; border-radius: 0; box-shadow: none; }
+.bkv-peek .tilecov:has(.covimg) { background: transparent; }
+.bkv-peek .tilecov .covimg { inset: 0; width: 100%; height: 100%; max-width: none; max-height: none; object-fit: contain; }
+
+/* THE COVER FIT (ASKS #169, #173 -- Osca 30 Sep: "we need picturees to fit the books without leaving loads of blank
+   space, or it not fitting"). The page's cover-fit script draws every jacket to the slot's own shape (straight, or a
+   plain band cut from its middle -- never squeezed) and marks it `data-fit`; that canvas IS the slot's aspect to one
+   source pixel, so `fill` here is a uniform scale -- no crop (`cover` cut the title and the author) and no bars
+   (`contain` letterboxed rung 1 and the book view). `!important` only on object-fit: the rungs' rules carry #shelf. */
+.tilecov .covimg[data-fit] { inset: 0; width: 100%; height: 100%; max-width: none; max-height: none; margin: 0;
+  object-fit: fill !important; }
+.tilecov:has(.covimg[data-fit]) { background: transparent; }
+
+/* THE TYPESET COVER, SET TO ITS SLOT (ASKS #173: "invluding our own book covers, made in frank"). library.html's type
+   fit marks a typeset cover `data-typefit` once it has sized its title, author and initial in cqw so that each lies
+   whole inside the cover; the clamps and ellipses that cut a title ("The Bucolics and E") come off here, and the first
+   words -- which could only ever be a sentence cut short -- are not drawn. */
+.tilecov[data-typefit] .t, .tilecov[data-typefit] .a {
+  -webkit-line-clamp: unset; line-clamp: none; overflow: visible; text-overflow: clip; overflow-wrap: normal; }
+.tilecov[data-typefit]:not(.l5) .t, .tilecov[data-typefit] .a { display: block; }
+.tilecov[data-typefit] .fw { display: none; }
+
+/* THE BOOK YOU COME BACK TO (ASKS #175, the Stranger: "nothing marks the book you came back to"): a ring over the
+   jacket that fades on its own -- closing the book view, or a pinch that moved the book out from under the pointer */
+#shelf .railrow.tile[data-back] .tilecov::after {
+  content: ""; position: absolute; inset: 0; z-index: 3; pointer-events: none;
+  box-shadow: inset 0 0 0 3px var(--fg), inset 0 0 0 4px var(--bg);
+  animation: tile-back 1.6s ease-out forwards; }
+@keyframes tile-back { 0%, 40% { opacity: 1; } 100% { opacity: 0; } }
+
+/* ==================================================================
+   SHELVES AS ALBUMS (ASKS #184 #185, Osca 30 Sep; Z7). library.html says the gesture and the page; this is their
+   picture. The page reads NEWLY ADDED (a short row) · SHELVES (an album a shelf: the stack of its covers, its name,
+   its count) · LIBRARY (every book). The rows are a strip each that runs sideways under the hand, edge to edge like
+   the grid, the labels in the LABEL recipe (11 / 600 / .13, the grid tags' and the book view's). A shelf opened is
+   its own page: its name (renamed where it stands), its books with what was made from each and the reader's words,
+   and the shelf's companion -- the one context layer -- as its own card, at the right on a window, first on a phone.
+   ================================================================== */
+#shelf { --row-h: 176px; }
+html[data-phone] #shelf { --row-h: 148px; }
+@media (orientation: landscape) { html[data-phone] #shelf { --row-h: 112px; } }
+#shelf .libsec { margin: 0; padding: 0 0 18px; }
+#shelf :is(.libsec, .libhead) { width: auto; max-width: none; }   /* edge to edge, as the grid under them is (#shelf's children are capped at the column elsewhere) */
+#shelf .libhead { margin: 0; padding: 18px 24px 10px; font: 600 11px / 1.4 var(--ui-font); letter-spacing: .13em;
+  text-transform: uppercase; color: var(--fg); opacity: .78; }
+#shelf .libhead.lib-all { padding-top: 6px; }
+html[data-phone] #shelf .libhead { padding-left: 16px; padding-right: 16px; }   /* #shelf already carries the safe inset on its side */
+html[data-phone] #shelf .libsec:first-of-type .libhead { padding-top: 12px; }
+#shelf .libstrip { display: flex; gap: 12px; overflow-x: auto; overflow-y: hidden; padding: 0 24px 2px;
+  scroll-snap-type: x proximity; scroll-padding: 0 24px; scrollbar-width: none; overscroll-behavior-x: contain; }
+#shelf .libstrip::-webkit-scrollbar { display: none; }
+html[data-phone] #shelf .libstrip { gap: 8px; padding: 0 16px 2px; scroll-padding: 0 16px; }
+/* the one rung that is a book a screen has no rows over it: it is the walk, snapped book to book */
+#shelf.rail[data-zoom="1"] :is(.libsec, .libhead.lib-all) { display: none; }
+
+/* a new book: its jacket, the row's height, no frame; a finished render says so in the grid tag's glass */
+#shelf .nw-item { flex: none; position: relative; display: block; margin: 0; padding: 0; border: 0; background: none;
+  width: calc(var(--row-h) * 88 / 120); height: var(--row-h); cursor: pointer; scroll-snap-align: start;
+  -webkit-appearance: none; appearance: none; -webkit-tap-highlight-color: transparent; }
+#shelf .nw-item .tilecov, #shelf .al-c .tilecov { width: 100%; height: 100%; border: 0; border-radius: 0; box-shadow: none; }
+#shelf .nw-item .tilecov .covimg, #shelf .al-c .tilecov .covimg, .liftghost .tilecov .covimg {
+  inset: 0; width: 100%; height: 100%; max-width: none; max-height: none; object-fit: cover; }
+#shelf .nw-item:hover .tilecov { filter: brightness(1.06); }
+#shelf .nw-tag { position: absolute; left: 4px; bottom: 4px; z-index: 2; pointer-events: none; max-width: calc(100% - 8px);
+  padding: 3px 7px; border-radius: 999px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font: 600 11px / 1.2 var(--ui-font); letter-spacing: .13em; text-transform: uppercase; color: var(--fg);
+  background: color-mix(in srgb, var(--bg) 70%, transparent); border: 1px solid color-mix(in srgb, var(--fg) 12%, transparent);
+  -webkit-backdrop-filter: saturate(1.8) blur(12px); backdrop-filter: saturate(1.8) blur(12px); }
+#shelf .nw-tag::before { content: "\25B6\FE0E"; margin-right: 5px; font-size: 8px; vertical-align: 1px; }
+
+/* an album: up to three covers stacked, the front one whole, the two behind it rising to its right; a 2 px seam of
+   paper between them (rule 1: no card, no frame) */
+#shelf .album { flex: none; display: grid; grid-template-rows: auto auto auto; justify-items: start; text-align: left;
+  width: calc((var(--row-h) - 16px) * 88 / 120 + 28px); margin: 0; padding: 0; border: 0; background: none; color: var(--fg);
+  cursor: pointer; scroll-snap-align: start; -webkit-appearance: none; appearance: none; -webkit-tap-highlight-color: transparent; }
+#shelf .al-stack { position: relative; display: block; width: 100%; height: var(--row-h); }
+#shelf .al-stack[data-n="0"] { background: color-mix(in srgb, var(--fg) 6%, transparent); }
+#shelf .al-c { position: absolute; left: 0; bottom: 0; height: calc(var(--row-h) - 16px); aspect-ratio: 88 / 120;
+  outline: 2px solid var(--bg); }
+#shelf .al-c[data-i="0"] { z-index: 3; }
+#shelf .al-c[data-i="1"] { z-index: 2; left: 14px; bottom: 8px; }
+#shelf .al-c[data-i="2"] { z-index: 1; left: 28px; bottom: 16px; }
+#shelf .al-name { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; max-width: 100%; margin: 8px 0 0; overflow: hidden; overflow-wrap: anywhere;
+  font: 600 calc(14px * var(--read-scale, 1)) / 1.3 var(--read-family, var(--serif, "Iowan Old Style", Palatino, Georgia, serif)); }
+#shelf .al-n { display: block; margin: 2px 0 0; font: 600 11px / 1.4 var(--ui-font); letter-spacing: .13em; opacity: .62; }
+#shelf .album:hover .al-c[data-i="0"] .tilecov { filter: brightness(1.06); }
+#shelf .album:focus-visible, #shelf .nw-item:focus-visible { outline: 2px solid var(--fg); outline-offset: 2px; }
+#shelf .album[data-fresh] .al-stack { animation: al-fresh 1.5s ease-out; }
+@keyframes al-fresh { 0%, 35% { box-shadow: 0 0 0 3px var(--chrome-accent); } 100% { box-shadow: 0 0 0 3px transparent; } }
+
+/* THE LIFT: the carried cover rides over everything under the hand, the one it came from waits as a ghost of itself,
+   and the thing under the hand says what a drop will do -- the page's one loud colour, Frank's red, for the one act */
+.liftghost { position: fixed; left: 0; top: 0; z-index: 300; pointer-events: none; will-change: transform;
+  box-shadow: 0 18px 40px rgba(0, 0, 0, .28), 0 2px 6px rgba(0, 0, 0, .18); }
+.liftghost .tilecov { width: 100%; height: 100%; border: 0; border-radius: 0; box-shadow: none; animation: lift-rise .18s ease-out both; }
+@keyframes lift-rise { from { transform: scale(.94); } to { transform: scale(1.04); } }
+html[data-lifting], html[data-lifting] * { -webkit-user-select: none; user-select: none; cursor: grabbing !important; }
+#shelf [data-lifted] .tilecov { opacity: .3; }
+#shelf :is(.railrow.tile, .nw-item) { -webkit-touch-callout: none; }
+#shelf :is(.railrow.tile, .nw-item, .album) img { -webkit-user-drag: none; }
+#shelf :is(.railrow.tile, .nw-item)[data-drop] .tilecov { outline: 3px solid var(--chrome-accent); outline-offset: -3px; }
+#shelf .album[data-drop] .al-stack { outline: 3px solid var(--chrome-accent); outline-offset: 3px; }
+#shelf .railrow.tile[data-drop], #shelf .nw-item[data-drop], #shelf .album[data-drop] { position: relative; }
+#shelf .railrow.tile[data-drop]::after, #shelf .nw-item[data-drop]::after, #shelf .album[data-drop]::after {
+  content: "New shelf"; position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 6; pointer-events: none;
+  padding: 5px 10px; border-radius: 999px; white-space: nowrap;
+  font: 600 11px / 1.2 var(--ui-font); letter-spacing: .13em; text-transform: uppercase;
+  color: #fff; background: var(--chrome-accent); box-shadow: 0 2px 10px rgba(0, 0, 0, .18); }
+#shelf .album.album[data-drop]::after { content: "Add"; top: calc(var(--row-h) / 2); }
+#shelf .album.album[data-drop="has"]::after { content: "On this shelf"; background: color-mix(in srgb, var(--bg) 80%, transparent); color: var(--fg); }
+
+/* ---- A SHELF, OPENED: its own page (the head's order circle is the library's, and goes) */
+body:has(#shelf[data-shelfpage]) .phhead { display: none; }
+#shelf.rail[data-shelfpage] { scroll-snap-type: none !important; padding: 0 !important; }
+html[data-phone]:has(#shelf[data-shelfpage]) { scroll-snap-type: none; }
+#shelf .spage { box-sizing: border-box; max-width: 1180px; margin: 0 auto; padding: 0 24px 64px; }
+html[data-phone] #shelf .spage { padding: 0 16px calc(var(--safe-bottom, 0px) + 120px); }   /* #shelf keeps the safe insets on its sides */
+@media (min-width: 721px) { html[data-phone] #shelf .sp-body { grid-template-columns: minmax(0, 1fr) minmax(240px, 300px); gap: 16px 24px; } html[data-phone] #shelf .sp-comp { position: static; } }   /* a phone on its side is shorter than the card: it scrolls with the page */
+#shelf .sp-head { position: sticky; top: 0; z-index: 5; display: flex; align-items: center; gap: 12px; padding: 18px 0 14px;
+  background: linear-gradient(to bottom, var(--bg) 78%, color-mix(in srgb, var(--bg) 0%, transparent)); }
+html[data-phone] #shelf .sp-head { padding-top: calc(var(--safe-top, 0px) + 10px); }
+#shelf .sp-t { flex: 1; min-width: 0; }
+#shelf .sp-glass { flex: none; width: 32px; height: 32px; padding: 0; border-radius: 50%; display: grid; place-items: center; cursor: pointer;
+  color: var(--fg); border: 1px solid color-mix(in srgb, var(--fg) 12%, transparent); background: color-mix(in srgb, var(--bg) 62%, transparent);
+  -webkit-backdrop-filter: saturate(1.8) blur(18px); backdrop-filter: saturate(1.8) blur(18px); box-shadow: 0 2px 10px rgba(0, 0, 0, .08);
+  -webkit-appearance: none; appearance: none; -webkit-tap-highlight-color: transparent; }
+html[data-phone] #shelf .sp-glass { width: 40px; height: 40px; }
+#shelf .sp-glass:hover { background: color-mix(in srgb, var(--fg) 8%, var(--bg)); }
+#shelf .sp-glass svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+#shelf .sp-more svg { fill: currentColor; stroke: none; }
+#shelf .sp-name { display: block; width: 100%; box-sizing: border-box; margin: 0; padding: 0 0 2px; border: 0; border-bottom: 1px solid transparent;
+  border-radius: 0; background: transparent; color: var(--fg); outline: none; text-overflow: ellipsis;
+  font: 600 32px / 1.15 var(--serif, "Iowan Old Style", Palatino, Georgia, serif); -webkit-appearance: none; appearance: none; }
+html[data-phone] #shelf .sp-name { font-size: 28px; }
+#shelf .sp-name:hover { border-bottom-color: color-mix(in srgb, var(--fg) 18%, transparent); }
+#shelf .sp-name:focus { border-bottom-color: color-mix(in srgb, var(--fg) 55%, transparent); }
+#shelf .sp-count { margin: 4px 0 0; font: 600 11px / 1.4 var(--ui-font); letter-spacing: .13em; text-transform: uppercase; opacity: .78; }
+#shelf .sp-body { display: grid; grid-template-columns: minmax(0, 1fr) minmax(300px, 380px); gap: 20px 48px; align-items: start; padding-top: 12px; }
+#shelf .sp-comp { grid-column: 2; grid-row: 1; position: sticky; top: 92px; }
+#shelf .sp-books { grid-column: 1; grid-row: 1; }
+@media (max-width: 720px) {
+  #shelf .sp-body { grid-template-columns: minmax(0, 1fr); }
+  #shelf .sp-comp { grid-column: 1; grid-row: 1; position: static; }
+  #shelf .sp-books { grid-row: 2; }
+}
+/* the companion: the one context layer, as the shelf's own card */
+#shelf .sp-comp { box-sizing: border-box; padding: 18px 20px 8px; border-radius: var(--r-2, 15px);
+  background: color-mix(in srgb, var(--fg) 4.5%, var(--bg)); }
+#shelf .sp-ch { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+#shelf .sp-ch b { font: 600 11px / 1.4 var(--ui-font); letter-spacing: .13em; text-transform: uppercase; }
+#shelf .sp-ch span { font: 400 11px / 1.4 var(--ui-font); letter-spacing: .06em; opacity: .62; text-align: right; }
+#shelf .sp-lead { margin: 10px 0 14px; font: 400 calc(17px * var(--read-scale, 1)) / 1.45 var(--read-family, var(--serif, Georgia, serif)); }
+#shelf .sp-cb { padding: 12px 0; border-top: 1px solid color-mix(in srgb, var(--fg) 10%, transparent); }
+#shelf .sp-cb h4 { margin: 0; font: 600 calc(15px * var(--read-scale, 1)) / 1.3 var(--read-family, var(--serif, Georgia, serif)); }
+#shelf .sp-cf { margin: 4px 0 0; font: 400 12px / 1.5 var(--ui-font); color: var(--fg-dim); }
+#shelf .sp-cy { margin: 8px 0 0; font: 400 calc(14px * var(--read-scale, 1)) / 1.5 var(--read-family, var(--serif, Georgia, serif)); }
+#shelf .sp-cy span { display: block; margin: 0 0 2px; font: 600 11px / 1.4 var(--ui-font); letter-spacing: .13em; text-transform: uppercase; opacity: .62; }
+#shelf .sp-cn { margin: 6px 0 0; font: italic 400 calc(13px * var(--read-scale, 1)) / 1.5 var(--read-family, var(--serif, Georgia, serif)); color: var(--fg-dim); }
+/* a book on the shelf: its jacket, and beside it what it is, what was made from it, and the reader's words */
+#shelf .sp-books { list-style: none; margin: 0; padding: 0; display: grid; gap: 28px; }
+#shelf .sp-book { display: grid; grid-template-columns: 132px minmax(0, 1fr); gap: 20px; align-items: start; }
+html[data-phone] #shelf .sp-book { grid-template-columns: 96px minmax(0, 1fr); gap: 14px; }
+html #shelf .spage .railrow.tile { width: 100% !important; height: auto !important; min-height: 0 !important; margin: 0 !important; padding: 0 !important;
+  display: block !important; border: 0 !important; background: none !important; box-shadow: none !important; scroll-snap-align: none !important; }
+html #shelf .spage .railrow.tile .tilecov { width: 100% !important; height: auto !important; aspect-ratio: 88 / 120; border: 0; border-radius: 0; box-shadow: none; }
+html #shelf .spage .railrow.tile .tilecov .covimg { inset: 0; width: 100%; height: 100%; max-width: none; max-height: none; object-fit: cover; }
+html #shelf .spage .railrow.tile :is(.railrow-title, .railrow-by, .railrow-lang, .railrow-verdict, .railrow-status, .tile-pane, .tile-close, .gridtag) { display: none !important; }
+#shelf .sp-bt { margin: 0; font: 600 calc(18px * var(--read-scale, 1)) / 1.25 var(--read-family, var(--serif, Georgia, serif)); }
+#shelf .sp-by { margin: 4px 0 0; font: 600 11px / 1.4 var(--ui-font); letter-spacing: .13em; text-transform: uppercase; opacity: .62; }
+#shelf .sp-made { list-style: none; margin: 10px 0 0; padding: 0; font: 400 13px / 1.55 var(--ui-font); }
+#shelf .sp-made i { display: inline-block; width: 1.5em; font-style: normal; font-size: 10px; opacity: .62; }
+#shelf .sp-none, #shelf .sp-empty { margin: 10px 0 0; font: 400 13px / 1.5 var(--ui-font); color: var(--fg-dim); }
+#shelf .sp-empty { list-style: none; }
+#shelf .sp-about { display: block; margin: 12px 0 0; }
+#shelf .sp-about span { display: block; margin: 0 0 4px; font: 600 11px / 1.4 var(--ui-font); letter-spacing: .13em; text-transform: uppercase; opacity: .62; }
+#shelf .sp-about textarea { display: block; width: 100%; box-sizing: border-box; min-height: 2.6em; margin: 0; padding: 8px 10px; resize: vertical;
+  font: 400 calc(14px * var(--read-scale, 1)) / 1.45 var(--read-family, var(--serif, Georgia, serif)); color: var(--fg);
+  background: transparent; border: 1px solid color-mix(in srgb, var(--fg) 14%, transparent); border-radius: var(--r-1, 11px); outline: none; }
+#shelf .sp-about textarea:focus { border-color: color-mix(in srgb, var(--fg) 45%, transparent); }
+#shelf .sp-about textarea::placeholder { color: var(--fg-dim); opacity: 1; }
+#shelf .sp-off { margin: 8px 0 0; padding: 0; border: 0; background: none; cursor: pointer; color: var(--fg-dim);
+  font: 400 12px / 1.4 var(--ui-font); -webkit-appearance: none; appearance: none; }
+#shelf .sp-off:hover { color: var(--fg); text-decoration: underline; text-underline-offset: 3px; }
+
+/* ==================================================================
+   DARK COVERS (ASKS #172, Osca 30 Sep: "Dark mode should turn book covers and things black and white, just warmth
+   adjusted -- like if you add warmth to black and white you don't get black and white ... if you do want to use
+   colours in dark mode, it'd only either be from warmth inverted OR from the frank red"). In dark every cover --
+   a jacket, a cover Frank set, the album's stack, the book view, the strip, the carried one -- is drawn in one
+   tone: grey (grayscale 1) pushed toward the paper's warmth by sepia in proportion to --warm (0 at Paper, so a
+   neutral grey; 18 at Candle), Settings' contrast (--contrast, -2..2, 0 = as drawn) as a contrast step, and a
+   little under full brightness so a white jacket is not a lamp in a dark room. Light keeps every colour; contrast
+   applies there too. `!important` in dark because the rungs' own `filter` (a hover's brightness, rung 1's none)
+   would otherwise put the colour back.
+   ================================================================== */
+.tilecov { filter: contrast(calc(1 + var(--contrast, 0) * 0.08)); }
+html[data-theme="dark"] .tilecov, html[data-dark] .tilecov {
+  filter: grayscale(1) sepia(calc(var(--warm, 0) / 18 * 0.62)) contrast(calc(1 + var(--contrast, 0) * 0.08)) brightness(0.9) !important; }
+@media (prefers-color-scheme: dark) {
+  html:not([data-theme="light"]) .tilecov {
+    filter: grayscale(1) sepia(calc(var(--warm, 0) / 18 * 0.62)) contrast(calc(1 + var(--contrast, 0) * 0.08)) brightness(0.9) !important; }
 }
