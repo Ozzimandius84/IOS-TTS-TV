@@ -838,7 +838,7 @@ html:not([data-phone]) .mplay{
    (Follow does nothing until a voice plays: "what's this silly glyph? When I press it generally it does nothing").
    Once it plays, the capsule rises over the band as the player it is -- rail, clock, the sentence arrows, Follow.
    As you read, all of it goes (band.js data-away), and the book's scroll bar with it. */
-html[data-phone] .pplay[data-playing="off"]{ display:none !important; }   /* at rest the ▶ is the band's (band.js .band-play) */
+html[data-phone]:not([data-played]) .pplay[data-playing="off"]{ display:none !important; }   /* at rest the ▶ is the band's (band.js .band-play); once it has played in this chapter a pause keeps the capsule (html[data-played], reader.html; ASKS #195) */
 html[data-phone] .pplay, html[data-phone] .scrub2{ transition:transform .24s ease, opacity .24s ease; }
 html[data-phone][data-away] .pplay{ transform:translateY(calc(100% + 80px)); opacity:0; pointer-events:none; }
 html[data-phone][data-away] .scrub2{ opacity:0; pointer-events:none; }

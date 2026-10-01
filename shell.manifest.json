@@ -2,7 +2,7 @@
   "added_here": [
     "index.html"
   ],
-  "bytes": 3705127,
+  "bytes": 3716163,
   "count": 87,
   "files": {
     "bar/askbar.css": {
@@ -70,12 +70,12 @@
       "sha256": "332fac37024799037c72c7c0a20c62a6f93e0d19be8753cf9c1e1dfa5d549459"
     },
     "reader/band.css": {
-      "bytes": 38751,
-      "sha256": "afd5cf402e0c551a516c22d91ba70b9b96755b8977070ab9b4ba8333fa31b0af"
+      "bytes": 39160,
+      "sha256": "69ab72be5fc903b39a9a225ab55b21e896f940feee61ac0bd6f2f98df7aa1051"
     },
     "reader/band.js": {
-      "bytes": 26420,
-      "sha256": "0a9e30ac1b6be79f88f58fd3383d2c108b36020ede18ae1e98b86ed4e7475f03"
+      "bytes": 26743,
+      "sha256": "e40ed97a7dbaada0cfc0d0c1552285c4a1fb4e33eda41a435f491e0978713294"
     },
     "reader/book-nav.js": {
       "bytes": 363208,
@@ -122,8 +122,8 @@
       "sha256": "f7c403259c6900175f8b96f872b2a884e7dd0577f5a992e5a6ce034a5d313fb0"
     },
     "reader/follow.js": {
-      "bytes": 17960,
-      "sha256": "45c378af75d651a6754a711928570655c495f9264f9378f8f7a2293cc303f27d"
+      "bytes": 18667,
+      "sha256": "76795d2162e3379dd10009a657bb24ebf1ce958cb1e4f129dca8585300e389f2"
     },
     "reader/hints.js": {
       "bytes": 12739,
@@ -150,12 +150,12 @@
       "sha256": "ff85c2962e4edf69fb2f5ec55da2513cb96da96bebe725501d3c19bc612c5598"
     },
     "reader/listen.css": {
-      "bytes": 3500,
-      "sha256": "31d97c6d8f53450d7f194ee49ac7a02cbc87f6abf94ba4fe276f78411f897e34"
+      "bytes": 4520,
+      "sha256": "0d20c9bb1fbb13f2c63b25e66e9224feb44fe0a10e55da09bc2c30a32a2fbe68"
     },
     "reader/listen.js": {
-      "bytes": 37024,
-      "sha256": "920217b4f142d7a08e66805dd12fae78b2602b72171d722fd1d99bc4112fb4e3"
+      "bytes": 39949,
+      "sha256": "b9b64f0e8306a5519a1a65edf6c1819b12758dc8de0e9cd8885ee4cf95c1de50"
     },
     "reader/lookup.js": {
       "bytes": 41169,
@@ -206,8 +206,8 @@
       "sha256": "01d0599452f0583b677409bef75c8211aeee66c02d6033831ced4bace0fc37cd"
     },
     "reader/reader.html": {
-      "bytes": 168162,
-      "sha256": "9b71a2cc1a016bc8dd3fb09ef720892d953b0404ec6c413a32c2cc9a57e1b3ad"
+      "bytes": 173445,
+      "sha256": "3d80130789597e050cff44338d35694fc076da60614cfeb884d948dd4c0a5885"
     },
     "reader/scrub.css": {
       "bytes": 13348,
@@ -226,8 +226,8 @@
       "sha256": "23bc089254d1bec0dc7fac76e6db2c9a05dcd079bb00df0ef682fa21ac0c9874"
     },
     "reader/shell.css": {
-      "bytes": 53373,
-      "sha256": "342c6cd354586781c355eacb8f26443c7f492923ecc1c8d9e4cf8c48981fa03b"
+      "bytes": 53498,
+      "sha256": "bb6be55f3c75d2b8d4ffb92f25aca541bec42ec85f1e32b10a9c6dd8039a9500"
     },
     "reader/surface.css": {
       "bytes": 58301,
@@ -238,8 +238,8 @@
       "sha256": "518b0cab590e018306712571f846ae36fa7735f0aed18824ecc4ee604134ad2b"
     },
     "reader/sw.js": {
-      "bytes": 28300,
-      "sha256": "171061b1812bc2adc20336ff2cf370ee125fe9efcb5a99e9ff3655213ebc55eb"
+      "bytes": 28544,
+      "sha256": "4a36dbf774ebed80d1e4c065e3c775fe8832ea4b9c46251aeb4c31676a0acd70"
     },
     "reader/sysvoice.js": {
       "bytes": 45964,
@@ -356,7 +356,7 @@
   },
   "home_page": "library/library.html",
   "source": {
-    "commit": "b7de760",
+    "commit": "3c0a494",
     "how": "design/export.py --shell --phone-shell (30 Sep: the web edition 18a4246 baked for the phone bundle); books/ and library/library.json kept",
     "repo": "/sessions/rcw-01daqke7brlcxu77wypzwnpb/mnt/TTSTV",
     "shell_cache": "ttstv-shell-v60"

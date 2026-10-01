@@ -50,6 +50,18 @@ html[data-follow-mark="none"] ::highlight(listen-word) {
   background-color: transparent;
 }
 
+/* THE SAME TWO MARKS AS RECTS, where WebKit will not paint a highlight on the phone's unselectable column (listen.js
+   rectMode, ASKS #195): one <i> per line box, in the reader's box over the paper and under every bar. The colours and
+   FOLLOW's one constant are the highlights' own, rule for rule. */
+.listenrects{ position:fixed; inset:0; pointer-events:none; z-index:2; }
+.listenrects[hidden]{ display:none; }
+.listenrects i{ position:fixed; display:block; border-radius:2px; }
+.listenrects i.listen-sentence{ background-color: color-mix(in oklab, var(--ink, #17150f) 9%, transparent); }
+.listenrects i.listen-word{ background-color: color-mix(in oklab, var(--ink, #17150f) 26%, transparent); }
+html[data-follow-mark="sentence"] .listenrects i.listen-sentence{ background-color: color-mix(in oklab, var(--ink, #17150f) 5%, transparent); }
+html[data-follow-mark="sentence"] .listenrects i.listen-word{ background-color: transparent; }
+html[data-follow-mark="none"] .listenrects i{ background-color: transparent; }
+
 /* the <audio> is furniture: it plays, it is never seen and it never takes
    part in the layout the shell measures */
 audio.listen-audio { display: none; }

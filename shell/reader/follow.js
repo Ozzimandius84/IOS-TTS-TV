@@ -285,9 +285,17 @@
       var v = pane(), playing = false, stillNow = false;
       try { playing = !!(opt.playing && opt.playing()); } catch (e) {}
       try { stillNow = !!(opt.still && opt.still()); } catch (e) {}
+      /* WHAT THE CHROME COVERS IS NOT "ON SCREEN" (ASKS #195, the phone): the layers' capsule at the top and the
+         band and player at the foot float OVER the pane, so a sentence under the glass was "whole on the screen"
+         and the page never moved for it. `inset()` -> {top, bottom}, px of the pane the page's chrome covers. */
+      var ins = null;
+      try { ins = opt.inset ? opt.inset() : null; } catch (e) { ins = null; }
+      var it = ins && +ins.top > 0 ? +ins.top : 0, ib = ins && +ins.bottom > 0 ? +ins.bottom : 0;
+      var vh = v ? (v.clientHeight || 0) : 0;
+      if (it + ib > vh * 0.6) { it = 0; ib = 0; }        /* a chrome that covers most of the pane is not a reading view */
       var move = tr.step({
         key: s && s.key, sent: s && rectOf(s.range),
-        view: v ? { top: v.getBoundingClientRect().top, height: v.clientHeight || 0 } : null,
+        view: v ? { top: v.getBoundingClientRect().top + it, height: vh - it - ib } : null,
         playing: playing, held: held, still: stillNow,
       });
       if (!move || !v) return null;

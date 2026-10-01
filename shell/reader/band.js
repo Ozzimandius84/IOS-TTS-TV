@@ -255,7 +255,10 @@
      Photos does the same with its capsules. */
   function awayAsYouRead(band) {
     var R = document.documentElement, last = {}, acc = 0, hand = 0;
-    ['touchmove', 'wheel', 'keydown', 'pointerdown'].forEach(function (t) { addEventListener(t, function () { hand = Date.now(); }, { capture: true, passive: true }); });   /* a page restoring its place is not reading */
+    /* a page restoring its place is not reading -- and nor is a press on the chrome: ▶ pressed in the pill made the
+       voice's first page turn count as a hand and took the bars (and the player just asked for) away (ASKS #195) */
+    var CHROME = '.band, .pplay, .mplay, .phlayers, .sf, .marghand';
+    ['touchmove', 'wheel', 'keydown', 'pointerdown'].forEach(function (t) { addEventListener(t, function (e) { var g = e.target; if (g && g.closest && g.closest(CHROME)) return; hand = Date.now(); }, { capture: true, passive: true }); });
     function set(away) { if (away === R.hasAttribute('data-away')) return; if (away) R.setAttribute('data-away', ''); else R.removeAttribute('data-away'); }
     document.addEventListener('scroll', function (e) {
       var el = e.target === document ? document.scrollingElement : e.target; if (!el || el.contains(band)) return;

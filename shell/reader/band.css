@@ -482,7 +482,7 @@ html[data-phone][data-voice] .band-play{
 }
 html[data-phone][data-voice] .band-play svg{ width: 16px; height: 16px; display: block; margin-left: 2px; }
 html[data-phone][data-voice] .band-play:active{ transform: scale(.94); }
-html[data-phone][data-playing] .band-play{ display: none; }
+html[data-phone][data-playing] .band-play, html[data-phone][data-played] .band-play{ display: none; }   /* the capsule is up, with its own ▶ (ASKS #195) */
 /* THE FOOT FADES UNDER THE GLASS (Photos does it too): on a book the lines ran on behind and between the three pieces
    and read as "things going over each other" (Osca, 29 Sep). A fade from nothing to the paper, the band's own height
    and a little more, so the last line visible ends cleanly above the glass. It goes away with the band as you read. */
@@ -493,7 +493,8 @@ html[data-phone] .band[data-book], html[data-phone] .band:has(.band-pill[data-bo
 }
 /* while the voice plays the player capsule stands over the row: the fade reaches up under it too (Stranger, 29 Sep:
    50 px of words showed between the capsule and the row) */
-html[data-phone][data-playing] .band[data-book], html[data-phone][data-playing] .band:has(.band-pill[data-book]){ padding-top: 84px; }
+html[data-phone][data-playing] .band[data-book], html[data-phone][data-playing] .band:has(.band-pill[data-book]),
+html[data-phone][data-played] .band[data-book], html[data-phone][data-played] .band:has(.band-pill[data-book]){ padding-top: 84px; }
 
 /* THE PHONE ON ITS SIDE (Osca, 29 Sep: landscape "for everything"): the three glass pieces keep a phone's width,
    centred, clear of the island's side -- not a capsule stretched across 852 px */
@@ -542,13 +543,14 @@ html:not([data-phone]) .band .layers button svg{ width: 13px; height: 13px; }
    window) while on the shelf and on Settings it ends the page's column (--band-measure, x 1338). It is placed against
    the column (.band-in) now, so it is the same x on every web page and a second press in the same place closes
    Settings. */
-html[data-web] .band[data-book] .band-in{ position: relative; }
-html[data-web] .band[data-book] [data-door="settings"]{ position: absolute; right: 0; top: 50%; transform: translateY(-50%); }
-html[data-web] .band[data-book] .band-right{ margin-right: calc(22px + var(--band-gap, 12px)); }
+/* (not on the phone: the web edition on a phone is html[data-web] too, and its ⚙ is the foot's left circle -- ASKS #195) */
+html[data-web]:not([data-phone]) .band[data-book] .band-in{ position: relative; }
+html[data-web]:not([data-phone]) .band[data-book] [data-door="settings"]{ position: absolute; right: 0; top: 50%; transform: translateY(-50%); }
+html[data-web]:not([data-phone]) .band[data-book] .band-right{ margin-right: calc(22px + var(--band-gap, 12px)); }
 /* THE ⚙'S HIT IS THE ROUND BUTTON'S 32 (ASKS #106: every free-standing round button is 32 on the Mac and the web),
    while the tiny bar (#139) keeps it DRAWN at 22 with its 13 glyph: the 5 px ring round it takes the press and
    draws nothing */
-html[data-web] .band-door[data-door="settings"]::before{ content: ""; position: absolute; inset: -5px; }
+html[data-web]:not([data-phone]) .band-door[data-door="settings"]::before{ content: ""; position: absolute; inset: -5px; }
 /* ONE FIELD ON THE PHONE (ASKS #158): a press on the pill raises the Surface's own field in the pill's place, its ×
    in the mic's (surface.css); while the sheet is up (html[data-sheet], surface.js) the band's three step aside, so
    the pill is never drawn as a second field under it */

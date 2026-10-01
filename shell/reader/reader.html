@@ -25,9 +25,9 @@
      ("everybody knows, like YouTube"), the title and chapter centred, the four
      layers as glyphs at the right. It goes with the page -- carried up by what
      the text scrolls, back by a scroll up or the pointer at the window's top --
-     so it never jumps. The phone keeps #pbar (pbar.js: the pill, the drag up
-     to the shelf, the hide-as-you-read) until those gestures move under
-     band.js; so the band is not mounted there. -->
+     so it never jumps. On the phone the same band is mounted at the foot in its
+     phone form (ASKS #195, 1 Oct) and #pbar's strip is not drawn; pbar.js still
+     keeps the open-books list. -->
 <link rel="stylesheet" href="band.css">
 <link rel="stylesheet" href="layers.css">
 <link rel="stylesheet" href="tellfrank.css"><!-- Tell Frank (ASKS #134-#136) -->
@@ -36,6 +36,10 @@
 <style>
 #bandHost{ position:fixed; top:0; left:0; right:0; z-index:60; pointer-events:none; }
 #bandHost .band{ pointer-events:auto; }
+/* ON THE PHONE THE BAND IS THE BAR (ASKS #195): pbar's strip and its peek are not drawn once the band is mounted --
+   one chrome at the foot, the plan's. The band's own box takes no presses between its three pieces (band.css). */
+html[data-phone][data-band="reader"] #pbar, html[data-phone][data-band="reader"] #pbarpeek{ display:none !important; }
+html[data-phone] #bandHost .band{ pointer-events:none; }
 /* the band says the book and the chapter; the running head would say them twice */
 html[data-band="reader"]:not([data-phone]) .runhead{ visibility:hidden; }
 html[data-band="reader"] .band-head{ cursor:pointer; }
@@ -777,12 +781,21 @@ html[data-phone] #playnote{ bottom:calc(var(--safe-bottom, env(safe-area-inset-b
     return !n || n.getAttribute("data-shown") !== "off";
   }
 
-  var lastWpm = null, lastPlaying = null, lastFollow = null;
+  var lastWpm = null, lastPlaying = null, lastFollow = null, playedIn = null;
   function paint(s) {
     var here = wanted(s);
     if (bar.hidden === here) bar.hidden = !here;
     if (PHONE) { if (here) R.setAttribute("data-voice", ""); else R.removeAttribute("data-voice"); }   /* the band's ▶ shows only with a voice to play */
-    if (!here) { R.removeAttribute("data-pplay"); return; }
+    if (!here) { R.removeAttribute("data-pplay"); R.removeAttribute("data-played"); playedIn = null; return; }
+    /* PAUSE KEEPS THE BAR (ASKS #195; the listening Stranger, 1 Oct: "pause, and the whole capsule vanished ... a
+       stranger who pauses once has lost listening for good"). On the phone the player is only the ▶ in the pill until
+       a voice plays; once it has played in this chapter, a pause leaves the capsule where it is -- its ▶ to resume, its
+       rail and clock to see where the voice stopped. Another chapter is a fresh start: the ▶ is the pill's again. */
+    if (PHONE) {
+      if (s.playing) playedIn = s.chapterId;
+      else if (playedIn !== s.chapterId) playedIn = null;
+      if (playedIn) R.setAttribute("data-played", ""); else R.removeAttribute("data-played");
+    }
 
     /* ★ NO CLOCK, AND THE BAR SAYS SO. The system voice moves no clock --
        `state().t` and `state().d` both stay 0 and `seekFraction`, `nudge` and
@@ -963,7 +976,7 @@ html[data-phone] #playnote{ bottom:calc(var(--safe-bottom, env(safe-area-inset-b
     var ph = document.documentElement.hasAttribute("data-phone");
     FrankHints.show("book", ph ? [
       { at: "foot", text: "To go back to your shelf, drag the book’s title up." },
-      { at: "#pplaygo", text: "Play reads the book aloud; each word lights up as it is read." },   /* the ▶ itself, not the whole row (Stranger, 29 Sep) */
+      { at: "#bandHost .band-play", text: "Play reads the book aloud; each word lights up as it is read." },   /* the ▶ itself, not the whole row (Stranger, 29 Sep); at rest it is the pill's (ASKS #195) */
     ] : [
       { at: ".band .layers", text: "Book, Mine, Everyone, Voice: the same page, with your notes, everyone’s, or the voice’s marks." },
       { at: "top", text: "Press V to read one word at a time; press it again to come back to the page." },
@@ -1192,7 +1205,13 @@ function nameTab(b){ document.title = ((b && b.title) || "A book") + " · Frank"
 (function(){
   const R = document.documentElement, host = document.getElementById("bandHost");
   try{ if(window.TTSTVHost && TTSTVHost.isWeb) R.setAttribute("data-web", "1"); }catch(_){}
-  if(!host || !window.Band || R.hasAttribute("data-phone")) return;
+  /* THE PHONE MOUNTS THE BAND TOO (ASKS #195, Osca 1 Oct: "where's all the glass stuff you made ... it's not the
+     glass you made before"). The phone app wore pbar's painted strip because this line returned on the phone; the plan
+     (band.html, host=phone) has always drawn the band's three glass pieces at the foot -- ⚙ · [▶ title / chapter] ·
+     mic -- with the layers' capsule at the top. So the phone mounts the same band, in its phone form, and pbar's strip
+     steps aside (the style below); pbar.js still keeps the open-books list the Library reads. The pill's gestures are
+     band.js's: a tap is the search, a drag up the shelf, a long press on the ⚙ the theme. */
+  if(!host || !window.Band) return;
   let band = null, B = null;
   const NOTE = {
     book: "",
@@ -1209,6 +1228,7 @@ function nameTab(b){ document.title = ((b && b.title) || "A book") + " · Frank"
     B = b; if(band){ band.remove(); band = null; }
     band = Band.mount(host, { page: "reader", book: { title: (b && b.title) || "A book", chapter: chapterName(0) },
       hrefs: { library: "../library/library.html", settings: "../settings/settings.html" } });
+    if(R.hasAttribute("data-phone")){ phoneFoot(band); setTimeout(function(){ const p = document.getElementById("readerpane"); if(p) p.dispatchEvent(new Event("scroll")); }, 350); return; }   /* the phone: its layers are the capsule at the top (below), its band rides nothing */
     const note = document.getElementById("layernote");
     if(window.Layers && Layers.control) Layers.control(band, { layer: "book", onLayer: function(l){
       document.getElementById("book").setAttribute("data-layer", l);
@@ -1219,6 +1239,26 @@ function nameTab(b){ document.title = ((b && b.title) || "A book") + " · Frank"
     ride(band);
     setTimeout(function(){ const p = document.getElementById("readerpane"); if(p) p.dispatchEvent(new Event("scroll")); }, 350);   /* the head's state at opening, not only after a scroll */
     outOfBook(band);
+  }
+  /* THE PHONE'S FOOT IS THE BAND'S ROW: the player capsule stands on it (shell.css places .pplay on --pbar-h, the old
+     strip's height), so --pbar-h becomes the height of the band's glass pieces, and the capsule floats a --gap above
+     them as the plan draws it. Measured, not copied: the pill's own box. */
+  function phoneFoot(band){
+    const put = function(){
+      const p = band.querySelector(".band-pill"); const h = p ? Math.round(p.getBoundingClientRect().height) : 0;
+      if(h > 0) R.style.setProperty("--pbar-h", h + "px");
+    };
+    put(); setTimeout(put, 300); addEventListener("resize", put);
+    /* THE PILL SAYS WHAT THE RUNNING HEAD SAYS (the plan's canvas copies the same line, and pbar's pill did): the
+       chapter on screen, or the author on the title page -- the name, or the number in Roman (band.js) */
+    const rh = document.getElementById("readerhead"), pi = band.querySelector(".band-pill i");
+    if(!rh || !pi) return;
+    const say = function(){
+      const a = rh.querySelector("a, span"); let t = a ? a.textContent.replace(/\s+/g, " ").trim().replace(/\.$/, "") : "";
+      if(window.Band && Band.chapterLabel) t = Band.chapterLabel(t);
+      if(pi.textContent !== t) pi.textContent = t;
+    };
+    say(); new MutationObserver(say).observe(rh, { childList: true, subtree: true, characterData: true });
   }
   /* PINCH OUT AND FLING OUT, FROM INSIDE A BOOK (ASKS #148, #149; dismiss.js). A pinch out anywhere on the page -- the
      Mac trackpad, Safari's gesture, two fingers -- shrinks the book with the hand and, past the threshold, goes to the
@@ -1357,7 +1397,10 @@ function nameTab(b){ document.title = ((b && b.title) || "A book") + " · Frank"
   let last = null, acc = 0, hand = 0;   /* data-phone is asked at each scroll: it can land after this runs */
   /* only a READER's scroll takes the bars: the book restoring its place on open is a scroll too, and it hid them
      before anyone had read a line. A hand within the last second is what counts. */
-  ["touchmove", "wheel", "keydown", "pointerdown"].forEach(function(t){ addEventListener(t, function(){ hand = Date.now(); }, { capture: true, passive: true }); });
+  /* ...and a press on the chrome is not reading either: ▶ in the pill, then the voice's first page turn, hid the
+     player that had just been asked for (ASKS #195) */
+  const CHROME = ".band, .pplay, .mplay, .phlayers, .sf, .marghand";
+  ["touchmove", "wheel", "keydown", "pointerdown"].forEach(function(t){ addEventListener(t, function(e){ const g = e.target; if(g && g.closest && g.closest(CHROME)) return; hand = Date.now(); }, { capture: true, passive: true }); });
   const set = (away) => { if(away === R.hasAttribute("data-away")) return; if(away) R.setAttribute("data-away", ""); else R.removeAttribute("data-away"); };
   document.addEventListener("scroll", function(e){
     const t = e.target; if(!t || t.id !== "readerpane" || !R.hasAttribute("data-phone")) return;
@@ -2106,7 +2149,27 @@ try{ (function(){
     playing(){ try{ return !!T.playing(); }catch(e){ return false; } },
     still(){ return !!document.querySelector(".pane.zoomed, .column.zoomed"); },
     onState(){ try{ if(window.PlayBar) PlayBar.sync(); }catch(e){} },
+    /* the phone's chrome floats over the pane: the layers' capsule at the top, the band and the player at the foot */
+    inset(){
+      const R = document.documentElement; if(!R.hasAttribute("data-phone") || R.hasAttribute("data-away")) return null;
+      const p = $("readerpane"); if(!p) return null;
+      const pr = p.getBoundingClientRect(); let top = 0, bottom = 0;
+      const cap = document.querySelector(".phlayers .layers") || document.querySelector(".phlayers");
+      if(cap){ const r = cap.getBoundingClientRect(); if(r.height > 0) top = Math.max(0, r.bottom - pr.top); }
+      document.querySelectorAll("#bandHost .band-pill, #pplay").forEach(function(el){
+        const r = el.getBoundingClientRect(); if(r.height > 0 && getComputedStyle(el).display !== "none") bottom = Math.max(bottom, pr.bottom - r.top);
+      });
+      return { top: top, bottom: bottom };
+    },
   });
+  /* A HAND HOLDS FOLLOW UNTIL THE NEXT PRESS OF PLAY (follow.js's own rule) -- and nothing pressed it: Follow.resume()
+     had no caller, so one scroll by hand while the voice read (on the phone, the scroll that brings the bars back)
+     stopped the page following for good (the listening Stranger, 1 Oct: "jumped once ... then the page stopped
+     again"). A play that starts is that press. */
+  (function(){
+    let was = false;
+    T.on(function(){ let p = false; try{ p = !!T.playing(); }catch(e){} if(p && !was){ try{ Follow.resume(); }catch(e){} } was = p; });
+  })();
 
   /* ★ OSCA'S ONE CONSTANT, ON THE PAGE. `Follow.MARK` is "sentence" or "none";
      reader/listen.css draws both off this attribute and nothing else reads it.

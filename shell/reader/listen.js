@@ -570,7 +570,65 @@ function mount(o) {
   function onPause() { paint(); }
 
   /* ------------------------------------------------------- the highlight */
+  /* WEBKIT PAINTS NO ::highlight ON TEXT THAT CANNOT BE SELECTED (ASKS #195; marginalia.js found it for the marks,
+     #191). The phone's column is `user-select:none` on purpose, and WebKit -- every WKWebView, so the iOS app --
+     then draws no Custom Highlight on it: the listening Stranger saw "no highlight on any word" while both marks were
+     set. So where the column cannot be selected the two marks are drawn as RECTS, the marks' own fallback: one
+     absolutely placed <i> per line box of the same Range, in a layer beside the pane, under the bars, over the paper
+     (listen.css `.listenrects`). The ranges are the same; only the brush changes. It is redrawn when a mark moves and
+     on a scroll, behind one rAF. */
+  function rectMode() {
+    try {
+      if (!document.documentElement.hasAttribute("data-phone")) return false;
+      const p = col && (col.querySelector("p.line") || col);
+      if (!p) return false;
+      const cs = getComputedStyle(p);
+      return (cs.webkitUserSelect || cs.userSelect || cs.getPropertyValue("user-select")) === "none";
+    } catch (e) { return false; }
+  }
+  const rectRanges = {};
+  let rectsEl = null, rectsRaf = 0, rectsWired = false;
+  function rectsLayer() {
+    if (rectsEl && rectsEl.isConnected) return rectsEl;
+    rectsEl = document.createElement("div");
+    rectsEl.className = "listenrects"; rectsEl.setAttribute("aria-hidden", "true");
+    ((pane && pane.parentNode) || document.body).appendChild(rectsEl);
+    return rectsEl;
+  }
+  function drawRects() {
+    rectsRaf = 0;
+    const host = rectsLayer(), out = [];
+    for (const name in rectRanges) {
+      const r = rectRanges[name]; if (!r || !r.getClientRects) continue;
+      const rs = r.getClientRects();
+      for (let k = 0; k < rs.length; k++) {
+        const b = rs[k]; if (!b || b.width <= 0 || b.height <= 0) continue;
+        out.push('<i class="' + name + '" style="left:' + b.left.toFixed(1) + 'px;top:' + b.top.toFixed(1)
+          + 'px;width:' + b.width.toFixed(1) + 'px;height:' + b.height.toFixed(1) + 'px"></i>');
+      }
+    }
+    const html = out.join("");
+    if (host.__html !== html) { host.innerHTML = html; host.__html = html; }
+    host.hidden = !out.length;
+  }
+  function rectsSoon() {
+    if (!rectsWired) {
+      rectsWired = true;
+      addEventListener("scroll", rectsSoon, { passive: true, capture: true });
+      addEventListener("resize", rectsSoon, { passive: true });
+    }
+    if (!rectsRaf) rectsRaf = requestAnimationFrame(drawRects);
+  }
   function setHighlight(name, range) {
+    if (rectMode()) {
+      const was = rectRanges[name] || null;
+      if (!range && !was) return;
+      if (range && was && was.startContainer === range.startContainer && was.startOffset === range.startOffset
+          && was.endContainer === range.endContainer && was.endOffset === range.endOffset) return;
+      if (range) rectRanges[name] = range; else delete rectRanges[name];
+      rectsSoon();
+      return;
+    }
     if (!hiOK) return;
     try {
       if (range) CSS.highlights.set(name, new Highlight(range));
