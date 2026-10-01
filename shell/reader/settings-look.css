@@ -217,3 +217,36 @@ html[data-phone] body .ttstv-settings .look-appear .set-row[data-field="theme"] 
 
 /* THE WEB SAYS ONLY WHAT THE WEB CAN DO (ASKS #187, settings-look.js): a row the web cannot use is absent */
 [data-look-off]{ display: none !important; }
+
+/* THE LAST ROW CLEARS THE BAND (the iOS Strangers, 1 Oct: "the ⚙ · Search Settings · mic bar floats over the last line
+   of every Settings page ... on first open it also covers the font chips"; on its side "it covers the sample text and
+   the last row"). The phone's foot (band.css: --band-float 48 over --gap and half the home strip) is drawn over this
+   page by the host, so the page leaves that much room under its last row, and a breath, on both sides of the phone. */
+html[data-phone] body main{
+  padding-bottom: calc(var(--band-float, 48px) + 2 * var(--gap, 8px) + var(--safe-bottom, env(safe-area-inset-bottom, 0px)) + 24px) !important;
+  scroll-padding-bottom: calc(var(--band-float, 48px) + 2 * var(--gap, 8px) + var(--safe-bottom, env(safe-area-inset-bottom, 0px)) + 12px);
+}
+/* ...and on its side the tab strip is not jammed to the top edge (stranger-ios-side-oneword: "the tab strip is
+   jammed against the top edge"): the status bar is gone sideways, so the strip takes its own breath */
+@media (orientation: landscape){
+  html[data-phone] body header.set-titlebar{ padding-top: calc(var(--safe-top, 0px) + 10px); }
+}
+/* THE PAGE ABOVE THE THUMB'S CARD IS READ FROM THE TOP (settings-look.js morePage): the paragraph starts under the
+   head, as a book's page does, and the lines that do not fit fade out over the card -- no room is left empty */
+html[data-phone] body .look-thumb #preview, html[data-phone] body .look-thumb #preview[hidden]{
+  justify-content: flex-start; overflow: hidden; min-height: 0;
+  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 64px), transparent);
+          mask-image: linear-gradient(to bottom, #000 calc(100% - 64px), transparent);
+}
+html[data-phone] body .look-thumb #preview p{ margin-top: 0; }
+@media (orientation: landscape){
+  html[data-phone] body .look-thumb #preview .look-more{ display: none; }
+  html[data-phone] body .look-thumb #preview, html[data-phone] body .look-thumb #preview[hidden]{ -webkit-mask-image: none; mask-image: none; }
+}
+html:not([data-phone]) #preview .look-more{ display: none; }
+/* the block is exactly the first screen (thumbFit's --look-thumb-h), so the longer page cannot push the card down */
+@media (orientation: portrait){
+  html[data-phone] body .look-thumb{ height: var(--look-thumb-h, auto); }
+  html[data-phone] body .look-thumb #preview, html[data-phone] body .look-thumb #preview[hidden]{ flex: 1 1 0px; }
+  html[data-phone] body .look-thumb > :not(#preview){ flex-shrink: 0; }
+}

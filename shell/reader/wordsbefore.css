@@ -1,0 +1,35 @@
+/* design/reader/wordsbefore.css -- the words before a chapter (Z10, wordsbefore.js): a quiet card on the opener,
+   under the chapter's title. Quiet = the chrome's small face at the page's dim ink, no box, a hairline above;
+   the words in the book's own face so a reader sees them as they will meet them. */
+.opener .wb{ margin-top:2.4em; width:100%; max-height:calc(100vh - 14em); overflow:auto; overscroll-behavior:contain;
+  font:400 13px/1.45 var(--chrome-ui-font, var(--ui, system-ui)); color:var(--dim, var(--chrome-fg-dim));
+  border-top:var(--hair, 1px) solid color-mix(in srgb, currentColor 22%, transparent); padding-top:10px;
+  -webkit-user-select:none; user-select:none; text-align:left; scrollbar-width:thin; }
+.opener.tinted .wb{ color:inherit; opacity:.86; }
+.wb-head{ display:flex; align-items:center; justify-content:space-between; margin-bottom:6px; }
+.wb-head span{ font-size:11px; font-weight:600; letter-spacing:.14em; text-transform:uppercase; }
+.wb-x{ -webkit-appearance:none; appearance:none; border:0; background:transparent; color:inherit; font:inherit; font-size:18px; line-height:1;
+  width:28px; height:28px; margin:-6px -6px 0 0; border-radius:50%; cursor:pointer; opacity:.8; }
+.wb-x:hover{ opacity:1; background:color-mix(in srgb, currentColor 8%, transparent); }
+html[data-phone] .wb-x{ width:var(--tap, 44px); height:var(--tap, 44px); margin:-12px -12px -8px 0; }
+.wb-list{ list-style:none; margin:0; padding:0; display:grid; grid-template-columns:1fr 1fr; column-gap:28px; row-gap:1px; }
+.wb-list li{ display:flex; align-items:baseline; gap:8px; min-width:0; }
+.wb-w{ flex:none; cursor:pointer; font:400 15px/1.45 var(--serif, Georgia, serif); color:var(--ink); }
+.opener.tinted .wb-w{ color:inherit; }
+.wb-w b{ font-weight:500; }
+.wb-w i{ font-size:13px; color:var(--dim, var(--chrome-fg-dim)); }
+.wb-g{ min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.wb-w:hover b{ text-decoration:underline; text-underline-offset:.15em; text-decoration-thickness:1px; }
+/* the phone upright: one column, a gloss runs to the edge and stops; on its side the two columns come back */
+html[data-phone] .wb-list{ grid-template-columns:1fr; }
+html[data-phone] .wb-list li{ min-height:24px; }
+@media (orientation: landscape){ html[data-phone] .wb-list{ grid-template-columns:1fr 1fr; column-gap:20px; } html[data-phone] .opener .wb{ margin-top:1em; max-height:calc(100vh - 7.5em); } }
+/* put away: one quiet word under the title brings it back */
+.wb-back{ -webkit-appearance:none; appearance:none; align-self:flex-start; margin-top:1.6em; padding:4px 0; border:0; background:transparent; cursor:pointer;
+  font:600 11px/1.4 var(--chrome-ui-font, var(--ui, system-ui)); letter-spacing:.14em; text-transform:uppercase; color:var(--dim, var(--chrome-fg-dim)); }
+.opener.tinted .wb-back{ color:inherit; opacity:.7; }
+html[data-phone] .wb-back{ min-height:var(--tap, 44px); }
+.wb-quiet p{ margin:0; font-style:italic; }
+.wb-fail{ border-top:0; padding-top:0; max-height:none; overflow:visible; }
+.wb-fail .tf-fail{ position:static; transform:none; margin:0; width:auto; max-width:none; }
+.opener.tinted .wb-w i{ color:inherit; opacity:.6; }

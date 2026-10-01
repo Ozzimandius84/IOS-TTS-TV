@@ -30,10 +30,22 @@
    foot of General, "Tell Frank", a press opens the sheet. The sheet itself is tellfrank.js, loaded here too. */
 (function () {
   "use strict";
-  var base = "/design/reader/";
-  if (!window.TellFrank && !document.querySelector("script[data-tf]")) {
+  /* this file's own folder: /design/reader/ on the canvas, ../reader/ beside settings/settings.html in shell/ (a fixed
+     /design/ address ships a Settings page that loads nothing -- integration, 1 Oct) */
+  var me = document.currentScript, base = me && me.src ? me.src.replace(/[^/]*(?:[?#].*)?$/, "") : "/design/reader/";
+  /* the module links ../reader/tellfrank.js (the shipped tree's place); under /design/ that file is not there, so a
+     page whose own copy did not arrive takes the design master's (Z2, 1 Oct: the Tell Frank row and the Cloud
+     failure card did nothing on the web and the phone canvas) */
+  if (!window.TellFrank && !document.querySelector("script[data-tf-design]")) {
     var l = document.createElement("link"); l.rel = "stylesheet"; l.href = base + "tellfrank.css"; document.head.appendChild(l);
-    var s = document.createElement("script"); s.src = base + "tellfrank.js"; s.setAttribute("data-tf", ""); document.head.appendChild(s);
+    var s = document.createElement("script"); s.src = base + "tellfrank.js"; s.setAttribute("data-tf", ""); s.setAttribute("data-tf-design", ""); document.head.appendChild(s);
+  }
+  /* SETTINGS ▸ CLOUD, REDRAWN (Z2, 1 Oct): its own pair of files, loaded with the look (settings-cloud.js says why) */
+  if (!window.FrankCloud && !document.querySelector("script[data-zc]")) {
+    var zl = document.createElement("link"); zl.rel = "stylesheet"; zl.href = base + "settings-cloud.css"; document.head.appendChild(zl);
+    /* the one FrankAccount first (account.js -- the Library's too), then the tab that reads it; in order */
+    if (!(window.FrankAccount && window.FrankAccount.one)) { var za = document.createElement("script"); za.src = base + "account.js"; za.async = false; document.head.appendChild(za); }
+    var zs = document.createElement("script"); zs.src = base + "settings-cloud.js"; zs.async = false; zs.setAttribute("data-zc", ""); document.head.appendChild(zs);
   }
   function row() {
     var g = document.querySelector('.set-panel[data-tab="general"]'); if (!g || g.querySelector(".tf-setrow")) return !!g;
@@ -320,6 +332,18 @@
     });
     return out;
   }
+  /* NO EMPTY ROOM OVER THE CARD (the iOS Strangers, 1 Oct: "General opens with a big empty gap and the sample
+     paragraph floating in the middle before APPEARANCE starts"). On the phone the paragraph stood centred in the
+     room between the head and the card; now it is the page itself, read from the top -- the book's next lines
+     (books/eclogues-en c001, as printed) follow the two the module carries, and the room above the card is filled
+     with text that fades out at its foot, so the thumb's card still sits where #182 put it and nothing floats. */
+  var MORE = ["Exiled from home am I; while, Tityrus, you sit careless in the shade, and, at your call, “Fair Amaryllis” bid the woods resound.",
+    "O Meliboeus, ’twas a god vouchsafed this ease to us, for him a god will I deem ever, and from my folds a tender lamb oft with its life-blood shall his altar stain.",
+    "His gift it is that, as your eyes may see, my kine may roam at large, and I myself play on my shepherd’s pipe what songs I will."];
+  function morePage(pv) {
+    if (pv.querySelector(".look-more")) return;
+    MORE.forEach(function (t) { var p = document.createElement("p"); p.className = "look-more"; p.textContent = t; pv.appendChild(p); });
+  }
   var ORDER = ["Appearance", "Type", "Interface", "Size & spacing", "#preview", "One word", "Voice", "Frank"];
   function relay() {
     var G = document.querySelector('.set-panel[data-tab="general"]'), R = document.querySelector('.set-panel[data-tab="reading"]');
@@ -336,7 +360,7 @@
     var card = document.createElement("div"); card.className = "set-card look-appear";
     card.appendChild(theme); card.appendChild(warmth); card.appendChild(contrastRow());
     var thumb = document.createElement("div"); thumb.className = "look-thumb";
-    if (document.documentElement.hasAttribute("data-phone") && preview) thumb.appendChild(preview);
+    if (document.documentElement.hasAttribute("data-phone") && preview) { thumb.appendChild(preview); morePage(preview); }
     thumb.appendChild(head); thumb.appendChild(card);
     /* the old Appearance card keeps the interface font, as "Interface"; its note was warmth's, and warmth left */
     if (oldAp) { oldAp.els[0].textContent = "Interface"; oldAp.els = oldAp.els.filter(function (x) { if (x.classList.contains("set-note")) { x.remove(); return false; } return true; }); by.Interface = oldAp; delete by.Appearance; }
@@ -353,10 +377,15 @@
     /* Account, after General */
     accountTab();
     if (!document.querySelector('.set-panel[data-tab="account"]')) G.parentNode.appendChild(accountPanel(G.parentNode));
-    /* the tab to open: Reading remembered is General now; Account remembered is Account */
-    var stored = null; try { stored = localStorage.getItem(TAB_KEY); } catch (e) {}
-    if (stored === "account") showAccount(true);
-    else if (!R.hidden || stored === "reading") { var g = document.querySelector('.set-tab[data-tab="general"]'); if (g) g.click(); }
+    /* THE TAB TO OPEN IS THE FIRST (the iOS Stranger, 1 Oct: "Settings opened on the Sync tab instead of the first
+       tab"; Osca #182: Appearance is "right there when you press settings"). settings.js reopens the last tab it
+       stored; the page opens on General every time, unless its address names a tab (?tab=account, or a Cloud state
+       -- settings-cloud.js opens Cloud for ?state=). */
+    var want = null; try { want = new URLSearchParams(location.search).get("tab"); } catch (e) {}
+    if (want === "account") showAccount(true);
+    else if (!want || want === "general" || want === "reading") { var g = document.querySelector('.set-tab[data-tab="general"]'); if (g) g.click(); }
+    else { var t = document.querySelector('.set-tab[data-tab="' + want + '"]'); if (t) t.click(); }
+    var m0 = document.querySelector("main"); if (m0) m0.scrollTop = 0;
     thumbFit();
     return true;
   }
@@ -437,4 +466,105 @@
   document.addEventListener("change", function (e) { if (e.target.closest && e.target.closest('[data-look="name"]')) sweep(); }, true);
   document.addEventListener("click", function (e) { if (e.target.closest && e.target.closest('[data-look="rename"]')) setTimeout(sweep, 0); }, true);
   window.addEventListener("storage", function (e) { if (e.key === "frank.account") sweep(); });
+})();
+/* PLAIN WORDS, AND ONLY WHAT THIS DEVICE CAN DO (the iOS Strangers, 1 Oct: "Settings talks to a stranger in the
+   builders' words" -- PROMPTS/testers/stranger-ios-marks-settings-1-oct.md, stranger-ios-side-oneword-1-oct.md).
+   settings.js and prefs.js are the module's (D26: read, never written), so the design master says each line again
+   in a reader's words as it is drawn, the meaning kept; and a row that cannot work on this host is absent, not
+   explained. EXPORT: each pair below becomes the string in settings.js / prefs.js (the left side is quoted from
+   them), each `gone` becomes a row settings.js does not build on that host.
+     WHOLE  a text that IS the left side becomes the right side (a label, a line)
+     PART   a pattern inside a longer line
+   The table is the only list; a Stranger's next sentence is one more row. */
+(function () {
+  "use strict";
+  var R = document.documentElement;
+  function phone() { return R.hasAttribute("data-phone"); }
+  function mac() { return R.hasAttribute("data-mac-window"); }
+  var SYNC_LINE = "Sign in to keep your books, your marks and your place on every device.";
+  var WHOLE = {
+    "Gutter": "Margins",
+    "the eye never moves": "one word at a time",
+    "Touch off": "Pocket mode",
+    "The screen goes black and every touch is swallowed, so the phone can go in a pocket. Hold the bottom-left corner for 1.2 s to come back.":
+      "The screen goes dark and ignores touches while Frank reads, so the phone can go in a pocket. Hold the bottom-left corner to wake it.",
+    "Trigger": "Start listening",
+    "AirPods: double-tap": "Double-tap your AirPods",
+    "A double-tap opens the listening window. There is no key to change on a phone.": "Double-tap your AirPods and Frank listens.",
+    "Interface": "App",
+    "Interface font": "App font",
+    "the narrator's": "the book's voice",
+    "The voice the assistant speaks back in. Press a voice in the reader to choose a different one.": "The voice that answers when you talk to Frank.",
+    "Listening window": "Listening time",
+    "Hands-free listens through this device's default input. Test opens it once.": "Frank listens through this device's microphone when you talk to it.",
+    "Test opens the listening window once and prints what it heard. Silence in it is a plain “What?”": "Test listens once and shows what it heard.",
+    "Open the listening window": "Start listening",
+    "Same as an AirPods double-tap": "Or double-tap your AirPods",
+    "Another": "Suggest another",
+    "First run": "Start",
+    "Not signed in · the account's folder, Drive/Frank": "Sign in first · your books go in a Frank folder in your Drive",
+    "Push when a job finishes": "Send new voices to your devices when they are ready",
+    "Studio has not said yet": "Not known yet",
+    "Not paired and not signed in.": "Your Mac isn't connected, and you aren't signed in.",
+    "no dictionary for it on the Mac": "your Mac has no dictionary for it",
+    "Languages are added in the Frank app: this page has no door to keep one.": "Languages are added in the Frank app on your Mac or iPhone."
+  };
+  var PART = [
+    [/^Saved on this device\. Not mirrored to the SSD:.*$/, "Saved on this device."],
+    [/^the Mac's list not read\s*(--|—|-)\s*pair or sign in$/, "not checked yet — connect your Mac, or sign in, under Sync"],
+    [/^This phone hasn't read the Mac's list of dictionaries.*$/, "This phone doesn't know yet which languages your Mac has. Connect your Mac, or sign in, under Sync, then come back."],
+    [/^No languages yet: pair with Studio or sign in, then open this tab\.$/, "No languages yet. Connect your Mac, or sign in, under Sync, then come back."],
+    [/^No Studio paired yet · press Sync to find one$/, "Not connected yet · press Sync with your Mac on the same Wi-Fi"],
+    [/^(\d+) Studios? found · type the code Studio's row shows$/, "$1 found · type the code your Mac shows"],
+    [/^No Studio found on this network · .*$/, "No Mac found on this Wi-Fi · open Frank on your Mac and press Sync there"],
+    [/^(.*) wants to pair · via (.*)$/, "$1 wants to connect · via $2"],
+    [/no Google client on this device|Google is the account|^Studio on this Mac · the library/, null]   /* the whole sign-in line: SYNC_LINE */
+  ];
+  function say(t) {
+    var k = t.trim(); if (!k) return null;
+    if (Object.prototype.hasOwnProperty.call(WHOLE, k)) return t.replace(k, WHOLE[k]);
+    if (k === "The app's own text — sidebars, menus, this window. Never the book.")
+      return phone() ? "Menus, buttons and Settings. Never the book." : mac() ? "Menus, the sidebar and this window. Never the book." : "Menus, buttons and Settings. Never the book.";
+    if (k === "This network") return phone() ? "Your Mac, on this Wi-Fi" : "This Wi-Fi";
+    for (var i = 0; i < PART.length; i++) if (PART[i][0].test(k)) return PART[i][1] == null ? SYNC_LINE : k.replace(PART[i][0], PART[i][1]);
+    return null;
+  }
+  function off(el) { if (el && !el.hasAttribute("data-look-off")) el.setAttribute("data-look-off", ""); }
+  function headOf(card) { var h = card && card.previousElementSibling; return h && h.classList.contains("set-head") ? h : null; }
+  function gone() {
+    /* the door (an address and a pass typed from "Studio's square") is a builder's road; 1.0's voice is Frank's
+       cloud and a phone reaches its Mac under Sync through -- absent on every host */
+    var door = document.querySelector(".tr-doorcard"); if (door) { off(door); off(headOf(door)); }
+    /* iCloud Drive is not built: a reader is not offered a road that goes nowhere */
+    off(document.querySelector('.tr-dest[data-dest="icloud"]'));
+    /* a key to press is a keyboard's: on the phone the Voice group's M row goes */
+    if (phone()) [].forEach.call(document.querySelectorAll('.set-panel[data-tab="general"] .hk-row, .set-panel[data-tab="general"] .set-row'), function (r) { if (r.querySelector(".hk-cap")) off(r); });
+    /* Pocket mode is the phone's own (a pocket); the Mac and the web do not draw it */
+    if (!phone()) [].forEach.call(document.querySelectorAll('.set-row[data-field="touchOff"]'), off);
+  }
+  /* the Name row says why there is a name at all, once: who sees it, and that it is theirs to change */
+  function nameLine() {
+    var r = document.querySelector('.set-row[data-look="name"] .set-l'); if (!r || r.querySelector("small")) return;
+    var s = document.createElement("small"); s.textContent = "Shown beside the notes you share. Frank picked one; change it to anything."; r.appendChild(s);
+  }
+  function sweep(root) {
+    var w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, { acceptNode: function (n) {
+      var p = n.parentNode; if (!p || !p.closest) return NodeFilter.FILTER_REJECT;
+      if (p.closest(".zc, .set-find, script, style, .look-head")) return NodeFilter.FILTER_REJECT;
+      return NodeFilter.FILTER_ACCEPT; } });
+    var n, todo = [];
+    while ((n = w.nextNode())) { var v = say(n.nodeValue); if (v != null && v !== n.nodeValue) todo.push([n, v]); }
+    todo.forEach(function (x) { x[0].nodeValue = x[1]; });
+  }
+  var busy = false;
+  function run() {
+    if (busy) return; busy = true;
+    try { var s = document.querySelector(".ttstv-settings") || document.body; if (s) sweep(s); var st = document.getElementById("status"); if (st && !s.contains(st)) sweep(st); gone(); nameLine(); }
+    finally { busy = false; }
+  }
+  var queued = false;
+  function soon() { if (queued || busy) return; queued = true; setTimeout(function () { queued = false; run(); }, 0); }
+  run();
+  new MutationObserver(soon).observe(document.documentElement, { childList: true, subtree: true, characterData: true });
+  window.SettingsWords = { say: say, run: run };
 })();

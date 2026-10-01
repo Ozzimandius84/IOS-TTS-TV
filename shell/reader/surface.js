@@ -235,7 +235,10 @@
     // W1 SHELL-WEB: on a website the sentence is D3's.
     /* ...and on the web, what the web did (ASKS #187, the web Stranger: "carthage" said "Studio needs the Mac app or
        Frank's cloud" -- a sentence about another device, POLISH 5): the shelf was searched and had nothing */
-    if (window.TTSTVHost && window.TTSTVHost.isWeb) return "Nothing on your shelf for that.";
+    if (window.TTSTVHost && window.TTSTVHost.isWeb) {
+      /* a browser with no account searches Frank's public shelf only, until SERVER-3 (FrankAccount, account.js) */
+      var sc = webScope(); return sc.none || "Nothing on your shelf for that.";
+    }
     return S.bench
       ? "Search needs Studio on this Mac — open Frank"
       : (PAIRED
@@ -737,6 +740,7 @@
   function mount(opts) {
     if (root) return handle();
     opts = opts || {};
+    voiceSeams();
     root = document.createElement("div");
     scrim = el("div", "sf-scrim");
     sheet = el("div", "sf");
@@ -2304,6 +2308,7 @@
 
   /* ================================================================ drawing */
   function draw() {
+    designRecordings();
     if (!listEl) return;
     /* THE WAIT IS STATE (G-SURF2) -- see `S.asking`. Every caller of draw()
        now draws it, which is the whole of the fix for the note that vanished
@@ -2334,6 +2339,10 @@
     /* SOURCE-DOOR: the origin's own row, above everything -- it was asked
        for by name, from a book, and it is the only thing the field holds */
     doorBand(listEl);
+    /* THE WEB'S SCOPE, SAID ONCE (Z1; integration, 1 Oct): a browser with no account searches Frank's public shelf
+       and nothing else until SERVER-3 -- one quiet line over what it found, so a short list is not a mystery */
+    var scope = webScope();
+    if (S.q && !searching && scope.line && (rows.length || S.media.length)) { var sl = note(scope.line); sl.classList.add("sf-scope"); listEl.appendChild(sl); }
 
     /* WORKING first, always, and pinned -- it is the only band that is about
        what the machine is doing rather than about what you asked. Since
@@ -3120,6 +3129,11 @@
     return h;
   }
   function note(t) { var n = el("span", "sf-note"); n.textContent = t; return n; }
+  function webScope() {
+    var _h = window.TTSTVHost, A = window.FrankAccount;
+    if (!(_h && _h.isWeb) || !A || typeof A.searchScope !== "function") return { scope: "all", line: "", none: "" };
+    try { return A.searchScope() || { scope: "all", line: "", none: "" }; } catch (e) { return { scope: "all", line: "", none: "" }; }
+  }
   function brokeLine(detail, none) {
     if (brokeLine.said !== detail) { brokeLine.said = detail; try { console.warn("[surface] search broke: " + detail); } catch (e) {} }
     var n = note(none ? "Nothing on your shelf for that, and the search beyond it didn’t come back this time. "
@@ -4015,6 +4029,9 @@
     var box = el("div", "sf-cand");
     box.appendChild(head(c.kind === "text" ? "This result" : "This recording"));
     box.appendChild(el("div", "ct", esc(c.title || "untitled")));
+    /* Z9 · Z13 (DESIGN #197): what this recording can BECOME comes first -- a voice, or a reading joined to a book */
+    if (window.VoicePage && r0.use) box.appendChild(VoicePage.useCard(c));
+    else if (window.VoicePage && isLibriVox(c)) box.appendChild(VoicePage.attachCard(c, { book: subject() }));
     /* EVERY LINE IS A FIELD THE CANDIDATE ACTUALLY HAS. A field it does not
        carry is not drawn -- never "unknown", never an empty row, because a
        blank labelled `Licence` reads as "no licence" and that is a different
@@ -4290,7 +4307,7 @@
     worksEl.classList.toggle("empty", !busy && !S.set.length && !S.sel);
     /* SURFACE-ONE (5): on the phone the selected thing is the bottom half
        and the list the top half -- only once something IS selected */
-    if (sheet) sheet.classList.toggle("sf-hassel", !!(S.set.length || S.sel) && !S.selAuto);
+    if (sheet) sheet.classList.toggle("sf-hassel", (!!(S.set.length || S.sel) && !S.selAuto) || !!S.cand);   /* a pressed recording is a selection too: its card is the bottom half (Z9 · Z13, DESIGN #197) */
     /* ...and a selection the PAGE made is not one (ASKS #168, #45; the phone-search Stranger: "inside a book the
        sheet opens split, the bottom half a card for the book I'm already in; on its side that leaves room for ONE
        passage"). Over a book the book is pre-selected (G-AUTOSEL) so the Mac's works column names it; on the phone
@@ -5690,6 +5707,13 @@
        untranscribed tail), verbatim, out of `reference-check.json`. */
     if (v && v.blocked && v.blocked.refusal) line.appendChild(note(v.blocked.refusal));
     if (S.voiceErr) line.appendChild(note(S.voiceErr));
+    /* Z9 · SHARE THIS VOICE (P2: "on the voice ... the picker"): the consent line, Withdraw always there, or "not
+       yours to share" with the reason -- voicepage.js's block, over FrankVoice.Voices */
+    if (v && window.VoicePage && window.FrankVoice) {
+      var shareSlot = el("div", "sf-share");
+      var drawShare = function (o) { FrankVoice.Voices.get(v.name).then(function (vv) { if (!vv) return; shareSlot.textContent = ""; shareSlot.appendChild(VoicePage.shareBlock(vv, drawShare, o || {})); }); };
+      drawShare({}); line.appendChild(shareSlot);
+    }
     return prow("Voice", box, line);
   }
 
@@ -6330,6 +6354,29 @@
     try { window.open(url, "_blank", "noopener,noreferrer"); } catch (e) { location.href = url; }
   }
 
+  /* ================================================ THE VOICE SEAMS (Z8 · Z9 · Z13, DESIGN #197, 1 Oct)
+     A recording pressed -- a LibriVox reading, or anything "Use as voice" -- is answered by voicepage.js's cards,
+     and those ask voicestore.js (window.FrankVoice: one seam per back end -- voices, renders, books, attach,
+     account). Both load beside this file when a page has not loaded them itself, so every page that mounts the
+     Surface gets the cards with no new script tag. EXPORT copies the three files beside surface.js. */
+  function voiceSeams() {
+    if (window.VoicePage || document.querySelector("script[data-voiceseam]")) return;
+    var me = document.querySelector('script[src$="surface.js"]'), base = me ? me.src.replace(/surface\.js(\?.*)?$/, "") : "";
+    var css = document.createElement("link"); css.rel = "stylesheet"; css.href = base + "voicepage.css"; css.setAttribute("data-voiceseam", ""); document.head.appendChild(css);
+    ["voicestore.js", "voicepage.js"].forEach(function (f) {
+      var t = document.createElement("script"); t.src = base + f; t.async = false; t.setAttribute("data-voiceseam", "");
+      t.onload = function () { if (window.VoicePage && opened) drawWorks(); }; document.head.appendChild(t);
+    });
+  }
+  /* THE DESIGN PAGE'S RECORDINGS (Z9 · Z13): on a /design/ page whose search brought back no recording (no studio, or
+     a studio that did not answer), FrankVoice's samples stand in, so the LibriVox row and "Use as voice" can be pressed
+     in band on every host. A shipped page, or a plugged-in attach source, gets [] here and nothing changes. */
+  function designRecordings() {
+    if (S.q && !(S.media && S.media.length) && window.FrankVoice && FrankVoice.design) S.media = FrankVoice.Attach.sampleHits(S.q) || [];
+  }
+  /* a recording that is a LibriVox reading: the row's press offers to join it to a book you have (Z13) */
+  function isLibriVox(c) { return !!c && (c.source === "librivox" || /librivox/i.test(c.url || "") || /librivox/i.test(c.collection || "")); }
+
   /* the fallback, and it is labelled as the fallback */
   function videoQueryUrl() {
     return "https://www.youtube.com/results?search_query=" + encodeURIComponent(S.q);
@@ -6431,7 +6478,10 @@
       uv.title = "clone a reference voice from this recording — yt-dlp fetches it, "
                + "importvoice cuts and transcribes it, refguard measures it";
       uv.addEventListener("click", function (e) {
-        e.stopPropagation(); cloneVoiceFrom(c, uv);
+        e.stopPropagation();
+        /* Z9: the press goes on to choosing the book the voice reads -- the card in the pane follows the import */
+        if (window.VoicePage) { selectCandidate(r, { key: r.dataset.key, cand: c, use: true }); if (!S.live) return; }
+        cloneVoiceFrom(c, uv);
       });
       r.querySelector(".end").appendChild(uv);
     }
@@ -6770,6 +6820,34 @@
                 work: Object.keys(S.work).length }
     };
   }
+
+  /* BAND'S STATES FOR Z9 / Z13 (design only): ?surface=<words>&zattach=offered|aligning|done|failed
+     &zuse=making|choose|chosen|failed&zpress=librivox|use -- open the sheet on those words and press the row.
+     Only on a /design/ page; a shipped page never reads these. */
+  function zPress() {
+    var Q = new URLSearchParams(location.search);
+    if (!Q.has("surface")) return;
+    if (!/\/design\//.test(location.pathname)) return;
+    if (!root) mount();
+    var go = function () {
+      if (!window.FrankVoice || !window.VoicePage) return setTimeout(go, 60);
+      if (Q.get("zattach")) FrankVoice.pick("attach", Q.get("zattach"));
+      if (Q.get("zuse")) FrankVoice.pick("use", Q.get("zuse"));
+      if (Q.get("zaccount")) FrankVoice.pick("account", Q.get("zaccount"));
+      open(Q.get("surface") || "", true);
+      setTimeout(function () { zPressRow(Q.get("zpress") || "librivox"); }, 50);
+    };
+    go();
+  }
+  function zPressRow(which) {
+    var rows = listEl ? listEl.querySelectorAll(".sf-hit") : [];
+    for (var i = 0; i < rows.length; i++) {
+      var k = rows[i].dataset.key || "";
+      if (which === "use" && /youtube/.test(k)) { var u = [].filter.call(rows[i].querySelectorAll("button"), function (b) { return b.textContent === "Use as voice"; })[0]; if (u) u.click(); return; }
+      if (which === "librivox" && /librivox/.test(k)) { rows[i].click(); return; }
+    }
+  }
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", function () { setTimeout(zPress, 0); }); else setTimeout(zPress, 0);
 
   window.SearchSurface = { mount: mount, open: open, close: close, toggle: toggle,
                            ask: ask, draw: draw, measure: measure, cfg: CFG,

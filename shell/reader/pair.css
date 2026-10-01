@@ -1,0 +1,46 @@
+/* design/reader/pair.css -- two translations side by side (Z11, pair.js / two.html). The reading face is the page's
+   (tokens.css --serif, --ink, --ground); the chrome face names the translators. Photos rule 1: the page is the
+   content, edge to edge, no card; the two columns are two pages with a space between, never a rule (pair.html). */
+html, body{ margin:0; background:var(--ground); color:var(--ink); }
+.pr-page{ box-sizing:border-box; max-width:1180px; margin:0 auto; padding:calc(var(--band-h, 28px) + 48px) 40px 120px; }
+html[data-phone] .pr-page{ padding:calc(var(--safe-top, env(safe-area-inset-top, 0px)) + 36px) 22px calc(var(--safe-bottom, env(safe-area-inset-bottom, 0px)) + 96px); }
+.pr-head{ text-align:center; margin-bottom:36px; }
+.pr-head h1{ margin:0; font:500 1.6rem/1.3 var(--serif); }
+.pr-by{ margin:.6em 0 0; font:400 13px/1.5 var(--chrome-ui-font, var(--ui, system-ui)); letter-spacing:.12em; text-transform:uppercase; color:var(--dim, var(--chrome-fg-dim)); }
+.pr-and{ color:var(--chrome-accent); }
+/* the two columns: a head each, sticky under the band, so a reader deep in the book still knows which is which */
+.pr-cols, .pr-row{ display:grid; grid-template-columns:1fr 1fr; column-gap:56px; }
+.pr-cols{ position:sticky; top:var(--band-h, 28px); z-index:2; background:var(--ground); padding:10px 0 8px; margin-bottom:6px; }
+.pr-colhead{ font:600 11px/1.4 var(--chrome-ui-font, var(--ui, system-ui)); letter-spacing:.14em; text-transform:uppercase; color:var(--dim, var(--chrome-fg-dim)); }
+.pr-row{ padding:6px 0; border-radius:6px; position:relative; }
+.pr-row + .pr-row{ margin-top:2px; }
+.pr-cell p{ margin:0 0 .7em; font:400 .9rem/1.6 var(--serif); hyphens:auto; -webkit-hyphens:auto; text-align:justify; cursor:pointer; }
+.pr-cell p:last-child{ margin-bottom:0; }
+/* pressing a passage lights its partner: one quiet wash across the row, behind both */
+.pr-row[data-lit]::before{ content:""; position:absolute; inset:-4px -20px; border-radius:8px; background:color-mix(in srgb, var(--chrome-accent) 8%, transparent); pointer-events:none; }
+.pr-lack{ display:flex; align-items:flex-start; }
+.pr-none{ margin:0; padding-top:.2em; font:italic 400 14px/1.5 var(--serif); color:var(--dim, var(--chrome-fg-dim)); cursor:default !important; text-align:left !important; }
+.pr-isnote p{ font-size:.92rem; color:color-mix(in srgb, var(--ink) 78%, transparent); }
+.pr-notek{ display:block; font:600 11px/1.4 var(--chrome-ui-font, var(--ui, system-ui)); letter-spacing:.12em; text-transform:uppercase; color:var(--dim, var(--chrome-fg-dim)); margin-bottom:.3em; }
+/* THE PHONE UPRIGHT: one column, each passage then its partner in #119's face -- the italic at 80 % ink */
+html[data-phone] .pr-cols{ display:none; }
+html[data-phone] .pr-row{ grid-template-columns:1fr; row-gap:.45em; padding:8px 0 14px; }
+html[data-phone] .pr-b p{ font-style:italic; color:color-mix(in srgb, var(--ink) 80%, transparent); }
+html[data-phone] .pr-cell p{ text-align:left; font-size:.95rem; }
+html[data-phone] .pr-head h1{ font-size:1.35rem; }
+html[data-phone] .pr-by{ font-size:11px; }
+html[data-phone] .pr-by .pr-and{ display:none; }
+html[data-phone] .pr-by span{ display:block; }
+html[data-phone] .pr-by .pr-tb{ font-style:italic; text-transform:none; letter-spacing:.02em; font-size:13px; font-family:var(--serif); }
+html[data-phone] .pr-row[data-lit]::before{ inset:-2px -10px; }
+/* on its side the two columns come back, closer */
+@media (orientation: landscape){
+  html[data-phone] .pr-page{ padding-left:calc(var(--safe-left, env(safe-area-inset-left, 0px)) + 20px); padding-right:calc(var(--safe-right, env(safe-area-inset-right, 0px)) + 20px); padding-top:24px; }
+  html[data-phone] .pr-cols{ display:grid; top:0; column-gap:28px; }
+  html[data-phone] .pr-row{ grid-template-columns:1fr 1fr; column-gap:28px; }
+  html[data-phone] .pr-b p{ font-style:normal; color:inherit; }
+  html[data-phone] .pr-by span{ display:inline; } html[data-phone] .pr-by .pr-and{ display:inline; }
+  html[data-phone] .pr-by .pr-tb{ font-style:normal; text-transform:uppercase; letter-spacing:.12em; font-size:11px; font-family:inherit; }
+}
+html[data-phone] .pr-none{ font-size:13px; }
+.pr-page > .tf-fail{ position:static; transform:none; margin:20vh auto 0; }

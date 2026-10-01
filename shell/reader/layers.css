@@ -379,7 +379,7 @@ html:not([data-phone]) .layers button svg{ width: var(--ui-field); height: var(-
 .ly-over[data-mode="sheet"]{ left: var(--gap); right: var(--gap); bottom: calc(var(--pbar-h, var(--band-foot, 96px)) + var(--gap)); max-height: 36vh; overflow: auto; overscroll-behavior: contain;
   padding: var(--gap); border-radius: calc(var(--r-ui) * 1.8); border: var(--hair) solid var(--ly-line); background: var(--ly-glass);
   -webkit-backdrop-filter: saturate(1.4) blur(18px); backdrop-filter: saturate(1.4) blur(18px); box-shadow: 0 4px 18px var(--shadow-md); }
-.ly-over[data-mode="sheet"][data-empty]:not(:has(.ly-go-to:not([hidden]))){ display: none; }
+.ly-over[data-mode="sheet"][data-empty]:not(:has(.ly-go-to:not([hidden]))):not([data-say]){ display: none; }
 .ly-over[data-mode="sheet"] .ly-list{ display: flex; flex-direction: column; gap: var(--gap); }
 .ly-over[data-mode="sheet"] .ly-card{ background: color-mix(in srgb, var(--ly-paper) 70%, transparent); box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; }
 .ly-over[data-mode="sheet"] .ly-go-to{ width: 100%; }
@@ -405,3 +405,23 @@ html[data-phone] .ly-selbar .ly-verb{ height: calc(var(--tap) - var(--pad)); }
    drags across wear the Mine layer's own first colour, lighter than a kept highlight, so choosing reads as the start
    of marking; the selection bar (Highlight · Note · Share) rises over them in every layer, Book included. */
 #readercol ::selection, .ly-over ::selection{ background-color: color-mix(in srgb, var(--mg-gold) 26%, transparent); color: inherit; }
+/* Z15 -- the Voice layer as a customer sees it: the run itself, under the legend (layers.js buildVoice) */
+.ly-job{ flex-basis: 100%; display: grid; gap: calc(var(--gap) / 2); margin-top: calc(var(--gap) / 2); color: var(--ly-ink); }
+.ly-jobbar{ display: block; height: 4px; border-radius: 2px; background: color-mix(in srgb, var(--ly-ink) 12%, transparent); overflow: hidden; }
+.ly-jobbar b{ display: block; height: 100%; border-radius: 2px; background: var(--chrome-accent); transition: width .6s ease; }
+.ly-jobsay{ color: var(--ly-dim); font-size: var(--ui-fine); }
+.ly-jobdone{ grid-template-columns: 1fr auto; align-items: center; }
+.ly-jobfail{ flex-basis: 100%; margin-top: calc(var(--gap) / 2); }
+.ly-jobfail .tf-fail{ position: static; transform: none; margin: 0; width: auto; max-width: none; box-shadow: none; }
+.ly-was{ color: var(--ly-dim); font-style: normal; }
+.ly-head .ly-cast{ margin-left: auto; }
+/* Z14 -- not in your edition: the line a note made elsewhere carries, and the fold at the head for the ones whose words are not here */
+.ly-else{ color: var(--ly-dim); font-size: var(--ui-fine); margin: 0 0 calc(var(--gap) / 2); }
+.ly-nothere{ flex-basis: 100%; margin-top: calc(var(--gap) / 2); }
+.ly-nothere > summary{ cursor: pointer; color: var(--ly-dim); list-style: none; padding: calc(var(--gap) / 2) 0; }
+.ly-nothere > summary::-webkit-details-marker{ display: none; }
+.ly-nothere > summary::after{ content: " ›"; }
+.ly-nothere[open] > summary::after{ content: " ⌄"; }
+.ly-nothere .ly-card{ position: static; margin-top: var(--gap); }
+.ly-q{ margin: 0 0 calc(var(--gap) / 2); font: italic 400 calc(var(--ui-fine) + var(--gap-hair)) / 1.45 var(--serif, Georgia, serif); color: var(--ly-dim); }
+.ly-run .ly-dirsel{ max-width: 100%; min-width: 0; }

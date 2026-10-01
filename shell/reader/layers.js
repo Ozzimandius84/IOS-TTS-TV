@@ -512,7 +512,13 @@
   var WHO = { 'private': 'Only you', 'friends': 'Your friends', 'group': 'Your group', 'public': 'Everyone on Frank', 'on request': 'Anyone who asks you' };
   function initial(name) { return esc(String(name || '?').replace(/^[^A-Za-z]+/, '').charAt(0).toUpperCase() || '?'); }
   function ago(iso) { var d = new Date(iso); if (isNaN(d)) return String(iso || ''); return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }); }
-  function dots(cur) { return '<span class="ly-dots">' + HLC.map(function (c) { return '<button type="button" class="ly-dot" data-colour="' + c + '" aria-label="' + c + '" aria-pressed="' + (c === cur) + '"></button>'; }).join('') + '</span>'; }
+  /* Z4 (1 Oct): the person's colours, any number (colours.js keeps the palette); without it, the four */
+  function hlc() { return window.Colours ? Colours.list().map(function (e) { return e.colour; }) : HLC; }
+  function hlKey(c) { if (window.Colours && Colours.valid(c)) { Colours.css([c]); return Colours.cls(c); } return HLC.indexOf(c) >= 0 ? c : 'yellow'; }
+  function cname(c) { var n = window.Colours ? Colours.nameOf(c) : ''; return n ? ' <span class="ly-cname">· ' + esc(n) + '</span>' : ''; }
+  function swatch(c) { var x = window.Colours && Colours.valid(c) ? Colours.hex(c) : ''; return '<i class="ly-swatch" data-colour="' + esc(c || 'yellow') + '"' + (x && HLC.indexOf(c) < 0 ? ' style="background:' + esc(x) + '"' : '') + '></i>'; }
+  function dots(cur) { return '<span class="ly-dots fc-dots">' + hlc().map(function (c) { var x = window.Colours ? Colours.hex(c) : ''; return '<button type="button" class="ly-dot" data-colour="' + esc(c) + '" aria-label="' + esc(window.Colours ? Colours.label(c) : c) + '" aria-pressed="' + (c === cur) + '"' + (x && HLC.indexOf(c) < 0 ? ' style="background:' + esc(x) + '"' : '') + '></button>'; }).join('')
+    + (window.Colours ? '<button type="button" class="fc-plus" aria-label="Your colours"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 3.5v9M3.5 8h9"/></svg></button>' : '') + '</span>'; }
   function glyphShare() { return '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 10V2.5M5 5.5l3-3 3 3M4 8H3v5.5h10V8h-1"/></svg>'; }
 
   /* THE SHARE MODE: one sheet, three questions -- what (the passage, as the
@@ -569,7 +575,7 @@
   var WINCOL = ['--chrome-fg-dim', '--mg-gold', '--mg-red', '--mg-pink', '--chrome-accent', '--scrub-accent'];   /* never a green: the baseline is the paper's grey (ASKS #178) */
   function over(o) {
     var col = o.text, doc = col.ownerDocument, R = doc.documentElement, HL = !!(window.CSS && CSS.highlights && window.Highlight);
-    var layer = 'book', data = null, asked = false, items = [], reg = {}, voiceSel = null, overrides = {}, queued = false, api = null;
+    var layer = 'book', data = null, asked = false, items = [], reg = {}, voiceSel = null, overrides = {}, api = null;
     var slug = o.slug || ((new URLSearchParams(location.search).get('book') || '').split('/').filter(Boolean).pop() || '');
     var phone = function () { return R.hasAttribute('data-phone'); };
     var box = h('div', 'ly-over'); box.setAttribute('data-for', 'layers'); box.hidden = true;
@@ -624,11 +630,11 @@
     function buildMine() {
       data.notes.forEach(function (n) {
         var r = rangeOf(n.id, n.anchor && n.anchor.quote); if (!r) return;
-        add('ly-hl-' + (HLC.indexOf(n.colour) >= 0 ? n.colour : 'yellow'), r);
+        add('ly-hl-' + hlKey(n.colour), r);
         if (!n.body && n.kind === 'highlight') { item(r, null, n.id); return; }
         add('ly-noted', r);
         var c = h('div', 'ly-card ly-mine kind-' + n.kind,
-            '<div class="ly-who"><i class="ly-swatch" data-colour="' + esc(n.colour || 'yellow') + '"></i>' + (n.kind === 'question' ? 'Your question' : 'Your note') + '<span class="ly-when">' + esc(ago(n.made_at)) + '</span></div>'
+            '<div class="ly-who">' + swatch(n.colour) + (n.kind === 'question' ? 'Your question' : 'Your note') + cname(n.colour) + '<span class="ly-when">' + esc(ago(n.made_at)) + '</span></div>'
           + '<div class="ly-body" contenteditable="true" spellcheck="false">' + esc(n.body || '') + '</div>'
           + '<div class="ly-foot"><button type="button" class="ly-verb ly-vis" data-vis="' + esc(n.visibility) + '">' + esc({ 'private': 'Only me', friends: 'Friends', group: 'Group', 'public': 'Everyone', 'on request': 'On request' }[n.visibility] || 'Only me') + '</button>'
           + '<button type="button" class="ly-verb ly-share-b" aria-label="Share">' + glyphShare() + 'Share</button></div>');
@@ -657,12 +663,22 @@
         var chip = h('div', 'ly-count', '<b>' + c.highlights + '</b> readers marked this' + (c.notes ? ' · ' + c.notes + ' notes' : ''));
         item(r, chip, 'count:' + sid);
       });
+      var notHere = [], here = data.pub.edition || '';
       data.pub.contributions.forEach(function (p) {
-        var own = p.author === 'you', r = rangeOf('p:' + p.id, p.anchor && p.anchor.quote); if (!r) return;
+        /* J -- LOOKUPS STAY PERSONAL (Z16): a look-up of what Frank already knows is never a contribution; CONTRIB-1
+           refuses one, and should one ever arrive it is not drawn here or counted */
+        if (p.kind === 'lookup' || p.kind === 'gloss') return;
+        if (byWho && p.author !== byWho) return;
+        var own = p.author === 'you', r = rangeOf('p:' + p.id, p.anchor && p.anchor.quote);
+        /* E -- NOT IN YOUR EDITION (Z14): a note is anchored by its words (CONTRIB-1, by work_id); one whose words this
+           edition does not hold is not lost, it is listed at the head with where it was written */
+        if (!r) { if (p.anchor && p.anchor.quote && p.anchor.quote.exact) notHere.push(p); return; }
+        var elsewhere = p.edition && p.edition.id && p.edition.id !== here;
         readers[p.author] = 1;
         add(own ? 'ly-own' : 'ly-pubnote', r);
         var c = h('div', 'ly-card ly-pubcard kind-' + p.kind + (own ? ' ly-own' : ''),
             '<div class="ly-who"><i class="ly-av" aria-hidden="true">' + (own ? 'Y' : initial(p.author)) + '</i>' + (own ? 'You' : esc(p.author)) + '<span class="ly-when">' + esc(ago(p.made_at)) + '</span></div>'
+          + (elsewhere ? '<div class="ly-else">Written in ' + esc(p.edition.label || 'another edition') + ' — found here by its words.</div>' : '')
           + '<div class="ly-body">' + esc(p.body) + '</div>'
           + '<div class="ly-replies">' + (p.thread || []).map(function (t) { return '<p><b>You</b> ' + esc(t) + '</p>'; }).join('') + '</div>'
           + '<div class="ly-foot"><button type="button" class="ly-verb ly-reply">Reply' + (p.replies ? ' <i>' + p.replies + '</i>' : '') + '</button>'
@@ -671,8 +687,21 @@
         press(c.querySelector('.ly-share-b'), function () { share(doc.body, { mine: own, visibility: 'public', quote: p.anchor.quote.exact, body: p.body, author: own ? '' : p.author }, Object.assign(ctx(), { onClose: paint })); });
         item(r, c, 'p:' + p.id);
       });
-      var n = Object.keys(readers).length;
-      head.innerHTML = items.length ? '<b>Everyone</b><span>' + data.pub.contributions.length + ' public notes · ' + n + ' readers</span>' : '';
+      var n = Object.keys(readers).length, shown = data.pub.contributions.filter(function (p) { return p.kind !== 'lookup' && p.kind !== 'gloss' && (!byWho || p.author === byWho); }).length;
+      head.innerHTML = byWho ? '<b>' + esc(byWho) + '’s notes</b><span>' + shown + ' on this book · <button type="button" class="ly-verb ly-allpeople">Everyone’s</button></span>'
+                     : items.length || notHere.length ? '<b>Everyone</b><span>' + shown + ' public notes · ' + n + ' readers</span>' : '';
+      var allp = head.querySelector('.ly-allpeople'); if (allp) press(allp, function () { byWho = null; paint(); });
+      if (notHere.length) {
+        var g = h('details', 'ly-nothere'); if (openNotHere) g.open = true;
+        g.innerHTML = '<summary>' + notHere.length + ' note' + (notHere.length > 1 ? 's' : '') + ' on this book ' + (notHere.length > 1 ? 'aren’t' : 'isn’t') + ' in your edition</summary>'
+          + notHere.map(function (p) { return '<div class="ly-card ly-pubcard ly-away"><div class="ly-who"><i class="ly-av" aria-hidden="true">' + initial(p.author) + '</i>' + esc(p.author) + '<span class="ly-when">' + esc(ago(p.made_at)) + '</span></div>'
+            + '<blockquote class="ly-q">“' + esc(p.anchor.quote.exact) + '”</blockquote><div class="ly-body">' + esc(p.body) + '</div>'
+            + '<div class="ly-else">These words aren’t in your edition' + (p.edition && p.edition.label ? ' — they are in ' + esc(p.edition.label) : '') + '.</div>'
+            + '<div class="ly-foot"><button type="button" class="ly-verb ly-findit" data-q="' + esc((data.book && data.book.title) || '') + '">Find that edition</button></div></div>'; }).join('');
+        g.addEventListener('toggle', function () { openNotHere = g.open; layout(); });
+        g.querySelectorAll('.ly-findit').forEach(function (b) { press(b, function () { try { doc.dispatchEvent(new CustomEvent('frank:surface', { detail: { q: b.getAttribute('data-q') } })); } catch (e) {} }); });
+        head.appendChild(g);
+      }
     }
     function replyTo(c, p) {
       var f = c.querySelector('.ly-replyf'); if (f) { f.querySelector('textarea').focus(); return; }
@@ -683,9 +712,31 @@
       press(f.querySelector('.ly-send'), send); press(f.querySelector('.ly-cancel'), function () { f.remove(); layout(); });
       setTimeout(function () { try { ta.focus({ preventScroll: true }); } catch (e) {} }, 0); layout();
     }
+    /* THE VOICE LAYER, AS A CUSTOMER SEES IT (Z15, 1 Oct; LAYERS.md §3/§3b; 1.0 gives the editor to every
+       reader -- Osca, 29 Sep). What changed from the drawing made for Osca: no engine, model or chunk id is ever
+       named (a customer never sees the cloud's name -- PAY §7); the head says whose voice reads the chapter and
+       what a colour is; the three marks are the same three; Re-run says how much it reads again and how long,
+       then shows the run itself -- running, done (hear it), or failed (Tell Frank) -- where Osca's said "queued".
+       A chapter with no voice yet says so, with the one way to give it one. THE JOB SEAM: write('rerun', rec)
+       may return {on(fn)}; fn({state: 'running'|'done'|'failed', done, of, why}). The bench runs a stand-in. */
+    var openNotHere = false;
+    /* ONE PERSON'S NOTES (integration, 1 Oct): a creator's link opens Everyone filtered to the person it names
+       (?layer=everyone&by=<name>, design/library/zero.js); the head says whose, and one press shows everyone again */
+    var byWho = null;
+    var vjob = null;   /* {state, done, of, scope, why} -- the last Re-run, until the next change */
+    function voiceName(M) { var id = Object.keys(M.windows || {})[0], w = id ? M.windows[id] : null; var v = M.voice_name || (w && w.voice) || ''; return String(v).split(/[-_]/)[0].replace(/^\w/, function (c) { return c.toUpperCase(); }); }
+    function secondsFor(ids) { var n = 0; ids.forEach(function (sid) { n += String(data.sentences[sid] || '').split(/\s+/).length; }); return Math.max(5, Math.round(n / 2.6)); }
+    function about(sec) { return sec < 50 ? 'about ' + (Math.ceil(sec / 10) * 10) + ' seconds' : 'about ' + Math.max(1, Math.round(sec / 60)) + ' minute' + (Math.round(sec / 60) > 1 ? 's' : ''); }
     function buildVoice() {
       var M = data.marks || {}, chap = null; for (var k in (M.chapters || {})) { chap = M.chapters[k]; break; }
-      if (!chap) return;
+      if (!chap || data.noVoice) {
+        head.innerHTML = '<b>Voice</b><p class="ly-hint">This chapter has no voice yet. When one reads it, its colours appear here, and you can change how any sentence is read.</p>'
+          + '<button type="button" class="ly-act ly-givevoice">Give it a voice…</button>'
+          + (window.Cast && Cast.isPlay && Cast.isPlay() ? '<button type="button" class="ly-verb ly-cast">Cast</button>' : '');
+        var cs0 = head.querySelector('.ly-cast'); if (cs0) press(cs0, function () { Cast.open(); });
+        press(head.querySelector('.ly-givevoice'), function () { try { doc.dispatchEvent(new CustomEvent('frank:voice-make', { detail: { slug: slug } })); } catch (e) {} });
+        return;
+      }
       var ids = Object.keys(M.windows || {}), css = '';
       ids.forEach(function (id, i) { var tok = WINCOL[i % WINCOL.length]; css += '::highlight(ly-win-' + i + '){ background-color: color-mix(in srgb, var(' + tok + ') ' + (i ? 22 : 14) + '%, transparent); }\n'; });
       css += '::highlight(ly-win-sel){ background-color: color-mix(in srgb, currentColor 16%, transparent); text-decoration: underline 2px; text-underline-offset: 4px; }\n';
@@ -696,29 +747,41 @@
         add('ly-win-' + i, r);
         if (voiceSel === sid) add('ly-win-sel', r);
         var d = ov.direction || m.direction;
-        if (d) item(r, h('div', 'ly-dir', 'direction · <i>' + esc(d) + '</i><span>noted · not yet heard</span>'), 'dir:' + sid);
+        if (d) item(r, h('div', 'ly-dir', 'direction · <i>' + esc(d) + '</i><span>noted — this voice can’t act it yet</span>'), 'dir:' + sid);
         else item(r, null, 'v:' + sid);
         /* the homographs the layer knows, inside this sentence: a dotted line under the word */
         var p = r.startContainer.parentElement && r.startContainer.parentElement.closest('p'), txt = S[sid];
         Object.keys(homs).forEach(function (hw) { var re = new RegExp('\\b' + hw + '\\b', 'i'), mm = re.exec(txt); if (!mm || !p) return;
           var base = p.textContent.indexOf(txt); if (base < 0) return; var rr = rangeIn(p, base + mm.index, base + mm.index + hw.length); if (rr) add(ov.reading ? 'ly-rd-set' : 'ly-rd', rr); });
       });
-      head.innerHTML = '<b>Voice</b><span>' + esc(ids.length ? (M.windows[ids[0]].voice || '') : '') + ' · ' + esc(chap.engine || '') + '</span>'
+      var nCh = Object.keys(overrides).length, vn = voiceName(M);
+      var tail = '';
+      if (nCh) tail = '<button type="button" class="ly-act ly-rerun-open">Re-run · ' + nCh + ' changed</button>';
+      else if (vjob && vjob.state === 'running') tail = '<div class="ly-job" role="status"><span>Re-running ' + vjob.of + ' sentence' + (vjob.of > 1 ? 's' : '') + ' — ' + vjob.done + ' of ' + vjob.of + ' done</span><i class="ly-jobbar"><b style="width:' + Math.round(100 * (vjob.done + 0.35) / vjob.of) + '%"></b></i><span class="ly-jobsay">The rest of the chapter keeps its audio. You can go on reading.</span></div>';
+      else if (vjob && vjob.state === 'done') tail = '<div class="ly-job ly-jobdone" role="status"><span>Re-run done — ' + vjob.of + ' sentence' + (vjob.of > 1 ? 's' : '') + ' read again.</span><button type="button" class="ly-act ly-hear">Hear it</button></div>';
+      else if (vjob && vjob.state === 'failed') tail = '<div class="ly-jobfail"></div>';
+      else tail = '<p class="ly-hint">Each colour is one of the voice’s windows, as the voice chose it. Press a sentence to change how it is read.</p>';
+      head.innerHTML = '<b>Voice</b><span>' + esc(vn ? 'read by ' + vn : '') + '</span>'
+        + (window.Cast && Cast.isPlay && Cast.isPlay() ? '<button type="button" class="ly-verb ly-cast">Cast</button>' : '')
         + '<div class="ly-legend">' + ids.map(function (id, i) { return '<span class="ly-win"><i style="--win:var(' + WINCOL[i % WINCOL.length] + ')"></i>' + esc(M.windows[id].name) + '</span>'; }).join('') + '</div>'
-        + (Object.keys(overrides).length ? '<button type="button" class="ly-act ly-rerun-open">Re-run · ' + Object.keys(overrides).length + ' changed</button>' : queued ? '<p class="ly-queued">Queued on ' + esc(chap.engine || '') + ' — the rest of the chapter keeps its audio.</p>' : '<p class="ly-hint">Press a sentence to change its window.</p>');
+        + tail;
       var ro = head.querySelector('.ly-rerun-open'); if (ro) press(ro, rerun);
+      var cs = head.querySelector('.ly-cast'); if (cs) press(cs, function () { Cast.open(); });
+      var hr = head.querySelector('.ly-hear'); if (hr) press(hr, function () { hr.textContent = 'Playing…'; try { doc.dispatchEvent(new CustomEvent('frank:voice-hear', { detail: { chunks: vjob.chunks || [] } })); } catch (e) {} setTimeout(function () { if (hr.isConnected) hr.textContent = 'Hear it'; }, 2600); });
+      var jf = head.querySelector('.ly-jobfail');
+      if (jf && window.TellFrank && TellFrank.failure) jf.appendChild(TellFrank.failure({ kind: 'Re-run', what: 'The re-run didn’t finish.', why: vjob.why || 'Your cloud didn’t answer for two minutes. Nothing you changed is lost.', fix: 'Try again', onFix: function () { var keep = vjob.chunks || {}; vjob = null; overrides = keep; paint(); rerun(); } }));
       if (voiceSel) runCard(voiceSel, chap, ids);
     }
     function runCard(sid, chap, ids) {
       var M = data.marks, m = chap.chunks[sid], ov = overrides[sid] || {}, cur = ov.window || m.window, d = ov.direction || m.direction || '';
       var txt = (data.sentences[sid] || ''), hw = Object.keys(M.homographs || {}).filter(function (w) { return new RegExp('\\b' + w + '\\b', 'i').test(txt); })[0];
       var c = h('div', 'ly-card ly-run',
-          '<div class="ly-who">' + esc(txt.split(/\s+/).slice(0, 6).join(' ')) + '…<span class="ly-when">' + esc(sid.split('.').slice(1).join(' · ')) + '</span></div>'
-        + '<div class="ly-mark"><label>Window</label><span class="ly-sws">' + ids.map(function (id, i) { return '<button type="button" class="ly-sw" data-win="' + esc(id) + '" style="--win:var(' + WINCOL[i % WINCOL.length] + ')" aria-label="' + esc(M.windows[id].name) + '" aria-pressed="' + (id === cur) + '"></button>'; }).join('') + '</span><em>' + esc(M.windows[cur].name) + '</em></div>'
-        + '<div class="ly-mark"><label>Direction</label><select class="ly-dirsel" aria-label="Direction"><option value="">Inferred · ' + esc(m.inferred || '') + '</option>' + (M.directions || []).map(function (x) { return '<option' + (x === d ? ' selected' : '') + '>' + esc(x) + '</option>'; }).join('') + '</select></div>'
+          '<div class="ly-who">' + esc(txt.split(/\s+/).slice(0, 7).join(' ')) + '…</div>'
+        + '<div class="ly-mark"><label>Window</label><span class="ly-sws">' + ids.map(function (id, i) { return '<button type="button" class="ly-sw" data-win="' + esc(id) + '" style="--win:var(' + WINCOL[i % WINCOL.length] + ')" aria-label="' + esc(M.windows[id].name) + '" aria-pressed="' + (id === cur) + '"></button>'; }).join('') + '</span><em>' + esc(M.windows[cur].name) + (cur === m.window ? '' : ' <span class="ly-was">(was ' + esc(M.windows[m.window].name) + ')</span>') + '</em></div>'
+        + '<div class="ly-mark"><label>Direction</label><select class="ly-dirsel" aria-label="Direction"><option value="">Its own: ' + esc(m.inferred || 'as written') + '</option>' + (M.directions || []).map(function (x) { return '<option' + (x === d ? ' selected' : '') + '>' + esc(x) + '</option>'; }).join('') + '</select></div>'
         + (hw ? '<div class="ly-mark"><label>Reading</label><span class="ly-sws">' + M.homographs[hw].map(function (x, i) { return '<button type="button" class="ly-verb ly-rdopt" data-i="' + i + '" aria-pressed="' + (!!ov.reading && ov.reading.ipa === x.ipa) + '">' + esc(hw) + ' /' + esc(x.ipa) + '/ <i>' + esc(x.sense) + '</i></button>'; }).join('') + '</span></div>' : '')
         + '<div class="ly-foot"><button type="button" class="ly-act ly-rerun-b"' + (Object.keys(overrides).length ? '' : ' disabled') + '>Re-run…</button><button type="button" class="ly-verb ly-done">Done</button></div>');
-      function set(k, v) { var o2 = overrides[sid] = overrides[sid] || {}; if (!v || v === m[k]) delete o2[k]; else o2[k] = v; if (!Object.keys(o2).length) delete overrides[sid]; queued = false; wrote('mark', { chunk: sid, change: o2 }); paint(); }
+      function set(k, v) { var o2 = overrides[sid] = overrides[sid] || {}; if (!v || v === m[k]) delete o2[k]; else o2[k] = v; if (!Object.keys(o2).length) delete overrides[sid]; vjob = null; wrote('mark', { chunk: sid, change: o2 }); paint(); }
       c.querySelectorAll('.ly-sw').forEach(function (b) { press(b, function () { set('window', b.getAttribute('data-win')); }); });
       c.querySelector('.ly-dirsel').addEventListener('change', function (e) { set('direction', e.target.value); });
       c.querySelectorAll('.ly-rdopt').forEach(function (b) { press(b, function () { var x = M.homographs[hw][+b.getAttribute('data-i')]; set('reading', ov.reading && ov.reading.ipa === x.ipa ? null : { word: hw, ipa: x.ipa }); }); });
@@ -726,20 +789,47 @@
       press(c.querySelector('.ly-done'), function () { voiceSel = null; paint(); });
       var r = ranges['s:' + sid]; if (r) item(r, c, 'run:' + sid);
     }
+    function runJob(scope, chunks) {
+      var of = Object.keys(chunks).length; vjob = { state: 'running', done: 0, of: of, scope: scope, chunks: chunks };
+      var job = null; try { if (SRC_WRITE) job = SRC_WRITE('rerun', { chunks: chunks, scope: scope }); } catch (e) {}
+      function on(st) { if (!vjob || vjob.chunks !== chunks) return; vjob.state = st.state || vjob.state; if (st.done != null) vjob.done = st.done; if (st.why) vjob.why = st.why; if (layer === 'voice') paint(); }
+      if (job && job.on) { job.on(on); return; }
+      /* the bench's stand-in for the cloud: one sentence every 2.4 s, then done */
+      (function step() { setTimeout(function () { if (!vjob || vjob.chunks !== chunks || vjob.state !== 'running' || vjob.hold) return; on({ done: vjob.done + 1 }); if (vjob.done >= vjob.of) on({ state: 'done' }); else step(); }, 2400); })();
+    }
     function rerun() {
-      var ids = Object.keys(overrides), M = data.marks, chap = null; for (var k in M.chapters) { chap = M.chapters[k]; break; }
+      var ids = Object.keys(overrides), M = data.marks; if (!ids.length) return;
+      var sec = secondsFor(ids);
       var scrim = h('div', 'ly-scrim'), sh = h('div', 'ly-share ly-rerun'); sh.setAttribute('role', 'dialog'); sh.setAttribute('aria-label', 'Re-run');
       sh.innerHTML = '<div class="ly-sh-head"><b>Re-run</b><button type="button" class="ly-x" aria-label="Close">×</button></div><ul>' + ids.map(function (sid) { var ov = overrides[sid];
           return '<li><span>' + esc((data.sentences[sid] || '').split(/\s+/).slice(0, 5).join(' ')) + '…</span><i>' + [ov.window ? 'window → ' + esc(M.windows[ov.window].name) : '', ov.direction ? 'direction → ' + esc(ov.direction) : '', ov.reading ? 'reading → /' + esc(ov.reading.ipa) + '/' : ''].filter(Boolean).join(' · ') + '</i></li>'; }).join('')
-        + '</ul><p class="ly-sh-say">' + ids.length + ' sentence' + (ids.length > 1 ? 's' : '') + ' on ' + esc(chap.engine || '') + '. Only these are read again; the rest of the chapter keeps its audio.</p>'
+        + '</ul><p class="ly-sh-say">' + ids.length + ' sentence' + (ids.length > 1 ? 's' : '') + ' read again, ' + about(sec) + ' of your cloud’s time. The rest of the chapter keeps its audio.</p>'
         + '<div class="ly-sh-acts"><button type="button" class="ly-act ly-go">Re-run passage</button><button type="button" class="ly-verb ly-go">Re-run chapter</button></div>';
       function close() { scrim.remove(); sh.remove(); }
       ['pointerdown', 'pointerup', 'click'].forEach(function (t) { sh.addEventListener(t, function (e) { e.stopPropagation(); }); scrim.addEventListener(t, function (e) { e.stopPropagation(); }); });
       press(scrim, close); press(sh.querySelector('.ly-x'), close);
-      sh.querySelectorAll('.ly-go').forEach(function (b) { press(b, function () { wrote('rerun', { chunks: overrides, scope: b.classList.contains('ly-act') ? 'passage' : 'chapter' });
-        Object.keys(overrides).forEach(function (sid) { var ov = overrides[sid], ch = chap.chunks[sid]; if (ov.window) ch.window = ov.window; if (ov.direction) ch.direction = ov.direction; if (ov.reading) ch.reading = ov.reading; });
-        overrides = {}; queued = true; voiceSel = null; close(); paint(); }); });
+      sh.querySelectorAll('.ly-go').forEach(function (b) { press(b, function () {
+        var chunks = overrides, chap = null; for (var k in M.chapters) { chap = M.chapters[k]; break; }
+        Object.keys(chunks).forEach(function (sid) { var ov = chunks[sid], ch = chap.chunks[sid]; if (ov.window) ch.window = ov.window; if (ov.direction) ch.direction = ov.direction; if (ov.reading) ch.reading = ov.reading; });
+        overrides = {}; voiceSel = null; close(); runJob(b.classList.contains('ly-act') ? 'passage' : 'chapter', chunks); paint(); }); });
       doc.body.appendChild(scrim); doc.body.appendChild(sh);
+      return sh;
+    }
+    /* THE BENCH'S DOOR TO EACH STATE (zstates.js, band's ?state=): a sentence selected, a window changed, the
+       Re-run sheet, the run running / done / failed, a chapter with no voice. Never called by the product. */
+    function voiceState(s) {
+      if (!data) return false;
+      var M = data.marks || {}, chap = null; for (var k in (M.chapters || {})) { chap = M.chapters[k]; break; }
+      if (s === 'noaudio') { data.noVoice = true; paint(); return true; }
+      data.noVoice = false; if (!chap) return false;
+      var sids = Object.keys(chap.chunks), first = sids[0], other = Object.keys(M.windows)[2] || Object.keys(M.windows)[1];
+      overrides = {}; vjob = null; voiceSel = null;
+      if (s === 'selected') voiceSel = first;
+      if (s === 'changed' || s === 'rerun') { overrides[first] = { window: other }; overrides[sids[1]] = { direction: 'amused' }; voiceSel = s === 'changed' ? first : null; }
+      if (s === 'running' || s === 'done' || s === 'failed') { var ch = {}; ch[first] = { window: other }; ch[sids[1]] = { direction: 'amused' }; vjob = { state: s, done: s === 'running' ? 1 : 2, of: 2, scope: 'passage', chunks: ch, hold: true }; }
+      paint();
+      if (s === 'rerun') rerun();
+      return true;
     }
 
     /* ---- where each card goes: beside the column, or in the phone's sheet -- */
@@ -777,6 +867,7 @@
         go.hidden = false; go.textContent = (layer === 'voice' ? 'The voice’s marks' : layer === 'everyone' ? data.pub.contributions.length + ' public notes' : data.notes.length + ' of your marks') + ' — ' + (ctx().chapter || 'go') + ' ›';
       } else if (go) go.hidden = true;
       box.toggleAttribute('data-empty', !shown);
+      box.toggleAttribute('data-say', !items.length && !!head.textContent);   /* a head with something to say and nothing on the text (Z15: no voice yet) still shows */
     }
     function onScroll() { if (tick || box.hidden) return; tick = requestAnimationFrame(function () { tick = 0; layout(); }); }
     doc.addEventListener('scroll', onScroll, { capture: true, passive: true });
@@ -823,6 +914,8 @@
       }
       function toMine() { var g = (api && api.goTo) || o.go; if (layer === 'book' && g) g('mine'); else paint(); }
       bar.querySelectorAll('.ly-dot').forEach(function (b) { press(b, function () { make('highlight', b.getAttribute('data-colour')); hideBar(true); toMine(); }); });
+      var plus = bar.querySelector('.fc-plus');   /* Z4: "+" opens the palette; a colour added there marks these words at once */
+      if (plus) press(plus, function () { var done = false; Colours.panel({ anchor: bar, onAdd: function (c) { if (!done) { done = true; make('highlight', c); } }, onClose: function () { hideBar(true); toMine(); } }); });
       press(bar.querySelector('.ly-bnote'), function () { var rec = make('note'); hideBar(true); toMine();
         var c = list.querySelector('[data-key="' + rec.id + '"] .ly-body'); if (c) setTimeout(function () { try { c.focus({ preventScroll: true }); } catch (e) {} }, 0); });
       press(bar.querySelector('.ly-bshare'), function () { var rec = n || null; hideBar(true);
@@ -862,7 +955,7 @@
       if (!asked) { asked = true; sourceOf(slug, function (d) { data = d; paint(); }); return; }
       paint();
     }
-    return api = { text: col, set: set, refresh: function () { if (data && layer !== 'book') paint(); }, count: function () { return { layer: layer, items: items.length, cards: items.filter(function (it) { return it.el && !it.el.hidden; }).length }; }, data: function () { return data; }, layout: layout, box: box };
+    return api = { by: function (who) { byWho = who || null; if (data && layer === 'everyone') paint(); return byWho; }, voiceState: voiceState, notHere: function (on) { openNotHere = on !== false; paint(); }, text: col, set: set, refresh: function () { if (data && layer !== 'book') paint(); }, count: function () { return { layer: layer, items: items.length, cards: items.filter(function (it) { return it.el && !it.el.hidden; }).length }; }, data: function () { return data; }, layout: layout, box: box };
   }
 
   /* GET studio's /marks/<slug>/<cid>; cb(body) or cb(null, why). The shape is the

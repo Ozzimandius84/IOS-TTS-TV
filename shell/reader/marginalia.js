@@ -220,7 +220,10 @@ var MARG_ROUTE = "/marginalia/";
 // Osca's four, in his order. The list is here rather than in a stylesheet
 // because it is the record's vocabulary: a colour that is not one of these
 // is not stored (margNormalise drops to the first), and the CSS is keyed off
-// it rather than the other way round.
+// it rather than the other way round. AND ANY COLOUR THE PERSON ADDS (Z4,
+// Osca 30 Sep: "any number, user-added"): an added colour is stored as its
+// own "#rrggbb", so a mark paints on every device whatever that device's
+// palette holds; names and order are design/reader/colours.js's.
 var MARG_COLOURS = ["green", "yellow", "red", "pink"];
 var MARG_TOMBSTONE_MS = 30 * 24 * 60 * 60 * 1000;
 
@@ -247,7 +250,9 @@ function margId(kind, now, rand) {
 }
 
 function margColour(c) {
-  return MARG_COLOURS.indexOf(c) >= 0 ? c : MARG_COLOURS[0];
+  if (MARG_COLOURS.indexOf(c) >= 0) return c;
+  if (typeof c === "string" && /^#[0-9a-f]{6}$/i.test(c)) return c.toLowerCase();
+  return MARG_COLOURS[0];
 }
 
 // Everything off disk, off another device or out of another writer comes
@@ -289,6 +294,10 @@ function margNormaliseEntry(e, kind) {
   out.to = (typeof e.to === "string" && e.to) ? e.to : e.from;
   if (kind === "notes") out.text = typeof e.text === "string" ? e.text : "";
   else out.colour = margColour(e.colour);
+  // A CARD'S MARK (Z6, Osca 30 Sep: "it's just a sort"): again / later / done, and when -- kept on the record so the
+  // Library's "your stuff" reads it here (design/library/seams.js keeps its frank.review.<slug> fallback).
+  if (e.review && typeof e.review === "object" && /^(again|later|done)$/.test(e.review.state))
+    out.review = { state: e.review.state, at: Number(e.review.at) || 0 };
   return out;
 }
 
@@ -1033,7 +1042,14 @@ function handDom(ctx) {
     bar.className = "marghand"; bar.hidden = true;
     say = doc.createElement("div"); say.className = "marghand-say";
     var row = doc.createElement("div"); row.className = "marghand-row";
-    for (var i = 0; i < MARG_COLOURS.length; i++) {
+    /* Z4: the person's colours, any number, and "+" -- the palette is colours.js's; without it, the four */
+    if (window.Colours) {
+      var dotsOf = function () { return Colours.dots({ kind: "margdot", onAdd: function (pl) { var used = false; Colours.panel({ anchor: bar, onAdd: function (c) { if (!used && cur) { used = true; colour(c); } } }); } }); };
+      var dotsEl = dotsOf();
+      var dotsNow = function () { var n = dotsOf(); dotsEl.parentNode.replaceChild(n, dotsEl); dotsEl = n; };
+      row.appendChild(dotsEl);
+      Colours.on(function () { if (bar && dotsEl && dotsEl.parentNode) dotsNow(); });
+    } else for (var i = 0; i < MARG_COLOURS.length; i++) {
       var b = doc.createElement("button");
       b.className = "margdot marg-" + MARG_COLOURS[i];
       b.setAttribute("data-colour", MARG_COLOURS[i]);
@@ -1060,6 +1076,7 @@ function handDom(ctx) {
       var t = e.target && e.target.closest ? e.target.closest("button") : null;
       if (!t) return;
       e.stopPropagation();
+      if (t.classList.contains("fc-plus")) return;   /* "+" is the palette's own press (colours.js) */
       if (t.classList.contains("margdot")) return colour(t.getAttribute("data-colour"));
       if (t.classList.contains("margnote")) return openEdit();
       if (t.classList.contains("margdel")) return remove();
@@ -1314,6 +1331,9 @@ function mount(o) {
   function ranges() {
     var by = {};
     for (var c = 0; c < MARG_COLOURS.length; c++) by["marg-" + MARG_COLOURS[c]] = [];
+    /* Z4: the palette's added colours are names too, so a colour no mark wears any more is cleared */
+    var PAL = window.Colours ? Colours.list() : [];
+    for (var pc = 0; pc < PAL.length; pc++) by["marg-" + Colours.cls(PAL[pc].colour)] = [];
     by["marg-note"] = [];
     by["marg-sel"] = [];
     var live = margLive(rec, "highlights");
@@ -1328,7 +1348,9 @@ function mount(o) {
         var words = margSpanIds(h.from, h.to, map.ids);
         /* the newest highlight wins a word it shares -- margColourAt is the
            record's own rule and this is its one caller on the page */
-        pushWords(by["marg-" + h.colour], map, words, function (id) {
+        var key = "marg-" + (window.Colours ? Colours.cls(h.colour) : h.colour);
+        if (!by[key]) { by[key] = []; if (window.Colours) Colours.css([h.colour]); }   /* a colour from another device's palette */
+        pushWords(by[key], map, words, function (id) {
           return margColourAt(id, live, map.ids) === h.colour;
         });
       })(h, map);

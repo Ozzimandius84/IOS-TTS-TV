@@ -32,6 +32,10 @@
 <link rel="stylesheet" href="layers.css">
 <link rel="stylesheet" href="tellfrank.css"><!-- Tell Frank (ASKS #134-#136) -->
 <script src="band.js"></script>
+<link rel="stylesheet" href="colours.css"><!-- Z4: the highlight colours, any number -->
+<link rel="stylesheet" href="wordsbefore.css"><!-- Z10: the words before a chapter -->
+<link rel="stylesheet" href="cast.css"><!-- Z12: a play's cast -->
+<script src="colours.js"></script>
 <script src="layers.js"></script>
 <style>
 #bandHost{ position:fixed; top:0; left:0; right:0; z-index:60; pointer-events:none; }
@@ -1109,6 +1113,8 @@ function buildStampText(b) {
 <script src="listen.js"></script>
 <script src="lookup.js"></script>
 <script src="marginalia.js"></script>
+<script src="wordsbefore.js"></script><!-- Z10 -->
+<script src="cast.js"></script><!-- Z12 -->
 <script src="cursor.js"></script>
 <!-- THE FLOAT'S DOOR (13 Sep, F1). The reader's half of design/reader/FLOAT.md
      -- the chapter once, a drift correction four times a second, and the
@@ -1134,6 +1140,9 @@ function buildStampText(b) {
      page and opens on ⌘K, on the bar's ⏎, and on the phone bar's ⌕ -- the
      reader has no askbar, so surface.js's own `bar()` takes `TTSTVPage.ask`
      here and answers the one verb that means "search". -->
+<!-- who is looking (account.js, the one FrankAccount the Library and Settings ask too): on the web, before an
+     account, the Surface searches Frank's public shelf and says so -->
+<script src="account.js"></script>
 <script src="surface.js"></script>
 <script>
 /* THE SHELL -- thirteenth pass, 4 September: book-nav.js owns the mechanic
@@ -1484,6 +1493,10 @@ try{ (function(){
         marginalia = Marginalia.mount({ nav, col: $("readercol"), pane: $("readerpane"),
                                         slug: b && b.slug, book: b, control: listen });
       }catch(e){ console.warn("[marginalia] not mounted:", e); }
+      /* Z10: the words before a chapter, on its opener (wordsbefore.js) */
+      try{ if(window.WordsBefore) WordsBefore.mount({ col: $("readercol"), book: b, slug: b && b.slug }); }catch(e){ console.warn("[words before] not mounted:", e); }
+      /* Z12: a play's cast (cast.js) -- the Voice layer's "Cast" opens it */
+      try{ if(window.Cast) Cast.mount({ book: b, slug: b && b.slug }); }catch(e){ console.warn("[cast] not mounted:", e); }
       try{
         cursor = Cursor.mount({ nav, bookEl: $("book"), slug: b && b.slug,
                                 book: b, control: listen });
@@ -2182,6 +2195,128 @@ try{ (function(){
   /* read-only, for a driver and the report */
   window.__follow = Follow;
 })(); }catch(e){ console.warn("[follow] not wired:", e); }
+/* ================= THE LIBRARY'S FOUR ASKS (integration, 1 Oct; ASKS #197) ==============
+   design/library/zero.js opens a book with what the person pressed for, in the address (openAt):
+     &listen             start the book's voice -- its rendered master where the chapter has one, else the
+                         device voice -- as soon as the chapter is on screen. "What do you read?" (Z3) promises the
+                         first sentence within 10 s of the press, whose time is sessionStorage
+                         "frank.firstread.pressed"; the ms are kept on window.__READER_ASK.
+     &voice=<name>       the voice the press named (a creator's link, Z17; a voice's page, Z8): kept for the book as
+                         "frank.voice.<slug>" and on <html data-askvoice>. A book has ONE rendered master today, so
+                         the choice can only change what plays once FrankVoice (voicestore.js) lists more than one.
+     &layer=everyone&by=<person>   the Everyone layer opened, showing that person's notes only (layers.js by()).
+     &mark=<id>          the chapter of that highlight or note, scrolled to it, the words flashed once.
+   A browser that will not sound without a press (an autoplay rule) is not argued with: the voice is asked again on
+   the person's first touch or key, and the page says nothing it cannot keep. */
+try{ (function(){
+  const Q = new URLSearchParams(location.search);
+  const ask = { listen: Q.has("listen"), voice: Q.get("voice") || null, layer: Q.get("layer") || null,
+                by: Q.get("by") || null, mark: Q.get("mark") || null };
+  if(!ask.listen && !ask.voice && !ask.layer && !ask.mark) return;
+  const R = document.documentElement, A = window.__READER_ASK = Object.assign({ log: [] }, ask);
+  const say = (k, v) => { A.log.push([k, v === undefined ? null : v, Date.now()]); };
+  const sl = ms => new Promise(r => setTimeout(r, ms));
+  async function until(fn, ms){ const t0 = Date.now(); while(Date.now() - t0 < ms){ try{ const v = fn(); if(v) return v; }catch(e){} await sl(90); } return null; }
+  const T = () => window.Transport || null;
+  function sounding(){ const t = T(); if(!t) return false; try{ return !!(t.playing() || t.speaking()); }catch(e){ return false; } }
+  function pressedAt(){ try{ return Number(sessionStorage.getItem("frank.firstread.pressed")) || 0; }catch(e){ return 0; } }
+
+  async function listenNow(){
+    const t = await until(() => { const x = T(); return x && x.ready && x.ready() ? x : null; }, 9000) || T();
+    if(!t){ say("listen", "no transport"); return; }
+    /* the chapter the address named is the one on screen first: wait for the landing to settle */
+    await until(() => { try{ return t.state().voice || t.state().system; }catch(e){ return false; } }, 6000);
+    for(let i = 0; i < 4 && !sounding(); i++){ try{ t.play(); }catch(e){ say("listen-error", String(e && e.message || e)); } await until(sounding, 1500); }
+    if(sounding()){
+      const p = pressedAt();
+      A.started = { at: Date.now(), ms: p ? Date.now() - p : null, by: t.speaking() ? "device" : "master" };
+      R.setAttribute("data-listening", A.started.by); say("listen", A.started);
+      return;
+    }
+    /* the browser wants a press first: the first touch or key anywhere is that press */
+    A.waiting = true; R.setAttribute("data-listening", "waiting"); say("listen", "waiting for a press");
+    const go = function(){ removeEventListener("pointerdown", go, true); removeEventListener("keydown", go, true);
+      A.waiting = false; try{ if(!sounding()) t.play(); }catch(e){} setTimeout(() => { if(sounding()){ A.started = { at: Date.now(), ms: null, by: t.speaking() ? "device" : "master", afterPress: true }; R.setAttribute("data-listening", A.started.by); } }, 900); };
+    addEventListener("pointerdown", go, true); addEventListener("keydown", go, true);
+  }
+
+  async function layerNow(){
+    const l = ask.layer;
+    const b = await until(() => document.querySelector((R.hasAttribute("data-phone") ? ".phlayers" : ".band") + ' .layers button[data-layer="' + l + '"]') ||
+                                document.querySelector('.layers button[data-layer="' + l + '"]'), 8000);
+    if(!b){ say("layer", "no " + l + " button"); return; }
+    b.click();
+    const o = await until(() => { const x = window.Layers && Layers.overlay(); return x && x.data && x.data() && R.getAttribute("data-lylayer") === l ? x : null; }, 10000);
+    if(o && ask.by && o.by) o.by(ask.by);
+    R.setAttribute("data-asklayer", l + (ask.by ? ":" + ask.by : "")); say("layer", l + (ask.by ? " by " + ask.by : ""));
+  }
+
+  function findMark(slug, id){
+    let rec = null; try{ rec = Marginalia.read(slug); }catch(e){}
+    const all = rec ? [].concat(rec.highlights || [], rec.notes || []) : [];
+    for(const e of all) if(e && e.id === id && !e.deleted) return { from: e.from, to: e.to || e.from };
+    try{ const mine = JSON.parse(localStorage.getItem("frank.mine." + slug) || "[]") || [];
+      for(const m of mine) if(m && m.id === id && m.anchor && m.anchor.ids && m.anchor.ids.length) return { from: m.anchor.ids[0], to: m.anchor.ids[m.anchor.ids.length - 1] };
+    }catch(e){}
+    return null;
+  }
+  async function markNow(b){
+    const m = findMark(b.slug, ask.mark);
+    if(!m){ say("mark", "not in this book's record"); return; }
+    const L = await until(() => window.ReaderControl && ReaderControl.chapterIndexOf && ReaderControl.mapOf ? ReaderControl : null, 8000);
+    const idx = L ? L.chapterIndexOf(String(m.from).split(".")[0]) : -1;
+    if(!(idx >= 0)){ say("mark", "chapter not found"); return; }
+    try{ nav.ensureChapter(idx); }catch(e){}
+    try{ nav.goTo(idx, 0); }catch(e){}
+    const sec = () => document.querySelector('#readercol .chapter[data-ch="' + idx + '"]');
+    await until(() => { const s = sec(); return s && !s.classList.contains("stub") && s.querySelector("p"); }, 8000);
+    let map = null; try{ map = await L.mapOf(idx); }catch(e){}
+    const a = map && map.byWordId && map.byWordId.get(m.from), z = (map && map.byWordId && map.byWordId.get(m.to)) || a;
+    if(!a){ say("mark", "words not on the page"); return; }
+    try{ if(a.flat >= 0) nav.goTo(idx, a.flat); }catch(e){}
+    /* the words to a third of the way down whatever scrolls them (never scrollIntoView: inside band's frame it would
+       scroll the canvas too) */
+    /* a map is the DOM it was built over: a chapter the window re-wrote has new text nodes, so a word is found again
+       by its paragraph (the id's pNNNN) and the same character offsets -- marginalia.js's rebase, in one line */
+    const live = (hit, id) => { if(hit.node && hit.node.isConnected) return hit;
+      const parts = String(id).split("."), n = parts[1] && parts[1].charAt(0) === "p" ? parseInt(parts[1].slice(1), 10) - 1 : -1;
+      const sc = sec(), el = sc && n >= 0 ? sc.querySelectorAll("p.line, p.sp, p.dir")[n] : null, node = el && el.firstChild;
+      return node && node.nodeType === 3 ? { node: node, el: el, s: hit.s, e: hit.e } : hit; };
+    const range = () => { try{ const A0 = live(a, m.from), Z0 = live(z, m.to); const r = document.createRange(); r.setStart(A0.node, A0.s); r.setEnd(Z0.node, Z0.e); return r; }catch(e){ return null; } };
+    for(let i = 0, near = 0; i < 16 && near < 1; i++){
+      const r0 = range(), rs = r0 ? r0.getClientRects() : [];
+      if(!rs.length){ try{ nav.ensureChapter(idx); }catch(e){} await sl(300); continue; }
+      const off = rs[0].top - innerHeight * 0.33; if(Math.abs(off) < 40){ near++; break; }
+      const A1 = live(a, m.from); let sc = A1.el && A1.el.parentNode;
+      while(sc && sc.nodeType === 1 && !(sc.scrollHeight > sc.clientHeight + 4 && /(auto|scroll)/.test(getComputedStyle(sc).overflowY))) sc = sc.parentNode;
+      if(!sc || sc.nodeType !== 1) sc = document.scrollingElement || document.documentElement;
+      sc.scrollTop += off;
+      await sl(350);
+    }
+    let rects = [];
+    try{ rects = [...range().getClientRects()]; }catch(e){}
+    if(!rects.length){ say("mark", "no rectangles"); return; }
+    rects.forEach(function(c){
+      const f = document.createElement("div"); f.className = "askflash";
+      f.style.cssText = "position:fixed;left:" + (c.left - 3) + "px;top:" + (c.top - 2) + "px;width:" + (c.width + 6) + "px;height:" + (c.height + 4) +
+        "px;border-radius:4px;pointer-events:none;z-index:40;background:color-mix(in srgb, var(--accent, #c33) 30%, transparent);transition:opacity .9s ease .9s;opacity:1";
+      document.body.appendChild(f);
+      requestAnimationFrame(() => requestAnimationFrame(() => { f.style.opacity = "0"; }));
+      setTimeout(() => f.remove(), 2200);
+    });
+    A.marked = { ch: idx, top: Math.round(rects[0].top), rects: rects.length };
+    R.setAttribute("data-askmark", ask.mark); say("mark", A.marked);
+  }
+
+  (async function(){
+    const b = await until(() => { try{ return OPEN_BOOK; }catch(_){ return null; } }, 15000);
+    if(!b){ say("book", "none opened"); return; }
+    if(ask.voice){ try{ localStorage.setItem("frank.voice." + b.slug, ask.voice); }catch(e){} R.setAttribute("data-askvoice", ask.voice); say("voice", ask.voice); }
+    if(ask.mark) await markNow(b);
+    if(ask.layer) await layerNow();
+    if(ask.listen) await listenNow();
+  })();
+})(); }catch(e){ console.warn("[asks] not wired:", e); }
 
 /* THE STRIP ITSELF, built rather than written down. It used to be markup at
    the bottom of the page and it is gone from there (Osca, 6 Sep); the handlers

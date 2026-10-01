@@ -54,6 +54,11 @@
 <script src="host.js"></script>
 <script src="../reader/keys.js"></script>
 <script src="../prefs/prefs.js"></script>
+<!-- THE LIBRARY'S FIVE SEAMS (ZERO-TO-ONE Z1 Z3 Z5 Z6 Z7 Z17, 1 Oct): FrankAccount · FrankStuff · FrankGroups ·
+     FrankFirstRun · FrankLink. Every 1.0 screen in zero.js asks one of these and nothing else; a back end plugs in with
+     useSource(). Real defaults where this page already holds the data (the marks, a private shelf). -->
+<script src="../reader/account.js"></script><!-- the one FrankAccount, Settings ▸ Cloud's too (integration, 1 Oct) -->
+<script src="seams.js"></script>
 <!-- THE PHONE'S ONE FLAG (design/phone/, 6 Sep): `html[data-phone]`, set before
      the first paint, is what the phone-only rules in this page's sheet key
      on -- a door, a bar that is not there. The test is the one settings.js
@@ -109,6 +114,7 @@
      element, answering html[data-phone] (band.css; POLISH rule 13, "a phone
      bar that is a different module from the Mac's" is the fault named). -->
 <link rel="stylesheet" href="library.css">
+<link rel="stylesheet" href="zero.css">
 </head>
 <body>
 <!-- FIRST RUN, BEFORE THE LIBRARY (Osca, 6 Sep: "First run (both apps): Sign
@@ -210,6 +216,7 @@
   <div class="phhead-r">
     <button type="button" class="phact" id="phact" aria-label="Do something with the chosen books" aria-haspopup="menu" hidden><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="5" cy="10" r="1.3"/><circle cx="10" cy="10" r="1.3"/><circle cx="15" cy="10" r="1.3"/></svg></button>
     <button type="button" class="phsel" id="phsel" aria-pressed="false">Select</button>
+    <button type="button" class="phstuff" id="phstuff" aria-label="Your stuff from the books" aria-pressed="false"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 16h5"/><path d="M12.6 3.9l3.5 3.5-6.9 6.9-4.2.7.7-4.2z"/></svg></button>
     <button type="button" class="phsort" id="phsort" aria-label="Sort the shelf" aria-haspopup="menu" aria-expanded="false"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 6.5h12M6.5 10h7M9 13.5h2"/></svg></button>
   </div>
 </div>
@@ -657,7 +664,11 @@ async function refresh() {
       const res = await fetch("library.json");
       if (res.ok) fromFile = await res.json();
     } catch (e) { /* none written for this instance */ }
-    if (libraryBooks === null) libraryBooks = Array.isArray(fromFile) ? fromFile : [];
+    /* a static row is the shipped inventory, never a book this device holds: on a phone whose door has answered,
+       one that is not on the device (and not bundled in the app) is a ghost -- it cannot open, and pressing it sent
+       the iOS Stranger back to the shelf seven times (#191) */
+    if (libraryBooks === null) libraryBooks = (Array.isArray(fromFile) ? fromFile : []).map(b => Object.assign({}, b, { file: true }))
+      .filter(b => !(deviceListed && deviceIsShelf() && !b.bundled));
   }
   if (!st && window.TTSTVContext) TTSTVContext.observe({ studioLive: studioLive });
   paintContext();
@@ -2069,7 +2080,12 @@ function deviceShelfRow(b) {
 }
 function placeDeviceBooks() {
   const memo = coverFactsMemo();
-  const rows = deviceBooks.filter(b => b && b.slug && !b.broken).map(b => {
+  /* EVERY BOOK IN THE DEVICE'S BOOKS FOLDER IS ON THE SHELF (#191, 1 Oct). The Simulator held twelve books and the
+     Library drew one: a folder put there by hand -- or by an install cut short before its row was written -- has no
+     row, so book_list (the app's lib.rs) answers {slug, title: slug, broken: true}, and this filter dropped it; the
+     shelf then showed library.json's one stale row. A folder with no row is still that book's files on this phone,
+     so it is a tile, named by its slug until its cover facts (book.json) give it a title. */
+  const rows = deviceBooks.filter(b => b && b.slug && b.slug.charAt(0) !== ".").map(b => {
     const r = deviceShelfRow(b);
     // a row that does not say whether it has a cover (imported before
     // `has_cover`) and whose picture 404'd here once is not asked again
@@ -2083,7 +2099,10 @@ function placeDeviceBooks() {
   // books/index.json road is guarded by `libraryBooks === null`, and a `[]`
   // written here first would hide the person's whole folder (wave 9)
   if (!rows.length && libraryBooks === null) return 0;
-  libraryBooks = (libraryBooks || []).filter(b => !b.device && !mine.has(b.slug)).concat(rows);
+  /* ...and a row from library.json that the device does not hold is dropped once the device has answered on a phone
+     (a ghost: it opens nothing). A bundled book (SHELVES-1b, the app's own resources) stays. */
+  const phoneShelf = deviceIsShelf() && libraryContext().phone;
+  libraryBooks = (libraryBooks || []).filter(b => !b.device && !mine.has(b.slug) && !(phoneShelf && b.file && !b.bundled)).concat(rows);
   // the row's own two strings when import.js wrote them, else what this page
   // worked out once before (THE BOOK'S OWN WORDS): no fetch, and no second
   // paint to put them on the cover
@@ -2208,6 +2227,7 @@ async function runImport(file) {
   };
   await refreshDevice();
   renderShelf();
+  if (good.length && window.FrankZero) FrankZero.kept("add", good.length === 1 ? "“" + good[0].title + "”" : "The books you added");
   if (good.length) {
     note(good.map(b => `${b.title} · ${b.chapters} ch · ${TTSTVBundle.fmtBytes(b.bytes)}`
       + (b.reimported ? " (already here, replaced)" : b.replaced.length ? " (replaced an older version)" : "")).join("   ") + " — tap it to read.");
@@ -2665,6 +2685,29 @@ function paintBookViews() {
   watchBookViews(tiles);
 }
 
+// "READ BY" IN THE BOOK VIEW'S ⓘ CARD (Z8, integration 1 Oct): the voices that have read this book, each a press that
+// plays it, and this device's own voice always there -- design/reader/voicepage.js's VoicePage.bookVoices(slug), over
+// window.FrankVoice (voicestore.js), the seam the Surface's voice cards already ask. Mounted under the chapters, above
+// READ, by the book view's fill(); the two files arrive beside surface.js when the Surface has not brought them yet.
+let readByTries = 0;
+function readBy(pane, slug) {
+  if (!pane || !slug) return;
+  pane.__readBy = slug;                         /* the newest book asked for wins a retry still in flight */
+  if (pane.querySelector(".tile-readby")) return;
+  if (!window.VoicePage || !window.FrankVoice) {
+    if (!document.querySelector("script[data-voiceseam]")) {
+      const css = document.createElement("link"); css.rel = "stylesheet"; css.href = "../reader/voicepage.css"; css.setAttribute("data-voiceseam", ""); document.head.appendChild(css);
+      ["voicestore.js", "voicepage.js"].forEach(f => { const x = document.createElement("script"); x.src = "../reader/" + f; x.async = false; x.setAttribute("data-voiceseam", ""); document.head.appendChild(x); });
+    }
+    if (readByTries++ < 40) setTimeout(() => { if (pane.isConnected && pane.__readBy === slug) readBy(pane, slug); }, 250);
+    return;
+  }
+  const slot = document.createElement("span"); slot.className = "tile-slot tile-readby";
+  try { slot.appendChild(VoicePage.bookVoices(slug)); } catch (e) { console.warn("[read by]", e); return; }
+  const read = pane.querySelector(".tile-read");
+  if (read) pane.insertBefore(slot, read); else pane.appendChild(slot);
+}
+
 let bookViewWatch = null, bookViewWatched = [];
 function wantBookView(tile) {
   const b = bookViewEntries.get(tile.dataset.slug);
@@ -2919,8 +2962,11 @@ function sortbarHTML(entries) {
 /* THE ORDERS AS A MENU. The same rows the tile menu draws, one act per order,
    the current one marked; `menuAct` sees the "order:" prefix and sets it. */
 function orderMenuItems() {
+  const z = window.FrankZero && FrankZero.orderItems();
+  if (z) return z;
   const now = shelfOrder();
-  return shelfOrderKeys().map(k => ({ id: "order:" + k, label: SHELF_ORDERS[k].label, checked: k === now }));
+  return shelfOrderKeys().map(k => ({ id: "order:" + k, label: SHELF_ORDERS[k].label, checked: k === now }))
+    .concat(window.FrankZero ? FrankZero.orderExtra() : []);
 }
 function openOrderMenu(btn) {
   const r = btn.getBoundingClientRect();
@@ -3147,6 +3193,7 @@ function shelfFromDrop(dragged, target) {
   const id = "s-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 6);
   libPatch(d => { d.shelves.push({ id, name, books: [dragged, target], collapsed: false, order: d.shelves.length, made: Date.now(), about: {} }); });
   renderShelf();
+  if (window.FrankZero) FrankZero.kept("shelf", "Your new shelf");   /* Z1: it happened; now, on the web, the ask */
   return id;
 }
 /* ...and a book dropped on a shelf: added (once). */
@@ -3267,6 +3314,7 @@ function paintShelfPage() {
     const html = shelfCompanionHTML(s, shelfBooks(s, shelfEntries()));
     if (comp._drawn !== html) { comp.innerHTML = html; comp._drawn = html; }
   }
+  if (window.FrankZero) FrankZero.paintShelfPage();   /* Z7: shared / joined, the owner's layer, a book's outputs opened */
 }
 function openShelfPage(id) {
   if (!library.shelves.some(s => s.id === id)) return false;
@@ -3294,6 +3342,8 @@ function closeShelfPage() {
 
 function renderShelf() {
   const el = document.getElementById("shelf");
+  /* THE LIBRARY'S SECOND DOOR (Z5): while it is open the page under the head is your stuff from the books */
+  if (window.FrankZero && FrankZero.drawInto(el)) return;
   noteFirstSeen(libraryBooks);      // before the entries: a new slug is dated once
   openNow = new Set(openBookSlugs());   // before any tile: the ✕ is in the markup
   const entries = shelfEntries();
@@ -4082,7 +4132,10 @@ var MARG_ROUTE = "/marginalia/";
 // Osca's four, in his order. The list is here rather than in a stylesheet
 // because it is the record's vocabulary: a colour that is not one of these
 // is not stored (margNormalise drops to the first), and the CSS is keyed off
-// it rather than the other way round.
+// it rather than the other way round. AND ANY COLOUR THE PERSON ADDS (Z4,
+// Osca 30 Sep: "any number, user-added"): an added colour is stored as its
+// own "#rrggbb", so a mark paints on every device whatever that device's
+// palette holds; names and order are design/reader/colours.js's.
 var MARG_COLOURS = ["green", "yellow", "red", "pink"];
 var MARG_TOMBSTONE_MS = 30 * 24 * 60 * 60 * 1000;
 
@@ -4109,7 +4162,9 @@ function margId(kind, now, rand) {
 }
 
 function margColour(c) {
-  return MARG_COLOURS.indexOf(c) >= 0 ? c : MARG_COLOURS[0];
+  if (MARG_COLOURS.indexOf(c) >= 0) return c;
+  if (typeof c === "string" && /^#[0-9a-f]{6}$/i.test(c)) return c.toLowerCase();
+  return MARG_COLOURS[0];
 }
 
 // Everything off disk, off another device or out of another writer comes
@@ -4151,6 +4206,10 @@ function margNormaliseEntry(e, kind) {
   out.to = (typeof e.to === "string" && e.to) ? e.to : e.from;
   if (kind === "notes") out.text = typeof e.text === "string" ? e.text : "";
   else out.colour = margColour(e.colour);
+  // A CARD'S MARK (Z6, Osca 30 Sep: "it's just a sort"): again / later / done, and when -- kept on the record so the
+  // Library's "your stuff" reads it here (design/library/seams.js keeps its frank.review.<slug> fallback).
+  if (e.review && typeof e.review === "object" && /^(again|later|done)$/.test(e.review.state))
+    out.review = { state: e.review.state, at: Number(e.review.at) || 0 };
   return out;
 }
 
@@ -5141,13 +5200,14 @@ function shelfActionItems(id) {
   const s = library.shelves.find(x => x.id === id);
   if (!s) return [];
   const i = library.shelves.indexOf(s);
-  return [
+  const items = [
     { id: "sh:rename", label: "Rename…" },
     i > 0 ? { id: "sh:up", label: "Move up" } : { id: "sh:up", label: "Move up", disabled: "already the first shelf" },
     i < library.shelves.length - 1 ? { id: "sh:down", label: "Move down" } : { id: "sh:down", label: "Move down", disabled: "already the last shelf" },
     { id: "sep" },
     { id: "sh:delete", label: "Delete shelf", danger: true },
   ];
+  return window.FrankZero ? FrankZero.shelfItems(id, items) : items;   /* Z7: Add books… · Share · Leave */
 }
 
 // ------------------------------------------------------- opening, in words
@@ -5266,6 +5326,7 @@ function menuAct(act) {
   hideMenu();
   // the order menu (LIBRARY-DESIGN): one act per order, no book behind it
   if (act && act.indexOf("order:") === 0) { setShelfOrder(act.slice(6)); return true; }
+  if (act && act.charAt(0) === "z" && window.FrankZero) { const r = FrankZero.act(act, t && t.slug); if (r !== null) return r; }
   if (!t) return null;
   const slug = t.slug;
   const book = slug ? (libraryBooks || []).find(b => b.slug === slug) : null;
@@ -5338,6 +5399,7 @@ function menuAct(act) {
     case "unmerge": return mergeDelete(slug);
     case "shelve": return showMenu(at.x, at.y, "pick", { slug }, shelfPickerItems());
     case "newshelf": {
+      if (window.FrankZero) return FrankZero.newShelf(slug ? ((SEL.length && SEL.indexOf(slug) >= 0) ? SEL : [slug]) : []);
       const name = ask("Name the shelf — Latin, Poems, Philosophy…", "");
       const id = shelfCreate(name);
       if (id && slug) shelfAdd(id, (SEL.length && SEL.indexOf(slug) >= 0) ? SEL : [slug]);
@@ -5363,6 +5425,7 @@ function menuAct(act) {
 function shelfAct(what, id) {
   const s = library.shelves.find(x => x.id === id);
   if (!s) return null;
+  if (window.FrankZero) { const r = FrankZero.shelfAct(what, id); if (r !== null) return r; }
   const i = library.shelves.indexOf(s);
   switch (what) {
     case "rename": return shelfRename(id, ask("Rename the shelf", s.name));
@@ -6903,6 +6966,7 @@ window.__LIBRARY_DEBUG__ = {
     VI.innerHTML = infoHTML(b);
     VI.querySelector(".bkv-title").textContent = (b && b.title) || slug;
     VI.querySelector(".bkv-by").textContent = (b && b.author) || "";
+    try { readBy(VI, slug); } catch (e) {}   /* Z8: "Read by", the voices that have read it */
     /* the neighbours: the shelf's own order, this one in the middle of the strip */
     var all = tiles(), i = all.indexOf(t), lo = Math.max(0, i - 12), hi = Math.min(all.length, i + 13);
     VT.innerHTML = all.slice(lo, hi).map(function (x) {
@@ -6912,7 +6976,7 @@ window.__LIBRARY_DEBUG__ = {
     var on = VT.querySelector('[aria-selected="true"]'); if (on) VT.scrollLeft = on.offsetLeft - (VT.clientWidth - on.offsetWidth) / 2;
     VS.scrollTop = 0;
     var slugs = b && b.merge ? b.merge.members.map(function (x) { return x.slug; }) : [slug];
-    try { Promise.all(slugs.map(loadBookRecord)).then(function (got) { if (viewing === slug && got.some(Boolean)) { var hh = infoHTML(entryFor(slug)); VI.innerHTML = hh; VI.querySelector(".bkv-title").textContent = (b && b.title) || slug; VI.querySelector(".bkv-by").textContent = (b && b.author) || ""; } }); } catch (e) {}
+    try { Promise.all(slugs.map(loadBookRecord)).then(function (got) { if (viewing === slug && got.some(Boolean)) { var hh = infoHTML(entryFor(slug)); VI.innerHTML = hh; VI.querySelector(".bkv-title").textContent = (b && b.title) || slug; VI.querySelector(".bkv-by").textContent = (b && b.author) || ""; try { readBy(VI, slug); } catch (e) {} } }); } catch (e) {}
   }
   /* the cover grows out of its place and shrinks back into it: one transform from the tile's rectangle */
   function fly(fromTile, open) {
@@ -7971,6 +8035,10 @@ window.__LIBRARY_DEBUG__ = {
     get lifting() { return !!(st && st.lifted); }, get target() { return st && st.target; } };
 })();
 </script>
+<!-- FRANK 1.0, THE LIBRARY'S PART (ZERO-TO-ONE Z1 Z3 Z5 Z6 Z7 Z17, ASKS #197): the screens over the seams in
+     seams.js. Last, because it draws over the page the code above has built. -->
+<script src="zero.js"></script>
+<script>FrankZero.boot();</script>
 <script data-design-baked>/* design/editor/apply.js -- inlined verbatim by design/export.py:
    the one definition of what a .design.json means */
 /* design/editor/apply.js -- THE HAND THAT APPLIES A DESIGN FILE TO A PAGE.

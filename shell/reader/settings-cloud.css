@@ -1,0 +1,91 @@
+/* SETTINGS ▸ CLOUD (Z2, settings-cloud.js says what and why). Drawn in Settings' own parts -- the shelf's capitals over a
+   card, a name in the reading face, a grey line under it, the form's own buttons -- so it is the same page as the
+   other tabs. Colours are the paper's (tokens.css through settings-look.css): both themes, warmth and contrast. */
+
+/* the Mac's Cloud panel (settings.js's Kaggle / Modal / Frank's card) steps aside for ours */
+html body .set-panel.zc-on > :not(.zc){ display: none !important; }
+
+/* the line a person reads first: the trial, the purchase -- a name set larger, its sentence under it, Buy beside */
+html body .ttstv-settings .zc .zc-line .set-name{ font-size: calc(19px * var(--read-scale, 1)); line-height: 1.3; }
+html body .ttstv-settings .zc .set-l small{ white-space: normal; overflow-wrap: break-word; display: block; margin-top: 3px; }
+html body .ttstv-settings .zc .set-row{ align-items: center; }
+html body .ttstv-settings .zc .set-row > .set-l{ flex: 1 1 auto; min-width: 0; }
+html body .ttstv-settings .zc .set-row > .set-c{ flex: 0 0 auto; display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+html body .ttstv-settings .zc .set-row .set-name:empty, html body .ttstv-settings .zc .zc-acts > .set-l{ display: none; }
+html body .ttstv-settings .zc .zc-acts > .set-c{ flex: 1 1 auto; justify-content: flex-start; }
+html body .ttstv-settings .zc .kag-btn{ white-space: nowrap; }
+html body .ttstv-settings .zc .zc-acct small{ font-variant: small-caps; letter-spacing: .03em; }
+
+/* this month's hours: a hairline rail, ink to the hours used; full is the accent (the limit refused the next hour) */
+.zc .zc-bar{ display: block; height: 6px; margin: 9px 0 6px; border-radius: 3px; overflow: hidden;
+  background: color-mix(in srgb, var(--fg, #1d1d1b) 10%, transparent); }
+.zc .zc-bar b{ display: block; height: 100%; border-radius: inherit; background: var(--fg, #1d1d1b); }
+.zc [data-zc-cloud="usedup"] .zc-bar b{ background: var(--accent, #832f2b); }
+.zc .zc-sub{ display: block; opacity: .8; }
+
+/* making it: three steps, the one you are on in ink, the done one ticked */
+.zc .zc-steps{ list-style: none; margin: 0; padding: 4px 16px 6px; counter-reset: zc; }
+.zc .zc-steps li{ counter-increment: zc; position: relative; padding: 8px 0 8px 34px; opacity: .55;
+  font: 400 var(--s-small, 12px) / 1.35 var(--ui-font, -apple-system, system-ui, sans-serif); color: var(--fg); }
+.zc .zc-steps li::before{ content: counter(zc); position: absolute; left: 0; top: 7px; width: 22px; height: 22px; border-radius: 50%;
+  display: grid; place-items: center; font: 600 11px/1 var(--ui-font, system-ui); border: 1px solid color-mix(in srgb, var(--fg) 30%, transparent); }
+.zc .zc-steps li.now, .zc .zc-steps li.done{ opacity: 1; }
+.zc .zc-steps li.now::before{ border-color: var(--fg); }
+.zc .zc-steps li.done::before{ content: "✓"; background: var(--fg); color: var(--bg); border-color: var(--fg); }
+.zc .zc-steps b{ display: block; font: 400 calc(15px * var(--read-scale, 1)) / 1.3 var(--read-family, var(--serif, Georgia, serif)); }
+.zc .zc-steps span{ display: block; color: var(--fg-dim, inherit); }
+
+/* failure: Tell Frank's card, sitting in the card's place, full width */
+.zc .zc-fail .tf-fail{ width: 100%; box-shadow: none; border: 0; background: transparent; }
+
+/* THE BENCH (design only): the sample states, quiet, under a hairline, in the LABEL recipe */
+.zc-bench{ margin: 28px 0 8px; padding-top: 12px; border-top: 1px dashed color-mix(in srgb, var(--fg, #1d1d1b) 22%, transparent); }
+.zc-bench-k{ font: 600 10px/1.4 var(--ui-font, system-ui); letter-spacing: .13em; text-transform: uppercase; opacity: .55; margin-bottom: 6px; }
+.zc-bench-r{ display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 6px 0; }
+.zc-bench-r span{ font: 600 10px/1 var(--ui-font, system-ui); letter-spacing: .1em; text-transform: uppercase; opacity: .55; width: 64px; }
+.zc-bench button{ -webkit-appearance: none; appearance: none; cursor: pointer; padding: 5px 10px; border-radius: 999px; color: var(--fg);
+  border: 1px solid color-mix(in srgb, var(--fg, #1d1d1b) 16%, transparent); background: transparent; font: 500 12px/1 var(--ui-font, system-ui); }
+.zc-bench button[aria-pressed="true"]{ background: var(--fg); color: var(--bg); border-color: var(--fg); }
+
+/* THE HAND-OFF SHEET: the other party's page in a frame over Settings. Mac / web: in the middle, as Paddle's overlay
+   is; the phone: from the foot, as Apple's sheet and a web sheet are, over the band */
+.zc-sheet{ position: fixed; inset: 0; z-index: 9500; display: grid; place-items: center; padding: 24px; }
+.zc-scrim{ position: absolute; inset: 0; background: color-mix(in srgb, #000 32%, transparent); }
+.zc-frame{ position: relative; box-sizing: border-box; width: min(440px, 100%); padding: 10px 10px 16px; border-radius: 18px; color: var(--fg);
+  background: var(--bg, #fbfaf6); border: 1px solid color-mix(in srgb, var(--fg, #1d1d1b) 12%, transparent); box-shadow: 0 24px 64px rgba(0, 0, 0, .28); }
+.zc-addr{ display: flex; align-items: center; gap: 8px; height: 36px; padding: 0 6px 0 12px; border-radius: 18px;
+  background: color-mix(in srgb, var(--fg, #1d1d1b) 6%, transparent); font: 500 13px/1 var(--ui-font, system-ui); }
+.zc-addr > svg{ width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.3; opacity: .7; }
+.zc-addr > span{ flex: 1 1 auto; opacity: .8; }
+.zc-x{ -webkit-appearance: none; appearance: none; display: grid; place-items: center; width: 28px; height: 28px; padding: 0; border: 0; border-radius: 50%;
+  cursor: pointer; color: var(--fg); background: color-mix(in srgb, var(--fg, #1d1d1b) 8%, transparent); }
+.zc-x svg{ width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; }
+.zc-room{ display: grid; place-content: center; gap: 6px; text-align: center; min-height: 220px; margin: 10px 0 12px; padding: 16px; border-radius: 12px;
+  border: 1px dashed color-mix(in srgb, var(--fg, #1d1d1b) 22%, transparent); }
+.zc-room b{ font: 400 calc(18px * var(--read-scale, 1)) / 1.3 var(--read-family, var(--serif, Georgia, serif)); }
+.zc-room span{ font: 400 13px/1.4 var(--ui-font, system-ui); opacity: .7; }
+.zc-say{ margin: 0 6px; font: 400 calc(14px * var(--read-scale, 1)) / 1.45 var(--read-family, var(--serif, Georgia, serif)); color: var(--fg); }
+.zc-bench-in{ margin: 14px 6px 0; }
+.zc-confirm .zc-frame{ padding: 22px 22px 18px; }
+.zc-confirm h2{ margin: 0 0 8px; font: 600 calc(20px * var(--read-scale, 1)) / 1.25 var(--read-family, var(--serif, Georgia, serif)); }
+.zc-confirm .zc-say{ margin: 0; }
+.zc-two{ display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; }
+html[data-phone] .zc-sheet-ph{ place-items: end center; padding: 0; }
+html[data-phone] .zc-sheet-ph .zc-frame{ width: 100%; max-width: 560px; border-radius: 22px 22px 0 0; border-bottom: 0;
+  padding-bottom: calc(18px + var(--safe-bottom, env(safe-area-inset-bottom, 0px))); }
+html[data-phone] .zc-sheet-ph.zc-confirm .zc-two .kag-btn{ flex: 1 1 0; min-height: var(--ph-tap, 44px); }
+@media (orientation: landscape){
+  html[data-phone] .zc-sheet-ph .zc-room{ min-height: 120px; }
+  html[data-phone] .zc-sheet-ph .zc-frame{ max-height: calc(100vh - 12px); overflow-y: auto; }
+}
+/* the phone: a row's button goes under its words, the whole width, the thumb's size */
+html[data-phone] body .ttstv-settings .zc .set-row{ flex-wrap: wrap; }
+html[data-phone] body .ttstv-settings .zc .set-row > .set-c{ flex: 1 1 100%; justify-content: stretch; margin-top: 10px; }
+html[data-phone] body .ttstv-settings .zc .set-row > .set-c .kag-btn{ flex: 1 1 0; min-height: var(--ph-tap, 44px); }
+@media (orientation: landscape){
+  html[data-phone] body .ttstv-settings .zc .set-row{ flex-wrap: nowrap; }
+  html[data-phone] body .ttstv-settings .zc .set-row > .set-c{ flex: 0 0 auto; margin-top: 0; }
+  html[data-phone] body .ttstv-settings .zc .zc-acts > .set-c{ flex: 1 1 auto; }
+}
+.zc-x:focus:not(:focus-visible){ outline: none; }
+.zc .zc-fail .tf-k{ display: none; }

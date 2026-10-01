@@ -30,7 +30,8 @@
 // that is not the current SHELL_CACHE, so changing this string IS the eviction
 // -- and changing it changes sw.js's own bytes, which is the only thing that
 // makes a browser run `install` and `activate` at all.
-const SHELL_CACHE = "ttstv-shell-v64";   // 1 Oct: #195 -- the phone reader mounts the band (the plan's glass foot, ▶ in the pill), pause keeps the player, the spoken sentence is drawn on the phone (rects), FOLLOW lets a hand go at the next Play and keeps clear of the chrome; was v63: 1 Oct: #191/#193 -- contents tap goes, printed contents are doors, one word where you read, marks paint and reach Mine, search closes;
+const SHELL_CACHE = "ttstv-shell-v65";   // 1 Oct: #197 EXPORT -- Frank 1.0's finished front end (Z1-Z17): the shop window, What do you read?, your stuff, shelves, the creator's link, colours, words before, two translations, cast, voices, Settings > Cloud
+                                         // was v64: 1 Oct: #195 -- the phone reader mounts the band (the plan's glass foot, ▶ in the pill), pause keeps the player, the spoken sentence is drawn on the phone (rects), FOLLOW lets a hand go at the next Play and keeps clear of the chrome; was v63: 1 Oct: #191/#193 -- contents tap goes, printed contents are doors, one word where you read, marks paint and reach Mine, search closes;
                                          // 30 Sep, later: EXPORT (web) second pass -- chapter tops scroll, Play from the line, marks, web wording;
                                          // 30 Sep: EXPORT (web) -- band, layers, hints, Tell Frank, settings look;
                                          // 24 Sep: D2-D7 rebuild (v0.2.0) -- rename, apply-state,
@@ -180,6 +181,23 @@ const SHELL_FILES = [
   "./tellfrank.js",
   "./settings-look.css",     // SETTINGS WEARS THE SETTINGS: settings/settings.html links both
   "./settings-look.js",
+  // FRANK 1.0, THE FINISHED FRONT END (ASKS #197, ZERO-TO-ONE-FOR-DESIGN Z1-Z17; EXPORT 1 Oct):
+  "./account.js",            // the ONE window.FrankAccount: the Library, Settings > Cloud and the Surface ask it
+  "./settings-cloud.css",    // Z2 Settings > Cloud redrawn (settings-look.js loads both, after account.js)
+  "./settings-cloud.js",
+  "./colours.css",           // Z4 highlight colours, any number (reader.html links both)
+  "./colours.js",
+  "./wordsbefore.css",       // Z10 the words before a chapter
+  "./wordsbefore.js",
+  "./cast.css",              // Z12 a play's cast
+  "./cast.js",
+  "./pair.css",              // Z11 two translations: two.html, the same-language pair's face
+  "./pair.js",
+  "./two.html",
+  "./voicestore.js",         // Z8 Z9 Z13 the voice seams (FrankVoice); surface.js and the Library load them beside it
+  "./voicepage.css",
+  "./voicepage.js",
+  "./voicepage.html",        // a voice and what it has read; a book's voices
   // ============================ THE BAR ===================================
   "../bar/askbar.js",        // the bar's answers; the field itself is the shell's (4 Sep)
   "../bar/askbar.css",       // ...and since 5 Sep they are `bar/`'s own, not the reader's:
@@ -204,6 +222,9 @@ const SHELL_FILES = [
                               // studio would have answered, built from this phone's own
                               // Kaggle courier rows, so ?studio= has a source on a phone
                               // with no Mac and no Studio.
+  "../library/seams.js",      // FRANK 1.0's Library (Z1 Z3 Z5 Z6 Z7 Z17): its five seams, the screens over them, their look
+  "../library/zero.js",
+  "../library/zero.css",
 
   "../library/oauth.html",    // WHERE GOOGLE HANDS THE CODE BACK, ON THE WEB HOST
                               // (W3 ACCOUNT, D5): the redirect URI the site's own OAuth client

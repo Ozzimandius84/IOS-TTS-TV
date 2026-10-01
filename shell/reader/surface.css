@@ -1021,3 +1021,11 @@ html[data-phone] .sf-field .sf-esc{
 html[data-phone] .sf-esc span{ display:none; }
 html[data-phone] .sf-esc svg{ display:block; width:16px; height:16px; fill:none; stroke:currentColor; stroke-width:1.25; stroke-linecap:round; }
 /* the band steps aside while the sheet is up: band.css (html[data-phone][data-sheet] .band) */
+
+/* A RECORDING'S ROW ON THE PHONE (Z9 · Z13, DESIGN #197, 1 Oct): its three verbs took the whole width and the title
+   stood one letter wide ("W / 18 / PARTS / 12 / H"). On the phone the verbs go under the title, the row's full width. */
+html[data-phone] .sf-row.sf-hit{ flex-wrap:wrap; }
+html[data-phone] .sf-row.sf-hit .body{ flex:1 1 calc(100% - 40px); }
+html[data-phone] .sf-row.sf-hit .end{ flex:1 1 100%; flex-wrap:wrap; }
+/* the voice cards in the pane: Share this voice under the Voice row (voicepage.css draws the block) */
+.sf-share{ display:block; margin-top:6px; }

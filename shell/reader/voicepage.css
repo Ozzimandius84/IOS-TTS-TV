@@ -1,0 +1,186 @@
+/* design/reader/voicepage.css -- the voice page, a book's voices, and the Surface's voice and LibriVox cards
+   (ZERO-TO-ONE-FOR-DESIGN Z8 · Z9 · Z13; DESIGN #197, 1 Oct 2026). The Photos rules: the content is the page (covers
+   edge to edge on a hairline seam, no card around a thing); chrome floats over it as glass -- ‹ · the name · ⋯ at the
+   top, the actions in one glass row at the foot -- the same 40 px circles and 52 px capsule as the book view
+   (library.css .bkv-*), so a voice opened and a book opened are one kind of thing. Colours are tokens.css's only. */
+.vp, .vp-card, .vp-share, .vp-byvoices {
+  --vp-fg: var(--chrome-fg); --vp-bg: var(--chrome-bg); --vp-dim: var(--chrome-fg-dim); --vp-rule: var(--chrome-border);
+  --vp-accent: var(--chrome-accent); --vp-ui: var(--chrome-ui-font); --vp-serif: var(--serif);
+  --vp-seam: 2px; --vp-cols: 6; --vp-col: 720px;
+  --vp-top: calc(var(--safe-top, env(safe-area-inset-top, 0px)) + 14px);
+  --vp-bottom: calc(var(--safe-bottom, env(safe-area-inset-bottom, 0px)) + 14px);
+  --vp-side: 0px;
+  color: var(--vp-fg);
+}
+html[data-web]:not([data-embed]) .vp { top: 28px; }                           /* standalone on the web: under the band (28) */
+/* the phone: clear of the island (the canvas hands --safe-top 54; a real iPhone's env() ~59; a desktop browser 0, so 44
+   is the floor) and over the band's foot; on its side the safe areas are left and right */
+html[data-phone] .vp { --vp-cols: 3; --vp-top: calc(max(var(--safe-top, 0px), env(safe-area-inset-top, 0px), 44px) + 14px); --vp-bottom: calc(max(var(--safe-bottom, 0px), env(safe-area-inset-bottom, 0px)) + 62px); }
+html[data-phone][data-land] .vp { --vp-cols: 6; --vp-top: 12px; --vp-bottom: calc(max(var(--safe-bottom, 0px), env(safe-area-inset-bottom, 0px)) + 58px); --vp-side: max(var(--safe-left, 0px), env(safe-area-inset-left, 0px), 59px); }
+html, body { margin: 0; background: var(--chrome-bg); }
+body { min-height: 100vh; }
+.vp { position: fixed; inset: 0; background: var(--vp-bg); font-family: var(--vp-ui); -webkit-font-smoothing: antialiased; }
+.vp *, .vp-card *, .vp-share * { box-sizing: border-box; }
+.vp-g svg, .vp svg, .vp-card svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.vp svg.f, .vp-card svg.f { fill: currentColor; stroke: none; }
+
+/* glass: the book view's (library.css .bkv-glass) */
+.vp-glass { border: 1px solid color-mix(in srgb, var(--vp-fg) 12%, transparent); background: color-mix(in srgb, var(--vp-bg) 64%, transparent);
+  -webkit-backdrop-filter: saturate(1.8) blur(18px); backdrop-filter: saturate(1.8) blur(18px); box-shadow: 0 4px 18px rgba(0,0,0,.12); color: var(--vp-fg); }
+
+/* ---------------------------------------------------------------- the top: ‹ · the name · ⋯ */
+.vp-top { position: absolute; z-index: 5; left: 0; right: 0; top: var(--vp-top); display: flex; align-items: center; justify-content: space-between;
+  gap: 10px; padding: 0 calc(12px + var(--vp-side)); pointer-events: none; }
+html:not([data-phone]) .vp-top { max-width: 760px; margin: 0 auto; }
+.vp-top > * { pointer-events: auto; }
+.vp-c { -webkit-appearance: none; appearance: none; width: 40px; height: 40px; border-radius: 50%; padding: 0; margin: 0; display: grid; place-items: center; cursor: pointer; flex: none; }
+.vp-c svg { width: 18px; height: 18px; }
+.vp-cap { min-width: 0; max-width: calc(100% - 120px); padding: 6px 16px; border-radius: 20px; text-align: center; display: flex; flex-direction: column; gap: 2px; }
+.vp-cap b { font: 600 14px/1.2 var(--vp-serif); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.vp[data-headseen] .vp-cap b { display: none; }   /* the big name is on screen: the capsule says only the kind */
+.vp-cap i { font: 400 9.5px/1.3 var(--vp-ui); font-style: normal; letter-spacing: .13em; text-transform: uppercase; color: var(--vp-dim); }
+
+/* ---------------------------------------------------------------- the page scrolls under the glass */
+.vp-scroll { position: absolute; inset: 0; overflow-y: auto; -webkit-overflow-scrolling: touch;
+  padding: calc(var(--vp-top) + 56px) var(--vp-side) calc(var(--vp-bottom) + 76px); scrollbar-width: none; }
+.vp-scroll::-webkit-scrollbar { display: none; }
+.vp-head { max-width: var(--vp-col); margin: 0 auto; padding: 12px 20px 22px; text-align: center; }
+.vp-name { margin: 0; font: 400 34px/1.15 var(--vp-serif); letter-spacing: -.005em; }
+html[data-phone] .vp-name { font-size: 30px; }
+.vp-whose { margin: 6px 0 0; font: 400 15px/1.4 var(--vp-serif); color: var(--vp-dim); }
+.vp-hear { -webkit-appearance: none; appearance: none; margin-top: 14px; height: 36px; padding: 0 16px 0 12px; border-radius: 18px; cursor: pointer;
+  display: inline-flex; align-items: center; gap: 8px; border: 1px solid color-mix(in srgb, var(--vp-fg) 14%, transparent); background: transparent; color: var(--vp-fg);
+  font: 600 11px/1 var(--vp-ui); letter-spacing: .13em; text-transform: uppercase; }
+.vp-hear[data-playing] { color: var(--vp-accent); border-color: var(--vp-accent); }
+.vp-bhead { display: flex; align-items: center; gap: 18px; text-align: left; }
+.vp-bht { min-width: 0; }
+
+/* ---------------------------------------------------------------- the readings, as Photos draws them: covers, edge to edge */
+.vp-grid { display: grid; grid-template-columns: repeat(var(--vp-cols), minmax(0, 1fr)); gap: var(--vp-seam); }
+html:not([data-phone]) .vp-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); max-width: 760px; margin: 0 auto; }   /* a window: the width of a reading page, like the book view */
+.vp-tile { -webkit-appearance: none; appearance: none; position: relative; display: block; padding: 0; margin: 0; border: 0; background: none; cursor: pointer;
+  aspect-ratio: 2 / 3; overflow: hidden; color: inherit; }
+.vp-cov { position: relative; display: block; width: 100%; height: 100%; overflow: hidden;
+  background: color-mix(in srgb, var(--vp-fg) 6%, var(--vp-bg)); }
+.vp-cov img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.vp-covt { position: absolute; inset: 0; padding: 12% 10%; display: flex; flex-direction: column; justify-content: center; gap: 6%; text-align: center; }
+.vp-covt b { font: 400 clamp(11px, 1.3vw, 17px)/1.2 var(--vp-serif); }
+.vp-covt i { font: italic 400 clamp(9px, 1vw, 12px)/1.3 var(--vp-serif); color: var(--vp-dim); }
+.vp-cov.img .vp-covt { visibility: hidden; }
+.vp-cov.sm { width: 44px; height: 66px; flex: none; }
+.vp-cov.xs { width: 32px; height: 48px; flex: none; }
+.vp-cov.md { width: 72px; height: 108px; flex: none; }
+.vp-cov.sm .vp-covt b, .vp-cov.xs .vp-covt b, .vp-cov.md .vp-covt b { font-size: 7px; }
+.vp-cov.sm .vp-covt i, .vp-cov.xs .vp-covt i, .vp-cov.md .vp-covt i { display: none; }
+.vp-tp { position: absolute; left: 8px; bottom: 8px; width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; }
+.vp-tp svg { width: 13px; height: 13px; }
+.vp-tile[data-playing] .vp-tp, .vp-row[data-playing] .vp-tp, .vp-vrow[data-playing] .vp-vp { color: var(--vp-accent); }
+.vp-tile[data-playing]::after { content: ""; position: absolute; inset: 0; box-shadow: inset 0 0 0 2px var(--vp-accent); }
+
+/* the owner's rows: the cover small, how much plays, and the reading's own control */
+.vp-rows, .vp-vrows, .vp-web, .vp-share, .vp-none, .vp-sec { max-width: var(--vp-col); margin-left: auto; margin-right: auto; }
+.vp-rows, .vp-vrows { padding: 0 16px; }
+.vp-row, .vp-vrow { display: flex; align-items: center; gap: 14px; padding: 10px 0; border-top: 1px solid var(--vp-rule); min-height: 64px; }
+.vp-row:first-child, .vp-vrow:first-child { border-top: 0; }
+.vp-rp { -webkit-appearance: none; appearance: none; position: relative; padding: 0; border: 0; background: none; cursor: pointer; flex: none; color: inherit; }
+.vp-rp .vp-tp { left: 6px; bottom: 6px; width: 24px; height: 24px; }
+.vp-rp .vp-tp svg { width: 10px; height: 10px; }
+.vp-rt { display: flex; flex-direction: column; gap: 3px; min-width: 0; flex: 1 1 auto; color: inherit; text-decoration: none; }
+.vp-rt b { font: 400 16px/1.25 var(--vp-serif); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.vp-rt i { font: 400 12px/1.35 var(--vp-ui); font-style: normal; color: var(--vp-dim); }
+.vp-why { display: block; font: italic 400 13px/1.4 var(--vp-serif); color: var(--vp-dim); }
+.vp-listed { display: inline-flex; align-items: center; gap: 8px; flex: none; font: 600 10px/1 var(--vp-ui); letter-spacing: .12em; text-transform: uppercase; color: var(--vp-dim); }
+.vp-listed[data-blocked="rights"] b { font-weight: 600; }
+.vp-sw { -webkit-appearance: none; appearance: none; position: relative; width: 44px; height: 26px; border-radius: 13px; padding: 0; cursor: pointer; flex: none;
+  border: 0; background: color-mix(in srgb, var(--vp-fg) 16%, transparent); transition: background .18s; }
+.vp-sw i { position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%; background: var(--vp-bg); box-shadow: 0 1px 3px rgba(0,0,0,.25); transition: transform .18s; }
+.vp-sw[aria-checked="true"] { background: var(--vp-accent); }
+.vp-sw[aria-checked="true"] i { transform: translateX(18px); }
+.vp-sw:disabled { opacity: .38; cursor: default; }
+.vp-vp { -webkit-appearance: none; appearance: none; width: 40px; height: 40px; border-radius: 50%; flex: none; display: grid; place-items: center; cursor: pointer;
+  border: 1px solid color-mix(in srgb, var(--vp-fg) 14%, transparent); background: transparent; color: var(--vp-fg); }
+.vp-vp svg { width: 13px; height: 13px; }
+.vp-device .vp-rt b { font-style: italic; }
+.vp-sec { margin-top: 8px; padding: 0 16px 6px; font: 600 10px/1 var(--vp-ui); letter-spacing: .13em; text-transform: uppercase; color: var(--vp-dim); }
+.vp-web { padding: 0 16px 16px; }
+.vp-own { flex: none; white-space: nowrap; }
+.vp-webrow { display: flex; align-items: center; gap: 14px; padding: 12px 0; border-bottom: 1px solid var(--vp-rule); }
+
+/* ---------------------------------------------------------------- words: a heading, a line, a quiet say */
+.vp-h { margin: 0 0 4px; font: 400 19px/1.3 var(--vp-serif); display: flex; align-items: center; gap: 6px; }
+.vp-h .vp-g svg { width: 15px; height: 15px; stroke: var(--vp-accent); stroke-width: 2; }
+.vp-p { margin: 4px 0 0; font: 400 14px/1.45 var(--vp-serif); color: var(--vp-dim); }
+.vp-say { margin: 0; font: 400 16px/1.4 var(--vp-serif); }
+.vp-where { margin: 10px 0 0; display: flex; gap: 8px; align-items: flex-start; font: 400 13px/1.45 var(--vp-ui); }
+.vp-where .vp-g { flex: none; padding-top: 1px; color: var(--vp-dim); }
+.vp-keep { margin: 12px 0 0; font: 400 14px/1.4 var(--vp-serif); }
+.vp-link { -webkit-appearance: none; appearance: none; border: 0; background: none; padding: 0; color: var(--vp-accent); font: inherit; text-decoration: underline; cursor: pointer; }
+.vp-consent { margin: 10px 0 12px; padding: 0 0 0 12px; border-left: 2px solid var(--vp-rule); font: italic 400 13px/1.45 var(--vp-serif); color: var(--vp-dim); }
+.vp-none { padding: 18px 20px; text-align: center; }
+
+/* ---------------------------------------------------------------- the share block (Z9) */
+.vp-share { padding: 16px 20px 18px; margin-bottom: 18px; border-top: 1px solid var(--vp-rule); border-bottom: 1px solid var(--vp-rule); }
+.vp-card .vp-share { margin: 14px 0 0; padding: 14px 0 0; border-bottom: 0; }
+.vp-field { display: flex; flex-direction: column; gap: 6px; margin: 14px 0 0; font: 600 10px/1 var(--vp-ui); letter-spacing: .12em; text-transform: uppercase; color: var(--vp-dim); }
+.vp-field input { height: 40px; border-radius: 10px; padding: 0 12px; font: 400 16px/1 var(--vp-serif); letter-spacing: 0; text-transform: none;
+  color: var(--vp-fg); background: color-mix(in srgb, var(--vp-fg) 5%, var(--vp-bg)); border: 1px solid var(--vp-rule); }
+.vp-tick { display: flex; gap: 10px; align-items: flex-start; margin: 14px 0 0; font: 400 14px/1.45 var(--vp-serif); cursor: pointer; }
+.vp-tick input { width: 18px; height: 18px; margin: 2px 0 0; accent-color: var(--vp-accent); flex: none; }
+
+/* ---------------------------------------------------------------- buttons: the book view's capsule, and a quiet one */
+.vp-acts { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 14px; align-items: center; }
+.vp-btn { -webkit-appearance: none; appearance: none; height: 40px; padding: 0 18px; border-radius: 20px; cursor: pointer; border: 1px solid transparent;
+  font: 600 11px/1 var(--vp-ui); letter-spacing: .13em; text-transform: uppercase;
+  background: color-mix(in srgb, var(--vp-fg) 90%, transparent); color: var(--vp-bg); }
+.vp-btn.ghost { background: transparent; color: var(--vp-fg); border-color: color-mix(in srgb, var(--vp-fg) 18%, transparent); }
+.vp-btn:disabled { opacity: .4; cursor: default; }
+.vp-x { -webkit-appearance: none; appearance: none; border: 0; background: none; margin-top: 12px; padding: 6px 0; cursor: pointer; color: var(--vp-dim);
+  font: 600 11px/1 var(--vp-ui); letter-spacing: .13em; text-transform: uppercase; }
+
+/* ---------------------------------------------------------------- the foot: the player and Use this voice */
+.vp-foot { position: absolute; z-index: 5; left: 0; right: 0; bottom: var(--vp-bottom); display: flex; justify-content: center; align-items: center; gap: 10px;
+  padding: 0 calc(12px + var(--vp-side)); pointer-events: none; }
+.vp-foot > * { pointer-events: auto; }
+.vp-use { -webkit-appearance: none; appearance: none; height: 52px; padding: 0 22px; border-radius: 26px; cursor: pointer; flex: none;
+  font: 600 12px/1 var(--vp-ui); letter-spacing: .13em; text-transform: uppercase; }
+.vp-player { height: 52px; border-radius: 26px; padding: 0 18px 0 6px; display: flex; align-items: center; gap: 10px; min-width: 0; max-width: 420px; flex: 0 1 auto; }
+.vp-player[hidden] { display: none; }
+.vp-pp { -webkit-appearance: none; appearance: none; width: 40px; height: 40px; border-radius: 50%; border: 0; display: grid; place-items: center; cursor: pointer; flex: none;
+  background: color-mix(in srgb, var(--vp-fg) 90%, transparent); color: var(--vp-bg); }
+.vp-pp svg { width: 13px; height: 13px; }
+.vp-pt { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.vp-pt b { font: 400 14px/1.2 var(--vp-serif); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.vp-pt i { font: 400 11px/1.2 var(--vp-ui); font-style: normal; color: var(--vp-dim); font-variant-numeric: tabular-nums; }
+html[data-phone]:not([data-land]) .vp-foot { flex-direction: column-reverse; align-items: stretch; }
+html[data-phone]:not([data-land]) .vp-player { max-width: none; }
+html[data-phone]:not([data-land]) .vp-use { align-self: center; }
+
+/* ---------------------------------------------------------------- over: a sheet, a failure */
+.vp-over:empty { display: none; }
+.vp-over { position: absolute; inset: 0; z-index: 9; display: grid; place-items: center; padding: 24px calc(16px + var(--vp-side));
+  background: color-mix(in srgb, var(--vp-bg) 40%, transparent); }
+html[data-phone]:not([data-land]) .vp-over { align-items: end; padding-bottom: var(--vp-bottom); }
+.vp-sheet { width: min(480px, 100%); max-height: calc(100% - 24px); overflow: auto; border-radius: 18px; padding: 20px 20px 16px; }
+.vp-pick { display: flex; flex-direction: column; margin-top: 10px; }
+.vp-pickrow { -webkit-appearance: none; appearance: none; display: flex; align-items: center; gap: 12px; padding: 8px 6px; border: 0; border-top: 1px solid var(--vp-rule);
+  background: none; text-align: left; cursor: pointer; color: inherit; border-radius: 0; }
+.vp-pickrow:first-child { border-top: 0; }
+.vp-pickrow[aria-checked="true"] { background: color-mix(in srgb, var(--vp-accent) 12%, transparent); }
+.vp-inline .vp-h { display: none; }
+
+/* ---------------------------------------------------------------- the Surface's cards (Z9 use, Z13 attach): in its pane */
+.vp-card { margin: 12px 0 0; padding: 0; font-family: var(--vp-ui); }
+.vp-ah { display: flex; gap: 12px; align-items: center; margin-bottom: 12px; }
+.vp-ah .vp-rt b { white-space: normal; }
+.vp-prog { height: 4px; border-radius: 2px; margin-top: 12px; background: color-mix(in srgb, var(--vp-fg) 12%, transparent); overflow: hidden; }
+.vp-prog i { display: block; height: 100%; background: var(--vp-accent); border-radius: 2px; }
+.vp-prog.busy i { width: 30%; animation: vp-busy 1.6s ease-in-out infinite; }
+@keyframes vp-busy { 0% { transform: translateX(-100%); } 100% { transform: translateX(340%); } }
+.vp-card .tf-fail { width: 100%; box-shadow: none; }
+.vp-card .vp-player { position: static; margin-top: 12px; }
+@media (prefers-reduced-motion: reduce) { .vp-prog.busy i { animation: none; width: 100%; opacity: .5; } }
+/* on its side the phone is 393 tall: the head is a line, not a title page, so the first control clears the foot */
+html[data-phone][data-land] .vp-head { padding: 0 20px 10px; }
+html[data-phone][data-land] .vp-name { font-size: 24px; }
+html[data-phone][data-land] .vp-hear { margin-top: 8px; height: 32px; }
+html[data-phone][data-land] .vp-scroll { padding-top: calc(var(--vp-top) + 48px); }

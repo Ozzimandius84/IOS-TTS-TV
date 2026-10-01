@@ -1,0 +1,58 @@
+/* design/reader/colours.css -- the palette's dots and its one panel (Z4, colours.js). The four colours' own
+   rules stay where they were (marginalia.css, layers.css); an added colour's are written by Colours.css(). */
+.fc-dots{ display:inline-flex; flex-wrap:wrap; align-items:center; gap:calc(var(--gap, 8px) / 2); }
+.fc-dots.fc-hand{ gap:var(--gap, 8px); }
+/* "+": the same circle as a dot, drawn as an outline -- it is a door to the palette, not a colour */
+.fc-plus{ -webkit-appearance:none; appearance:none; margin:0; padding:0; cursor:pointer; display:inline-grid; place-items:center;
+  width:calc(var(--pad, 12px) * 2); height:calc(var(--pad, 12px) * 2); border-radius:50%; background:transparent; color:inherit;
+  border:var(--hair, 1px) dashed color-mix(in srgb, currentColor 45%, transparent); }
+.fc-plus.margdot{ width:var(--tap, 44px); height:var(--tap, 44px); min-width:var(--tap, 44px); }
+html[data-phone] .ly-selbar .fc-plus{ width:calc(var(--tap, 44px) - var(--pad, 12px)); height:calc(var(--tap, 44px) - var(--pad, 12px)); }
+.fc-plus svg{ width:14px; height:14px; fill:none; stroke:currentColor; stroke-width:1.5; stroke-linecap:round; }
+.fc-plus:focus-visible{ outline:0; box-shadow:0 0 0 2px var(--chrome-accent); }
+/* MANY COLOURS ON THE PHONE: the dots wrap onto a second line and the verbs keep theirs (the bar grows, the
+   page does not move) -- a row of eleven 44 px circles is 528 px, wider than any phone */
+html[data-phone] .marghand-row{ flex-wrap:wrap; row-gap:var(--gap, 8px); }
+html[data-phone] .marghand-row .fc-dots{ flex:1 1 100%; }
+html[data-phone] .ly-selbar{ flex-wrap:wrap; max-width:calc(100vw - 16px); box-sizing:border-box; }
+html[data-phone] .ly-selbar .fc-dots{ flex:1 1 100%; }
+
+.fc-scrim{ position:fixed; inset:0; z-index:70; background:transparent; }
+.fc-panel{ position:fixed; z-index:71; box-sizing:border-box; width:min(320px, calc(100vw - 16px)); max-height:min(560px, calc(100vh - 32px)); overflow:auto;
+  padding:var(--pad, 12px); border-radius:var(--r-ui, 10px); font:400 var(--ui-act, 15px)/1.35 var(--chrome-ui-font, var(--ui, system-ui));
+  color:var(--ly-ink, var(--ink)); background:var(--ly-glass, var(--ground)); border:var(--hair, 1px) solid var(--ly-line, color-mix(in srgb, currentColor 16%, transparent));
+  -webkit-backdrop-filter:saturate(1.4) blur(18px); backdrop-filter:saturate(1.4) blur(18px); box-shadow:0 6px 24px var(--shadow-bench, rgba(0,0,0,.18)); }
+.fc-panel[data-sheet]{ left:50%; transform:translateX(-50%); bottom:calc(var(--safe-bottom, env(safe-area-inset-bottom, 0px)) + 8px); width:min(420px, calc(100vw - 16px - var(--safe-left, 0px) - var(--safe-right, 0px))); max-height:min(70vh, calc(100vh - 24px)); }
+.fc-head{ display:flex; align-items:center; justify-content:space-between; margin-bottom:var(--gap, 8px); }
+.fc-head b{ font-weight:600; }
+.fc-done{ -webkit-appearance:none; appearance:none; border:0; background:transparent; color:var(--chrome-accent); font:inherit; font-weight:600; cursor:pointer; min-height:32px; padding:0 4px; }
+html[data-phone] .fc-done{ min-height:var(--tap, 44px); }
+.fc-list{ list-style:none; margin:0; padding:0; display:grid; gap:2px; }
+.fc-list li{ display:flex; align-items:center; gap:var(--gap, 8px); min-height:36px; }
+html[data-phone] .fc-list li{ min-height:var(--tap, 44px); }
+.fc-sw{ flex:none; display:inline-grid; place-items:center; width:22px; height:22px; border-radius:50%; padding:0; border:0; box-shadow:inset 0 0 0 1px color-mix(in srgb, currentColor 18%, transparent); }
+.fc-name{ flex:1; min-width:0; font:inherit; font-size:var(--ui-field, 16px); color:inherit; background:transparent; border:0; border-bottom:var(--hair, 1px) solid transparent; padding:4px 0; outline:0; }
+.fc-name::placeholder{ color:var(--ly-dim, var(--chrome-fg-dim)); }
+.fc-name:focus{ border-bottom-color:var(--chrome-accent); }
+.fc-keep{ width:28px; }
+.fc-del{ -webkit-appearance:none; appearance:none; border:0; background:transparent; color:var(--ly-dim, var(--chrome-fg-dim)); font:inherit; font-size:18px; width:28px; height:28px; border-radius:50%; cursor:pointer; }
+html[data-phone] .fc-del{ width:var(--tap, 44px); height:var(--tap, 44px); }
+.fc-add{ margin-top:var(--pad, 12px); padding-top:var(--gap, 8px); border-top:var(--hair, 1px) solid var(--ly-line, color-mix(in srgb, currentColor 14%, transparent)); }
+.fc-addsay{ display:block; color:var(--ly-dim, var(--chrome-fg-dim)); font-size:var(--ui-fine, 13px); margin-bottom:var(--gap, 8px); }
+.fc-offer{ display:flex; flex-wrap:wrap; gap:10px; }
+.fc-offer .fc-sw{ width:28px; height:28px; cursor:pointer; }
+html[data-phone] .fc-offer{ gap:8px; }
+html[data-phone] .fc-offer .fc-sw{ width:36px; height:36px; }
+.fc-any{ position:relative; background:transparent; box-shadow:inset 0 0 0 1px color-mix(in srgb, currentColor 40%, transparent); color:inherit; overflow:hidden; }
+.fc-any svg{ width:14px; height:14px; fill:none; stroke:currentColor; stroke-width:1.5; stroke-linecap:round; pointer-events:none; }
+.fc-any input{ position:absolute; inset:0; opacity:0; cursor:pointer; width:100%; height:100%; border:0; padding:0; }
+.fc-sw:focus-visible, .fc-any:focus-within{ outline:0; box-shadow:0 0 0 2px var(--chrome-accent); }
+/* a named colour, where a mark is listed (the Mine layer's card) */
+.ly-cname{ font-weight:400; color:var(--ly-dim, var(--chrome-fg-dim)); }
+/* the phone on its side: the colours you have on the left, the ones to add on the right -- nothing below the fold */
+@media (orientation: landscape){
+  html[data-phone] .fc-panel[data-sheet]{ width:min(660px, calc(100vw - 16px - var(--safe-left, 0px) - var(--safe-right, 0px))); display:grid; grid-template-columns:1fr 1fr; column-gap:20px; align-items:start; max-height:calc(100vh - 16px); }
+  html[data-phone] .fc-panel[data-sheet] .fc-head{ grid-column:1 / -1; }
+  html[data-phone] .fc-panel[data-sheet] .fc-add{ margin-top:0; padding-top:0; border-top:0; }
+  html[data-phone] .fc-panel[data-sheet] .fc-list li{ min-height:40px; }
+}
