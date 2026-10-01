@@ -745,6 +745,20 @@ function mount(o){
      a unit whose paragraphs reach no indexed block) opens its chapter, which
      is what every row did yesterday -- never a 0 that would look like an
      answer and land on the wrong sonnet. */
+  /* ONE TAP IS GO, ON THE PHONE (#191, the iOS Stranger 1 Oct: "tapping a title in the contents only
+     highlighted it and changed the header -- to get there I had to work out that swiping left goes to the
+     selected chapter"). On the Mac and the web the panes stand BESIDE the reader, so a leaf already shows its
+     text the moment it is chosen and the directory stays open on purpose. On the phone the pane covers the
+     page: the reader moved under it and nobody could see that it had. So a leaf (or a flat chapter row)
+     chosen on the phone also carries the axis back to the page -- the same travel a swipe makes, by the
+     pane spring -- and the held depth is let go, as reading again always lets it go. A directory row (a
+     play, an act) still only opens its branch: it is not a place to read. */
+  function readOnPhone(){
+    if(!phoneFlag() || dx > -DX_REST) return;
+    heldDepth = 0;
+    snapStart(0, PANE_SNAP);
+    markPaint();
+  }
   function openNodeAt(node, idx){
     const w = node && typeof node.w === "number" ? node.w : null;
     if(w == null){ scrollReaderTo(idx); return; }
@@ -957,7 +971,7 @@ function mount(o){
           const it=level.items[k];
           if(!it) return;
           if(!it.node || !levelsPath){          // a flat chapter list: it IS the answer
-            if(it.chapterIdx!=null) scrollReaderTo(it.chapterIdx);
+            if(it.chapterIdx!=null){ scrollReaderTo(it.chapterIdx); readOnPhone(); }
             return;
           }
           // Everything ABOVE this row stays exactly as it is; this row becomes
@@ -1000,7 +1014,7 @@ function mount(o){
           const isLeaf = !(it.node.children||[]).some(c=>firstChapterIdx(c)!=null);
           if(isLeaf){
             const idx = firstChapterIdx(it.node);
-            if(idx!=null) openNodeAt(it.node, idx);
+            if(idx!=null){ openNodeAt(it.node, idx); readOnPhone(); }
           }
           // repaint every open pane against the directory we just moved to
           for(let L=0; L<currentMaxLeft(); L++)
@@ -1597,6 +1611,15 @@ function mount(o){
   // is byte-identical to the one this file has always written.
   let cursor = null;                       // {ch, wi} or null
   let restLevel = 0, restWritten = 0;      // the axis position, and what is on disk
+  /* HAS THE READER SCROLLED AWAY FROM THE CURSOR? (#191) True once the page is moved by a hand -- a scroll
+     that is none of this file's own seats (`programmaticTop`) -- after the cursor was last set; false again
+     the moment the cursor is set, and on every open. Only then is a cursor off the screen left behind by one
+     word (enterWord): a book reopened in the view, or a voice that moved the cursor, keeps it. */
+  let readAway = false;
+  if(o.readerPane) o.readerPane.addEventListener("scroll", () => {
+    if(placing || seating) return;
+    if(Math.abs(o.readerPane.scrollTop - programmaticTop) > 24) readAway = true;
+  }, {passive:true});
   function cursorKey(){ return "wordcursor:" + ((book && book.slug) || "?"); }
   function writeCursor(){
     if(!cursor && !place) return;
@@ -1606,7 +1629,7 @@ function mount(o){
     try{ localStorage.setItem(cursorKey(), JSON.stringify(rec)); }catch(_){}
   }
   function loadCursor(){
-    cursor = null; restLevel = 0; restWritten = 0; place = null;
+    cursor = null; restLevel = 0; restWritten = 0; place = null; readAway = false;
     try{
       const raw = localStorage.getItem(cursorKey());
       if(raw){ const c = JSON.parse(raw);
@@ -1772,7 +1795,7 @@ function mount(o){
     writeCursor();
   }
   function setCursor(ch, wi, why){
-    cursor = {ch: ch, wi: wi};
+    cursor = {ch: ch, wi: wi}; readAway = false;
     writeCursor();
     try{
       (o.bookEl || document).dispatchEvent(new CustomEvent("ttstv:cursor", {
@@ -1782,10 +1805,42 @@ function mount(o){
       }));
     }catch(_){}
   }
+  /* IS THE CURSOR'S LINE ON THE SCREEN? Measured as playStart measures it -- the paragraph that holds the
+     cursor's word, against the pane's own rectangle -- off the same index the view will use. A pane with no
+     size, or a word with nothing to measure, keeps the cursor: only a cursor that is MEASURED off the screen
+     is left behind. */
+  function cursorOnScreen(){
+    const pane = o.readerPane, col = o.readerCol;
+    if(!cursor || !pane || !col || !pane.getBoundingClientRect || !(pane.clientHeight > 0)) return true;
+    const sec = col.querySelector('section.chapter[data-ch="' + cursor.ch + '"]');
+    if(!sec) return false;
+    const pr = pane.getBoundingClientRect(), top = Math.max(pr.top, 0), bottom = Math.min(pr.bottom, innerHeight);
+    const sr = sec.getBoundingClientRect();
+    if(sr.bottom <= top || sr.top >= bottom) return false;
+    const live = cursor.ch === wordChapterIdx && wordDomIndex.length && wordDomIndex[0].node
+              && wordDomIndex[0].node.isConnected !== false;
+    if(!live){
+      wordChapterIdx = cursor.ch;
+      wordWords = wordsOf(book.chapters[cursor.ch]);
+      wordDomIndex = buildWordDomIndex(cursor.ch);
+    }
+    const w = wordDomIndex[cursor.wi];
+    if(!w || !w.p || !w.p.getBoundingClientRect) return true;
+    const r = w.p.getBoundingClientRect();
+    return r.top < bottom && r.bottom > top;
+  }
   function enterWord(idx){
     // the cursor wins: one word view is an ENDPOINT, and the endpoint is
     // where you last left it, not where the page happens to be sitting.
-    const useCursor = cursor && book && book.chapters && book.chapters[cursor.ch];
+    /* ...WHEN IT IS ON THE SCREEN (#191, 1 Oct). The iOS Stranger, reading "Mr. Apollinax": "I swiped left
+       and got the one-word view showing FRONT MATTER / Hippopotamus, the word I had looked up minutes
+       earlier, not my reading position." A press on a word moves the cursor (it is where the voice would
+       start), and a reader who then only SCROLLED left it behind -- the same fault ▶ had (#108/#187), and the
+       same measure (playStart's: the cursor's own line, on the screen or not): a cursor whose word is not on the
+       screen is not where this person is, so the view opens at the reading line instead and the cursor
+       moves there. A cursor on the screen still wins -- the voice's word, a word just pressed. */
+    let useCursor = cursor && book && book.chapters && book.chapters[cursor.ch];
+    if(useCursor && readAway){ let seen = true; try{ seen = cursorOnScreen(); }catch(_){ seen = true; } if(!seen) useCursor = false; }
     const ch = useCursor ? cursor.ch : idx;
     /* THE INDEX IS KEPT WHILE IT IS STILL THE PAGE'S. Rebuilding it is a walk of
        every line of the chapter -- on the complete Shakespeare a whole play, on
@@ -5117,6 +5172,76 @@ function mount(o){
     }
     return null;
   }
+  /* ============ THE BOOK'S OWN PRINTED CONTENTS ARE DOORS (#191, 1 Oct) ============
+     The iOS Stranger, in Poems' "CONTENTS" page: "I tapped 'The Hippopotamus'. Instead of going to the poem,
+     I got the dictionary card for Hippopotamus." book-data.js carries no links -- a printed contents page is
+     plain lines -- so the rule is the old reader's (`tocModel`, 31 Aug, reader/tests/test_contents_door.py),
+     MATCHED, NEVER GUESSED: a line is a door only when its whole text, normalised (lower case, runs of
+     anything but letters and digits to one space), IS another chapter's title -- no prefix, no fuzzy, no
+     nearest. And only on a page that is a contents page: three or more DISTINCT chapters named, AND either
+     the page says so ("contents", "table of contents", "index" as a line or its title) or at least half its
+     lines are titles -- so a cast list or an epigraph that repeats a title never turns the text into doors
+     under a finger that meant to look a word up. Hamlet's cast list stays plain; Poems' c001 has 24 doors.
+     The model is built once per chapter, off the book's data, not the DOM. */
+  const tocModels = new Map(); let tocBook = null;
+  function normTitle(t){
+    return String(t || "").toLowerCase().normalize("NFC")
+      .replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+  }
+  function tocModel(ci){
+    if(!book || !book.chapters) return null;
+    if(tocBook !== book){ tocModels.clear(); tocBook = book; }
+    if(tocModels.has(ci)) return tocModels.get(ci);
+    const titles = new Map();
+    const add = (t, k) => { const n = normTitle(t); if(n && !titles.has(n)) titles.set(n, k); };
+    book.chapters.forEach((c, k) => {
+      if(k === ci) return;
+      const n = String(c.n || ""), t = String(c.t || "");
+      add(n && t ? n + " " + t : (n || t), k);
+      if(t) add(t, k);
+      if(n && !t) add(n, k);
+    });
+    (function walk(ns){ (ns || []).forEach(nd => {
+      const k = firstChapterIdx(nd);
+      if(k != null && k !== ci && nd.title) add(nd.title, k);
+      walk(nd.children);
+    }); })(book.structure);
+    const ch = book.chapters[ci];
+    const lines = ((ch && ch.blocks) || []).filter(bl => bl && bl.r !== "fig" && String(bl.t || "").trim());
+    const said = /^(table of )?contents$|^index$/;
+    let says = said.test(normTitle(ch && (ch.t || ch.n))), hits = 0;
+    const named = new Set();
+    lines.forEach(bl => { const n = normTitle(bl.t);
+      if(said.test(n)) says = true;
+      if(titles.has(n)){ hits++; named.add(titles.get(n)); } });
+    const is = named.size >= 3 && (says || hits * 2 >= lines.length);
+    const m = is ? titles : null;
+    tocModels.set(ci, m);
+    return m;
+  }
+  function printedDoorOf(t){
+    const el = t && (t.nodeType === 3 ? t.parentNode : t);
+    const p = el && el.closest && el.closest("p.line");
+    const sec = p && p.closest && p.closest("section.chapter[data-ch]");
+    if(!sec) return null;
+    const m = tocModel(+sec.getAttribute("data-ch"));
+    if(!m) return null;
+    const k = m.get(normTitle(p.textContent));
+    return k == null ? null : k;
+  }
+  /* the door goes where the contents row for that chapter goes -- the same openNodeAt -- and the chapter's
+     text is asked for first, under the window (K25a) */
+  function goToPrinted(idx){
+    if(!book || !book.chapters || !book.chapters[idx]) return false;
+    if(readerPage && readerPage.ensure) readerPage.ensure(idx);
+    const path = deepestOwnerPath(book.structure || [], book.chapters[idx].id, []);
+    const node = path && path.length ? path[path.length - 1] : null;
+    if(node && typeof node.w === "number") openNodeAt(node, idx);
+    else { scrollReaderTo(idx); jumpTo(idx, 0, "contents", false); }
+    curChapterIdx = idx;
+    markPaint();
+    return true;
+  }
   let doorChapter = -1, doorTick = 0;   // the unit a heading's door opened, and the input tick it opened on
   function openContentsAt(idx){
     if(!book || !book.chapters || !book.chapters[idx]) return false;
@@ -5159,6 +5284,12 @@ function mount(o){
       const door = unitLinkOf(e.target);
       if(door != null){ e.preventDefault(); openContentsAt(door); return; }
       if(e.button !== 0) return;                       // yield: not the primary button
+      /* A PRINTED CONTENTS LINE IS A DOOR TOO (#191): before the word under it is looked up */
+      if(e.detail <= 1 && !(downAt && (Math.abs(e.clientX - downAt.x) > SEL_SLOP ||
+                                       Math.abs(e.clientY - downAt.y) > SEL_SLOP))){
+        const to = printedDoorOf(e.target);
+        if(to != null){ e.preventDefault(); goToPrinted(to); return; }
+      }
       if(e.detail > 1) return;                         // the double-click's own handler owns this
       if(downAt && (Math.abs(e.clientX - downAt.x) > SEL_SLOP ||
                     Math.abs(e.clientY - downAt.y) > SEL_SLOP)) return;   // yield: a drag

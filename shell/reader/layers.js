@@ -462,8 +462,34 @@
              pub: { counts: {}, contributions: [] }, marks: { windows: {}, chapters: {} } };
   }
   function wrote(kind, rec) {
+    /* a mark taken away here is taken away from the page's own record too (marginalia.js listens) */
+    if (kind === 'remove' && rec && rec.id) { try { document.dispatchEvent(new CustomEvent('layers:remove', { detail: { id: rec.id } })); } catch (e) {} }
     try { if (SRC_WRITE) { SRC_WRITE(kind, rec); return; } } catch (e) {}
     Object.keys(LOCAL).forEach(function (slug) { try { localStorage.setItem(LKEY + slug, JSON.stringify(LOCAL[slug])); } catch (e) {} });
+  }
+  /* THE PHONE'S HAND WRITES TO MINE TOO (#191, 1 Oct). The iOS Stranger: "I tapped yellow, the bar closed, and
+     the pen layer still said 'You have none yet'." The hold's bar is marginalia.js's, and its record
+     (`ttstv.reader.marginalia.<slug>`, word ids, synced) is not this layer's (`frank.mine.<slug>`, quotes) --
+     so every mark made by thumb was saved where Mine never looked. marginalia.js now hands each mark here as
+     this layer's own record, under the SAME id, so Mine lists it and a Remove on either side removes both. */
+  function keep(slug, rec) {
+    if (!slug || !rec || !rec.id) return false;
+    var list = LOCAL[slug] || devStore(slug).notes;
+    var i = -1; for (var k = 0; k < list.length; k++) if (list[k].id === rec.id) { i = k; break; }
+    if (i >= 0) list[i] = rec; else list.push(rec);
+    try { localStorage.setItem(LKEY + slug, JSON.stringify(list)); } catch (e) {}
+    try { if (SRC_WRITE) SRC_WRITE('note', rec); } catch (e) {}
+    if (LAST && LAST.refresh) LAST.refresh();
+    return true;
+  }
+  function unkeep(slug, id) {
+    if (!slug || !id) return false;
+    var list = LOCAL[slug] || devStore(slug).notes, hit = false;
+    for (var k = list.length - 1; k >= 0; k--) if (list[k].id === id) { list.splice(k, 1); hit = true; }
+    if (!hit) return false;
+    try { localStorage.setItem(LKEY + slug, JSON.stringify(list)); } catch (e) {}
+    if (LAST && LAST.refresh) LAST.refresh();
+    return true;
   }
   function clone(x) { return x == null ? x : JSON.parse(JSON.stringify(x)); }
   function scriptBase() { var s = document.querySelector('script[src*="layers.js"]'); return s ? s.src.replace(/layers\.js.*$/, '') : ''; }
@@ -836,7 +862,7 @@
       if (!asked) { asked = true; sourceOf(slug, function (d) { data = d; paint(); }); return; }
       paint();
     }
-    return api = { text: col, set: set, count: function () { return { layer: layer, items: items.length, cards: items.filter(function (it) { return it.el && !it.el.hidden; }).length }; }, data: function () { return data; }, layout: layout, box: box };
+    return api = { text: col, set: set, refresh: function () { if (data && layer !== 'book') paint(); }, count: function () { return { layer: layer, items: items.length, cards: items.filter(function (it) { return it.el && !it.el.hidden; }).length }; }, data: function () { return data; }, layout: layout, box: box };
   }
 
   /* GET studio's /marks/<slug>/<cid>; cb(body) or cb(null, why). The shape is the
@@ -878,5 +904,5 @@
     return { el: g, set: set, get: function () { return layer; }, overlay: function () { return ov; } };
   }
   var LAST = null;
-  window.Layers = { mount: mount, control: control, LAYERS: LAYERS, marks: marksOf, useSource: useSource, share: share, overlay: function () { return LAST; } };
+  window.Layers = { mount: mount, control: control, LAYERS: LAYERS, marks: marksOf, useSource: useSource, share: share, overlay: function () { return LAST; }, keep: keep, unkeep: unkeep };
 })();

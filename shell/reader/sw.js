@@ -30,7 +30,8 @@
 // that is not the current SHELL_CACHE, so changing this string IS the eviction
 // -- and changing it changes sw.js's own bytes, which is the only thing that
 // makes a browser run `install` and `activate` at all.
-const SHELL_CACHE = "ttstv-shell-v62";   // 30 Sep, later: EXPORT (web) second pass -- chapter tops scroll, Play from the line, marks, web wording;
+const SHELL_CACHE = "ttstv-shell-v63";   // 1 Oct: #191/#193 -- contents tap goes, printed contents are doors, one word where you read, marks paint and reach Mine, search closes;
+                                         // 30 Sep, later: EXPORT (web) second pass -- chapter tops scroll, Play from the line, marks, web wording;
                                          // 30 Sep: EXPORT (web) -- band, layers, hints, Tell Frank, settings look;
                                          // 24 Sep: D2-D7 rebuild (v0.2.0) -- rename, apply-state,
                                          // name in SHELL_FILES is only fetched by an install, so the

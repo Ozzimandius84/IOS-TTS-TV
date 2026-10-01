@@ -839,10 +839,37 @@ function handDom(ctx) {
     if (!map) { if (cid) ctx.want(cid); return null; }
     var entries = nodesOf(map).get(c.node);
     if (!entries) return null;
-    var hit = handWordAt(entries, c.offset);
+    var hit = nearestWord(c.node, entries, handWordAt(entries, c.offset), x, y);
     if (!hit) return null;
     var idx = indexOf(map).get(hit.id);
     return idx == null ? null : { cid: cid, map: map, idx: idx, id: hit.id };
+  }
+
+  /* THE WORD UNDER THE THUMB, BY ITS INK (#191). The caret a point resolves to sits BETWEEN letters, and at
+     the end of a line WebKit hands back the caret after the wrap -- the start of the next line's first word.
+     The iOS Stranger held "stars" (the last word on its line) and the bar quoted "with a talent for": the
+     word the press began on was dropped. So the caret's word is checked against the point: when its own
+     rects do not hold the point, the word on either side whose rects are nearest (same line first) is the
+     one under the thumb. */
+  function rectsOf(node, e) {
+    try { var r = doc.createRange(); r.setStart(node, e.s); r.setEnd(node, e.e); return r.getClientRects(); }
+    catch (err) { return []; }
+  }
+  function nearestWord(node, entries, hit, x, y) {
+    if (!hit || x == null || y == null) return hit;
+    var i = entries.indexOf(hit), best = hit, bd = Infinity;
+    for (var k = Math.max(0, i - 1); k <= Math.min(entries.length - 1, i + 1); k++) {
+      var rs = rectsOf(node, entries[k]);
+      for (var j = 0; j < rs.length; j++) {
+        var r = rs[j];
+        if (!r || r.width <= 0) continue;
+        var dx = x < r.left ? r.left - x : (x > r.right ? x - r.right : 0);
+        var dy = y < r.top ? r.top - y : (y > r.bottom ? y - r.bottom : 0);
+        var d = dy * 1000 + dx;
+        if (d < bd || (d === bd && entries[k] === hit)) { bd = d; best = entries[k]; }
+      }
+    }
+    return best;
   }
 
   /* ------------------------------------------------------------ the paint
@@ -883,9 +910,24 @@ function handDom(ctx) {
       var st = machine.hold();
       if (st !== "held" && st !== "extending") return;
       var hit = pointWord(x, y);
-      if (!hit) { machine.cancel(); return; }
-      begin(hit);
+      if (hit) { begin(hit); return; }
+      /* the chapter's map was still on its way (a first hold in a chapter): wait for it while the finger
+         stays down, instead of a hold that does nothing (#191) */
+      var c = caretAt(x, y), chIdx = c ? chapterAt(c.node) : -1, cid = chIdx >= 0 ? ctx.chapterIdOf(chIdx) : null;
+      if (!cid) { machine.cancel(); return; }
+      ctx.want(cid).then(function () {
+        var st2 = machine.state();
+        if (st2 !== "held" && st2 !== "extending") return;
+        var h2 = pointWord(x, y);
+        if (h2) begin(h2); else machine.cancel();
+      });
     }, machine.holdMs);
+  }
+  /* ...and asked for the moment a finger lands, so it is usually there before the hold is */
+  function prefetch(t) {
+    var chIdx = chapterAt(t);
+    var cid = chIdx >= 0 ? ctx.chapterIdOf(chIdx) : null;
+    if (cid && !ctx.mapNow(cid)) ctx.want(cid);
   }
 
   /* ---------------------------------------------------------- the listeners
@@ -897,6 +939,7 @@ function handDom(ctx) {
     var t = e.touches || [];
     if (t.length !== 1) { machine.cancel(); if (timer) { clearTimeout(timer); timer = null; } return; }
     machine.down(t[0].clientX, t[0].clientY, e.timeStamp);
+    try { prefetch(e.target); } catch (err) {}
     startTimer(t[0].clientX, t[0].clientY);
   }, { passive: true });
 
@@ -1108,6 +1151,24 @@ function handDom(ctx) {
            pointWord: pointWord, bar: function () { return bar; } };
 }
 
+/* WEBKIT PAINTS NO ::highlight ON TEXT THAT CANNOT BE SELECTED (#191, 1 Oct). The phone's column is
+   `-webkit-user-select:none` on purpose (page.css, G-MARKS: the hold is the app's, not iOS's), and WebKit --
+   Safari 26 and every WKWebView -- then draws no Custom Highlight on it at all: measured in Playwright's
+   WebKit 26 over books/poems, a `marg-yellow` range on "stars" tinted 0 of 702 px, and 622 of 702 the moment
+   that paragraph was `user-select:text` (Chromium tints 646 either way). The iOS Stranger's three marks were
+   all in the record (the Simulator's localStorage holds them) and none was ever seen. So where the column
+   cannot be selected, the marks take the LAYER this file already keeps for WebKit below 17.2 -- the same
+   ranges, painted as rects -- and selection on the phone stays exactly as G-MARKS set it. */
+function selectOff(col) {
+  try {
+    var p = col && (col.querySelector("p.line") || col);
+    if (!p || !window.getComputedStyle) return false;
+    var cs = getComputedStyle(p);
+    var us = cs.webkitUserSelect || cs.userSelect || cs.getPropertyValue("user-select");
+    return us === "none" && document.documentElement.hasAttribute("data-phone");
+  } catch (e) { return false; }
+}
+
 function mount(o) {
   o = o || {};
   var nav = o.nav, col = o.col;
@@ -1116,7 +1177,7 @@ function mount(o) {
 
   var rec = margReadRec(slug);
   var maps = new Map();            // chapter index -> map, once resolved
-  var hiOK = !!(window.CSS && CSS.highlights && window.Highlight);
+  var hiOK = !!(window.CSS && CSS.highlights && window.Highlight) && !selectOff(col);
   var selRun = null;               // the run a thumb is dragging, painted as marg-sel
   var run = null;                  // {ch, from, to} while Shift is held
 
@@ -1167,12 +1228,62 @@ function mount(o) {
     return [...out];
   }
 
+  /* A MAP IS THE DOM IT WAS BUILT OVER (#191). page.js keeps a WINDOW of chapters mounted (K25a): a chapter
+     you scroll away from is emptied and, when you come back, written again -- new <p>s, new text nodes. A map
+     built before that points at nodes no longer in the document, so a hold resolves nothing (the Stranger's
+     "a long hold did nothing" in Hamlet and Moby Dick) and a mark paints on text nobody can see. And a map
+     asked for while its chapter was an empty stub came back null and was kept as null for good. So: a stub is
+     never asked (nothing is cached for it; the paint asks again once it is mounted), and a map whose nodes
+     have left is REBASED onto the chapter's live paragraphs -- the word id names its paragraph (`pNNNN`, the
+     same index listen.js's paraIndexOf reads), and the characters are the same characters, so the offsets
+     carry over unchanged. */
+  function secOf(idx) { return col && col.querySelector ? col.querySelector('.chapter[data-ch="' + idx + '"]') : null; }
+  function mounted(idx) { var s = secOf(idx); return !!(s && !s.classList.contains("stub") && s.querySelector("p")); }
+  function stale(map) {
+    if (!map || !map.byWordId) return false;
+    var it = map.byWordId.values().next();
+    return !it.done && !!it.value.node && it.value.node.isConnected === false;
+  }
+  function rebase(idx, map) {
+    var sec = secOf(idx);
+    if (!sec || !mounted(idx)) return null;
+    var els = sec.querySelectorAll("p.line, p.sp, p.dir");
+    var by = new Map();
+    var bad = false;
+    map.byWordId.forEach(function (hit, id) {
+      if (bad) return;
+      var parts = String(id).split("."), n = parts.length > 1 && parts[1].charAt(0) === "p" ? parseInt(parts[1].slice(1), 10) - 1 : -1;
+      var el = n >= 0 ? els[n] : null, node = el && el.firstChild;
+      if (!node || node.nodeType !== 3 || (node.nodeValue || "").length < hit.e) { bad = true; return; }
+      by.set(id, { node: node, el: el, s: hit.s, e: hit.e, flat: hit.flat });
+    });
+    if (bad) return null;
+    return Object.assign({}, map, { byWordId: by });
+  }
+  function live(idx) {
+    var m = maps.get(idx) || null;
+    if (m && stale(m)) {
+      var r = rebase(idx, m);
+      if (r) { maps.set(idx, r); m = r; }
+    }
+    return m;
+  }
+  var asking = new Map();
   function want(cid) {
     if (!control || !control.mapOf || !control.chapterIndexOf) return Promise.resolve(null);
     var idx = control.chapterIndexOf(cid);
     if (idx < 0) return Promise.resolve(null);
-    if (maps.has(idx)) return Promise.resolve(maps.get(idx));
-    return control.mapOf(idx).then(function (m) { maps.set(idx, m || null); return m || null; });
+    if (maps.get(idx)) return Promise.resolve(live(idx));
+    if (!mounted(idx)) return Promise.resolve(null);
+    if (asking.has(idx)) return asking.get(idx);
+    var p = control.mapOf(idx).then(function (m) {
+      asking.delete(idx);
+      if (m && stale(m)) m = rebase(idx, m) || m;
+      if (m) maps.set(idx, m);
+      return m || null;
+    }, function () { asking.delete(idx); return null; });
+    asking.set(idx, p);
+    return p;
   }
 
   function rangeOf(hit) {
@@ -1186,7 +1297,11 @@ function mount(o) {
   function chapterOf(h) {
     var cid = chapterHint(h.from);
     var idx = control && control.chapterIndexOf ? control.chapterIndexOf(cid) : -1;
-    return idx >= 0 ? maps.get(idx) : null;
+    if (idx < 0) return null;
+    var m = live(idx);
+    /* not asked yet, or asked while it was a stub: ask now it is on the page, and paint again when it lands */
+    if (!m && mounted(idx) && !asking.has(idx)) want(cid).then(function (got) { if (got) paint(); });
+    return m;
   }
   function pushWords(out, map, words, guard) {
     for (var w = 0; w < words.length; w++) {
@@ -1236,7 +1351,12 @@ function mount(o) {
     rectsEl = document.createElement("div");
     rectsEl.className = "margrects";
     rectsEl.setAttribute("aria-hidden", "true");
-    document.body.appendChild(rectsEl);
+    /* INSIDE THE READER'S OWN BOX (#191): `.open` is a stacking context at z 3 and the reading box inside it
+       is fixed at z 1 with the paper as its background, so a layer on <body> at z 2 sat UNDER the paper --
+       drawn, and never seen (0 warm px over a marked word, measured). Beside the pane, in the box, it lies over
+       the text and under every bar, pane and one-word view the reader stacks above that box. */
+    var home = (o.pane && o.pane.parentNode) || document.body;
+    home.appendChild(rectsEl);
     return rectsEl;
   }
   function paintRects(by) {
@@ -1284,10 +1404,44 @@ function mount(o) {
     paintRects(by);
   }
 
+  /* the Custom Highlight mode has no scroll repaint of its own (the rect layer does): a mark whose chapter was
+     remounted under the window is re-found here, a quarter-second after the reader stops moving */
+  var remountT = 0;
+  addEventListener("scroll", function () {
+    if (!hiOK || remountT) return;
+    remountT = setTimeout(function () {
+      remountT = 0;
+      var need = false;
+      chaptersWithMarks().forEach(function (cid) {
+        var idx = control && control.chapterIndexOf ? control.chapterIndexOf(cid) : -1;
+        var m = idx >= 0 ? maps.get(idx) : null;
+        if ((m && stale(m) && mounted(idx)) || (!m && idx >= 0 && mounted(idx))) need = true;
+      });
+      if (need) repaint();
+    }, 250);
+  }, { passive: true, capture: true });
+
   function repaint() {
     var cids = chaptersWithMarks();
     if (!cids.length) { paint(); return Promise.resolve(); }
-    return Promise.all(cids.map(want)).then(paint);
+    return Promise.all(cids.map(want)).then(function () { paint(); backfill(); });
+  }
+  /* marks made before Mine could see them (the Stranger's three, still in the Simulator's record) are handed
+     over once, the first time their chapter's map is on the page */
+  var handed = new Set();
+  function backfill() {
+    if (!window.Layers || !Layers.keep) return;
+    var have = {};
+    try { (JSON.parse(localStorage.getItem("frank.mine." + slug) || "[]") || []).forEach(function (x) { if (x && x.id) have[x.id] = 1; }); } catch (e) {}
+    [["highlights", "highlight"], ["notes", "note"]].forEach(function (k) {
+      margLive(rec, k[0]).forEach(function (en) {
+        if (handed.has(en.id) || have[en.id]) { handed.add(en.id); return; }
+        var map = chapterOf(en);
+        if (!map || !map.byWordId.has(en.from)) return;
+        handed.add(en.id);
+        toMine(en, map, k[1]);
+      });
+    });
   }
 
   /* ------------------------------------------------------------- the write
@@ -1378,6 +1532,28 @@ function mount(o) {
                              witnessKind: witness ? "chapter-ids" : "none" }, extra);
     });
   }
+  /* ...AND MINE SEES IT (#191). The same mark, handed to the layers' own record as a quote -- the words
+     themselves and sixteen characters either side, ANCHOR-0's selector -- under the same id. */
+  function quoteOf(map, fromId, toId) {
+    var a = map.byWordId.get(fromId), b = map.byWordId.get(toId) || a;
+    if (!a || !a.node) return null;
+    try {
+      var r = document.createRange(); r.setStart(a.node, a.s); r.setEnd(b.node, b.e);
+      var A = a.node.nodeValue || "", B = b.node.nodeValue || "";
+      return { exact: r.toString().trim(), prefix: A.slice(Math.max(0, a.s - 16), a.s), suffix: B.slice(b.e, b.e + 16) };
+    } catch (e) { return null; }
+  }
+  function toMine(entry, map, kind) {
+    var L = window.Layers;
+    if (!L || !L.keep || !entry || !map) return;
+    var q = quoteOf(map, entry.from, entry.to);
+    if (!q || !q.exact) return;
+    try {
+      L.keep(slug, { id: entry.id, kind: kind, colour: margColour(entry.colour || margLastColour()),
+                     visibility: "private", made_at: new Date(entry.at || Date.now()).toISOString(),
+                     body: kind === "note" ? String(entry.text || "") : undefined, anchor: { quote: q } });
+    } catch (e) {}
+  }
   function markWords(cid, fromId, toId, colour) {
     return want(cid).then(function (map) {
       if (!map || !map.byWordId.has(fromId)) return null;
@@ -1385,6 +1561,7 @@ function mount(o) {
                           colour: margColour(colour || margLastColour()) })
         .then(function (entry) {
           patch(function (r) { r.highlights.push(entry); });
+          toMine(entry, map, "highlight");
           return entry;
         });
     });
@@ -1404,6 +1581,7 @@ function mount(o) {
                           text: String(text == null ? "" : text) })
         .then(function (entry) {
           patch(function (r) { r.notes.push(entry); });
+          toMine(entry, map, "note");
           return entry;
         });
     });
@@ -1411,7 +1589,17 @@ function mount(o) {
   function dropEntry(kind, id) {
     if (kind !== "notes" && kind !== "highlights" && kind !== "bookmarks") return;
     patch(function (r) { r[kind].push({ id: id, deleted: Date.now() }); });
+    try { if (window.Layers && Layers.unkeep) Layers.unkeep(slug, id); } catch (e) {}
   }
+  /* a mark removed from the Mine layer's own bar is removed here too -- the same id, both records */
+  document.addEventListener("layers:remove", function (e) {
+    var id = e && e.detail && e.detail.id;
+    if (!id) return;
+    ["highlights", "notes"].forEach(function (kind) {
+      if (margLive(rec, kind).some(function (x) { return x.id === id; }))
+        patch(function (r) { r[kind].push({ id: id, deleted: Date.now() }); });
+    });
+  });
 
   /* --------------------------------------------- THE OTHER HALF OF THE SYNC
      A mark made on the phone reaches `TTS_DATA/reader/marginalia/<slug>.json`
@@ -1466,7 +1654,7 @@ function mount(o) {
         chapterIdOf: function (i) { return control && control.chapterIdOf ? control.chapterIdOf(i) : null; },
         mapNow: function (cid) {
           var idx = control && control.chapterIndexOf ? control.chapterIndexOf(cid) : -1;
-          return idx >= 0 ? (maps.get(idx) || null) : null;
+          return idx >= 0 ? live(idx) : null;
         },
         want: want,
         cursor: function () { return nav && nav.cursor ? nav.cursor : null; },

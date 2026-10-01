@@ -2,7 +2,7 @@
   "added_here": [
     "index.html"
   ],
-  "bytes": 3683739,
+  "bytes": 3705127,
   "count": 87,
   "files": {
     "bar/askbar.css": {
@@ -78,8 +78,8 @@
       "sha256": "0a9e30ac1b6be79f88f58fd3383d2c108b36020ede18ae1e98b86ed4e7475f03"
     },
     "reader/book-nav.js": {
-      "bytes": 355136,
-      "sha256": "861dd453f8b815ac843b9a85510fa2817dfe2817ec50b52fbbe660b195fa8e1a"
+      "bytes": 363208,
+      "sha256": "53ce9d660d62c45af99752d3c100144f58d65ede50b69f14bfef16d15ac6357a"
     },
     "reader/book.js": {
       "bytes": 6136,
@@ -146,8 +146,8 @@
       "sha256": "d1ccce9fb08ac1b88f0986d5f8f90ed3d5cb5b6a14ece7c34e0025232f9293d2"
     },
     "reader/layers.js": {
-      "bytes": 74339,
-      "sha256": "36b5d2bd2b6a24c18fbd21e0338d865e323b45a6ecd8048dc47170ad5e69f19d"
+      "bytes": 76141,
+      "sha256": "ff85c2962e4edf69fb2f5ec55da2513cb96da96bebe725501d3c19bc612c5598"
     },
     "reader/listen.css": {
       "bytes": 3500,
@@ -170,8 +170,8 @@
       "sha256": "1aefc9009eaedd560895c090609893c064ea2ea4592958b706a0abc576c159d9"
     },
     "reader/marginalia.js": {
-      "bytes": 69235,
-      "sha256": "7ae706cf4898335c778c40f2c3555fbc5bce93181348c7fe1cb328e537f75d27"
+      "bytes": 79528,
+      "sha256": "a234610ea989db027ccbc775287c8ca5e8b3e2d4aa6b214aabce89223ea4d153"
     },
     "reader/page.css": {
       "bytes": 45046,
@@ -234,12 +234,12 @@
       "sha256": "a008d35e68c7160baf5095cd33791d95207bd182254f0000ebdf8788987d9756"
     },
     "reader/surface.js": {
-      "bytes": 363268,
-      "sha256": "84864bf1251eedbab034f013b028dfd3c8dafc19a9962cbddb5410b27c443c4d"
+      "bytes": 364310,
+      "sha256": "518b0cab590e018306712571f846ae36fa7735f0aed18824ecc4ee604134ad2b"
     },
     "reader/sw.js": {
-      "bytes": 28121,
-      "sha256": "1cd4fc090e8def68f170fce9f13395d46ba0f3d5a321a1c262bb14876adb761b"
+      "bytes": 28300,
+      "sha256": "171061b1812bc2adc20336ff2cf370ee125fe9efcb5a99e9ff3655213ebc55eb"
     },
     "reader/sysvoice.js": {
       "bytes": 45964,
@@ -356,7 +356,7 @@
   },
   "home_page": "library/library.html",
   "source": {
-    "commit": "c8a56f2",
+    "commit": "b7de760",
     "how": "design/export.py --shell --phone-shell (30 Sep: the web edition 18a4246 baked for the phone bundle); books/ and library/library.json kept",
     "repo": "/sessions/rcw-01daqke7brlcxu77wypzwnpb/mnt/TTSTV",
     "shell_cache": "ttstv-shell-v60"

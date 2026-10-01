@@ -759,7 +759,19 @@
 
     scrim.addEventListener("click", close);
     sheet.querySelector(".sf-esc").addEventListener("click", close);
-    input.addEventListener("input", function () { ask(input.value); });
+    /* A CLOSED SHEET TAKES NO KEYS (#191). It is opacity:0 and pointer-events:none -- still in the page, so
+       still focusable: a caret left in it (or put back by the OS) took the next keys and brought the sheet
+       back with "not in this book … Jdfoj". Focus arriving while it is closed is sent away, and a key that
+       reaches the field anyway is not a search. */
+    input.addEventListener("input", function () {
+      if (!opened) { input.value = ""; try { input.blur(); } catch (e) {} return; }
+      ask(input.value);
+    });
+    sheet.addEventListener("focusin", function (e) {
+      if (opened) return;
+      var t = e.target;
+      try { if (t && t.blur) t.blur(); } catch (err) {}
+    });
     input.addEventListener("keydown", function (e) {
       if (e.key === "Enter") { e.preventDefault(); ask(input.value, true); }
     });
@@ -959,6 +971,10 @@
        answer still out for them is dropped (the token), as an emptied field drops it in ask() */
     var ae = document.activeElement;
     if (ae && ae !== document.body && sheet.contains(ae) && ae.blur) ae.blur();   /* the field, or the × just pressed */
+    /* ...and the field whatever activeElement says (#191, the iOS Stranger 1 Oct: "I pressed ×, the reader looked
+       normal again, and my next taps typed 'Jdfoj' into the hidden search" -- a WKWebView can report the body as
+       active while the caret is still in the field, and the closed sheet is only transparent, not gone) */
+    try { if (input && input.blur) input.blur(); } catch (e) {}
     if (input.value) input.value = "";
     clearTimeout(outTimer); clearTimeout(repressTimer); token++;
     S.q = ""; S.asking = null; S.out = [];
