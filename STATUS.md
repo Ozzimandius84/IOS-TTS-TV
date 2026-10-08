@@ -1,3 +1,11 @@
+# 0B · ONE-PHONE — 8 Oct (Cowork: bridge VM + computer use) · IN PROGRESS
+
+**Status line:** `phone · 0B ONE-PHONE (PROMPTS/lanes/all-green.md, Osca 8 Oct) · started 22:10 · import TTSTV shell at HEAD (1d858f0, ttstv-shell-v66) over v65, build for the simulator, install on iPhone 17 / iPhone 17 Pro / iPhone Air (and Osca's iPhone if connected), one stamp, the 1 Oct first run, 12/12 tiles`
+
+Written before any change (RULES 5). The report replaces this entry when the lane ends.
+
+---
+
 # B-phone, wave 8 — Sign in again: the dead Drive grant · 26 Sep (Cowork: bridge VM + container Chromium) · phone `95b79d6` · TTSTV untouched · no GPU, 0 GPU-minutes
 
 **Status line:** `phone · B-phone wave 8 · 26 Sep · Settings ▸ Sync: a refresh refused with invalid_grant marks the stored grant revoked, the row says "Drive refused the saved sign-in … Sign in again to sync." and its account button becomes SIGN IN AGAIN (the one existing sign-in flow, a fresh grant over the dead one, then Sync runs); proved headless over a fake token endpoint, 49/49; the two shell files are AHEAD of TTSTV's masters (patch applies cleanly) and the real press is Osca's`

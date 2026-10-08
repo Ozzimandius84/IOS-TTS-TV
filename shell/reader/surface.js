@@ -3597,7 +3597,11 @@
        known by (slug, source, name, chapter) is what stops one import being
        drawn as two rows, which is `pollWorks`'s own twin rule and the reason
        `taken()` exists. */
-    if (S.job && !taken({ slug: S.job.slug, source: S.job.source,
+    /* A FINISHED JOB IS NOT WORKING (PRESS-PIPELINES, 8 Oct): `/state` keeps
+       the one job after it ends, and a Sample that failed at once ("bad queue
+       name") drew "Sampling c001 · RUNNING" here for hours with an empty log. */
+    var jobOver = S.job && (S.job.phase === "failed" || S.job.phase === "done");
+    if (S.job && !jobOver && !taken({ slug: S.job.slug, source: S.job.source,
                           name: S.job.name || S.job.chapter })) {
       var jk = "job:" + (S.job.slug || "") + ":" + (S.job.chapter || S.job.current_chapter || "");
       /* NOT EVERY JOB IS A RENDER, and this row said every one was. `/state`'s
@@ -5951,14 +5955,18 @@
        OWNER's (CLOUD-HIDE): a user's row ends at the dropdown and the default
        reason, and the readiness of Frank's cloud is Settings' to say. */
     if (!isOwner()) { if (S.whereErr) line.appendChild(note(S.whereErr)); return prow("Where", box, line); }
+    /* `/kaggle`'s `slots` is studio/kaggle.py::slots()'s DICT {limit, used,
+       free, known} -- drawn as a string it read "[object Object] free"
+       (PRESS-PIPELINES, 8 Oct). Only a count studio actually read is said. */
+    function slotsOf(k) { var s = k && k.slots; if (typeof s === "number" && s > 0) return { limit: s, free: s }; return (s && typeof s === "object" && s.known && s.limit != null) ? s : null; }
     var kg = d.kaggle || {};
     var bits = [];
     var hl = kaggleHours(kg.hours_left);
     if (hl) bits.push(hl + " of free GPU left this week");
     if (kg.running && kg.running.length)
       bits.push(kg.running.length + " session" + (kg.running.length === 1 ? "" : "s") + " running"
-                + (kg.slots ? " of " + kg.slots : ""));
-    else if (kg.slots) bits.push("no session running · " + kg.slots + " free");
+                + (slotsOf(kg) ? " of " + slotsOf(kg).limit : ""));
+    else if (slotsOf(kg)) bits.push("no session running · " + slotsOf(kg).free + " free");
     if (bits.length) line.appendChild(sub(esc(bits.join(" \u00b7 "))));
     /* CREDENTIALS AS A FACT, NEVER A VALUE. `credentials_present` is a
        Path.exists() on ~/.kaggle/kaggle.json; nothing on this wire is the
@@ -6115,7 +6123,10 @@
      `destinations`' own sentence, and that sentence lands here. */
   function sampleBlock(b) {
     var box = el("div", "sf-sample");
-    var s = S.sample;
+    /* ONLY THIS BOOK'S SAMPLE (PRESS-PIPELINES, 8 Oct): the poll re-installs the
+       one job's sample whatever book is chosen, so A Doll's House showed the
+       Eclogues' "Sample failed. bad queue name …" under its own title. */
+    var s = (S.sample && b && S.sample.slug === b.slug) ? S.sample : null;
     var unit = sampleUnit(b);
     if (s && s.phase === "sampling") {
       var bar = el("span", "sf-bar indeterminate", "<i></i>");

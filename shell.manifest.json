@@ -2,7 +2,7 @@
   "added_here": [
     "index.html"
   ],
-  "bytes": 4097053,
+  "bytes": 4098088,
   "count": 106,
   "files": {
     "bar/askbar.css": {
@@ -282,12 +282,12 @@
       "sha256": "167321c75913d56aa28581a18217a8eb0e7c20c4cffd5847b6c29eb071b9fc2b"
     },
     "reader/surface.js": {
-      "bytes": 370104,
-      "sha256": "4a3f86cfa073a39071fe6af4a2fc636233d397a8baabd347f8a196f13ec359c3"
+      "bytes": 371172,
+      "sha256": "d382407d35b363b2e0bd2e392cbd7cb9e1cc6e5d6deb390974d13a53b11d6999"
     },
     "reader/sw.js": {
-      "bytes": 29948,
-      "sha256": "1a39bafcadbfcd9fe0e7217f367632b5fe9a7d083869a9b07f9284782b146263"
+      "bytes": 29915,
+      "sha256": "e742099aaaff3996418ea7c49440ce87bac46d6ac14608da07094d320866871f"
     },
     "reader/sysvoice.js": {
       "bytes": 45964,
@@ -432,9 +432,9 @@
   },
   "home_page": "library/library.html",
   "source": {
-    "commit": "e717364",
-    "how": "design/export.py --shell --phone-shell (30 Sep: the web edition 18a4246 baked for the phone bundle); books/ and library/library.json kept",
+    "commit": "1d858f0",
+    "how": "design/export.py --shell --phone-shell into a scratch dir (8 Oct, 0B ONE-PHONE); 2 files differed (reader/surface.js, reader/sw.js) and were copied over; index.html and library/library.json kept",
     "repo": "/sessions/rcw-01daqke7brlcxu77wypzwnpb/mnt/TTSTV",
-    "shell_cache": "ttstv-shell-v60"
+    "shell_cache": "ttstv-shell-v66"
   }
 }
