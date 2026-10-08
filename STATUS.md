@@ -1,8 +1,53 @@
-# 0B · ONE-PHONE — 8 Oct (Cowork: bridge VM + computer use) · IN PROGRESS
+BOARD: 0B ONE-PHONE ❌ → ✅ (Osca's eye, 22:24: "well done. This is THE one for all future sessions.") · build 22:12 8 Oct, phone 826f118 + shell TTSTV 1d858f0 (ttstv-shell-v66)
 
-**Status line:** `phone · 0B ONE-PHONE (PROMPTS/lanes/all-green.md, Osca 8 Oct) · started 22:10 · import TTSTV shell at HEAD (1d858f0, ttstv-shell-v66) over v65, build for the simulator, install on iPhone 17 / iPhone 17 Pro / iPhone Air (and Osca's iPhone if connected), one stamp, the 1 Oct first run, 12/12 tiles`
+# 0B · ONE-PHONE — 8 Oct (Cowork: bridge VM + computer use on Simulator) · phone 377d0d8 … this commit · TTSTV untouched · 0 GPU-minutes
 
-Written before any change (RULES 5). The report replaces this entry when the lane ends.
+**Status line:** `phone · 0B ONE-PHONE · 8 Oct · ONE iPhone app on three simulators (iPhone 17, iPhone 17 Pro, iPhone Air), built 22:12 from shell v66 = Mac Frank's shell (TTSTV 1d858f0); each opens on "Books made Frank" (Sign in with Google / Not now), NOT NOW → the Library, 12/12 tiles, glass foot ⚙ · Search · mic. Osca: "This is THE one for all future sessions." The build that makes it: tools/phone.sh --sims (one build, many devices), --fresh (clean first run, books kept), --no-build.`
+
+**THE ONE PHONE APP, for every future session (Osca, 8 Oct 22:24):** the app built from this repo (`IOS TTS TV`, bundle `com.ttstv.frank`) from shell **v66 / TTSTV 1d858f0**, as installed tonight on iPhone 17, iPhone 17 Pro and iPhone Air. To put it (or a newer one) on the simulators, one line from this folder:
+`tools/phone.sh --sims "iPhone 17,iPhone 17 Pro,iPhone Air"` (add `--fresh` for a clean first run with the books kept; `--no-build` to install what is built).
+
+### 1. Built
+- **Shell v65 → v66** (`377d0d8`): `design/export.py --shell --phone-shell` into a scratch dir on the VM, compared with `shell/`: exactly 2 files differed (`reader/surface.js`, `reader/sw.js`), copied over; `index.html` and `library/library.json` kept; `shell.manifest.json` rewritten (106 files, source 1d858f0, v66); `prebuild.py` clean.
+- **`tools/phone.sh`** (`826f118`, `a71e3f0`, `1cffb52`):
+  - `--sims "A,B,C"` — one simulator build, then boot + install + launch on each device, Simulator.app opened; outcome lines to `scratch-probe/sims.log`.
+  - **The stale-app trap, fixed.** tauri's last step renames the archive's `Frank.app` onto `build/arm64-sim/Frank.app` and fails *"Directory not empty (os error 66)"* when one is there. The script then installed **the 26 Sep app still sitting there** — what Osca saw at 22:13 (old Library, "ON THIS DEVICE · OPEN", flat ⚙ + Library bar). Now the old .app moves to `_to_delete/` before the build, and the archive's app is taken if tauri still didn't.
+  - `--no-build` — install what is built.
+  - `--fresh` — `simctl uninstall` clears the app's saved state (first-run flag, prefs, WebKit storage), but `Library/Application Support/com.ttstv.frank/books` is copied aside first and put back after install, so the books survive (a plain delete loses them, they live inside the app).
+  - The exec bit, dropped by an in-place rewrite (*zsh: permission denied* at Osca's paste), restored; index mode 100755.
+- `src-tauri/gen/apple/frank_iOS/Info.plist` — as xcodegen + the deep-link plugin wrote it for the 22:12 build (frank-pair and the Google OAuth scheme as two URL types); committed so the repo matches the app.
+
+### 2. Verified — and how
+- Build check (RULES 2): the phone shows no stamp by design (`reader.html`: *"a website or a phone shows none"*). The stamp is the build: `scratch-probe/sims.log` `== 2026-10-08 22:12:27 sims build of 826f118`; the .app installed is `build/arm64-sim/Frank.app`, binary dated 2026-10-08 21:12:27 UTC (moved from the archive by hand once — the trap above — the 26 Sep one is in `_to_delete/stale-sim-app/`). Shell in it: manifest `1d858f0` / `ttstv-shell-v66`, the same tree Mac Frank serves at TTSTV HEAD.
+- `scratch-probe/sims-install.log` (Osca's `--no-build --fresh` paste, 22:23): per device `kept 12 books … put back 12 books … ok` × 3 (iPhone 17, iPhone 17 Pro, iPhone Air).
+- **Pressed with computer use (Simulator, full tier, background):** iPhone 17 and iPhone Air first screen = "Books made Frank", SIGN IN WITH GOOGLE, NOT NOW, glass foot. NOT NOW (AXPress on `AXButton 'NOT NOW'`) → the Library. iPhone 17 Pro was already past its first run when I looked (on the Library). **Tiles 12/12 on each**: A Doll's House, Daphnis and Chloe, David Copperfield, Essays (Emerson), Euthyphro, Hamlet, Les Pensées, Moby Dick, Poems, The Bucolics and Eclogues ×2, Don Quixote. Six screenshots sent to Osca (first screens, Libraries). All three windows on the current Space.
+- `probe.log`: `frank: page /library/library.html`, `webview fills the screen` at 402×874 and 420×912.
+- `md5sum languages/catalogue.json` 617c7c8c68f42d6c86b1d651abeef326 (no server started, no route pressed).
+- Osca, 22:24: *"well done. This is THE one for all future sessions."*
+
+### 3. Judgment calls
+- **v66, not v65.** "The same shell/ as 0A": TTSTV HEAD's shell is 1d858f0 (an 8 Oct surface fix, SHELL_CACHE v66), one commit past the 1 Oct export; the phone took it so the two hosts match.
+- **`--fresh` keeps the books.** Osca asked for Frank to be deleted from each simulator; a delete wipes the 12 books with it (they are in the app's data container), which would have failed his own 12-tiles gate. So the state is wiped and the books are put back.
+
+### 4. Boundary check
+One module: the iOS repo. TTSTV only read (export into a VM scratch dir, which writes nothing in TTSTV).
+
+### 5. Footprint
+VM scratch `~/phone-v66/` (4 MB). `_to_delete/stale-sim-app/Frank.app.26-sep` (102 MB, the stale app — Osca's to empty), `_to_delete/locks/` (git locks).
+
+### 6. Requests to core / other modules
+None.
+
+### 7. Known gaps
+- **Osca's own iPhone not done.** This lane cannot see whether it is connected (no `devicectl` from the bridge); the free team's profile lapsed 3 Oct. When wanted: `tools/phone.sh --register` then `tools/phone.sh`.
+- **The phone has no visible stamp** (by design since 28 Sep). A Stranger cannot read one on screen; the stamp is `scratch-probe/sims.log`'s line.
+- Building needed Osca's paste in Terminal (three times tonight; two were my faults — the trap, the exec bit). Terminal and Xcode are click-only for computer use, so `phone.sh` is the one line.
+
+### 8. Next
+S0-3/4/5 Strangers on these three simulators. Not started.
+
+### 8b. Commit check
+Committed by pathspec: STATUS.md, tools/phone.sh, src-tauri/gen/apple/frank_iOS/Info.plist (+ earlier shell/ and manifest). Locks moved into `_to_delete/locks/`. Untracked left alone.
 
 ---
 
