@@ -43,6 +43,10 @@
 #               opens Simulator.app -- a booted device is a process, not a
 #               window, and every gate this repo has runs without one.
 #   --no-build  with --sim/--sims: install the .app already built, build nothing.
+#   --fresh     with --sims: a clean first run on each device -- the app and
+#               ALL its saved state (first-run flag, prefs, WebKit storage) are
+#               uninstalled, but the device's books/ is kept aside first and
+#               put back, so the Library still holds them (Osca, 8 Oct 22:20).
 #   --sims "A,B,C"  ONE BUILD, SEVERAL SIMULATORS (0B ONE-PHONE, 8 Oct; Osca
 #               1 Oct: "launch multiple simulators, so you can have more than
 #               one stranger"): the --sim build once, then boot + install +
@@ -70,6 +74,7 @@ SIM=0
 SIM_NAME=""
 SIMS=""
 BUILD=1
+FRESH=0
 while [ $# -gt 0 ]; do
   case "$1" in
     --shell)      WITH_SHELL=1; shift ;;
@@ -79,6 +84,7 @@ while [ $# -gt 0 ]; do
     --register)   REGISTER=1; shift ;;
     --sim)        SIM=1; shift; if [ $# -gt 0 ] && [ "${1#--}" = "$1" ]; then SIM_NAME="$1"; shift; fi ;;
     --no-build)   BUILD=0; shift ;;
+    --fresh)      FRESH=1; shift ;;
     --sims)       SIM=1; SIMS="$2"; shift 2 ;;
     -h|--help)    sed -n '2,32p' "${BASH_SOURCE[0]}"; exit 0 ;;
     *)            echo "phone.sh: unknown argument $1 (try --help)" >&2; exit 2 ;;
@@ -140,6 +146,23 @@ if [ "$SIM" = 1 ]; then
       say "4/4  $N: boot, install, launch"
       xcrun simctl boot "$N" 2>/dev/null || true
       xcrun simctl terminate "$N" com.ttstv.frank 2>/dev/null || true
+      KEEP=""
+      if [ "$FRESH" = 1 ]; then
+        DATA="$(xcrun simctl get_app_container "$N" com.ttstv.frank data 2>/dev/null || true)"
+        BOOKS="$( [ -n "$DATA" ] && find "$DATA/Library" -maxdepth 3 -type d -name books 2>/dev/null | head -1 || true)"
+        if [ -n "$BOOKS" ]; then
+          KEEP="$(mktemp -d)/books"; REL="${BOOKS#$DATA/}"
+          cp -R "$BOOKS" "$KEEP"
+          echo "kept $(ls "$KEEP" | wc -l | tr -d ' ') books from $N ($REL)" | tee -a "$LOG"
+        fi
+        xcrun simctl uninstall "$N" com.ttstv.frank 2>/dev/null || true
+      fi
+      if [ -n "$KEEP" ]; then
+        xcrun simctl install "$N" "$SIM_APP"
+        DATA="$(xcrun simctl get_app_container "$N" com.ttstv.frank data)"
+        mkdir -p "$(dirname "$DATA/$REL")" && cp -R "$KEEP" "$DATA/$REL"
+        echo "put back $(ls "$DATA/$REL" | wc -l | tr -d ' ') books on $N" | tee -a "$LOG"
+      fi
       if xcrun simctl install "$N" "$SIM_APP" && xcrun simctl launch "$N" com.ttstv.frank; then
         echo "ok   $N" | tee -a "$LOG"
       else
