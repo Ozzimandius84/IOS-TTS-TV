@@ -42,6 +42,12 @@
 #               the booted device (or NAME, booted headless by simctl). Never
 #               opens Simulator.app -- a booted device is a process, not a
 #               window, and every gate this repo has runs without one.
+#   --sims "A,B,C"  ONE BUILD, SEVERAL SIMULATORS (0B ONE-PHONE, 8 Oct; Osca
+#               1 Oct: "launch multiple simulators, so you can have more than
+#               one stranger"): the --sim build once, then boot + install +
+#               launch on each named device, then Simulator.app opens so every
+#               booted device has a window. Each line of the outcome is also
+#               appended to scratch-probe/sims.log, which the bridge can read.
 #
 # Nothing here signs anything: codesign uses the identity Xcode already has.
 # If it asks for the login password, PHONE.md step 0 is the one line that stops
@@ -61,6 +67,7 @@ INSTALL=1
 REGISTER=0
 SIM=0
 SIM_NAME=""
+SIMS=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --shell)      WITH_SHELL=1; shift ;;
@@ -69,6 +76,7 @@ while [ $# -gt 0 ]; do
     --no-install) INSTALL=0; shift ;;
     --register)   REGISTER=1; shift ;;
     --sim)        SIM=1; shift; if [ $# -gt 0 ] && [ "${1#--}" = "$1" ]; then SIM_NAME="$1"; shift; fi ;;
+    --sims)       SIM=1; SIMS="$2"; shift 2 ;;
     -h|--help)    sed -n '2,32p' "${BASH_SOURCE[0]}"; exit 0 ;;
     *)            echo "phone.sh: unknown argument $1 (try --help)" >&2; exit 2 ;;
   esac
@@ -105,6 +113,25 @@ if [ "$SIM" = 1 ]; then
   [ -d "$SIM_APP" ] || { echo "phone.sh: no $SIM_APP -- the build did not produce one" >&2; exit 1; }
   printf 'built: %s (%s)\n' "$SIM_APP" "$(du -sh "$SIM_APP" | cut -f1)"
   if [ "$INSTALL" = 0 ]; then say "4/4  install: skipped (--no-install)"; exit 0; fi
+  if [ -n "$SIMS" ]; then
+    LOG="$REPO/scratch-probe/sims.log"; mkdir -p "$REPO/scratch-probe"
+    echo "== $(date '+%F %T') sims build of $(git -C "$REPO" rev-parse --short HEAD) ($(grep -o 'ttstv-shell-v[0-9]*' "$REPO/shell/reader/sw.js" | head -1))" >> "$LOG"
+    IFS=',' read -r -a NAMES <<< "$SIMS"
+    for N in "${NAMES[@]}"; do
+      N="$(echo "$N" | sed 's/^ *//; s/ *$//')"
+      say "4/4  $N: boot, install, launch"
+      xcrun simctl boot "$N" 2>/dev/null || true
+      xcrun simctl terminate "$N" com.ttstv.frank 2>/dev/null || true
+      if xcrun simctl install "$N" "$SIM_APP" && xcrun simctl launch "$N" com.ttstv.frank; then
+        echo "ok   $N" | tee -a "$LOG"
+      else
+        echo "FAIL $N" | tee -a "$LOG"
+      fi
+    done
+    open -a Simulator || true
+    echo "== done $(date '+%T')" >> "$LOG"
+    exit 0
+  fi
   if [ -n "$SIM_NAME" ]; then
     # boot by name, headless: simctl boots a device without Simulator.app
     xcrun simctl boot "$SIM_NAME" 2>/dev/null || true
