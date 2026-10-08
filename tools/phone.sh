@@ -42,6 +42,7 @@
 #               the booted device (or NAME, booted headless by simctl). Never
 #               opens Simulator.app -- a booted device is a process, not a
 #               window, and every gate this repo has runs without one.
+#   --no-build  with --sim/--sims: install the .app already built, build nothing.
 #   --sims "A,B,C"  ONE BUILD, SEVERAL SIMULATORS (0B ONE-PHONE, 8 Oct; Osca
 #               1 Oct: "launch multiple simulators, so you can have more than
 #               one stranger"): the --sim build once, then boot + install +
@@ -68,6 +69,7 @@ REGISTER=0
 SIM=0
 SIM_NAME=""
 SIMS=""
+BUILD=1
 while [ $# -gt 0 ]; do
   case "$1" in
     --shell)      WITH_SHELL=1; shift ;;
@@ -76,6 +78,7 @@ while [ $# -gt 0 ]; do
     --no-install) INSTALL=0; shift ;;
     --register)   REGISTER=1; shift ;;
     --sim)        SIM=1; shift; if [ $# -gt 0 ] && [ "${1#--}" = "$1" ]; then SIM_NAME="$1"; shift; fi ;;
+    --no-build)   BUILD=0; shift ;;
     --sims)       SIM=1; SIMS="$2"; shift 2 ;;
     -h|--help)    sed -n '2,32p' "${BASH_SOURCE[0]}"; exit 0 ;;
     *)            echo "phone.sh: unknown argument $1 (try --help)" >&2; exit 2 ;;
@@ -90,8 +93,10 @@ export PATH="$HOME/.cargo/bin:$PATH"
 command -v cargo    >/dev/null || { echo "phone.sh: no cargo on PATH (rustup?)" >&2; exit 1; }
 command -v xcodegen >/dev/null || { echo "phone.sh: no xcodegen -- brew install xcodegen" >&2; exit 1; }
 
+if [ "$BUILD" = 1 ]; then
 say "1/4  xcodegen -- project.yml into the Xcode project and Info.plist"
 ( cd "$APPLE" && xcodegen generate )
+fi
 
 if [ "$WITH_SHELL" = 1 ]; then
   say "2/4  import the shell from $TTSTV"
@@ -107,15 +112,28 @@ if [ "$SIM" = 1 ]; then
   # good (NOT-DONE-25-sep, wave A) -- so the .app's presence is the verdict, not
   # the exit code.
   SIM_APP="$APPLE/build/arm64-sim/Frank.app"
+  ARCHIVED="$APPLE/build/frank_iOS.xcarchive/Products/Applications/Frank.app"
+  if [ "$BUILD" = 1 ]; then
+  # THE STALE-APP TRAP (8 Oct, 0B): tauri's last step renames the archive's
+  # Frank.app onto build/arm64-sim/Frank.app and FAILS ("Directory not empty")
+  # when one is already there -- so every repeat build left the OLD .app in
+  # place and this script installed it (a 26 Sep app installed on 8 Oct).
+  # Move the old one out first; after the build, take the archive's if tauri
+  # still did not.
+  [ -d "$SIM_APP" ] && mv "$SIM_APP" "$REPO/_to_delete/Frank.app.sim-$(date +%s)"
   say "3/4  tauri ios build --debug --target aarch64-sim --ci"
   ( cd "$REPO" && npm run --silent -- tauri ios build --debug --target aarch64-sim --ci ) || \
     echo "phone.sh: tauri exited $? -- checking for the .app anyway (the rename-app step is the known one)" >&2
+  [ ! -d "$SIM_APP" ] && [ -d "$ARCHIVED" ] && mv "$ARCHIVED" "$SIM_APP"
+  else
+  say "3/4  build: skipped (--no-build) -- installing $SIM_APP as it stands"
+  fi
   [ -d "$SIM_APP" ] || { echo "phone.sh: no $SIM_APP -- the build did not produce one" >&2; exit 1; }
   printf 'built: %s (%s)\n' "$SIM_APP" "$(du -sh "$SIM_APP" | cut -f1)"
   if [ "$INSTALL" = 0 ]; then say "4/4  install: skipped (--no-install)"; exit 0; fi
   if [ -n "$SIMS" ]; then
     LOG="$REPO/scratch-probe/sims.log"; mkdir -p "$REPO/scratch-probe"
-    echo "== $(date '+%F %T') sims build of $(git -C "$REPO" rev-parse --short HEAD) ($(grep -o 'ttstv-shell-v[0-9]*' "$REPO/shell/reader/sw.js" | head -1))" >> "$LOG"
+    echo "== $(date '+%F %T') sims build of $(git -C "$REPO" rev-parse --short HEAD) ($(grep -o 'ttstv-shell-v[0-9][0-9]*' "$REPO/shell/reader/sw.js" | head -1))" >> "$LOG"
     IFS=',' read -r -a NAMES <<< "$SIMS"
     for N in "${NAMES[@]}"; do
       N="$(echo "$N" | sed 's/^ *//; s/ *$//')"
