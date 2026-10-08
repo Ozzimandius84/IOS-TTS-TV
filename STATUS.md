@@ -46,6 +46,17 @@ None.
 ### 8. Next
 S0-3/4/5 Strangers on these three simulators. Not started.
 
+### 0B, after — the S0 phone Strangers on THE ONE app (Osca, 8 Oct 22:24: "now work on this one, improve it" → "Strangers first")
+Three Strangers, one simulator each, on the 22:12 build (reports committed in TTSTV): **S0-3** iPhone 17 `35d705c`, **S0-4** iPhone 17 Pro `8a9bf6b`, **S0-5** iPhone Air + iPhone 17 `84de000`. All three passed the build check.
+
+**§6 rows for DESIGN (1J) — all three fix-firsts are in served pages, so D26 routes them through band; none is in this repo's Rust:**
+1. **Play is silent on the phone, and says so wrongly (S0-3).** Measured, not guessed: `reader/reader.html` ≈L617, Play's 1.2 s check counts as *sounding* only `now.playing && now.voice` (a rendered voice) or `window.speechSynthesis.speaking`. On the phone the system voice is NOT `window.speechSynthesis`: `sysvoice.js::pickSynth` takes `TTSTVHost.speech` (AVSpeechSynthesizer, `createNativeSynth`). So a book with no render reads as silent, the check toggles playback OFF and shows "Frank has no voice to read this with yet." The fix is one condition: also count `now.system && now.playing` (or `Transport.speaking()`). Its "Choose a voice" link opens `settings.html` → `openWindow("models")`, which on the phone does nothing; "Give it a voice…" likewise.
+2. **No way to make a highlight (S0-4).** A press on a word opens the one-word card only; no colour/Highlight/Note; "Your stuff" says "Hold a sentence … and choose a colour." Caveat from the Stranger: its press is < 1 s; if a sentence needs a longer hold, nothing tells a person.
+3. **Share / join a shelf hits sign-in at the last step (S0-5)** — and "Not now" on Join throws the typed code away. Making and filling a shelf works ("Add to Ancients · Add 3").
+Shared by all three: covers jammed under the status bar/clock, a book's cover running off the right edge, the word card that cannot be closed by tapping outside, "Give it a voice…" half under the foot bar, two identical Virgil tiles.
+
+Bridge notes: Simulator text fields refused background typing (S0-5 needed full-screen control, and waited ~70 min while another session held it — RULES 11).
+
 ### 8b. Commit check
 Committed by pathspec: STATUS.md, tools/phone.sh, src-tauri/gen/apple/frank_iOS/Info.plist (+ earlier shell/ and manifest). Locks moved into `_to_delete/locks/`. Untracked left alone.
 
