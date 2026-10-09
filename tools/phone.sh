@@ -188,7 +188,7 @@ if [ "$SIM" = 1 ]; then
         echo "FAIL $N" | tee -a "$LOG"
       fi
     done
-    open -a Simulator || true
+    open -g -a Simulator || true   # -g: Simulator stays behind what Osca is using (10 Oct)
     # ONE COPY (0D), after: every simulator that holds a com.ttstv.frank must
     # hold THIS build's bytes -- one left on an older Frank is a person seeing
     # an older front. The verdict goes to sims.log too, for the bridge.
