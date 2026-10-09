@@ -174,6 +174,12 @@
   }
   function amount(r) {
     var n = r.audio.length;
+    /* a render on this device (#206): what the folder says, in the host's own words */
+    if (r.local) {
+      var where = phone() ? "on this iPhone" : web() ? "in this browser" : "on this Mac";
+      if (!r.chapters) return "Made " + where;
+      return "Made " + where + " · " + (n >= r.chapters ? "all " + r.chapters + " chapters" : (n ? n + " of " : "") + r.chapters + " chapters");
+    }
     return (n >= r.chapters ? "All " + r.chapters + " chapters" : n + " of " + r.chapters + " chapters") + (r.lit.length >= n ? " · every word lit" : r.lit.length ? " · words lit in " + r.lit.length : "");
   }
   /* P3 -- "Listed under <voice>": live only when the book AND the voice are public */
@@ -333,17 +339,18 @@
     F().Books.get(key).then(null, function () { return null; }).then(function (b) {
       /* a book the back end does not know yet is still this book: its own name, no readings, the device voice */
       b = b || { slug: key, work_id: key, title: opts.title || key, author: "", web: {} };
-      Promise.resolve(F().Renders.byWork(key)).then(null, function () { return []; }).then(function (rs) {
+      Promise.resolve(F().Renders.byWork(key, { title: b.title, author: b.author, chapters: opts.chapters, voiced: opts.voiced, voicedIds: opts.voicedIds, first: opts.first })).then(null, function () { return []; }).then(function (rs) {
         rs = rs || [];
         var owner = acct.signed_in && (st === "owner" || st === "refused");
         if (owner) box.appendChild(webCtl(b));
         box.appendChild(el("h3", "vp-sec", "Read by"));
-        var shown = owner ? rs : rs.filter(function (r) { return r.listed && r.can_list; });
+        /* yours on this device are always yours to see and play (#206), whatever the listing says */
+        var shown = owner ? rs : rs.filter(function (r) { return r.local || (r.listed && r.can_list); });
         var list = el("div", "vp-vrows"); box.appendChild(list);
         shown.forEach(function (r) {
           var row = el("div", "vp-vrow"); row.setAttribute("data-hash", r.hash);
           var pb = btn("vp-vp", "", function () { player.play(r); }, "Play " + b.title + ", read by " + r.voice); pb.innerHTML = G.play; row.appendChild(pb);
-          var t = el("a", "vp-rt"); t.href = "?voice=" + encodeURIComponent(r.voice_id) + (opts.q || "");
+          var t = el(r.local ? "span" : "a", "vp-rt"); if (!r.local) t.href = "?voice=" + encodeURIComponent(r.voice_id) + (opts.q || "");
           t.appendChild(el("b", null, r.voice)); t.appendChild(el("i", null, (r.whose ? r.whose + "’s voice · " : "") + amount(r)));
           if (owner && r.mine && !r.can_list) t.appendChild(el("em", "vp-why", r.why));
           row.appendChild(t);

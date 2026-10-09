@@ -30,7 +30,7 @@
 // that is not the current SHELL_CACHE, so changing this string IS the eviction
 // -- and changing it changes sw.js's own bytes, which is the only thing that
 // makes a browser run `install` and `activate` at all.
-const SHELL_CACHE = "ttstv-shell-v66";   // 8 Oct: PRESS-PIPELINES fixes in surface.js -- a finished job is not a WORKING row, a sample belongs to its own book, the Kaggle slots line reads the count (not "[object Object]")
+const SHELL_CACHE = "ttstv-shell-v76";   // 9 Oct: One word belongs to the book it was pressed in (reader.html)
                                          // was v64: 1 Oct: #195 -- the phone reader mounts the band (the plan's glass foot, ▶ in the pill), pause keeps the player, the spoken sentence is drawn on the phone (rects), FOLLOW lets a hand go at the next Play and keeps clear of the chrome; was v63: 1 Oct: #191/#193 -- contents tap goes, printed contents are doors, one word where you read, marks paint and reach Mine, search closes;
                                          // 30 Sep, later: EXPORT (web) second pass -- chapter tops scroll, Play from the line, marks, web wording;
                                          // 30 Sep: EXPORT (web) -- band, layers, hints, Tell Frank, settings look;

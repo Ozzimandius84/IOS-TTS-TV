@@ -2285,3 +2285,28 @@ html[data-theme="dark"] .tilecov, html[data-dark] .tilecov {
   html:not([data-theme="light"]) .tilecov {
     filter: grayscale(1) sepia(calc(var(--warm, 0) / 18 * 0.62)) contrast(calc(1 + var(--contrast, 0) * 0.08)) brightness(0.9) !important; }
 }
+
+/* ============ TYPE TO FIND (ASKS #207, 9 Oct): the shelf's own find, a glass capsule at the top of the window
+   while letters are typed -- the letters in the book serif, the count in the LABEL voice, the way out as a hint.
+   A tile that does not answer leaves the grid (display none) so the ones that do close up. Mac and web only. */
+.typefind{
+  position: fixed; left: 50%; top: 14px; transform: translateX(-50%); z-index: 40;
+  display: flex; align-items: center; gap: 10px; height: 40px; padding: 0 16px 0 14px; border-radius: 999px;
+  color: var(--fg); border: 1px solid color-mix(in srgb, var(--fg) 12%, transparent);
+  background: color-mix(in srgb, var(--bg) 78%, transparent);
+  -webkit-backdrop-filter: saturate(1.8) blur(18px); backdrop-filter: saturate(1.8) blur(18px);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.14);
+  pointer-events: none; white-space: nowrap;
+}
+.typefind[hidden]{ display: none; }
+.typefind .tf-glyph{ width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; opacity: .7; }
+.typefind .tf-text{ font: 400 19px/1 var(--chrome-serif, var(--serif, "Iowan Old Style", Palatino, Georgia, serif)); letter-spacing: -.01em; }
+.typefind .tf-count{ font: 600 11px/1.2 var(--ui-font); letter-spacing: .13em; text-transform: uppercase; color: var(--fg-dim); }
+.typefind .tf-hint{ font: 400 11px/1.2 var(--ui-font); color: var(--fg-dim); margin-left: 4px; }
+.typefind.none .tf-count{ color: var(--chrome-accent, #c8102e); }
+#shelf .railrow[data-tf-hidden]{ display: none; }
+/* while letters are typed the page IS the answer: one grid of the books that answer, no Newly added strip, no
+   Shelves albums, no "Library" head above it */
+html[data-typefind] #shelf .libsec.lib-new, html[data-typefind] #shelf .libsec.lib-albums,
+html[data-typefind] #shelf .libhead.lib-all, html[data-typefind] #shelf .shelfhead{ display: none; }
+html[data-phone] .typefind{ display: none; }

@@ -223,9 +223,56 @@
     make: function (recording) { return call("voices", "make", [recording], function () { return useSample(PICK.use); }); },
     useFor: function (voiceId, slugKey) { return call("voices", "useFor", [voiceId, slugKey], function () { PICK.use = "chosen"; changed(); return { ok: true }; }); }
   };
+  /* THE BOOK'S OWN RENDER, ON THIS DEVICE (ASKS #206, Osca 9 Oct: "with T.S. Eliot poems, I have voices, however
+     none show" / "Should just be able to press play, if you have a voice. It should work everywhere"). With no
+     `renders` source wired (the shipped Frank, the phone, the web) the seam answered [] and the book view said
+     "No voice has read this book yet" over a book that plays in eliot-quartets in the reader. The book's folder
+     already says who read it: render.json names the voice, audio/<chapter>.<ext> are its readings. So when the
+     wired source (or the samples) has no row for a book, the folder is asked -- two roots tried, the shell's
+     (../books/) and the phone bundle's (../books/) -- and one row comes back, marked `local`, whose src plays the
+     chapter's own file. `opts` carries what the page knows of the book (title, author, how many chapters are voiced
+     and of how many, the first voiced chapter) so the row says the amount without reading book.json. */
+  var ROOTS = ["../books/", "../books/"];
+  function localRenders(key, opts) {
+    opts = opts || {};
+    if (!key || typeof fetch !== "function") return P([]);
+    var slug = encodeURIComponent(String(key));
+    function tryRoot(i) {
+      if (i >= ROOTS.length) return P(null);
+      var base = ROOTS[i] + slug + "/";
+      return fetch(base + "render.json", { cache: "no-store" }).then(function (r) { return r.ok ? r.json().then(function (j) { return { base: base, j: j }; }) : null; }, function () { return null; })
+        .then(function (x) { return x || tryRoot(i + 1); });
+    }
+    return tryRoot(0).then(function (x) {
+      if (!x || !x.j || !x.j.voice) return [];
+      var j = x.j, base = x.base, ext = j.audio_ext || "wav";
+      var of = +opts.chapters || null, n = (opts.voiced != null) ? +opts.voiced : null;
+      var voiced = Array.isArray(opts.voicedIds) ? opts.voicedIds : [];
+      return [{ hash: ("local:" + key + ":" + j.voice).replace(/[^a-z0-9:_-]+/gi, "").slice(0, 40), voice_id: j.voice, voice: j.voice,
+        work_id: key, slug: key, title: opts.title || key, author: opts.author || "", cover: null,
+        chapters: of, audio: voiced.length ? voiced : (n != null ? new Array(Math.max(0, n)).fill("") : []), lit: [],
+        rights: null, listed: false, can_list: true, why: "", engine: j.engine || "", made_at: "",
+        local: true, mine: true, whose: "", first: opts.first || voiced[0] || "c001",
+        src: function (ch) { return base + "audio/" + encodeURIComponent(ch || opts.first || "c001") + "." + ext; } }];
+    });
+  }
   var Renders = {
     byVoice: function (id) { return call("renders", "byVoice", [id], function () { return rendersSample(id, PICK.voice); }); },
-    byWork: function (key) { return call("renders", "byWork", [key], function () { return bookVoicesSample(key, PICK.book); }); },
+    byWork: function (key, opts) {
+      /* the wired source's (or the samples') rows, and the folder's own row beside them unless one of them already
+         names that voice -- a render on this device is listed whatever the cloud says of it */
+      return call("renders", "byWork", [key], function () { return bookVoicesSample(key, PICK.book); })
+        .then(function (rows) { return rows || []; }, function () { return []; })
+        .then(function (rows) { return localRenders(key, opts).then(function (loc) {
+          var seen = {}; rows.forEach(function (r) { seen[String(r.voice_id || r.voice).toLowerCase()] = r; });
+          /* a row the source already has for this voice IS the one on this device: it is marked local (shown and
+             playable whatever its listing); any other voice the folder names is added */
+          var add = [];
+          loc.forEach(function (r) { var k = String(r.voice_id).toLowerCase(); if (seen[k]) { seen[k].local = true; if (!seen[k].src) seen[k].src = r.src; } else add.push(r); });
+          return rows.concat(add);
+        }, function () { return rows; }); });
+    },
+    local: localRenders,
     setListed: function (hash, on) { return call("renders", "setListed", [hash, on], function () { return { ok: true }; }); },
     /* "already made?" -- RENDER-PUBLISH's lookup; answered before any GPU */
     made: function (voiceId, key) { return call("renders", "made", [voiceId, key], function () { return key === "eclogues-en" ? { hash: "x", chapters: 10, audio: 10 } : null; }); }

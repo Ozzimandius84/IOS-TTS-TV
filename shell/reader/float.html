@@ -29,7 +29,9 @@
 <!-- D18 (28 Sep): apparatus is a marker, not a word -- the unit's label,
      small, above the word, the same element the one-word view wears at its
      own size (float.css #mark). Empty until the reader's feed names one. -->
-<body><div id="card"><span id="mark" class="wordview-mark"><span class="of"></span><span class="label"></span></span><span id="word"></span></div><div id="fan"></div>
+<!-- ASKS #205 (Osca, 9 Oct: "try again from the top"): the word stands in a SLOT of steady width (float.css
+     --float-ch), its red letter on the slot's centre column, so the box never changes size word by word. -->
+<body><div id="card"><span id="mark" class="wordview-mark"><span class="of"></span><span class="label"></span></span><div id="slot"><span id="word"></span></div></div><div id="fan"></div>
 <!-- THE PIVOT'S RULE IS wordview.js's -- `WordView.pivotIndex` (letters only,
      the prototype's table). Loaded here for that one pure function; nothing
      is mounted. The float wraps the letter in `.pv` the way the view does. -->

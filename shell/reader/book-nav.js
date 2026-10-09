@@ -2983,6 +2983,20 @@ function mount(o){
       line(){
         const si = slotIdx();               /* D18: the slot's line, never a numeral's */
         const w = wordDomIndex[si];
+        /* THE WORD'S PLACE IN ITS PARAGRAPH, BY RANGE (ASKS #204). `w.start`
+           is an offset into the word's TEXT NODE; sliced against the
+           paragraph's whole textContent it marked the wrong run whenever the
+           paragraph held more than one node (a highlight span, a lang span,
+           a front-matter block), which is how "XIII." wore the mark under
+           "mathematician". Two ranges -- paragraph start to the word, the
+           word to the paragraph's end -- give the text on either side exactly. */
+        if(w && w.p && w.node){
+          try{
+            const r1 = document.createRange(); r1.setStart(w.p, 0); r1.setEnd(w.node, w.start);
+            const r2 = document.createRange(); r2.setStart(w.node, w.end); r2.setEnd(w.p, w.p.childNodes.length);
+            return { before: r1.toString(), word: wordTextAt(si) || "", after: r2.toString() };
+          }catch(_){}
+        }
         const text = w && w.p ? (w.p.textContent || "") : "";
         if(w && text) return { before: text.slice(0, w.start),
                                word: text.slice(w.start, w.end),

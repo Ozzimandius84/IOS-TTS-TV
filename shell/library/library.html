@@ -2703,7 +2703,10 @@ function readBy(pane, slug) {
     return;
   }
   const slot = document.createElement("span"); slot.className = "tile-slot tile-readby";
-  try { slot.appendChild(VoicePage.bookVoices(slug)); } catch (e) { console.warn("[read by]", e); return; }
+  /* what this page knows of the book goes with the ask (#206): the local render row says "3 of 25 chapters" from it */
+  const ent = (libraryBooks || []).find(b => b.slug === slug) || null;
+  const known = ent ? { title: ent.title, author: ent.author, chapters: ent.chapters_n || ent.chapters || null, voiced: ent.voiced != null ? ent.voiced : (ent.has_audio ? null : 0) } : {};
+  try { slot.appendChild(VoicePage.bookVoices(slug, undefined, known)); } catch (e) { console.warn("[read by]", e); return; }
   const read = pane.querySelector(".tile-read");
   if (read) pane.insertBefore(slot, read); else pane.appendChild(slot);
 }
@@ -3401,9 +3404,11 @@ function renderShelf() {
   /* (ASKS #80: the canvas's picture of the Library is Frank's, and Frank's shelf draws no route note -- in ?embed it is
      the console's, where Tell Frank's log keeps it) */
   if (libraryContext().bench && libraryWhy && /[?&]embed\b/.test(location.search) && !renderShelf.__warned) { renderShelf.__warned = 1; console.warn("[library] shelves are on this Mac only -- not mirrored to TTS_DATA/reader/library.json: " + libraryWhy); }
-  const line = (libraryContext().bench && libraryWhy && !/[?&]embed\b/.test(location.search))
-    ? `<div class="libline">Shelves, pairs and reading positions are on this Mac only — not mirrored to TTS_DATA/reader/library.json: ${esc(libraryWhy)}.</div>`
-    : "";
+  /* ASKS #208 (Osca, 9 Oct: "the bit of text at the bottom of my library in my desktop app, that should be
+     removed"): the mirror's refusal is never printed under the shelf. It stays in the console (above) and in Tell
+     Frank's log; the `positions[...]` write that lacks a `chapter` is library/'s own fault, named in STATUS §6. */
+  const line = "";
+  if (libraryContext().bench && libraryWhy && !renderShelf.__warned2) { renderShelf.__warned2 = 1; console.warn("[library] shelves are on this Mac only -- not mirrored to TTS_DATA/reader/library.json: " + libraryWhy); }
   /* THE SHELF IS ONLY REBUILT WHEN IT HAS CHANGED (Osca, 5 Sep: "There is a
      funny jitter/artifact when I switch between a reader and the library, the
      library book covers all jump/flicker very suddenly, it hurts the eyes").
@@ -6200,6 +6205,80 @@ document.addEventListener("keydown", (e) => {
     e.preventDefault(); toggleSources();
   }
 });
+
+/* ============ TYPE TO FIND (ASKS #207, Osca 9 Oct: "JUST ANY key press, on the keyboard, will start searching ...
+   if I just press T inside my library ... it will search for book names and Authors starting with T ... Surface
+   search can stay the same"). On the Mac and the web any printable key, with no modifier and no field under the
+   caret, starts a find of the shelf: a glass capsule at the top shows what has been typed and how many books
+   answer; every tile whose TITLE or AUTHOR has a word starting with the letters stays, the rest go; Backspace
+   edits, Esc clears, Enter opens the first book left. The Surface (⌘K) is untouched and still its own door. A
+   bare L therefore finds books -- the Light/dark key that used to answer it is prefs/'s to move to ⌘L (STATUS §6).
+   The phone has no keyboard at rest: nothing of this runs there (html[data-phone]). */
+const TypeFind = (() => {
+  let text = "";
+  let el = null, textEl = null, countEl = null;
+  function fold(s) { return String(s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase(); }
+  function words(s) { return fold(s).split(/[^\p{L}\p{N}]+/u).filter(Boolean); }
+  function matches(title, author, q) {
+    if (!q) return true;
+    const f = fold(q);
+    if (fold(title).startsWith(f)) return true;
+    return words(title).concat(words(author)).some(w => w.startsWith(f));
+  }
+  function bar() {
+    if (el) return el;
+    el = document.createElement("div"); el.id = "typefind"; el.className = "typefind"; el.hidden = true;
+    el.setAttribute("role", "status"); el.setAttribute("aria-live", "polite");
+    el.innerHTML = '<svg class="tf-glyph" viewBox="0 0 20 20" aria-hidden="true"><circle cx="8.5" cy="8.5" r="5.2"/><path d="m12.5 12.5 4 4"/></svg><span class="tf-text"></span><span class="tf-count"></span><span class="tf-hint">Esc clears · ↩ opens</span>';
+    document.body.appendChild(el);
+    textEl = el.querySelector(".tf-text"); countEl = el.querySelector(".tf-count");
+    return el;
+  }
+  function tiles() { return Array.from(document.querySelectorAll("#shelf .railrow[data-slug]")); }
+  function apply() {
+    const q = text;
+    let n = 0, all = 0;
+    for (const t of tiles()) {
+      if (t.classList.contains("loading")) continue;
+      all++;
+      const title = (t.querySelector(".railrow-title") || {}).textContent || t.getAttribute("aria-label") || "";
+      const by = (t.querySelector(".railrow-by") || {}).textContent || "";
+      const ok = matches(title, by.split("\u00b7")[0], q);
+      t.toggleAttribute("data-tf-hidden", !ok);
+      if (ok) n++;
+    }
+    const b = bar();
+    b.hidden = !q;
+    if (q) {
+      textEl.textContent = q;
+      countEl.textContent = n === 1 ? "1 book" : (n + " books");
+      b.classList.toggle("none", n === 0);
+    }
+    document.documentElement.toggleAttribute("data-typefind", !!q);
+    return n;
+  }
+  function first() { return tiles().find(t => !t.hasAttribute("data-tf-hidden") && !t.classList.contains("loading")); }
+  function clear() { text = ""; apply(); }
+  function key(e) {
+    if (isPhone()) return false;
+    const t = e.target;
+    if (t && (t.isContentEditable || /^(input|textarea|select)$/i.test(t.tagName || ""))) return false;
+    if (e.metaKey || e.ctrlKey || e.altKey) return false;
+    if (document.querySelector(".sf-sheet.open, #surface.open, [data-sheet]")) return false;   /* the Surface has the keys */
+    if (e.key === "Escape") { if (!text) return false; clear(); return true; }
+    if (e.key === "Backspace") { if (!text) return false; text = text.slice(0, -1); apply(); return true; }
+    if (e.key === "Enter") { if (!text) return false; const f = first(); if (f) { clear(); f.click(); } return true; }
+    if (e.key.length !== 1 || (e.key === " " && !text)) return false;
+    text += e.key; apply(); return true;
+  }
+  /* a shelf rebuilt from scratch (refresh, an ingest) keeps the find */
+  const shelf = document.getElementById("shelf");
+  if (shelf && typeof MutationObserver === "function") new MutationObserver(() => { if (text) apply(); }).observe(shelf, { childList: true });
+  return { key, apply, clear, matches, get text() { return text; } };
+})();
+document.addEventListener("keydown", (e) => {
+  if (TypeFind.key(e)) { e.preventDefault(); e.stopImmediatePropagation(); }
+}, true);
 
 document.getElementById("menu").addEventListener("click", (e) => {
   const b = e.target.closest("button[data-act]");

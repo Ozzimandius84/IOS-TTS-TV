@@ -47,6 +47,8 @@
 #               ALL its saved state (first-run flag, prefs, WebKit storage) are
 #               uninstalled, but the device's books/ is kept aside first and
 #               put back, so the Library still holds them (Osca, 8 Oct 22:20).
+#   (0D) every --sim/--sims build runs TTSTV's testkit/one_copy.py: `fresh` on the
+#               .app before any install, `installed` over every simulator after.
 #   --sims "A,B,C"  ONE BUILD, SEVERAL SIMULATORS (0B ONE-PHONE, 8 Oct; Osca
 #               1 Oct: "launch multiple simulators, so you can have more than
 #               one stranger"): the --sim build once, then boot + install +
@@ -93,6 +95,18 @@ done
 
 say() { printf '\n\033[1m== %s\033[0m\n' "$*"; }
 
+# 0D ONE COPY -- TTSTV's testkit/one_copy.py, the one gate against an older
+# front reaching a person (Osca, 8 Oct 22:17: "a better front end has already
+# been made, but it's reverted ... happening continually"). It is in the OTHER
+# repo on purpose (one copy of the check, too); a Mac without TTSTV cannot
+# build for a person, so a missing file is a refusal, not a skip.
+ONE_COPY="$TTSTV/testkit/one_copy.py"
+one_copy() {
+  [ -f "$ONE_COPY" ] || { echo "phone.sh: 0D ONE COPY needs $ONE_COPY -- pass --ttstv <path to TTSTV>" >&2; exit 1; }
+  say "one copy: $*"
+  python3 "$ONE_COPY" "$@" || { echo "phone.sh: ONE-COPY refused (the line above says which file) -- nothing installed" >&2; exit 1; }
+}
+
 # Xcode's ▶ gets this from project.yml's script phase; a terminal run gets it
 # from the shell -- except under `env -i`, cron, or an editor's task runner.
 export PATH="$HOME/.cargo/bin:$PATH"
@@ -136,6 +150,11 @@ if [ "$SIM" = 1 ]; then
   fi
   [ -d "$SIM_APP" ] || { echo "phone.sh: no $SIM_APP -- the build did not produce one" >&2; exit 1; }
   printf 'built: %s (%s)\n' "$SIM_APP" "$(du -sh "$SIM_APP" | cut -f1)"
+  # ONE COPY (0D, Osca 8 Oct; wired here 10 Oct): the .app about to go onto a
+  # simulator must have been built AFTER the newest file of shell/ -- an older
+  # .app is exactly how the 26 Sep Library came back on 8 Oct. The check is
+  # TTSTV's testkit/one_copy.py (stdlib) and its sentence names the file.
+  one_copy fresh --shell "$REPO/shell" "$SIM_APP"
   if [ "$INSTALL" = 0 ]; then say "4/4  install: skipped (--no-install)"; exit 0; fi
   if [ -n "$SIMS" ]; then
     LOG="$REPO/scratch-probe/sims.log"; mkdir -p "$REPO/scratch-probe"
@@ -170,6 +189,15 @@ if [ "$SIM" = 1 ]; then
       fi
     done
     open -a Simulator || true
+    # ONE COPY (0D), after: every simulator that holds a com.ttstv.frank must
+    # hold THIS build's bytes -- one left on an older Frank is a person seeing
+    # an older front. The verdict goes to sims.log too, for the bridge.
+    if one_copy installed --built "$SIM_APP" --sims "$HOME/Library/Developer/CoreSimulator/Devices"; then
+      echo "one-copy ok   installed ($(xcrun simctl listapps booted 2>/dev/null | grep -c com.ttstv.frank || true) booted)" | tee -a "$LOG"
+    else
+      echo "one-copy FAIL installed -- a simulator still has an older Frank (the line above says which)" | tee -a "$LOG"
+      echo "== done $(date '+%T')" >> "$LOG"; exit 1
+    fi
     echo "== done $(date '+%T')" >> "$LOG"
     exit 0
   fi

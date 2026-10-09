@@ -59,7 +59,21 @@ html, body{
    without shrinking the dial for every other word. The type is the
    reader's own serif at --float-em; no wordview.css, no wordpane.css —
    the word here is one element and nothing else. */
+/* THE SLOT (ASKS #205, Osca 9 Oct: "the whole thing looks very bad ... try again from the top"; the S0 Stranger:
+   "the window is re-made and resized to each word, 896x255 -> 352x187 -> 294x187"). The box used to be each word's
+   own width, so the HUD jittered with every word. Now the word stands in a slot of STEADY width -- --float-ch ems
+   of the word's size -- with its red letter on the slot's centre column (float.js::placeWord writes the left), the
+   one-word view's own rule. A word wider than the slot is set smaller to fit (the slot is the dial, not the word).
+   The window is slot + margins, the same for "a" and "mathematician". */
+:root{ --float-ch: 9; }
+#slot{
+  position:relative;
+  width:calc(var(--float-em) * var(--float-ch));
+  height:var(--float-em);
+  overflow:visible;
+}
 #word{
+  position:absolute; left:0; top:0;
   display:inline-block;
   font-family:var(--serif);
   font-weight:normal;
@@ -68,13 +82,7 @@ html, body{
   color:var(--ink);
   white-space:nowrap;
   padding:0;
-  max-width:40ch;
-  overflow:hidden;
-  text-overflow:ellipsis;
 }
-
-/* THE ONE STEP OF TRACKING, and then the ellipsis. Never a smaller type. */
-#word[data-long="1"]{ letter-spacing:-.03em; }
 
 /* THE MARKER (D18, 28 Sep) at the float's own size: the same element the
    one-word view draws (wordview.css .wordview-mark -- the chrome face,
@@ -110,21 +118,43 @@ html, body{
    from the press point, OUTSIDE the box, away from the nearer screen border
    (float.js::openFan places them; this is what one looks like). A toggle
    (Speak) shows its state as a filled circle. Tap one or slide onto it. */
+/* THE FAN, REDRAWN (ASKS #205, Osca 9 Oct: "have you even tried the options? ... they look AWFUL"). The circles
+   were 40 px ink rings with an 11 px word squeezed inside. Now each is a DISC of the card's own glass, 44 px (the
+   tap), one glyph in it at 18 px, and its name UNDER it in Frank's small voice (the LABEL recipe: 10/600/.13,
+   capitals) -- so the disc stays a disc and the word is read, not squinted at. Speak is a toggle: on, the disc fills
+   with the red and the glyph goes to ground. The one under the finger (data-hot) lifts a little and wears a red
+   ring. The arc is float.js's (fanLayout): the centres are spaced so two discs with their labels never touch. */
 #fan{ position:absolute; left:0; top:0; width:0; height:0; pointer-events:none; }
 #fan .fc{
   position:absolute; transform:translate(-50%,-50%);
-  width:var(--fan-size, 40px); height:var(--fan-size, 40px); border-radius:50%;
-  box-sizing:border-box; border:1.5px solid var(--ink);
-  background:var(--ground, #fff); color:var(--ink);
-  font:500 11px/1 var(--chrome-ui-font, var(--ui)); letter-spacing:.02em;
-  display:flex; align-items:center; justify-content:center; text-align:center;
+  width:var(--fan-size, 44px); height:var(--fan-size, 44px); border-radius:50%;
+  box-sizing:border-box;
+  background:color-mix(in srgb, var(--ground, #fbfaf6) 82%, transparent);
+  -webkit-backdrop-filter:saturate(1.8) blur(20px); backdrop-filter:saturate(1.8) blur(20px);
+  border:1px solid color-mix(in srgb, var(--ink, #1d1d1b) 14%, transparent);
+  box-shadow:0 6px 18px rgba(0,0,0,.16);
+  color:var(--ink);
+  display:flex; align-items:center; justify-content:center;
   pointer-events:auto; cursor:default; white-space:nowrap;
-  animation: fl-fan 140ms ease both;
+  animation: fl-fan 160ms cubic-bezier(.2,.8,.2,1) both;
+  transition: transform .12s ease, background-color .12s ease;
 }
-#fan .fc .g{ font-size:15px; line-height:1; }
-#fan .fc[data-on="1"]{ background:var(--ink); color:var(--ground, #fff); }
-#fan .fc[data-hot="1"]{ outline:2px solid var(--pivot); outline-offset:2px; }
-@keyframes fl-fan{ from{ opacity:0; transform:translate(-50%,-50%) scale(.6); } }
+#fan .fc .g{ font:400 18px/1 var(--serif); letter-spacing:0; }
+#fan .fc .g.t{ font:600 13px/1 var(--chrome-ui-font, var(--ui)); letter-spacing:-.01em; }  /* a two-letter glyph (Aa) */
+/* the name stands BESIDE the disc, on the side the fan opened toward (the fan is a vertical arc, away from the
+   nearer screen border), so four names never run under the next disc */
+#fan .fc .fl{
+  position:absolute; top:50%; transform:translateY(-50%);
+  left:100%; margin-left:8px;
+  font:600 10px/1.2 var(--chrome-ui-font, var(--ui)); letter-spacing:.13em; text-transform:uppercase;
+  color:var(--ink); white-space:nowrap;
+  text-shadow:0 0 6px var(--ground, #fbfaf6), 0 0 2px var(--ground, #fbfaf6);
+}
+#fan[data-away="left"] .fc .fl{ left:auto; right:100%; margin-left:0; margin-right:8px; }
+#fan .fc[data-on="1"]{ background:var(--pivot); border-color:transparent; color:var(--ground, #fbfaf6); }
+#fan .fc[data-on="1"] .fl{ color:var(--ink); }
+#fan .fc[data-hot="1"]{ transform:translate(-50%,-50%) scale(1.1); box-shadow:0 0 0 2px var(--pivot), 0 8px 22px rgba(0,0,0,.2); }
+@keyframes fl-fan{ from{ opacity:0; transform:translate(-50%,-50%) scale(.5); } }
 
 /* ============ THE RED LETTER BREATHES (§10) — the only state light. While
    Speak is on the pivot moves on warmth, saturation and darkness ONLY, over
@@ -145,6 +175,8 @@ html, body{
    size and every hand are what they were. The blur is of this window's own content; on the Mac the real frost over
    the desktop is the window's vibrancy (EXPORT: desktop/, NSVisualEffectView under a transparent webview). */
 #card{ isolation:isolate; }
+/* THE BENCH (#205): with no window to be the box, the card stands at the middle of the page so the fan has room */
+html[data-bench] #card{ left:50%; top:50%; transform:translate(-50%,-50%); }
 #card::before{ content:""; position:absolute; z-index:-1; inset:calc(var(--float-margin) * -0.6);
   border-radius:calc(var(--float-em) * .26);
   background:color-mix(in srgb, var(--ground, #fbfaf6) 74%, transparent);

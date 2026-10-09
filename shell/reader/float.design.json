@@ -7,7 +7,7 @@
     "hold": 350,
     "snap": 12,
     "home": 80,
-    "fan": { "radius": 64, "size": 40, "arc": 100 },
+    "fan": { "radius": 56, "size": 44, "arc": 150 },
     "breathe": { "period": 4000, "sat": 0.15, "light": 0.08, "hue": 3 }
   },
   "css": {},

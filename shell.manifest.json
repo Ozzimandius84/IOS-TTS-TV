@@ -2,7 +2,7 @@
   "added_here": [
     "index.html"
   ],
-  "bytes": 4098088,
+  "bytes": 4140995,
   "count": 106,
   "files": {
     "bar/askbar.css": {
@@ -38,12 +38,12 @@
       "sha256": "7dcf043103a15c94225d3871d310a6367a1f4e1c028e4c97a486f84c77613873"
     },
     "library/library.css": {
-      "bytes": 172283,
-      "sha256": "93698df2882b792f3745909bc6e99ed1479654ee2f78ed3f09fbdea3d935bc67"
+      "bytes": 174221,
+      "sha256": "53123b64ffa45dde4c2c30c1606d0e974a475cf34fd3ad085a1844b640769523"
     },
     "library/library.html": {
-      "bytes": 470978,
-      "sha256": "b0d731fb00bfa937d28173e5789b97d92bab39e1ac0228a588ecf24f416e4438"
+      "bytes": 475981,
+      "sha256": "6bd6dd5b67c34dfa8568ef376c8bb63151218fd1948af6b76a9ba4525af9543a"
     },
     "library/library.json": {
       "bytes": 3,
@@ -94,8 +94,8 @@
       "sha256": "e40ed97a7dbaada0cfc0d0c1552285c4a1fb4e33eda41a435f491e0978713294"
     },
     "reader/book-nav.js": {
-      "bytes": 363208,
-      "sha256": "53ce9d660d62c45af99752d3c100144f58d65ede50b69f14bfef16d15ac6357a"
+      "bytes": 364129,
+      "sha256": "3df87255cfb984f82c0fe6f6ab9ecd610a9332f9862cba3970467912e4a19356"
     },
     "reader/book.js": {
       "bytes": 6136,
@@ -134,20 +134,20 @@
       "sha256": "f3695fc24f753ea0197841fefa41f37b92208443ec9cb434a2cdc7ca108fe1fc"
     },
     "reader/float.css": {
-      "bytes": 8444,
-      "sha256": "ab2921e399bfdb4fa8de10701d2b3942d3ab2057065599d855d48e83ec37c960"
+      "bytes": 11050,
+      "sha256": "bc2dd1ff76e743ab1fb5cc376d2b89d54570d143b5ae84de9214dd2c7db66b26"
     },
     "reader/float.design.json": {
       "bytes": 1104,
-      "sha256": "6f5cceb6bba82a912339f59402ac6217d578d7274f33b89efdf7bbe40a963627"
+      "sha256": "7188d0b6b4f9cc5f1b85f6cdae48714fead091623e451939fb843d4407c0433c"
     },
     "reader/float.html": {
-      "bytes": 2248,
-      "sha256": "15129c66907a767ddac7631bf7e59f9c5902ebd462b2d97813abc0da19acf6d2"
+      "bytes": 2488,
+      "sha256": "3ef2393c6c24f0b02f6e69bd323d42880d56c18ba771643d6113acb793295abf"
     },
     "reader/float.js": {
-      "bytes": 41712,
-      "sha256": "9d453a01353452b82d799b613866e192f0887762e0fb9d8ee5e614a0c08b8973"
+      "bytes": 45579,
+      "sha256": "778d43146699589e6918d71d3de4af7ef0d1c80f3c97ba27b95e77029d9e86c6"
     },
     "reader/floatdoor.js": {
       "bytes": 31549,
@@ -190,8 +190,8 @@
       "sha256": "b9b64f0e8306a5519a1a65edf6c1819b12758dc8de0e9cd8885ee4cf95c1de50"
     },
     "reader/lookup.js": {
-      "bytes": 41169,
-      "sha256": "f8f6cc0904f4a085d283e9746c485cb2db1e082cabfa07d69ca144f3b9bd1460"
+      "bytes": 45225,
+      "sha256": "4917d51644a670fde52b6b4ced567ec620f84a723719b28e49d2d3c28aecc1e0"
     },
     "reader/manifest.webmanifest": {
       "bytes": 811,
@@ -246,8 +246,8 @@
       "sha256": "01d0599452f0583b677409bef75c8211aeee66c02d6033831ced4bace0fc37cd"
     },
     "reader/reader.html": {
-      "bytes": 183770,
-      "sha256": "a2a18e2ca8f7e72081964192100281c7eb121ca1eec69df338f7b2933b897646"
+      "bytes": 184849,
+      "sha256": "06126bd779006e32d5e4cb0a2f53c13a9d86d3a267466632f0841498ecd142be"
     },
     "reader/scrub.css": {
       "bytes": 13348,
@@ -278,16 +278,16 @@
       "sha256": "bb6be55f3c75d2b8d4ffb92f25aca541bec42ec85f1e32b10a9c6dd8039a9500"
     },
     "reader/surface.css": {
-      "bytes": 58881,
-      "sha256": "167321c75913d56aa28581a18217a8eb0e7c20c4cffd5847b6c29eb071b9fc2b"
+      "bytes": 61890,
+      "sha256": "d3f94d3b7296517dbe8c5453502f8426d35ac13c7764468529f988531bb86059"
     },
     "reader/surface.js": {
-      "bytes": 371172,
-      "sha256": "d382407d35b363b2e0bd2e392cbd7cb9e1cc6e5d6deb390974d13a53b11d6999"
+      "bytes": 384516,
+      "sha256": "3b2d5997e69aee63fdf9c4131e4195455f124e49d6ebcd71f0fa3a0c97bc8e99"
     },
     "reader/sw.js": {
-      "bytes": 29915,
-      "sha256": "e742099aaaff3996418ea7c49440ce87bac46d6ac14608da07094d320866871f"
+      "bytes": 29804,
+      "sha256": "ffb716d7b61d0eb2a035ae97fe89ea03149d8c623952e2c123aca981ff63ed60"
     },
     "reader/sysvoice.js": {
       "bytes": 45964,
@@ -322,12 +322,12 @@
       "sha256": "7d4d1b5bcb294e93c77f63b34c1b2e02b5320231ea5f72e807dc1ae53dff6754"
     },
     "reader/voicepage.js": {
-      "bytes": 35751,
-      "sha256": "8638ec1db0011372372709db0e02dc373114622796770f409c69db713411e24d"
+      "bytes": 36425,
+      "sha256": "afaa103281f185ecba221524127dd9af1b616f6b7846a5198133fa76868f0acd"
     },
     "reader/voicestore.js": {
-      "bytes": 21009,
-      "sha256": "9d187d6baa573c8ce8676b128519699304ab321875b2b8ca3326c44916f9bb5a"
+      "bytes": 24605,
+      "sha256": "31954e741bd73a06ac3f6d9d9ff10248dcdd573cce0996cc7bd6e59aa07a272c"
     },
     "reader/wheel.css": {
       "bytes": 3423,
@@ -346,8 +346,8 @@
       "sha256": "7df23a1c61c337d3b0043202178e3fdef63a466b9129e2b50244b7fb55eec34e"
     },
     "reader/wordpane.js": {
-      "bytes": 8510,
-      "sha256": "bbeebf2d6a561221c66b82fc13b04eba163b2850181c6036f2a1d866a9070954"
+      "bytes": 11195,
+      "sha256": "7197777d076e99790120f9a01c59fb905e7c7baea0f0b53f4a32ab45635111e1"
     },
     "reader/wordsbefore.css": {
       "bytes": 3182,
@@ -432,9 +432,9 @@
   },
   "home_page": "library/library.html",
   "source": {
-    "commit": "1d858f0",
-    "how": "design/export.py --shell --phone-shell into a scratch dir (8 Oct, 0B ONE-PHONE); 2 files differed (reader/surface.js, reader/sw.js) and were copied over; index.html and library/library.json kept",
-    "repo": "/sessions/rcw-01daqke7brlcxu77wypzwnpb/mnt/TTSTV",
-    "shell_cache": "ttstv-shell-v66"
+    "commit": "8453827",
+    "how": "design/export.py --shell --phone-shell into a scratch dir (10 Oct, PHONE level-up v66->v76); 15 files differed (library/library.css, library/library.html, reader/book-nav.js, reader/float.css, reader/float.design.json, reader/float.html, reader/float.js, reader/lookup.js, reader/reader.html, reader/surface.css, reader/surface.js, reader/sw.js, reader/voicepage.js, reader/voicestore.js, reader/wordpane.js) and were copied over; index.html and library/library.json kept",
+    "repo": "/sessions/<vm>/mnt/TTSTV (= ~/Documents/RUNNERS/TTSTV/TTSTV)",
+    "shell_cache": "ttstv-shell-v76"
   }
 }

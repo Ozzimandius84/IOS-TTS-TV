@@ -357,8 +357,18 @@ html[data-theme="dark"], html[data-dark]{
 .sf-pair{
   margin:2px 0 8px; font:10.5px/1.45 var(--sf-ui); color:var(--sf-dim);
 }
+/* THE VERBS NEVER CRUSH THE WORDS (Osca, 9 Oct 16:24: "as layout for audio files, this is awful"): a recording row
+   carries four verbs (Audition · Open · Attach to … · Use as voice) and `.end` was `flex:0 0 auto`, so the body shrank
+   to nothing -- the title to "Time Mac…", the facts to one word a line. The row wraps: the body keeps at least 240px
+   and the verbs go under the words as one line of their own when they do not fit beside them; a long verb (the
+   join's progress) wraps inside `.end` rather than pushing. */
+.sf-row{ flex-wrap:wrap; }
+.sf-row .body{ flex:1 1 240px; }
+/* and DETERMINISTIC (the 9 Oct Stranger: the rows flipped between two heights on every redraw -- the verbs wrapped
+   or not with the scrollbar's width): three verbs or more ALWAYS go under the words, whatever the width */
+.sf-row:has(> .end > :nth-child(3)) > .end{ flex:1 0 100%; }
 .sf-row .end{
-  flex:0 0 auto; display:flex; align-items:center; gap:7px;
+  flex:0 1 auto; max-width:100%; display:flex; flex-wrap:wrap; align-items:center; gap:7px;
   padding-top:2px;
   font:var(--sf-meta)/1.3 var(--sf-ui); letter-spacing:.12em;
   text-transform:uppercase; color:var(--sf-dim);
@@ -797,7 +807,8 @@ html[data-theme="dark"], html[data-dark]{
 .sf-ddface[aria-expanded="true"]{ border-color:var(--sf-ink); }
 .sf-ddface[disabled]{ opacity:.55; cursor:default; }
 .sf-ddface .fx{ flex:1 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.sf-ddface .cx{ flex:0 0 auto; font-size:9px; color:var(--sf-dim); }
+/* `sf-cx`, not `cx`: cast.css's `.cx` is a fixed, centred glass panel (z 71), and a chevron named `cx` wore it over the sheet -- the cream bar, 9 Oct */
+.sf-ddface .sf-cx{ flex:0 0 auto; font-size:9px; color:var(--sf-dim); }
 
 /* the open list: over the column, not in its flow, so the rows below do not
    jump when it opens; nine rows tall then it scrolls */
@@ -1029,3 +1040,31 @@ html[data-phone] .sf-row.sf-hit .body{ flex:1 1 calc(100% - 40px); }
 html[data-phone] .sf-row.sf-hit .end{ flex:1 1 100%; flex-wrap:wrap; }
 /* the voice cards in the pane: Share this voice under the Voice row (voicepage.css draws the block) */
 .sf-share{ display:block; margin-top:6px; }
+
+/* ===== SIMPLER STUDIO COLUMN + TWO SCROLLS ON THE LEFT (Osca, 9 Oct 01:03) =====
+   The left column holds two parts when there is both: what is YOURS (the shelf, this book, the work) on top and what
+   is OUT THERE (every source, the Elsewhere lanes) under it, each with its own scroll. One part alone fills it. */
+.sf-list.sf-split2{ display:flex; flex-direction:column; overflow:hidden; padding-bottom:0; }
+.sf-list.sf-split2 > .sf-part{ flex:1 1 0; min-height:0; overflow-y:auto; overscroll-behavior:contain; }
+.sf-list.sf-split2 > .sf-out{ border-top:1px solid var(--sf-rule); padding-bottom:var(--sf-pad); }
+/* the book's two presses side by side: Open, and Pair with another book */
+.sf-bacts{ display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin:12px 0 4px; }
+.sf-bacts .sf-open{ margin:0; }
+.sf-pairbtn{ font-size:10px; padding:.8em 1.4em; }
+/* the settings and each chapter's steps: one quiet line, opened when wanted */
+.sf-moreset, .sf-each{ margin:10px 0 0; border-top:1px solid var(--sf-rule); }
+.sf-moresum{ cursor:pointer; list-style:none; padding:10px 0 6px;
+  font:600 9.5px/1.4 var(--sf-ui); letter-spacing:.12em; text-transform:uppercase; color:var(--sf-dim); }
+.sf-moresum::-webkit-details-marker{ display:none; }
+.sf-moresum::after{ content:" \25B8"; }
+details[open] > .sf-moresum::after{ content:" \25BE"; }
+.sf-moresum:hover{ color:var(--sf-ink); }
+@media (max-width:720px), (pointer:coarse){
+  .sf-list.sf-split2{ overflow:hidden; }
+}
+.sf-each > .sf-provpane > .sf-h:first-child{ display:none; }   /* the summary already says it */
+.sf-workfold{ margin:6px 0 0; border-top:1px solid var(--sf-rule); }
+.sf-workfold > .sf-workhead .wl{ display:none; }   /* the summary says it once */
+/* yours takes what it needs (up to most of the column) and scrolls past that; out there takes the rest */
+.sf-list.sf-split2 > .sf-mine{ flex:0 1 auto; max-height:62%; }
+.sf-list.sf-split2 > .sf-out{ flex:1 1 0; }

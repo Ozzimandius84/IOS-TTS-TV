@@ -179,6 +179,11 @@ const CSS = [
   '  text-align:left; -webkit-overflow-scrolling:touch;',
   '}',
   '.lookupcard[hidden]{ display:none; }',
+  /* BESIDE THE WORD (ASKS #203, Osca 9 Oct: "the definition is going over the
+     one word view"). The foot is the first choice; when the room under the
+     word is too little for a card, the card stands beside the word instead --
+     fit() measures and writes left/top/max-height on the element. */
+  '.lookupcard.beside{ left:auto; right:auto; bottom:auto; transform:none; width:min(var(--card-w-beside, 24rem), 40vw); }',
   /* THE HEAD SAYS WHOSE IT IS, and that is not decoration: it is the half of
      "two clean states" that the reader can see. */
   '.lookupcard-whose{',
@@ -299,6 +304,21 @@ function arm(doc) {
   doc.addEventListener("click", (ev) => {
     if (current && current.press) current.press(ev);
   }, false);
+  /* the window changing shape moves the word; the card follows (#203) */
+  if (win && win.addEventListener) win.addEventListener("resize", () => {
+    if (current && current.showing && current.fit) current.fit();
+  }, false);
+  /* ESCAPE, FIRST OF ALL (#203; the S0 Stranger: "Esc closed the card AND left
+     the one-word view"). The document handler below stops the event, but a
+     listener that registered before it on the same target still runs; so the
+     card's Esc is taken at the window in the CAPTURE phase, before anyone. */
+  if (win && win.addEventListener) win.addEventListener("keydown", (ev) => {
+    if (!ev || !current || ev.key !== "Escape" || !current.showing) return;
+    current.close();
+    ev.stopImmediatePropagation();
+    ev.stopPropagation();
+    ev.preventDefault();
+  }, true);
   doc.addEventListener("keydown", (ev) => {
     if (!ev || !current) return;
     /* ESCAPE: with a card open, close it and STOP — book-nav.js on the same
@@ -517,6 +537,7 @@ function mount(o) {
       formEl = null, glossEl = null, etymEl = null, relEl = null, noteEl = null,
       footEl = null, appleBtn = null, webBtn = null;
   let showing = null;           // the word the card is about, or null
+  let handle = null;            // the live handle (fit() reads fromPage off it)
   let poll = null;              // the one timer, never a stack
   let watching = null;          // the MutationObserver on the view
 
@@ -675,6 +696,56 @@ function mount(o) {
       appleBtn.setAttribute("aria-label", "Open Apple’s dictionary for " + text);
     }
     if (appleWhy) setText(noteEl, appleWhy);
+    fit();
+  }
+
+  /* THE CARD NEVER COVERS THE WORD (ASKS #203, Osca 9 Oct 01:27: "the
+     definition is going over the one word view"; the S0 Stranger: "the card's
+     box is y 393-765 in an 840-high window; the big word sat at y~440 -- the
+     card covers the big word completely"). The foot anchor was right and the
+     height was not: 46vh from 9vh up reaches 55% of the frame, over the word
+     that stands at the centre. So the card is MEASURED against the word each
+     time it is drawn: on the view it may rise only to a gap under the word's
+     box; when that leaves it too little height to be a card at all (a phone
+     on its side, a word at a huge dial), it stands BESIDE the word on the
+     wider side; and only when neither fits does it keep the foot and take what
+     is left. A card opened on the reading page (#144) is not the view's and
+     is not measured. Numbers: GAP 12px, a card is a card from 140px. */
+  const FIT_GAP = 12, FIT_MIN = 140, BESIDE_MIN = 280;
+  function unfit() {
+    if (!card) return;
+    card.classList.remove("beside");
+    card.style.maxHeight = ""; card.style.top = ""; card.style.left = "";
+  }
+  function fit() {
+    if (!card || card.hidden) return;
+    unfit();
+    if (handle && handle.fromPage) return;
+    const view = doc.querySelector && doc.querySelector(".wordview");
+    if (!view || !view.classList.contains("on")) return;
+    const w = view.querySelector(".wordview-word");
+    if (!w || !w.getBoundingClientRect) return;
+    const win = doc.defaultView || window;
+    const vw = win.innerWidth || 0, vh = win.innerHeight || 0;
+    if (!vw || !vh) return;
+    const r = w.getBoundingClientRect();
+    const cr = card.getBoundingClientRect();
+    const foot = Math.max(0, vh - cr.bottom);          // --card-bottom, as resolved
+    const below = vh - foot - r.bottom - FIT_GAP;       // the height left under the word
+    if (below >= FIT_MIN) { card.style.maxHeight = Math.round(below) + "px"; return; }
+    const rightRoom = vw - r.right - FIT_GAP * 2, leftRoom = r.left - FIT_GAP * 2;
+    const side = rightRoom >= leftRoom ? "right" : "left";
+    const room = Math.max(rightRoom, leftRoom);
+    if (room >= BESIDE_MIN) {
+      card.classList.add("beside");
+      const cw = Math.min(card.offsetWidth || 384, room);
+      card.style.left = Math.round(side === "right" ? r.right + FIT_GAP : r.left - FIT_GAP - cw) + "px";
+      const top = Math.max(FIT_GAP, Math.min(r.top, vh - FIT_MIN - FIT_GAP));
+      card.style.top = Math.round(top) + "px";
+      card.style.maxHeight = Math.round(vh - top - FIT_GAP) + "px";
+      return;
+    }
+    card.style.maxHeight = Math.max(FIT_MIN, Math.round(below)) + "px";   // the last resort, and it is said in §7
   }
 
   /* THE SECOND PRESS. `TTSTVHost.lookupApple(word)` presents Apple's own
@@ -756,7 +827,7 @@ function mount(o) {
     if (watching) { watching.disconnect(); watching = null; }
     appleWhy = null;
     showing = null;
-    if (card) card.hidden = true;
+    if (card) { card.hidden = true; unfit(); }
     return null;
   }
 
@@ -792,8 +863,8 @@ function mount(o) {
   if (current && current.close) current.close();
   if (doc) arm(doc);
 
-  const handle = {
-    entry, load, settled, open, close, press, draw,
+  handle = {
+    entry, load, settled, open, close, press, draw, fit,
     fromPage: false,        /* D on the reading page: the cursor's word, not the view's */
     get loaded() { return !!dict || doorAnswered; },
     get viaPack() { return viaDoor; },

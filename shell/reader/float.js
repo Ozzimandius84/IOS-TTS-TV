@@ -59,6 +59,7 @@
 
   var card = document.getElementById("card");
   var wordEl = document.getElementById("word");
+  var slotEl = document.getElementById("slot");   /* #205: the steady slot the word stands in */
   var markEl = document.getElementById("mark");   /* D18: the unit marker */
 
   /* ---------------------------------------------------------- who am I
@@ -147,11 +148,27 @@
     var b = bodyOf(i);                  /* ...the slot the nearest body word (D18) */
     var w = b >= 0 && b < words.length ? words[b] : "";
     paintText(w);
-    /* TRACKED IN BY ONE STEP AND THEN ELLIPSISED, NEVER SHRUNK — the rule
-       `WORD.height` exists to forbid (FLOAT.md §3). */
-    wordEl.removeAttribute("data-long");
-    if (wordEl.scrollWidth > wordEl.clientWidth) wordEl.setAttribute("data-long", "1");
-    fit();                              /* the window is the word's (§8) */
+    placeWord();                        /* #205: the red letter on the slot's centre column */
+    fit();                              /* the window is the slot's (#205; §8 said the word's) */
+  }
+
+  /* THE WORD IN ITS SLOT (ASKS #205). The slot is --float-ch ems wide and never changes with the word; the word is
+     set at the em, then smaller if it is wider than the slot (slot / word, never larger than the em), and placed so
+     the pivot letter's centre stands on the slot's centre -- the one-word view's own rule (wordview.js::place), so
+     the HUD reads as the word sliding through a fixed window. A word with no letters (a dash) is centred whole. */
+  function placeWord() {
+    if (!slotEl || !wordEl) return;
+    var em = emPx(), sw = slotEl.clientWidth || (em * (parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--float-ch")) || 9));
+    wordEl.style.fontSize = "";
+    var ww = wordEl.offsetWidth || 0;
+    if (ww > sw && ww > 0) { wordEl.style.fontSize = (em * sw / ww).toFixed(2) + "px"; ww = wordEl.offsetWidth || ww; }
+    var wr = wordEl.getBoundingClientRect(), pr = pvEl ? pvEl.getBoundingClientRect() : null;
+    var pc = pr ? (pr.left + pr.width / 2 - wr.left) : ww / 2;      /* the pivot's centre, from the word's left */
+    var left = sw / 2 - pc;
+    /* a word whose pivot sits far right would leave the slot on the left -- keep it inside, pivot off-centre */
+    if (left < 0) left = 0;
+    if (left + ww > sw) left = Math.max(0, sw - ww);
+    wordEl.style.left = left.toFixed(2) + "px";
   }
 
   /* THE RED LETTER (FLOAT-HANDS stage 1, 28 Sep). The float painted the whole
@@ -208,6 +225,7 @@
   var anchor = null;             /* {px, top}: the pivot's left and the word's top, in window px */
   var pad = { l: 0, t: 0, r: 0, b: 0 };   /* the fan's room around the box (stage 3) */
   var hosted = !!LABEL;          /* under Frank the window is ours to size; on the bench it is the browser's */
+  if (!hosted) document.documentElement.setAttribute("data-bench", "1");   /* #205: the card at the page's middle */
   function fit() {
     var H = window.TTSTVHost;
     if (!hosted || !H || typeof H.floatResize !== "function") return;
@@ -374,15 +392,16 @@
              breathe: { period: 4000, sat: 0.15, light: 0.08, hue: 3 } },
   };
   var VERBS = {
+    /* #205: every verb has a GLYPH in the disc and its NAME under it (float.css .fl); `text` marks a lettered glyph */
     speak:     { label: "Speak",     glyph: "\u25CE", toggle: true, cmd: function () { return "speak:" + (mic ? "off" : "on"); } },
-    define:    { label: "Define",    cmd: "define" },
-    explain:   { label: "Explain",   cmd: "explain" },
-    translate: { label: "Translate", cmd: "translate" },
+    define:    { label: "Define",    glyph: "Aa", text: true, cmd: "define" },
+    explain:   { label: "Explain",   glyph: "?", cmd: "explain" },
+    translate: { label: "Translate", glyph: "\u21C4", cmd: "translate" },
     frank:     { label: "Frank",     glyph: "\u2302", cmd: "close" },
     prevch:    { label: "Chapter",   glyph: "\u25C0", cmd: "chapter:-1" },
     nextch:    { label: "Chapter",   glyph: "\u25B6", cmd: "chapter:1" },
-    pace:      { label: "Pace",      cmd: "pace" },
-    sleep:     { label: "Sleep",     cmd: "sleep" },
+    pace:      { label: "Pace",      glyph: "\u2248", cmd: "pace" },
+    sleep:     { label: "Sleep",     glyph: "\u263E", cmd: "sleep" },
   };
   function fanVerbs() {
     var out = [];
@@ -628,6 +647,7 @@
   var away = "right";             /* the side the fan opens on: away from the nearer border */
   var mic = false;                /* Speak's state */
   function applyPad() {
+    if (!hosted) { card.style.left = ""; card.style.top = ""; fanEl.style.left = "0px"; fanEl.style.top = "0px"; return; }   /* the fan sits in the card on the bench (openFan) */   /* #205: the bench's card stays at the middle (float.css) */
     card.style.left = "calc(var(--float-margin) + " + pad.l + "px)";
     card.style.top = "calc(var(--float-margin) + " + pad.t + "px)";
     fanEl.style.left = pad.l + "px"; fanEl.style.top = pad.t + "px";
@@ -667,12 +687,26 @@
     lastPress = at;
     var ids = fanVerbs();
     if (!ids.length) return;
-    var R = dial("fan.radius", 64), size = dial("fan.size", 40), arc = dial("fan.arc", 100);
-    var W = window.innerWidth - pad.l - pad.r, H = window.innerHeight - pad.t - pad.b;
-    var pts = fanLayout(at.x - pad.l, at.y - pad.t, W, H, ids.length, away, R, size, arc);
-    var minX = 0, minY = 0, maxX = W, maxY = H;
-    pts.forEach(function (c) { minX = Math.min(minX, c.x - size / 2 - 4); minY = Math.min(minY, c.y - size / 2 - 4); maxX = Math.max(maxX, c.x + size / 2 + 4); maxY = Math.max(maxY, c.y + size / 2 + 4); });
-    pad = { l: Math.ceil(-minX), t: Math.ceil(-minY), r: Math.ceil(maxX - W), b: Math.ceil(maxY - H) };
+    var size = dial("fan.size", 44), arc = dial("fan.arc", 150);
+    /* #205: the radius grows with the count so two discs and their labels never touch -- chord >= size + 14 */
+    var R = Math.max(dial("fan.radius", 56), ids.length > 1 ? (size + 10) / (2 * Math.sin((arc * Math.PI / 180) / (ids.length - 1) / 2)) : 0);
+    fanEl.setAttribute("data-away", away);                   /* the names stand on this side of the discs (float.css) */
+    /* THE BOX IS THE CARD + ITS MARGIN, not the window (#205): under Frank they are the same rectangle; on the
+       bench the window is the page and the box is the card at its middle, so the fan opens beside the card there */
+    var m0 = marginPx(), c0 = card.getBoundingClientRect();
+    var bx = c0.left - m0, by = c0.top - m0, W = c0.width + 2 * m0, H = c0.height + 2 * m0;
+    var pts = fanLayout(at.x - bx, at.y - by, W, H, ids.length, away, R, size, arc);
+    /* back to page px, then the room the fan needs beyond the window (the pads; under Frank the window grows) */
+    pts.forEach(function (c) { c.x += bx - pad.l; c.y += by - pad.t; });
+    /* ON THE BENCH the fan rides inside the card (its coordinates are the card's), so a frame that grows to make
+       room -- the card re-centring with it -- carries the discs along; under Frank the window IS the box */
+    if (!hosted) { if (fanEl.parentNode !== card) card.appendChild(fanEl); pts.forEach(function (c) { c.x -= c0.left; c.y -= c0.top; }); }
+    var LBL = 18;                                             /* the label's height under a disc */
+    var minX = 0, minY = 0, maxX = window.innerWidth - pad.l - pad.r, maxY = window.innerHeight - pad.t - pad.b;
+    pts.forEach(function (c) { minX = Math.min(minX, c.x - size / 2 - 6); minY = Math.min(minY, c.y - size / 2 - 6); maxX = Math.max(maxX, c.x + size / 2 + 6); maxY = Math.max(maxY, c.y + size / 2 + LBL + 6); });
+    pad = { l: Math.ceil(-minX), t: Math.ceil(-minY), r: Math.ceil(maxX - (window.innerWidth - pad.l - pad.r)), b: Math.ceil(maxY - (window.innerHeight - pad.t - pad.b)) };
+    pad.r = Math.max(0, pad.r); pad.b = Math.max(0, pad.b);
+    if (!hosted) pad = { l: 0, t: 0, r: 0, b: 0 };     /* the bench's window does not grow; the card stays at the middle */
     applyPad();
     document.documentElement.style.setProperty("--fan-size", size + "px");
     var cb = card.getBoundingClientRect();
@@ -681,7 +715,7 @@
       var v = VERBS[id], el = document.createElement("div");
       el.className = "fc"; el.setAttribute("data-verb", id);
       el.style.left = pts[i].x + "px"; el.style.top = pts[i].y + "px";
-      el.innerHTML = (v.glyph ? '<span class="g">' + v.glyph + "</span>" : "") + (v.glyph ? "" : v.label);
+      el.innerHTML = '<span class="g' + (v.text ? " t" : "") + '">' + (v.glyph || v.label.charAt(0)) + '</span><span class="fl">' + v.label + '</span>';
       el.title = v.label;
       if (v.toggle) el.setAttribute("data-on", mic ? "1" : "0");
       fanEl.appendChild(el);
@@ -702,8 +736,9 @@
   function circleAt(x, y) {
     if (!fan) return null;
     var size = dial("fan.size", 40);
+    var o = hosted ? { x: 0, y: 0 } : card.getBoundingClientRect();   /* the bench's fan is card-relative */
     for (var i = 0; i < fan.circles.length; i++) {
-      var c = fan.circles[i], dx = x - pad.l - c.x, dy = y - pad.t - c.y;
+      var c = fan.circles[i], dx = x - pad.l - c.x - (o.left || 0), dy = y - pad.t - c.y - (o.top || 0);
       if (dx * dx + dy * dy <= (size / 2) * (size / 2) + 16) return c;
     }
     return null;
@@ -711,7 +746,9 @@
   function act(id) {
     var v = VERBS[id];
     if (!v) return;
-    if (id === "speak") { mic = !mic; breathe(mic); }
+    if (id === "speak") { mic = !mic; breathe(mic);
+      /* the disc shows the state at once (#205): filled while the mic is open */
+      if (fan) fan.circles.forEach(function (c) { if (c.id === "speak") c.el.setAttribute("data-on", mic ? "1" : "0"); }); }
     var cmd = typeof v.cmd === "function" ? v.cmd() : v.cmd;
     if (id === "speak") cmd = "speak:" + (mic ? "on" : "off");
     send(cmd);

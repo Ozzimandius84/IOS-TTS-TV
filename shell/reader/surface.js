@@ -1136,7 +1136,23 @@
        same answer, so whoever asked refreshes both. */
     S.shelf = ((d.books) || []).map(shelfOf);
     shelfAt = Date.now();
+    var wasJob = S.job;
     S.job = d.job || null; S.pending = d.pending || []; S.ingests = d.ingests || [];
+    /* ATTACH-PRESS: the join's progress onto every row that pressed it (`attach()` above) */
+    if (d.attach && d.attach.slug) {
+      /* only the recording that was pressed: the key is slug|url and the job names its archive.org id */
+      Object.keys(S.attached).forEach(function (k) {
+        if (k.indexOf(d.attach.slug + "|") === 0 && (!d.attach.recording || k.indexOf(d.attach.recording) >= 0)) S.attached[k] = attachWords(d.attach);
+      });
+    }
+    /* A BOOK'S GRID IS RE-READ WHEN ITS JOB ENDS (Frank, 9 Oct): `loadBook`
+       fetches once and keeps, so c001 rendered 184.7 s and restitched on
+       Modal while its row still drew two cells and offered SPEAK again. */
+    if (wasJob && wasJob.slug && wasJob.phase === "running" && S.detail[wasJob.slug]
+        && (!S.job || S.job.phase !== "running" || S.job.slug !== wasJob.slug)) {
+      delete S.detail[wasJob.slug];
+      loadBook(wasJob.slug);
+    }
     /* THE RE-PARSE QUEUE, its two fields, exactly as the import queue's
        two (studio/serve.py::_serve_state, 4 Sep): `reparsing` is running,
        `reparses` is waiting, both `[]` and never absent -- so this reads
@@ -1370,6 +1386,35 @@
      row prints whatever came back -- including that -- and never a success
      it did not get. */
   function attach(c, to, btn) {
+    /* ATTACH-PRESS (9 Oct): THE PRESS IS THE JOIN. `POST /attach` (tools/search run_attach) wanted a downloaded
+       file and torch in studio's own venv, so in Frank it answered "this recording hasn't been fetched yet" and
+       nothing else -- pressed and seen 9 Oct 14:30. The join that was built for this row is attach/service.py
+       behind studio's doors: GET /attach/offer maps the reading's sections onto the book, POST /attach/start runs
+       it in the background (archive.org -> whisper + MMS on this Mac, CPU, no cloud) and `/state.attach` carries
+       its progress, which `takeState` writes onto this row's words below. */
+    var k = attachKey(c, to);
+    if (btn) { btn.disabled = true; btn.textContent = "Asking\u2026"; }
+    if (!S.live) { S.attached[k] = "Attach needs studio behind this page"; draw(); return Promise.resolve(null); }
+    var q = "/attach/offer?slug=" + encodeURIComponent(to.slug) + "&url=" + encodeURIComponent(c.url || "")
+          + "&title=" + encodeURIComponent(c.title || "") + "&reader=" + encodeURIComponent(c.reader || c.author || "");
+    return getJSON(q, 60000).then(function (r) {
+      if (!r || !r.offer) { S.attached[k] = "Can\u2019t attach \u2014 " + ((r && (r.why || r.error)) || "no reading matched the book"); draw(); return null; }
+      S.attachSlug = to.slug;
+      return postJSON("/attach/start", { offer: r.offer.id }).then(function (job) {
+        if (!job || job.error) { S.attached[k] = "Attach failed \u2014 " + ((job && (job.error.why || job.error.what || job.error)) || "no answer"); draw(); return null; }
+        S.attached[k] = attachWords(job); draw(); pollWorks(); return job;
+      });
+    }).catch(function (e) { S.attached[k] = "Attach failed \u2014 " + (e && e.message || e); draw(); return null; });
+  }
+  /* the row's words for the join's state (voicestore.js's AttachJob shape) */
+  function attachWords(j) {
+    if (!j) return "";
+    if (j.state === "aligning") return "Joining \u2014 section " + (j.section || 0) + " of " + j.sections + (j.chapters_done ? " \u00b7 " + j.chapters_done + " chapters play already" : "") + (j.eta_s ? " \u00b7 about " + mmss(j.eta_s) + " left" : "");
+    if (j.state === "done") return "Attached \u2014 " + j.chapters_done + " chapters play in this reading";
+    if (j.state === "failed") return "Attach failed \u2014 " + (j.error && (j.error.what + (j.error.why ? " " + j.error.why : "")) || "");
+    return "";
+  }
+  function attachOld(c, to, btn) {
     var k = attachKey(c, to);
     return act("/attach", { candidate: c, slug: to.slug }, btn, "Attaching")
       .then(function (j) {
@@ -2314,7 +2359,35 @@
        now draws it, which is the whole of the fix for the note that vanished
        a microtask after it appeared. */
     var searching = !!S.asking;
+    /* THE LIST KEEPS ITS SCROLL ACROSS A REDRAW (9 Oct, measured with the probe: the poll replaced the whole list
+       every 2 s and a new list starts at 0 -- "everything juddering about"). The right column had this since
+       1d346e3; the left never did. Each part's scrollTop is read before the rebuild and put back after settle(). */
+    var keepScroll = {};
+    Array.prototype.forEach.call(listEl.querySelectorAll(".sf-part"), function (p) {
+      keepScroll[p.classList.contains("sf-out") ? "out" : "mine"] = p.scrollTop;
+    });
+    if (!listEl.querySelector(".sf-part")) keepScroll.root = listEl.scrollTop;
     listEl.textContent = "";
+    /* TWO SCROLLS ON THE LEFT (Osca, 9 Oct 01:03: "I had separate scrolls within the left side of surface, for
+       results internally and externally. I liked that."). What is yours -- the shelf, this book, the work going on
+       -- scrolls in the top part; what is out there -- every source's rows and the Elsewhere lanes -- scrolls in
+       its own part under it. One part alone takes the whole column. `listEl` points at the part being written and
+       is put back by `settle()` before the column is drawn. */
+    var listRoot = listEl, mineEl = el("div", "sf-part sf-mine"), outEl = el("div", "sf-part sf-out");
+    function toMine() { listEl = mineEl; }
+    function toOut() { listEl = outEl; }
+    function settle() {
+      listEl = listRoot;
+      if (workFold) mineEl.appendChild(workFold);
+      var both = !!mineEl.childNodes.length && !!outEl.childNodes.length;
+      listRoot.classList.toggle("sf-split2", both);
+      if (mineEl.childNodes.length) listRoot.appendChild(mineEl);
+      if (outEl.childNodes.length) listRoot.appendChild(outEl);
+      if (keepScroll.mine) mineEl.scrollTop = keepScroll.mine;
+      if (keepScroll.out) outEl.scrollTop = keepScroll.out;
+      if (keepScroll.root) listRoot.scrollTop = keepScroll.root;
+    }
+    toMine();
     var rows = rank();
     /* A QUERY THAT NAMED A RECORDING (SURFACE-FIX, 28 Sep: "Monte Cristo
        audiobook", "Moby Dick LibriVox") gets the recordings FIRST -- the
@@ -2342,13 +2415,27 @@
     /* THE WEB'S SCOPE, SAID ONCE (Z1; integration, 1 Oct): a browser with no account searches Frank's public shelf
        and nothing else until SERVER-3 -- one quiet line over what it found, so a short list is not a mystery */
     var scope = webScope();
+    toOut();
     if (S.q && !searching && scope.line && (rows.length || S.media.length)) { var sl = note(scope.line); sl.classList.add("sf-scope"); listEl.appendChild(sl); }
 
     /* WORKING first, always, and pinned -- it is the only band that is about
        what the machine is doing rather than about what you asked. Since
        Round 2 it is ALSO the only place any of it appears: the right column
        stopped mirroring the running job, so this band has to be complete. */
+    toMine();
+    /* THE WORK IS ONE LINE, AT THE FOOT OF WHAT IS YOURS (the 9 Oct Stranger: "Working takes the whole top pane --
+       the answer to my search is hidden, and so is the book Pair tells me to choose"). Shut by default; opened, it is
+       the same rows, Stop and Log as before. */
+    var workFold = null;
     if (working.length) {
+      workFold = el("details", "sf-workfold");
+      if (S.workOpen) workFold.open = true;
+      workFold.addEventListener("toggle", function () { S.workOpen = workFold.open; });
+      var wsum = el("summary", "sf-moresum");
+      var wrun = working.filter(function (r) { return r.kind === "run"; }).length;
+      wsum.textContent = "Working \u00b7 " + wrun + " running" + (working.length > wrun ? ", " + (working.length - wrun) + " queued" : "");
+      workFold.appendChild(wsum);
+      var keepEl = listEl; listEl = workFold;
       listEl.appendChild(workingHead(working));
       working.forEach(function (w) {
         listEl.appendChild(workRow(w));
@@ -2358,6 +2445,7 @@
         var lg = S.logs[w.key];
         if (lg && lg.open) listEl.appendChild(logPane(lg));
       });
+      listEl = keepEl;
     }
 
     /* WHAT EACH SOURCE IS DOING, AT THE TOP OF RESULTS -- during AND after
@@ -2373,6 +2461,16 @@
        first."* Over an open book the book's own words come before the shelf
        and before everywhere else: the passages that hold the query, then the
        chapters whose titles do. Anywhere else these stay at the foot. */
+    /* CHOOSING THE OTHER BOOK OF A PAIR (Osca, 9 Oct: "a button, then choose a book in the left section"): with the
+       field empty the left offers the shelf's books in another language first; typing still searches everything */
+    if (S.pairPick && !S.q) {
+      toMine();
+      var pickOf = null;
+      S.shelf.forEach(function (x) { if (x.slug === S.pairPick) pickOf = x; });
+      var pc = pairCandidates(pickOf || { slug: S.pairPick, lang: null });
+      listEl.appendChild(head(pc.length ? "Choose the other book" : "No book in another language yet"));
+      pc.forEach(function (b) { listEl.appendChild(shelfRow(b)); });
+    }
     var bookFirst = !!(S.q && S.inBook && !filt);
     if (bookFirst) inBookBand(listEl);
     var strip = S.q && (searching || S.adapters) ? sourcesStrip() : null;
@@ -2391,6 +2489,7 @@
       });
     }
     if (recordingsFirst) {
+      toOut();
       listEl.appendChild(head("Recordings"));
       /* the source a person NAMED comes first: "Moby Dick LibriVox" is the
          LibriVox recording (the web lane -- archive.org's librivoxaudio),
@@ -2399,12 +2498,14 @@
       else { videoLane(listEl); webLane(listEl); }
     }
     if (filt) {
+      toOut();
       listEl.appendChild(head(filt === "filtered" ? "Filtered out" : "Results — " + (SOURCE[filt] || filt)));
       if (strip) listEl.appendChild(strip);
       rows.forEach(function (r) { listEl.appendChild(rowFor(r)); });
       if (!rows.length) listEl.appendChild(note(filt === "filtered"
         ? "nothing the filter dropped is a text — the dropped rows are recordings or pages"
         : "no text rows from " + (SOURCE[filt] || filt) + " — its rows are in the Elsewhere lanes"));
+      settle();
       kinds();
       drawWorks();
       return;
@@ -2413,6 +2514,7 @@
        real title on disk), say it once, above the rows, the way a person would: what was searched, and what was typed */
     var hq = heard();
     if (S.q && hq && hq.corrected_from && hq.title) {
+      toOut();
       var cf = el("p", "sf-corrected");
       cf.appendChild(document.createTextNode("Showing “" + hq.title + "” · you typed “" + hq.corrected_from + "”"));
       listEl.appendChild(cf);
@@ -2425,24 +2527,33 @@
       rows = rows.filter(function (r) { return !(r.kind === "shelf" && r.book && drawn[r.book.slug]); });
     }
     if (CFG.mixed) {
-      if (rows.length || strip) listEl.appendChild(head(S.q ? "Results" : "Your library"));
+      var ours = rows.filter(function (r) { return r.kind === "shelf" || r.kind === "drive"; });
+      var theirs = rows.filter(function (r) { return !(r.kind === "shelf" || r.kind === "drive"); });
+      toMine();
+      if (ours.length) { listEl.appendChild(head("Your library"));
+        ours.forEach(function (r) { listEl.appendChild(rowFor(r)); }); }
+      toOut();
+      if (theirs.length || strip) listEl.appendChild(head("Elsewhere"));
       if (strip) listEl.appendChild(strip);
-      rows.forEach(function (r) { listEl.appendChild(rowFor(r)); });
+      theirs.forEach(function (r) { listEl.appendChild(rowFor(r)); });
     } else {
-      if (strip) listEl.appendChild(strip);
       var mine = rows.filter(function (r) { return r.kind === "shelf"; });
       var here = rows.filter(function (r) { return r.kind === "drive"; });
       var them = rows.filter(function (r) { return r.kind === "out"; });
+      toMine();
       if (mine.length) { listEl.appendChild(head("Your library"));
         mine.forEach(function (r) { listEl.appendChild(shelfRow(r.book)); }); }
       if (here.length) { listEl.appendChild(head(driveHead()));
         here.forEach(function (r) { listEl.appendChild(driveRow(r.file, r)); }); }
-      if (them.length) { listEl.appendChild(head("Out there"));
-        them.forEach(function (r) { listEl.appendChild(outRow(r)); }); }
+      toOut();
+      if (them.length || strip) listEl.appendChild(head("Elsewhere"));
+      if (strip) listEl.appendChild(strip);
+      them.forEach(function (r) { listEl.appendChild(outRow(r)); });
     }
     /* SURFACE-ONE (1): the two kinds that are not books or places -- a voice
        you have and a person whose books you have -- as their own sections, so
        the kind pills have something to count. */
+    toMine();
     if (S.q) { voiceBand(listEl); peopleBand(listEl); }
     /* THE FILES ALREADY PARSED ARE NOT ROWS, AND THEY ARE NOT NOTHING. The
        twin rule drops them from the list (the book is a row above); the
@@ -2456,6 +2567,7 @@
     /* ONE LINE, NEVER TWO (ASKS #187, the web Stranger): "Only your shelf answered" is said only when the shelf DID
        answer; with nothing found anywhere the one line says so, and the no-studio line below is not added to it */
     var said = false;
+    toOut();
     if (S.q && !searching && S.outErr) { listEl.appendChild(brokeLine(S.outErr, !rows.length && !shelfHits.length)); said = true; }
     else if (S.q && !searching && !rows.length && !working.length && !S.media.length) {
       listEl.appendChild(note(!S.live && window.TTSTVHost && TTSTVHost.isWeb ? noStudioLine() : nothingLine())); said = true; }
@@ -2466,6 +2578,7 @@
     /* ...and never over an empty field (ASKS #168: the first thing an empty search said was "Studio needs the Mac
        app or Frank's cloud" -- a sentence about another device, POLISH 5). Nothing typed: nothing said, the shelf
        shows. Words typed that nothing here answered: the one line that says why. */
+    toMine();
     if (!S.live) { if (!said && S.q && !rows.length && !shelfHits.length && !(bookFirst && S.inBook)) listEl.appendChild(note(noStudioLine())); }
     else if (S.stateErr) listEl.appendChild(note(S.stateErr));
 
@@ -2474,6 +2587,7 @@
 
     /* the lanes that are not books, at the foot of the one list */
     if (S.q && !bookFirst) {
+      toMine();
       var here = inBookRow();
       if (here) { listEl.appendChild(head("In this book")); listEl.appendChild(here); }
       chapterRows().forEach(function (n, i) {
@@ -2481,16 +2595,19 @@
         listEl.appendChild(n);
       });
       if (!recordingsFirst) {
-        listEl.appendChild(head("Elsewhere"));
+        toOut();
+        if (!outEl.querySelector(".sf-h")) listEl.appendChild(head("Elsewhere"));
         videoLane(listEl);
         webLane(listEl);
       }
     }
     if (S.q && bookFirst && !recordingsFirst) {
-      listEl.appendChild(head("Elsewhere"));
+      toOut();
+      if (!outEl.querySelector(".sf-h")) listEl.appendChild(head("Elsewhere"));
       videoLane(listEl);
       webLane(listEl);
     }
+    settle();
     kinds();
     drawWorks();
   }
@@ -2527,7 +2644,12 @@
     var old = listEl.querySelector(".sf-kinds");
     if (old) listEl.removeChild(old);
     var counts = { books: 0, voices: 0, sources: 0, people: 0 };
-    var sec = "top", kids = Array.prototype.slice.call(listEl.children);
+    /* the two scrolls (draw's `settle`): a part's rows are counted and filtered as the column's own */
+    var sec = "top", kids = [];
+    Array.prototype.forEach.call(listEl.children, function (c) {
+      if (c.classList.contains("sf-part")) Array.prototype.forEach.call(c.children, function (n) { kids.push(n); });
+      else kids.push(c);
+    });
     kids.forEach(function (n) {
       if (n.classList.contains("sf-workhead")) sec = "working";
       else if (n.classList.contains("sf-h")) sec = headKind(n.textContent);
@@ -2880,7 +3002,7 @@
       v.type = "button"; v.textContent = voiced ? "Re-voice" : "Voice";
       v.addEventListener("click", function (e) {
         e.stopPropagation();
-        run({ slug: b.slug, chapter: ch.id, step: "speak" }, v, "Voicing");
+        pressStep(b.slug, ch.id, "speak", v, "Voicing");
       });
       end.appendChild(v);
     }
@@ -4301,7 +4423,15 @@
      studio/studio.html's cockpit at this width: the running card, the one
      queue (imports first, because an import takes the free slot ahead of a
      push), and the step grid of whatever row is open. */
+  /* THE COLUMN KEEPS ITS PLACE (Osca 9 Oct, pressed in Frank: every poll redrew the book's column from nothing and
+     threw it back to the top within a second, so a chapter's Speak at the foot could not be pressed). The redraw
+     is unchanged; only the scroll position of the column and its scroller is carried across it. */
   function drawWorks() {
+    var sc = worksEl ? [worksEl, worksEl.parentNode] : [], keep = sc.map(function (n) { return n ? n.scrollTop : 0; });
+    drawWorksNow();
+    sc.forEach(function (n, i) { if (n && keep[i]) n.scrollTop = keep[i]; });
+  }
+  function drawWorksNow() {
     if (!worksEl) return;
     worksEl.textContent = "";
     var working = Object.keys(S.work).map(function (k) { return S.work[k]; });
@@ -4413,8 +4543,8 @@
       /* {book, book} different lang → Pair */
       if (books.length === 2 && books[0].lang && books[1].lang && books[0].lang !== books[1].lang) {
         var pb = el("button", "sf-verb");
-        pb.type = "button"; pb.textContent = "Pair " + books[0].title + " (" + books[0].lang + ") + " + books[1].title + " (" + books[1].lang + ")";
-        pb.title = "POST /pair — align sentences across languages";
+        pb.type = "button"; pb.textContent = "Pair them";
+        pb.title = books[0].title + " (" + books[0].lang + ") + " + books[1].title + " (" + books[1].lang + ")";
         pb.addEventListener("click", function () {
           act("/pair", { left: books[0].slug, right: books[1].slug }, pb, "Pairing");
         });
@@ -4460,13 +4590,14 @@
     if (singleBook) {
       worksEl.appendChild(bookPane(books[0]));
       fold = el("details", "sf-studiofold");
-      var sum = el("summary", "sf-studiosum"); sum.textContent = "Voice & rendering";
+      var sum = el("summary", "sf-studiosum"); sum.textContent = "Read it aloud";
       fold.appendChild(sum);
-      if (S.foldOpen) fold.open = true;
+      if (S.foldOpen !== false) fold.open = true;
       fold.addEventListener("toggle", function () { S.foldOpen = fold.open; });
       worksEl.appendChild(fold); into = fold;
     }
-    if (S.live) into.appendChild(allBand());
+    /* EVERY RENDER, ALL BOOKS is the machine, not this book: it lives on the left's WORKING band now, not here */
+    if (S.live && !singleBook) into.appendChild(allBand());
     var st = singleBook ? studioBlock() : null;
     if (st) {
       /* `head("Studio")` is gone (G-DROPDOWN): the column's one heading is
@@ -4501,8 +4632,15 @@
     var provBook = null;
     if (S.sel && singleBook && S.sel.slug && !S.sel.cells)
       (S.shelf || []).forEach(function (b) { if (b.slug === S.sel.slug && b.source) provBook = b; });
-    if (provBook) into.appendChild(provPane(provBook));
     if (S.sel && singleBook) into.appendChild(gridFor(S.sel));
+    if (st && studioBlock.more) { into.appendChild(studioBlock.more); studioBlock.more = null; }
+    if (provBook) {
+      /* where it came from: one quiet line, opened when wanted */
+      var prov = el("details", "sf-each");
+      var prs = el("summary", "sf-moresum"); prs.textContent = "Where it came from";
+      prov.appendChild(prs); prov.appendChild(provPane(provBook));
+      into.appendChild(prov);
+    }
     /* the log is no longer drawn here: it belongs under its own WORKING row
        (item 2), which `draw()` appends immediately after that row */
     /* IN THE SAME TASK AS THE CLEAR. `worksEl.textContent = ""` above detaches
@@ -4535,10 +4673,26 @@
     var voiced = Number(b.chapters_voiced || b.voiced) || 0;
     facts.push(voiced ? (voiced + " read aloud") : "not read aloud yet");
     box.appendChild(el("div", "sf-bfacts", facts.join(" \u00b7 ")));
+    var acts = el("div", "sf-bacts");
     var go = el("button", "sf-verb sf-open");
     go.type = "button"; go.textContent = "Open";
     go.addEventListener("click", function () { openBook({ slug: m.slug }); });
-    box.appendChild(go);
+    acts.appendChild(go);
+    /* ONE PAIR BUTTON (Osca, 9 Oct). Pressed, it asks for the other book on the LEFT; the next row pressed there
+       joins this one and the pair's own verb appears. Only offered when the shelf has a book in another language. */
+    if ((S.live || S.bench) && pairCandidates({ slug: m.slug, lang: b.lang }).length) {
+      var pairOn = S.pairPick === m.slug;
+      var pp = el("button", "sf-verb ghost sf-pairbtn");
+      pp.type = "button"; pp.textContent = pairOn ? "Cancel" : "Pair with another book";
+      pp.addEventListener("click", function (e) {
+        e.stopPropagation();
+        S.pairPick = pairOn ? null : m.slug;
+        draw();
+      });
+      acts.appendChild(pp);
+    }
+    box.appendChild(acts);
+    if (S.pairPick === m.slug) box.appendChild(note("Choose the other book on the left."));
     if (!d) loadBook(m.slug);
     var rows = d && d.chapters ? d.chapters : [];
     if (rows.length) {
@@ -4585,9 +4739,14 @@
     /* G-SET: selectSlug adds to the set (replacing an auto-seeded member,
        keeping a clicked one) rather than replacing the whole selection. */
     var already = S.set.some(function (m) { return m.slug === slug; });
+    /* A PRESS CHOOSES THE BOOK (Osca, 9 Oct: "simplify the pair thing as a button then choose a book in the left
+       section"). A row press used to ADD to the set, with nothing saying so -- the Stranger's second press made a
+       pair it never asked for. Now a press is this book, alone; only after "Pair with another book" does the next
+       press add the second. */
+    var pairing = !!S.pairPick && !already;
+    if (!already || !pairing) S.pairPick = null;
     if (!already) {
-      /* if the last member was auto-seeded, replace it */
-      if (S.selAuto && S.set.length === 1) S.set.length = 0;
+      if (!pairing) S.set.length = 0;
       var member = { kind: "book", slug: slug, title: (b && b.title) || slug,
                      lang: b && b.lang, hue: hueFor(slug),
                      author: b && b.author, voice: b && b.voice,
@@ -4611,7 +4770,7 @@
     if (S.sample && S.sample.slug !== slug) S.sample = null;
     if (S.live) loadBook(slug);
     if (S.live) { askEngines(false); askKaggle(false); }
-    drawWorks();
+    if (pairing) draw(); else drawWorks();   /* a pair's second book also takes the "choose" band off the left */
     return S.sel;
   }
 
@@ -4775,7 +4934,7 @@
   function gridFor(subject) {
     var box = el("div", "sf-grid");
     var tint = subject.hue || hue(subject.slug || subject.key || "");
-    box.appendChild(head((subject.title || "This book") + " — steps"));
+    /* no head: the book's name is the column's head already, and "— steps" was the machine's word */
 
     /* A WORKING ROW HAS ONE SET OF CELLS, not one per chapter: it is an
        import, and an import is a whole book's parse. Draw the one ribbon. */
@@ -4834,29 +4993,23 @@
          surface shows only the plausible candidates — different language, so
          `align_books` has something to align — and posts the same route. A
          book with one language and no candidate draws nothing. */
-      var cands = pairCandidates(subject);
-      if (cands.length) {
-        var pairDiv = el("div", "sf-pair");
-        pairDiv.appendChild(el("span", "sf-pair-label", "Pair with"));
-        cands.forEach(function (c) {
-          var pb = el("button", "sf-verb ghost");
-          pb.type = "button";
-          pb.textContent = c.title + " (" + c.lang + ")";
-          pb.title = "align sentences: POST /pair {" + subject.slug + ", " + c.slug + "}";
-          pb.addEventListener("click", function (e) {
-            e.stopPropagation();
-            act("/pair", { left: subject.slug, right: c.slug }, pb, "Pairing");
-          });
-          pairDiv.appendChild(pb);
-        });
-        acts.appendChild(pairDiv);
-      }
+      /* PAIR IS ON THE BOOK NOW (bookPane), one button -- the list of every other-language book that stood here
+         is gone (Osca, 9 Oct: "DO NOT just list every book in my library on the right side"). */
 
       box.appendChild(acts);
     }
 
     /* ONLY THE TICKED ROWS, all of them: the dropdown is what scrolls, so
        "N more chapters" is gone with the twelve-row cut. */
+    /* EACH CHAPTER'S STEPS ARE ONE PRESS AWAY (Osca, 9 Oct: "loads of options, EVEN MORE loads of text"): the
+       Run above is the press a person makes; the per-chapter ribbons are for when one chapter needs looking at. */
+    var each = el("details", "sf-each");
+    var es = el("summary", "sf-moresum"); es.textContent = "Each chapter";
+    each.appendChild(es);
+    if (S.eachOpen) each.open = true;
+    each.addEventListener("toggle", function () { S.eachOpen = each.open; });
+    box.appendChild(each);
+    var into = each;
     rows.filter(function (ch) { return ticked.indexOf(ch.id) >= 0; }).forEach(function (ch) {
       var row = el("div", "sf-gr");
       row.appendChild(el("span", "gid", ch.id || ""));
@@ -4913,16 +5066,20 @@
           if (isRestitch && speakDone) {
             act("/restitch", { slug: subject.slug, chapter: ch.id }, b, "restitch");
           } else if (next && !isRestitch) {
-            run({ slug: subject.slug, chapter: ch.id, step: next }, b, next);
+            pressStep(subject.slug, ch.id, next, b, next);
           }
         });
         row.appendChild(b);
         row.classList.add("pick");
         row.addEventListener("click", function () { openBook(subject, ch.id); });
       }
-      box.appendChild(row);
+      into.appendChild(row);
     });
     if (S.actErr) box.appendChild(note(S.actErr));
+    /* ...and a press that STARTED but failed at once says why, here, instead of vanishing. */
+    else if (S.job && S.job.phase === "failed" && subject.slug && S.job.slug === subject.slug
+             && (S.job.err || S.job.last_error || S.job.push_error))
+      box.appendChild(note(S.job.err || S.job.last_error || S.job.push_error));
     return box;
   }
 
@@ -4984,24 +5141,26 @@
     var out = { body: { slug: b.slug, chapters: ticked, queue: true }, plan: plan,
                 disabled: false, title: "", text: "Run" };
     if (!ticked.length) {
-      out.disabled = true; out.text = "Run \u2014 nothing ticked";
+      out.disabled = true; out.text = "No chapter chosen";
       out.title = "nothing ticked \u2014 open Chapters and tick at least one";
       return out;
     }
     if (!plan.steps.length) {
-      out.disabled = true; out.text = "Run \u2014 nothing left";
+      out.disabled = true; out.text = "Read aloud already";
       out.title = "every step of the ticked chapters is done";
       return out;
     }
-    out.text = "Run \u2014 " + plan.steps.join(" \u00b7 ") + " on " + plan.chapters
-      + (plan.chapters === 1 ? " chapter" : " chapters")
-      + " \u00b7 " + (voice || "no voice") + " \u00b7 " + (currentEngine(b) || "no model")
-      + " \u00b7 " + whereLabel();
+    /* A PERSON'S WORDS ON THE BUTTON (Osca, 9 Oct): what it does to the book, not the step list -- the steps,
+       voice, model and place are in its title and in Settings. */
+    var all = plan.chapters === rows.length;
+    out.text = all ? "Read the whole book aloud"
+      : "Read " + plan.chapters + (plan.chapters === 1 ? " chapter" : " chapters") + " aloud";
+    out.detail = plan.steps.join(" \u00b7 ") + " \u00b7 " + (voice || "no voice") + " \u00b7 "
+      + (currentEngine(b) || "no model") + " \u00b7 " + whereLabel();
     var refuse = whereRefusal();
     if (!voice) { out.disabled = true; out.title = "no voice chosen yet"; }
     else if (refuse) { out.disabled = true; out.title = refuse; }
-    else out.title = "POST /run {slug, chapters:[" + ticked.length + "], queue:true} \u2014 every "
-                   + "remaining step of the ticked chapters, one at a time, studio's own queue";
+    else out.title = out.detail;
     return out;
   }
   /* THE CHAPTERS DROPDOWN: 138's primitive, multi. "All" / "None" are the
@@ -5214,6 +5373,19 @@
     var h = Math.floor(hours), m = Math.round((hours - h) * 60);
     return (h ? h + " h " : "") + m + " min";
   }
+  /* A CHAPTER'S OWN SPEAK GOES WHERE "WHERE" SAYS (Osca, 9 Oct). The cell's
+     verb on speak with WHERE = Modal/Kaggle was refused by studio
+     (`tasks.where_refusal`) and the job ended failed in 0 s, so the press
+     looked dead. Speak is the one remote step: off this Mac it is the Run
+     shape over that one chapter, which runs the local steps here and pushes
+     speak to the box. */
+  function pressStep(slug, chId, step, btn, word) {
+    if (step === "speak" && whereNow() !== "local") {
+      return run({ slug: slug, chapters: [chId], queue: true }, btn, "Starting");
+    }
+    return run({ slug: slug, chapter: chId, step: step }, btn, word);
+  }
+
   function whereNow() {
     var d = (S.live ? S.kaggle.value : MOCK_KAGGLE) && (S.live ? S.kaggle.value : MOCK_KAGGLE).destinations;
     if (d && d.default) return d.default;
@@ -5347,7 +5519,7 @@
       : on.length ? on.map(function (it) { return it.face || it.text; }).join(", ")
       : (o.empty || "none");
     face.appendChild(fx);
-    var cx = el("span", "cx"); cx.textContent = isOpen ? "\u25B4" : "\u25BE";
+    var cx = el("span", "sf-cx"); cx.textContent = isOpen ? "\u25B4" : "\u25BE";
     face.appendChild(cx);
     if (!items.length) face.disabled = true;
     face.addEventListener("click", function (e) {
@@ -5651,13 +5823,14 @@
     }
 
     var line = el("div", "sf-vsub");
-    line.appendChild(sub(voiceWords(v, list.length)));
+    /* the measured words about the clip are said only when they are a refusal (below); a voice that is fine
+       needs no sentence under it */
     /* IMPORT IS A BUTTON UNDER THE ROW NOW, with Change reference -- one file
        picker, `POST /voice?name=&filename=` with the raw bytes, and the new
        voice arrives as a row of the dropdown on the next `/state`. */
     var acts = el("div", "sf-acts");
     var imp = el("button", "sf-verb ghost");
-    imp.type = "button"; imp.textContent = "Import";
+    imp.type = "button"; imp.textContent = "New voice";
     imp.title = "An mp3 or wav to clone \u2014 15\u201330 s of clean speech";
     imp.addEventListener("click", function () { pickVoiceFile(null, imp); });
     acts.appendChild(imp);
@@ -5669,6 +5842,7 @@
          the pair before anything reaches that folder. So this button is the
          whole of "change the reference", and the guard is what makes it safe. */
       var ch = el("button", "sf-verb ghost");
+      ch.hidden = true;   /* a voice's own page changes its clip; the book's column does not need it */
       ch.type = "button"; ch.textContent = "Change reference";
       ch.title = "a new clip for " + v.name + " — importvoice re-cuts it and refguard measures it";
       ch.addEventListener("click", function () { pickVoiceFile(v.name, ch); });
@@ -5713,7 +5887,9 @@
     if (S.voiceErr) line.appendChild(note(S.voiceErr));
     /* Z9 · SHARE THIS VOICE (P2: "on the voice ... the picker"): the consent line, Withdraw always there, or "not
        yours to share" with the reason -- voicepage.js's block, over FrankVoice.Voices */
-    if (v && window.VoicePage && window.FrankVoice) {
+    /* (sharing a voice is the voice's own page, not a book's column -- Osca, 9 Oct: "loads of text which does not
+       need to be there") */
+    if (false && v && window.VoicePage && window.FrankVoice) {
       var shareSlot = el("div", "sf-share");
       var drawShare = function (o) { FrankVoice.Voices.get(v.name).then(function (vv) { if (!vv) return; shareSlot.textContent = ""; shareSlot.appendChild(VoicePage.shareBlock(vv, drawShare, o || {})); }); };
       drawShare({}); line.appendChild(shareSlot);
@@ -6173,10 +6349,9 @@
                              ? "no chapter ticked \u2014 open Chapters" : "no chapter to sample yet")
       : (S.ssd && S.ssd.mounted === false) ? "the SSD is unplugged — the model and the voice clip are on it"
       : !S.voice ? "no voice chosen yet" : null;
-    box.appendChild(sampleActs(b, unit, "Sample 30 s of " + (unit || "…"), blocked));
+    box.appendChild(sampleActs(b, unit, "Hear 30 seconds", blocked));
     if (blocked) box.appendChild(sub("Can’t: " + esc(blocked) + "."));
-    else box.appendChild(sub("Nothing long starts until you have heard this. It really "
-      + "synthesizes, in the chosen voice, model and destination — real numbers back."));
+    /* (the paragraph under the button is gone: the button says what it does) */
     if (S.sampleErr) box.appendChild(note(S.sampleErr));
     return prow("Sample", box, null);
   }
@@ -6261,25 +6436,54 @@
     var b = subject();
     if (!b) return null;
     var box = el("div", "sf-studio");
+    /* WHAT A PERSON COMES HERE FOR (Osca, 9 Oct: "THINK about what users will use it for, MAKE IT THAT SIMPLE"):
+       choose a voice, hear it read this book, then have the book read. Voice and Sample are on the face; the
+       book's language, where it runs and the model are one press away, under one line that says what they are
+       set to now. */
     box.appendChild(voiceBlock(b));
-    var vlb = voiceLangBlock(b);
-    if (vlb) box.appendChild(vlb);
-    box.appendChild(langBlock(b));
-    box.appendChild(whereBlock());
-    box.appendChild(engineBlock(b));
     box.appendChild(sampleBlock(b));
+    var more = el("details", "sf-moreset");
+    var ms = el("summary", "sf-moresum");
+    var bits = [];
+    var lg = (bookLangs(b) || []).join(" + ");
+    if (lg) bits.push(lg.toUpperCase());
+    var wn = whereNow(); if (wn) bits.push(wn === "local" ? "this Mac" : wn.charAt(0).toUpperCase() + wn.slice(1));
+    var en = currentEngine(b); if (en) bits.push(en);
+    ms.textContent = "Settings" + (bits.length ? " · " + bits.join(" · ") : "");
+    more.appendChild(ms);
+    if (S.moreOpen) more.open = true;
+    more.addEventListener("toggle", function () { S.moreOpen = more.open; });
+    var vlb = voiceLangBlock(b);
+    if (vlb) more.appendChild(vlb);
+    more.appendChild(langBlock(b));
+    more.appendChild(whereBlock());
+    more.appendChild(engineBlock(b));
+    /* drawn UNDER the Read-aloud button by drawWorks, so the order is the order a person goes in: voice, hear it,
+       read it aloud -- and the settings after */
+    studioBlock.more = more;
     return box;
   }
 
   /* ------------------------------------------------------- the works, live */
   var pollTimer = null;
+  /* what a poll can change, as one string: the job, the queue, the ingests, the re-parses, the join, the shelf's
+     voiced counts -- cheap to compare, and a change anywhere in them is a redraw */
+  function stateSig() {
+    try {
+      return JSON.stringify([S.job, S.pending, S.ingests, S.reparsing, S.attached, S.stateErr,
+                             (S.shelf || []).map(function (b) { return [b.slug, b.voiced, b.chapters, b.title]; })]);
+    } catch (e) { return String(Math.random()); }
+  }
   function pollWorks() {
     clearTimeout(pollTimer);
     if (!opened || !S.live) return;
     /* the same `askState` a keystroke uses -- this is only the CLOCK on it:
        two seconds while something is running, five while nothing is */
+    var before = stateSig();
     askState().then(function () {
-      draw();
+      /* ONLY WHEN SOMETHING CHANGED (9 Oct): a poll whose answer is the same as the last one redraws nothing --
+         the rebuild was the flicker, and with a job running it came every two seconds */
+      if (stateSig() !== before) draw();
       pollTimer = setTimeout(pollWorks,
         (S.job || S.ingests.length || S.reparsing.length) ? 2000 : 5000);
     });

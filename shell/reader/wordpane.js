@@ -158,14 +158,56 @@
         }
       }
       if(!on) return;
-      const key = o.key ? String(o.key()) : "";
-      if(key === seen) return;                 // one write per word, not per frame
+      const key = (o.key ? String(o.key()) : "") + "@" + (l.clientWidth || 0);
+      if(key === seen) return;                 // one write per word (and per width), not per frame
       seen = key;
       const t = (o.line && o.line()) || null;
       const kids = l.children || [];
-      if(kids[0]) kids[0].textContent = (t && t.before) || "";
-      if(kids[1]) kids[1].textContent = (t && t.word) || "";
-      if(kids[2]) kids[2].textContent = (t && t.after) || "";
+      const win = windowOf(t, l);
+      if(kids[0]) kids[0].textContent = win.before;
+      if(kids[1]) kids[1].textContent = win.word;
+      if(kids[2]) kids[2].textContent = win.after;
+      painted = l.clientWidth || 0;
+    }
+
+    /* ---- THE WINDOW (ASKS #204, Osca 9 Oct: "the subtext, under the one
+       word view ... isn't following the top word, they're not the same").
+       The line was the whole paragraph, clamped to one row of the measure, so
+       the moment the word stood past the first ~100 characters it was behind
+       the "..." and the row went on showing the paragraph's head -- on a
+       front-matter block that is "XIII. XIV. CONTENTS ..." for every word on
+       the page. The row is now a WINDOW cut around the word: as many
+       characters as the measure holds at this type, the word a little left
+       of the middle (0.42 -- the pivot column's share), the cut made at a
+       space and marked with an ellipsis. The word moves, the window moves
+       with it, and the word is always in it and marked. The measure is read
+       off the element itself (clientWidth / one character of its own font),
+       so the phone's shorter row and a bigger type both get their own count;
+       a resize repaints (`painted` remembers the width the row was cut for). */
+    let painted = 0;
+    const BEFORE_SHARE = 0.42;
+    function chPx(l){
+      try{
+        const cv = doc.createElement("canvas"), cx = cv.getContext && cv.getContext("2d");
+        if(!cx) return 0;
+        const cs = (doc.defaultView || root).getComputedStyle(l);
+        cx.font = [cs.fontStyle, cs.fontWeight, cs.fontSize, cs.fontFamily].join(" ");
+        return cx.measureText("abcdefghijklmnopqrstuvwxyz ").width / 27;
+      }catch(_){ return 0; }
+    }
+    function windowOf(t, l){
+      const before = (t && t.before) || "", word = (t && t.word) || "", after = (t && t.after) || "";
+      const ch = chPx(l), w = l.clientWidth || 0;
+      const cap = (ch > 0 && w > 0) ? Math.floor(w / ch) : 0;
+      if(!cap || before.length + word.length + after.length <= cap) return { before, word, after };
+      let nb = Math.max(0, Math.floor(cap * BEFORE_SHARE) - Math.floor(word.length / 2));
+      let na = Math.max(0, cap - nb - word.length - 2);           // 2: the two ellipses
+      if(before.length < nb){ na += nb - before.length; nb = before.length; }
+      if(after.length < na){ nb = Math.min(before.length, nb + (na - after.length)); na = after.length; }
+      let b = before.slice(before.length - nb), a = after.slice(0, na);
+      if(nb < before.length){ const sp = b.indexOf(" "); if(sp > 0 && sp < b.length - 1) b = b.slice(sp + 1); b = "\u2026" + b; }
+      if(na < after.length){ const sp = a.lastIndexOf(" "); if(sp > 0) a = a.slice(0, sp); a = a + "\u2026"; }
+      return { before: b, word, after: a };
     }
 
     function clear(){

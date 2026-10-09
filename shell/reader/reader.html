@@ -402,9 +402,13 @@ html[data-phone] #playnote{ bottom:calc(var(--safe-bottom, env(safe-area-inset-b
        key, or Esc inside one word, is the reader choosing a view, so it is written where Settings' View writes it:
        data-read-view follows, the Settings form shows it, and the next book opens where they left off -- never in a
        one word somebody else chose. A gesture along the axis is not a choice of view and writes nothing. */
-    function keepView(v) {
-      try { var S = window.TTSTVSettings; if (S && S.read().view !== v) S.patch({ view: v }); } catch (_) {}
-    }
+    /* ...BUT THE CHOICE BELONGS TO THE BOOK (the Stranger, 9 Oct, stranger-reading-place-9-oct.md: One word pressed in
+       The Time Machine brought David Copperfield and Letters back as one big word from their first page, and threw
+       Copperfield's Chapter 3 place away -- 0 of 3 returns right). Writing it to the shared store made it EVERY book's
+       view and every open tab's. The book already keeps its own: book-nav.js writes the axis it came to rest on as `v`
+       on `wordcursor:<slug>` (K24) and openBook restores it. So a press here writes nothing shared; Settings' View row
+       stays what it says -- how a book you have never opened starts. */
+    function keepView(v) { /* the book's own `v` is written by book-nav.js's noteRest */ }
     document.addEventListener("keydown", function (e) {
       if (e.key === "Escape" && !e.defaultPrevented && onWordSide()) keepView("page");
     }, true);
@@ -1588,13 +1592,17 @@ try{ (function(){
      asynchronously -- so the view is re-applied on the way out of every open,
      for the same reason the block above this one sits above the open. */
   const open0 = nav.openBook;
-  nav.openBook = function(b){ const r = open0.call(nav, b); view(S.read()); return r; };
+  /* Settings' View is the start of a book with no place of its own; a book that has been read comes back the way
+     it was left (book-nav.js restores its own `v` and its line). */
+  const hasPlace = b => { try{ return !!(b && b.slug && localStorage.getItem("wordcursor:" + b.slug)); }catch(_){ return false; } };
+  nav.openBook = function(b){ const r = open0.call(nav, b); if(!hasPlace(b)) view(S.read()); return r; };
   /* ...and the store re-applies the view ONLY when the view itself changed (ASKS #176). Forcing it on every
      store change put a reader who had pressed back to the page straight into one word again the next time
      ANY setting moved -- a pace drag, a theme key, another window's write -- so the bar's One word button
      and Esc "did not leave". */
   let lastView = S.read().view;
-  S.subscribe(s => { paint(s); if(s.view !== lastView){ lastView = s.view; view(s, true); } });
+  /* a View changed in Settings moves the book in front of the reader, never the ones in tabs behind it */
+  S.subscribe(s => { paint(s); if(s.view !== lastView){ lastView = s.view; if(!document.hidden) view(s, true); } });
 })(); }catch(e){ console.warn("[settings] not wired:", e); }
 
 /* ======================= PACE — ONE WORD'S OWN CLOCK ======================
