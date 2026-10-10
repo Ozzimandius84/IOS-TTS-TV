@@ -1,3 +1,30 @@
+# PHONE-LEVEL — 10 Oct (Cowork: bridge VM + Simulator in the background) · phone 79510db … · TTSTV b924801 read only · 0 GPU-minutes · IN PROGRESS
+
+**Status line:** `phone · PHONE-LEVEL · 10 Oct · shell v66 → v76 (TTSTV 8453827 = b924801 for shell/), ONE-COPY wired into tools/phone.sh; simulator install pending`
+
+Written first, filled as it goes.
+
+- 00:15 `design/export.py --shell --phone-shell` into `$HOME/phone-v76` on the VM, compared with `shell/`: 15 files differed and were copied (library.css, library.html, book-nav.js, float.css, float.design.json, float.html, float.js, lookup.js, reader.html, surface.css, surface.js, sw.js, voicepage.js, voicestore.js, wordpane.js); `index.html`, `library/library.json` kept; `shell.manifest.json` rewritten (106 files, 4,140,995 B, source 8453827, `ttstv-shell-v76`).
+- 00:25 proof the phone shell is TTSTV's APPROVED shell, not a lane's WIP: TTSTV `design/reader/book-nav.js` is dirty (another lane, mtime 23:18 UTC, after the 23:15 export). All **104/104** files common to phone `shell/` and TTSTV `HEAD:shell/` are identical once the GENERATED banner and the `../../`→`../` depth are normalised; `git diff 8453827 b924801 -- shell design/reader` is empty, so v76 at b924801 is the same tree.
+- 00:26 `python3 testkit/one_copy.py masters` → `ONE-COPY ok  masters`. `tools/phone.sh` now runs `one_copy fresh` on the built .app before any install and `one_copy installed` over every simulator after (verdict into `scratch-probe/sims.log`); `bash -n` ok.
+
+# 1·SYNC — 9 Oct (Cowork: bridge VM + computer use in the background on Frank and Simulator) · phone 79510db … · TTSTV 072b37b read only · 0 GPU-minutes · IN PROGRESS
+
+**Status line:** `phone · 1·SYNC · 9 Oct · STARTED 02:55 — build check pending (the computer is held by another session); the gate is a note + three highlights Mac → phone, one note phone → Mac, then a fresh simulator pull N/N`
+
+Written first, filled as it goes. Rows below are appended live; the nine headings are completed at the end.
+
+- 02:55 read CLAUDE.md, sync_landed_11_sep, the_pull_is_the_apps, library/STATUS.md, this file's 0B entry. TTSTV HEAD `072b37b`; iOS HEAD `79510db`. `md5sum languages/catalogue.json` = 617c7c8c68f42d6c86b1d651abeef326.
+- 02:56 frank-build `build_status`: last rebuild finished exit 0 (74 s), ONE-COPY ok fresh + installed, `/Applications/Frank.app` reopened. Stamp on screen not yet read: `computer_open_application` refused — "Another Claude session is currently using this computer".
+- Marks travel as `marks/<slug>.json` on Drive (TTSTV `library/drive.js::syncMarksLedger`, `syncMergeMarks` = `reader/marginalia.js` merge, newest `at` wins) or `/sync/marginalia` on the LAN (`studio/sync.py::push_marginalia`); the phone's pull of BOOKS is Rust (`src-tauri/src/pull.rs`), the ledgers are the page's (`settings.js::runSync`). So a marks fault is JS in a served page → DESIGN row, not Rust, unless the pull itself breaks.
+- **10 Oct 03:12 UTC — 1·SYNC resumed (this session, Cowork, Opus) on Osca's 04:11 `go`.** Gate restated: shell v78 (`77073b8`) on iPhone 17 + 17 Pro; (1) 3 highlights + 1 note made in Mac Frank in one book → Sync → visible on iPhone 17; (2) a fresh simulator pulls every book N/N; (3) phone note → Mac waits on PHONE-READ's highlight press. iOS HEAD `77073b8`; `shell/reader/sw.js` `ttstv-shell-v78` source; `tools/phone.sh` mode 100755, `bash -n` ok.
+- 03:12 the build cannot start from this lane: the bridge shell is a Linux VM (`xcrun: command not found`); Terminal/Xcode are click-tier for computer use. `scratch-probe/sims-build.log` shows Osca's last paste (23:29 UTC 9 Oct) died on *"zsh: permission denied: tools/phone.sh"* — the exec bit `8c3b1d5` restored since. The simulators still hold the 8 Oct 22:12 build (v66): `build/arm64-sim/Frank.app` dated 2026-10-08 21:12 UTC, sims.log's last line `== done 22:23:35` (8 Oct).
+- 03:12 Mac Frank is being rebuilt right now by another lane (`frank-build build_status`: running) — no press on Frank until it reopens.
+- 03:13 `fe1718f` **`tools/phone.sh --empty "A,B"`**: with `--fresh`, the named simulators get NO books put back (logged `emptied <dev>: N books NOT kept`) — the "fresh simulator pulls N/N" device. Mode stays 100755. Membership test run on three names (Air → empty, 17 → keep, 17 Pro → empty when listed). The one paste sent to Osca: `tools/phone.sh --sims "iPhone 17,iPhone 17 Pro,iPhone Air" --fresh --empty "iPhone Air"` — the Air is in the list because it still holds the v66 build, and ONE-COPY `installed` would fail the run with it left behind.
+- 03:14 computer use granted: Simulator + Frank (`com.ttstv.desktop`), full tier, background.
+- 08:19 Mac Frank rebuild finished (exit 0, 68 s). But **every Frank window (Library 1914, Euthyphro 1923, a third 1922) is held by another Claude session** — `computer_app_screenshot` refused. The paste has not been run yet (sims.log still ends 8 Oct 22:23). Both halves wait.
+- How the marks reach the phone (read, `shell/settings/settings.js` THE TRANSFER TAB): the Mac's Sync press reconciles its browser store with Studio's mirror; the phone's Sync pushes its marks to the Studio it paired with (`ttstv.sync.pair`, Bonjour `_ttstv._tcp` + a six-digit code typed once) and writes back the merged set. So on a simulator the gate needs the LAN pairing first — and typing the code into Simulator was refused in the background on 8 Oct (S0-5). If it still is, that is a row, not a full-screen takeover.
+
 BOARD: 0B ONE-PHONE ❌ → ✅ (Osca's eye, 22:24: "well done. This is THE one for all future sessions.") · build 22:12 8 Oct, phone 826f118 + shell TTSTV 1d858f0 (ttstv-shell-v66)
 
 # 0B · ONE-PHONE — 8 Oct (Cowork: bridge VM + computer use on Simulator) · phone 377d0d8 … this commit · TTSTV untouched · 0 GPU-minutes
