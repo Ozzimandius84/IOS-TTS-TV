@@ -47,6 +47,9 @@
 #               ALL its saved state (first-run flag, prefs, WebKit storage) are
 #               uninstalled, but the device's books/ is kept aside first and
 #               put back, so the Library still holds them (Osca, 8 Oct 22:20).
+#   --many      with --sims: allow more than ONE simulator (each ~1.5-2 GB;
+#               three at once crashed the M2 Air on 10 Oct). Without it, one
+#               name only, and every other booted simulator is shut down first.
 #   --empty "A,B"  with --fresh: these devices do NOT get their books back --
 #               a stranger's first run with an empty shelf, for the sync gate
 #               "a fresh simulator pulls every book N/N" (1-SYNC, 10 Oct).
@@ -81,6 +84,7 @@ SIMS=""
 BUILD=1
 FRESH=0
 EMPTY=""
+MANY=0
 while [ $# -gt 0 ]; do
   case "$1" in
     --shell)      WITH_SHELL=1; shift ;;
@@ -92,6 +96,7 @@ while [ $# -gt 0 ]; do
     --no-build)   BUILD=0; shift ;;
     --fresh)      FRESH=1; shift ;;
     --empty)      EMPTY="$2"; shift 2 ;;
+    --many)       MANY=1; shift ;;
     --sims)       SIM=1; SIMS="$2"; shift 2 ;;
     -h|--help)    sed -n '2,32p' "${BASH_SOURCE[0]}"; exit 0 ;;
     *)            echo "phone.sh: unknown argument $1 (try --help)" >&2; exit 2 ;;
@@ -165,6 +170,17 @@ if [ "$SIM" = 1 ]; then
     LOG="$REPO/scratch-probe/sims.log"; mkdir -p "$REPO/scratch-probe"
     echo "== $(date '+%F %T') sims build of $(git -C "$REPO" rev-parse --short HEAD) ($(grep -o 'SHELL_CACHE = "ttstv-shell-v[0-9]*' "$REPO/shell/reader/sw.js" | grep -o 'ttstv-shell-v[0-9]*'))" >> "$LOG"
     IFS=',' read -r -a NAMES <<< "$SIMS"
+    # ONE SIMULATOR AT A TIME (1-SYNC, 10 Oct). Three iOS 26 simulators
+    # booted at once on the M2 Air, beside Frank, Chrome, VS Code and the
+    # Cowork VM, is the likeliest cause of the Mac crashing twice that
+    # morning (09:43 install of three, bridge lost 09:51 and 10:25). So every
+    # other booted simulator is shut down first, and more than one name needs
+    # --many, said out loud.
+    if [ "${#NAMES[@]}" -gt 1 ] && [ "$MANY" != 1 ]; then
+      echo "phone.sh: ${#NAMES[@]} simulators named -- each booted iOS simulator costs ~1.5-2 GB of the Mac's memory, and three crashed this Mac (10 Oct). Name ONE, or add --many if you mean it." >&2
+      exit 2
+    fi
+    xcrun simctl shutdown all 2>/dev/null || true
     for N in "${NAMES[@]}"; do
       N="$(echo "$N" | sed 's/^ *//; s/ *$//')"
       say "4/4  $N: boot, install, launch"
