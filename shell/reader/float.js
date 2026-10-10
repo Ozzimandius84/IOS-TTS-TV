@@ -101,25 +101,35 @@
     j = i; while (j >= 0 && skip.has(j)) j--;
     return j >= 0 ? j : i;
   }
+  /* C (Osca, 10 Oct 03:14-03:41): the line above the word is WHERE YOU ARE -- the unit (an act, an eclogue, a
+     chapter) in small capitals, Roman numerals as printed, and the SPEAKER in italics when the book has one
+     (floatdoor.js `speakers`). It stands at one column left of the red letter and never jumps word by word. */
+  var speakers = [];
+  function speakerAt(i) { var s = null; for (var k = 0; k < speakers.length; k++) { if (speakers[k].i <= i) s = speakers[k]; else break; } return s; }
+  function capsTitle(t) {
+    return String(t || "").replace(/\.$/, "").split(/(\s+)/).map(function (w) {
+      if (/^[IVXLCDM]+[.,]?$/.test(w) || !/[A-Z]/.test(w) || w !== w.toUpperCase()) return w;
+      return w.charAt(0) + w.slice(1).toLowerCase();
+    }).join("");
+  }
   function paintMark(i) {
     if (!markEl) return;
     var m = null;
     for (var k = 0; k < marks.length; k++) { if (marks[k].i <= i) m = marks[k]; else break; }
-    var key = m ? (m.of || "") + "\u0001" + (m.label || "") : "";
+    var sp = speakerAt(i);
+    var key = (m ? (m.of || "") + "\u0001" + (m.label || "") : "") + "\u0002" + (sp ? sp.name : "");
     if (key === markOn) return;
     markOn = key;
-    markEl.querySelector(".of").textContent = m ? (m.of || "") : "";
-    markEl.querySelector(".label").textContent = m ? (m.label || "") : "";
+    var who = markEl.querySelector(".who");
+    if (!who) { who = document.createElement("span"); who.className = "who"; markEl.appendChild(who); }
+    var of = m && m.of && m.of !== m.label ? capsTitle(m.of) : "";
+    markEl.querySelector(".of").textContent = of;
+    markEl.querySelector(".label").textContent = m ? capsTitle(m.label || "") : "";
+    who.textContent = sp ? sp.name : "";
     var wasOn = markEl.classList.contains("on");
-    markEl.classList.toggle("on", !!(m && m.label));
-    markEl.removeAttribute("data-ev"); void markEl.offsetWidth; markEl.setAttribute("data-ev", "unit");
-    /* the marker is above the word, so the card's height changed: the window
-       follows and the word's top does not move (fit's dy). When the marker
-       just came ON under Frank, the em was read off the window with the
-       marker's share of the height missing (the slide's steps arrive before
-       the first paint) -- read it again with the marker in, or every open
-       grows the word by (1.96 / 1.6) (seen on the Air: 293 -> 363 -> 450). */
-    if (wasOn !== markEl.classList.contains("on") && typeof onWindowResize === "function" && hosted) { wantH = null; onWindowResize(); return; }
+    markEl.classList.toggle("on", !!((m && m.label) || sp));
+    if (wasOn !== markEl.classList.contains("on") && typeof onWindowResize === "function" && hosted) { wantH = null; layoutCard(); onWindowResize(); return; }
+    if (typeof layoutCard === "function") layoutCard();
     if (typeof fit === "function") fit();
   }
 
@@ -156,20 +166,30 @@
      set at the em, then smaller if it is wider than the slot (slot / word, never larger than the em), and placed so
      the pivot letter's centre stands on the slot's centre -- the one-word view's own rule (wordview.js::place), so
      the HUD reads as the word sliding through a fixed window. A word with no letters (a dash) is centred whole. */
-  function placeWord() {
-    if (!slotEl || !wordEl) return;
-    var em = emPx(), sw = slotEl.clientWidth || (em * (parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--float-ch")) || 9));
-    wordEl.style.fontSize = "";
-    var ww = wordEl.offsetWidth || 0;
-    if (ww > sw && ww > 0) { wordEl.style.fontSize = (em * sw / ww).toFixed(2) + "px"; ww = wordEl.offsetWidth || ww; }
-    var wr = wordEl.getBoundingClientRect(), pr = pvEl ? pvEl.getBoundingClientRect() : null;
-    var pc = pr ? (pr.left + pr.width / 2 - wr.left) : ww / 2;      /* the pivot's centre, from the word's left */
-    var left = sw / 2 - pc;
-    /* a word whose pivot sits far right would leave the slot on the left -- keep it inside, pivot off-centre */
-    if (left < 0) left = 0;
-    if (left + ww > sw) left = Math.max(0, sw - ww);
-    wordEl.style.left = left.toFixed(2) + "px";
+  /* THE BOX IS THE WORDS (Osca, 10 Oct 03:35: "THE BOX DOES NOT MAP TO THE WORD ... the touch area for scrubbing
+     SHOULD ALWAYS be either side of the word"). After every word the card is laid out off the glyphs: the red
+     letter's centre at column L, the word around it, the where-you-are line at one fixed column (META_COL em) left of
+     the letter. The window is the card + a scrub strip each side (bandPx) + a corner row above and below (kPx), so
+     the strips sit against the word's first and last letter at any length. geo holds the numbers regionAt reads. */
+  var K_RATIO = 0.32, BAND_MIN = 30, BAND_RATIO = 0.55, META_COL = 1.1, META_GAP = 0.06, META_H = 0.325;
+  function bandPx() { return Math.max(BAND_MIN, emPx() * BAND_RATIO); }
+  function kPx() { return emPx() * K_RATIO; }
+  var geo = null;
+  function layoutCard() {
+    if (!wordEl) return;
+    var em = emPx(), ww = wordEl.offsetWidth || 0, wh = em * 1.08;
+    var pre = pvEl ? (pvEl.offsetLeft + pvEl.offsetWidth / 2) : ww / 2;
+    var on = !!(markEl && markEl.classList.contains("on"));
+    var mw = on ? markEl.offsetWidth : 0, mh = on ? markEl.offsetHeight : 0, lc = em * META_COL;
+    var L = Math.max(pre, on ? lc : 0), R = Math.max(ww - pre, on ? mw - lc : 0);
+    var top = on ? mh + em * META_GAP : 0;
+    wordEl.style.left = (L - pre).toFixed(2) + "px"; wordEl.style.top = top.toFixed(2) + "px";
+    if (markEl) { markEl.style.left = (L - lc).toFixed(2) + "px"; markEl.style.top = "0px"; }
+    card.style.width = (L + R).toFixed(2) + "px"; card.style.height = (top + wh).toFixed(2) + "px";
+    if (hosted) { card.style.left = (bandPx() + pad.l).toFixed(2) + "px"; card.style.top = (kPx() + pad.t).toFixed(2) + "px"; }
+    geo = { cardW: L + R, cardH: top + wh, wordX: L - pre, wordY: top, wordW: ww, wordH: wh };
   }
+  function placeWord() { layoutCard(); }
 
   /* THE RED LETTER (FLOAT-HANDS stage 1, 28 Sep). The float painted the whole
      word as one text node, so `#word .pv` matched nothing and the pivot was
@@ -233,15 +253,16 @@
        it until the first word is painted (a fit to an empty card would
        shrink it to the margins and grow it back -- a blink). */
     if (!wordEl.textContent) return;
-    var m = marginPx();
-    var cr = card.getBoundingClientRect();
+    var bnd = bandPx(), kk = kPx();
+    if (!geo) layoutCard();
+    var cr = { width: geo ? geo.cardW : card.offsetWidth, height: geo ? geo.cardH : card.offsetHeight };
     var wr = wordEl.getBoundingClientRect();
     var pr = pvEl ? pvEl.getBoundingClientRect() : wr;
     /* the window is box + the fan's pads while the fan is up (stage 3) -- and while the fan (or an answer) is up THE
        BOX HOLDS STILL (ASKS #146, Osca 29 Sep): the size and place it had when the fan opened, whatever word is on it */
     var still = (fan && fan.box) || (answer && answer.box);
     var bw = still ? still.w : cr.width, bh = still ? still.h : cr.height;
-    var w = Math.ceil(bw + 2 * m + pad.l + pad.r), h = Math.ceil(bh + 2 * m + pad.t + pad.b);
+    var w = Math.ceil(bw + 2 * bnd + pad.l + pad.r), h = Math.ceil(bh + 2 * kk + pad.t + pad.b);
     /* the pivot's left and the word's top, in WINDOW px: the screen pixel is
        origin + these, so the origin moves by (last - now) and the letter
        stays. The anchor is the last frame's window-px, never shifted. */
@@ -263,7 +284,7 @@
     /* h = em + 2 × 0.3 em (+ the marker's 0.36 em + gap when on) */
     var on = markEl && markEl.classList.contains("on");
     h -= pad.t + pad.b;                   /* the fan's room is not the word's */
-    var em = on ? (h - MARK_GAP) / (1 + 2 * MARGIN_RATIO + MARK_RATIO) : h / (1 + 2 * MARGIN_RATIO);
+    var em = on ? h / (2 * K_RATIO + 1.08 + META_H + META_GAP) : h / (2 * K_RATIO + 1.08);
     if (!(em > 0)) return;
     setEm(em);
     wantH = h; anchor = null;            /* the window put us here; measure afresh */
@@ -291,6 +312,7 @@
       shown = -1; seen = -1; drops = 0;
       skip = p.skip && p.skip.length ? new Set(p.skip) : null;
       marks = (p.marks || []).slice().sort(function (a, b) { return a.i - b.i; });
+      speakers = (p.speakers || []).slice().sort(function (a, b) { return a.i - b.i; });
       markOn = null; paintMark(-1);      /* null, so an empty marker is written */
       run();
       return;
@@ -319,7 +341,7 @@
     document.body.appendChild(el);
     var cb = card.getBoundingClientRect(), side = away || "right";
     answer = { el: el, side: side, box: { w: cb.width, h: cb.height } };
-    var m = marginPx(), need = ANSWER_W + ANSWER_GAP;
+    var m = bandPx(), need = ANSWER_W + ANSWER_GAP;
     var tall = Math.max(0, el.offsetHeight - (cb.height + 2 * m));
     pad = { l: side === "left" ? need : 0, t: 0, r: side === "right" ? need : 0, b: Math.ceil(tall) };
     applyPad();
@@ -365,15 +387,25 @@
      the two literals together. */
   var BACK = 120, GAP = 400;
   var backRun = 0, backAt = 0;
-  card.addEventListener("wheel", function (e) {
-    var dxw = +e.deltaX || 0;
+  /* TWO FINGERS OR A WHEEL, ANYWHERE ON THE FLOAT (Osca, 10 Oct 03:41: "the scroll and the drag should go the same
+     way ... the same scroll across ALL APPS"): deltaY scrubs, 34 px a word, in the system's own direction (natural
+     scrolling is already in deltaY); deltaX keeps §7's way home. */
+  var WHEEL_PX = 34, wAcc = 0, wAt = 0;
+  document.addEventListener("wheel", function (e) {
+    var dyw = (+e.deltaY || 0) * (e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? 400 : 1), dxw = +e.deltaX || 0;
+    if (dyw && Math.abs(dyw) >= Math.abs(dxw)) {
+      e.preventDefault();
+      var tw = now(); if (tw - wAt > 220) wAcc = 0; wAt = tw; wAcc += dyw;
+      var n = Math.trunc(wAcc / WHEEL_PX); if (n) { wAcc -= n * WHEEL_PX; send("scrub:" + n); }
+      return;
+    }
     if (!dxw) return;
     var t = now();
     if (t - backAt > GAP || (backRun < 0) !== (dxw < 0)) backRun = 0;
     backAt = t;
     backRun += dxw;
     if (backRun <= -BACK) { backRun = 0; send("close"); }
-  }, { passive: true });
+  }, { passive: false });
 
   /* §9: NO KEYBOARD MAP AT ALL. The window never takes focus (floatwin.rs
      focused(false)), so no key can reach it, and there is nothing to bind.
@@ -449,11 +481,17 @@
   var onFan = function (at) { lastPress = at; };   /* stage 3 replaces this */
 
   function regionAt(x, y) {
-    var m = marginPx(), W = window.innerWidth, H = window.innerHeight;
-    var cx = x < m ? "l" : x >= W - m ? "r" : "";
-    var cy = y < m ? "t" : y >= H - m ? "b" : "";
+    var bx = x - pad.l, by = y - pad.t, W = window.innerWidth - pad.l - pad.r, H = window.innerHeight - pad.t - pad.b;
+    var b = bandPx(), k = kPx();
+    var cx = bx < k ? "l" : bx >= W - k ? "r" : "", cy = by < k ? "t" : by >= H - k ? "b" : "";
     if (cx && cy) return { box: "R", corner: cy + cx };            /* tl tr bl br */
-    if (cx) return { box: "S", side: cx === "l" ? "left" : "right" };
+    if (geo) {
+      var y0 = k + geo.wordY, y1 = y0 + geo.wordH, x0 = b + geo.wordX, x1 = x0 + geo.wordW;
+      if (by >= y0 - 6 && by <= y1 + 6) {
+        if (bx < x0 && bx >= x0 - b) return { box: "S", side: "left" };
+        if (bx > x1 && bx <= x1 + b) return { box: "S", side: "right" };
+      }
+    }
     if (cy) return { box: cy === "t" ? "top" : "bottom" };
     return { box: "W" };
   }
@@ -493,7 +531,7 @@
      the word back here. Release resumes there -- nothing to do, the cursor
      IS there. */
   function scrubTo(dyTotal) {
-    var want = Math.round(dyTotal / SCRUB_PX);
+    var want = Math.round(-dyTotal / SCRUB_PX);   /* the words follow the finger, like any page (Osca 10 Oct 03:41) */
     var step = want - gesture.scrubbed;
     if (!step) return;
     gesture.scrubbed = want;
@@ -646,15 +684,17 @@
   var fan = null;                 /* {at, circles:[{id, el, x, y}], away} while open */
   var away = "right";             /* the side the fan opens on: away from the nearer border */
   var mic = false;                /* Speak's state */
+  var lastG = null;               /* the last geometry asked for: where the capsule has room */
   function applyPad() {
     if (!hosted) { card.style.left = ""; card.style.top = ""; fanEl.style.left = "0px"; fanEl.style.top = "0px"; return; }   /* the fan sits in the card on the bench (openFan) */   /* #205: the bench's card stays at the middle (float.css) */
-    card.style.left = "calc(var(--float-margin) + " + pad.l + "px)";
-    card.style.top = "calc(var(--float-margin) + " + pad.t + "px)";
-    fanEl.style.left = pad.l + "px"; fanEl.style.top = pad.t + "px";
+    card.style.left = (bandPx() + pad.l).toFixed(2) + "px";
+    card.style.top = (kPx() + pad.t).toFixed(2) + "px";
+    fanEl.style.left = "0px"; fanEl.style.top = "0px";
   }
   function refreshAway() {
     return geom().then(function (g) {
       if (!g || !(g.sw > 0)) return away;
+      lastG = g;
       var mid = g.x + g.w / 2 - g.sx;
       nearer = mid < g.sw / 2 ? "left" : "right";
       away = nearer === "left" ? "right" : "left";    /* nearer border = left -> fan opens right */
@@ -682,45 +722,39 @@
     out.forEach(function (c) { c.x += awaySide === "left" ? -shift : shift; });
     return out;
   }
+  var ICON = {
+    speak: '<svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/></svg>',
+    define: '<svg viewBox="0 0 24 24"><path d="M4 5.5A1.5 1.5 0 0 1 5.5 4H11v16H5.5A1.5 1.5 0 0 1 4 18.5zM20 5.5A1.5 1.5 0 0 0 18.5 4H13v16h5.5a1.5 1.5 0 0 0 1.5-1.5z"/></svg>',
+    explain: '<svg viewBox="0 0 24 24"><path d="M4 6.5A2.5 2.5 0 0 1 6.5 4h11A2.5 2.5 0 0 1 20 6.5v7a2.5 2.5 0 0 1-2.5 2.5H10l-4 4v-4h.5A2.5 2.5 0 0 1 4 13.5z"/><path d="M10 8.6a2 2 0 1 1 2.6 1.9c-.4.2-.6.5-.6.9v.4M12 13.6v.01"/></svg>',
+    frank: '<svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="14" rx="2.5"/><path d="M14 12H7.5M10.5 9 7.5 12l3 3"/></svg>',
+  };
   function openFan(at) {
     closeFan(true);
     lastPress = at;
     var ids = fanVerbs();
     if (!ids.length) return;
-    var size = dial("fan.size", 44), arc = dial("fan.arc", 150);
-    /* #205: the radius grows with the count so two discs and their labels never touch -- chord >= size + 14 */
-    var R = Math.max(dial("fan.radius", 56), ids.length > 1 ? (size + 10) / (2 * Math.sin((arc * Math.PI / 180) / (ids.length - 1) / 2)) : 0);
-    fanEl.setAttribute("data-away", away);                   /* the names stand on this side of the discs (float.css) */
-    /* THE BOX IS THE CARD + ITS MARGIN, not the window (#205): under Frank they are the same rectangle; on the
-       bench the window is the page and the box is the card at its middle, so the fan opens beside the card there */
-    var m0 = marginPx(), c0 = card.getBoundingClientRect();
-    var bx = c0.left - m0, by = c0.top - m0, W = c0.width + 2 * m0, H = c0.height + 2 * m0;
-    var pts = fanLayout(at.x - bx, at.y - by, W, H, ids.length, away, R, size, arc);
-    /* back to page px, then the room the fan needs beyond the window (the pads; under Frank the window grows) */
-    pts.forEach(function (c) { c.x += bx - pad.l; c.y += by - pad.t; });
-    /* ON THE BENCH the fan rides inside the card (its coordinates are the card's), so a frame that grows to make
-       room -- the card re-centring with it -- carries the discs along; under Frank the window IS the box */
-    if (!hosted) { if (fanEl.parentNode !== card) card.appendChild(fanEl); pts.forEach(function (c) { c.x -= c0.left; c.y -= c0.top; }); }
-    var LBL = 18;                                             /* the label's height under a disc */
-    var minX = 0, minY = 0, maxX = window.innerWidth - pad.l - pad.r, maxY = window.innerHeight - pad.t - pad.b;
-    pts.forEach(function (c) { minX = Math.min(minX, c.x - size / 2 - 6); minY = Math.min(minY, c.y - size / 2 - 6); maxX = Math.max(maxX, c.x + size / 2 + 6); maxY = Math.max(maxY, c.y + size / 2 + LBL + 6); });
-    pad = { l: Math.ceil(-minX), t: Math.ceil(-minY), r: Math.ceil(maxX - (window.innerWidth - pad.l - pad.r)), b: Math.ceil(maxY - (window.innerHeight - pad.t - pad.b)) };
-    pad.r = Math.max(0, pad.r); pad.b = Math.max(0, pad.b);
-    if (!hosted) pad = { l: 0, t: 0, r: 0, b: 0 };     /* the bench's window does not grow; the card stays at the middle */
-    applyPad();
-    document.documentElement.style.setProperty("--fan-size", size + "px");
-    var cb = card.getBoundingClientRect();
-    fan = { at: at, circles: [], away: away, box: { w: cb.width, h: cb.height } };
-    ids.forEach(function (id, i) {
+    if (!geo) layoutCard();
+    var boxW = geo ? geo.cardW + 2 * bandPx() : window.innerWidth - pad.l - pad.r, boxH = geo ? geo.cardH + 2 * kPx() : window.innerHeight - pad.t - pad.b;
+    var cap = document.createElement("div"); cap.className = "cap"; cap.setAttribute("role", "toolbar");
+    fan = { at: at, circles: [], away: away, box: { w: geo ? geo.cardW : card.offsetWidth, h: geo ? geo.cardH : card.offsetHeight } };
+    ids.forEach(function (id) {
       var v = VERBS[id], el = document.createElement("div");
-      el.className = "fc"; el.setAttribute("data-verb", id);
-      el.style.left = pts[i].x + "px"; el.style.top = pts[i].y + "px";
-      el.innerHTML = '<span class="g' + (v.text ? " t" : "") + '">' + (v.glyph || v.label.charAt(0)) + '</span><span class="fl">' + v.label + '</span>';
-      el.title = v.label;
+      el.className = "fc"; el.setAttribute("data-verb", id); el.title = v.label;
+      el.innerHTML = (ICON[id] || '<span class="g">' + (v.glyph || v.label.charAt(0)) + '</span>') + '<span class="fl">' + v.label + '</span>';
       if (v.toggle) el.setAttribute("data-on", mic ? "1" : "0");
-      fanEl.appendChild(el);
-      fan.circles.push({ id: id, el: el, x: pts[i].x, y: pts[i].y });
+      cap.appendChild(el);
+      fan.circles.push({ id: id, el: el, x: 0, y: 0 });
     });
+    fanEl.appendChild(cap);
+    var cw = cap.offsetWidth, ch = cap.offsetHeight, GAPC = 10;
+    /* below the words, unless the screen has no room there */
+    var below = true;
+    if (lastG && lastG.sh > 0) below = (lastG.y + lastG.h + ch + GAPC) <= (lastG.sy + lastG.sh);
+    var extra = Math.max(0, cw - boxW);
+    pad = { l: Math.ceil(extra / 2), r: Math.ceil(extra / 2), t: below ? 0 : ch + GAPC, b: below ? ch + GAPC : 0 };
+    applyPad();
+    cap.style.left = Math.round(pad.l + boxW / 2 - cw / 2) + "px";
+    cap.style.top = (below ? pad.t + boxH + GAPC - kPx() / 2 : 0) + "px";
     hold(true);
     fit();
   }
@@ -735,12 +769,9 @@
   }
   function circleAt(x, y) {
     if (!fan) return null;
-    var size = dial("fan.size", 40);
-    var o = hosted ? { x: 0, y: 0 } : card.getBoundingClientRect();   /* the bench's fan is card-relative */
-    for (var i = 0; i < fan.circles.length; i++) {
-      var c = fan.circles[i], dx = x - pad.l - c.x - (o.left || 0), dy = y - pad.t - c.y - (o.top || 0);
-      if (dx * dx + dy * dy <= (size / 2) * (size / 2) + 16) return c;
-    }
+    var el = document.elementFromPoint(x, y), fc = el && el.closest ? el.closest(".fc") : null;
+    if (!fc) return null;
+    for (var i = 0; i < fan.circles.length; i++) if (fan.circles[i].el === fc) return fan.circles[i];
     return null;
   }
   function act(id) {

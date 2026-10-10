@@ -1203,7 +1203,8 @@ function boot(opts = {}) {
     return 2500;
   }
 
-  const synth = opts.synth || (win && win.speechSynthesis) || null;
+  /* NO APPLE VOICE IN FRANK (Osca, 10 Oct 02:59: "THE MAC VOICE should NOT exist in Frank ... Don't want it ANYWHERE NEAR my APP"): the page never picks up window.speechSynthesis; answers are Frank's rendered voice or written */
+  const synth = opts.synth || null;
   const mediaSession = opts.mediaSession !== undefined ? opts.mediaSession : (win && win.navigator && win.navigator.mediaSession) || null;
   const Recognition = win && (win.SpeechRecognition || win.webkitSpeechRecognition);
   const recognizerFactory =
@@ -1520,7 +1521,7 @@ function boot(opts = {}) {
     if (result.type === "answer" && result.text) {
       remember(text, result.text);
       // PRESSED IS WRITTEN, SPOKEN IS SAID -- the book's voice (chat 103/125)
-      if (!quietAsked && synth) await tts.say(result.text, { synth, assistant });
+      if (!quietAsked) await tts.say(result.text, { synth, assistant });
     }
     return result;
   }
@@ -1674,8 +1675,6 @@ function boot(opts = {}) {
         const msg = "The dictionary isn't connected to the reader yet.";
         if (!quietAsked) await tts.say(msg, { synth, assistant });
         result = { type: "answer", text: msg, unavailable: missingHooks, quiet: quietAsked };
-      } else if (!synth && parseLookupQuery(text)) {
-        result = { type: "answer", text: "No speechSynthesis in this browser.", unavailable: ["speechSynthesis"], quiet: quietAsked };
       } else {
         result = await app.handleUtterance(text, opts);
       }

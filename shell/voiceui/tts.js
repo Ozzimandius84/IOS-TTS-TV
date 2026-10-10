@@ -394,6 +394,8 @@ async function say(text, opts = {}) {
     if (r && r.played) return { spoken: true, timedOut: false, error: null, how: "file", plan: p };
     p.fellBack = r && r.error ? String(r.error && r.error.message || r.error) : "file did not play";
   }
+  /* NO APPLE VOICE IN FRANK (Osca, 10 Oct 02:59: "THE MAC VOICE should NOT exist in Frank ... Don't want it ANYWHERE NEAR my APP"): with no synth handed in (the page never hands one), an answer with no Frank voice is written, not spoken */
+  if (!opts.synth) return { spoken: false, timedOut: false, error: "no Frank voice for this answer", how: "quiet", plan: p };
   const spoken = await speak(text, Object.assign({}, opts, { voiceName: p.voiceName || opts.voiceName || null }));
   return Object.assign(spoken, { how: "synth", plan: p });
 }

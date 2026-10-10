@@ -374,7 +374,7 @@
     return box;
   }
   function deviceRead(b, bt) {
-    try { var u = new SpeechSynthesisUtterance(b.title + ". " + (b.author || "")); speechSynthesis.cancel(); speechSynthesis.speak(u); } catch (e) {}
+    /* NO APPLE VOICE IN FRANK (Osca, 10 Oct 02:59: "THE MAC VOICE should NOT exist in Frank ... Don't want it ANYWHERE NEAR my APP"): no device-voice preview */
     bt.parentNode.setAttribute("data-playing", "");
   }
   /* P1 -- the book's own "On the web": On / Off / can't, the reason in words, and "my own writing" */

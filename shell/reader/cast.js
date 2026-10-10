@@ -110,7 +110,8 @@
     }
     function hear(i) {
       if (i >= sc.length) { playing = null; draw(); return; }
-      var line = sc[i], ss = window.speechSynthesis, idx = ps.map(function (p) { return p.cue; }).indexOf(line.cue);
+      /* NO APPLE VOICE IN FRANK (Osca, 10 Oct 02:59: "THE MAC VOICE should NOT exist in Frank ... Don't want it ANYWHERE NEAR my APP"): the scene is never read in a device voice; it steps silently */
+      var line = sc[i], ss = null, idx = ps.map(function (p) { return p.cue; }).indexOf(line.cue);
       var silent = !ss || !ss.getVoices || !ss.getVoices().length;
       playing = { i: i, silent: silent, timer: 0 }; draw();
       var next = function () { if (playing && playing.i === i) hear(i + 1); };

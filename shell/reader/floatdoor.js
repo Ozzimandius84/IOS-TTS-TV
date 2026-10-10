@@ -190,8 +190,28 @@
         sentEnds: sentEnds,
         skip: skip,
         marks: marks,
+        speakers: speakersOf(blocks),
       },
     };
+  }
+  /* WHO IS SPEAKING (Osca, 10 Oct 03:03: "an act, I don't know the scene OR the speaker. I need to know these
+     things"). A play's speaker is a block of its own (`r: "sp"`, NORA, HELMER) and never a word, so it is walked
+     here the way wordview.js::chapterMarks walks the words -- sp/dir/fig blocks count no words -- and each speaker
+     lands at the flat index of the first word after it. [{i, name}], in order; a book with no speakers sends []. */
+  function speakersOf(blocks) {
+    var out = [], n = 0;
+    (blocks || []).forEach(function (b) {
+      if (!b) return;
+      if (b.r === "sp") {
+        var name = String(b.t || "").trim().replace(/[.:,;]+$/, "");
+        if (name && name === name.toUpperCase()) name = name.toLowerCase().replace(/(^|[\s'-])(\S)/g, function (m, a, c) { return a + c.toUpperCase(); });
+        if (name) out.push({ i: n, name: name });
+        return;
+      }
+      if (b.r === "dir" || b.r === "fig") return;
+      n += String(b.t || "").split(/\s+/).filter(Boolean).length;
+    });
+    return out;
   }
   function apparatusOf(chapter, structure) {
     var WV = typeof window !== "undefined" ? window.WordView : null;
@@ -266,6 +286,10 @@
         sentEnds: sentEnds,
         skip: skip,
         marks: marks,
+        speakers: speakersOf(o.chapter && o.chapter.blocks).map(function (sp) {
+          for (var r = 0; r < flats.length; r++) if (flats[r] >= sp.i) return { i: r, name: sp.name };
+          return null;
+        }).filter(Boolean),
       },
     };
   }

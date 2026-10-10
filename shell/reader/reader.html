@@ -466,13 +466,10 @@ html[data-phone] #playnote{ bottom:calc(var(--safe-bottom, env(safe-area-inset-b
           var T = window.Transport; if (!T) return false;
           var st = T.state ? T.state() : {};
           if (st.playing) { T.toggle(); return true; }
-          var at = lastCursor;
-          try { if (!at && typeof nav !== "undefined" && nav && nav.cursor) at = nav.cursor; } catch (_) {}
-          if (at && at.chapter >= 0 && window.TTSTVBook && st.chapterIndex !== at.chapter) {
-            try { TTSTVBook.go(at.chapter, at.word | 0); } catch (_) {}
-            setTimeout(function () { T.toggle(); }, 350);
-            return true;
-          }
+          /* nothing sounding: the bar's own ▶, which starts at the word on screen -- the float's word -- and, with no
+             Frank voice for the chapter, stops again and says so rather than playing silence (or the Apple voice) */
+          var go = document.getElementById("mplaygo") || document.getElementById("pplaygo");
+          if (go) { go.click(); return true; }
           T.toggle(); return true;
         },
         /* §10's scrub (stage 5): the one-word view's own word step, n times --
@@ -1982,6 +1979,9 @@ addEventListener("hashchange", () => {
    page is showing. One cursor, two drivers, never both at once (the pace
    stands down above). */
 try{ (function(){
+  /* NO APPLE VOICE IN FRANK (Osca, 10 Oct 02:59: "THE MAC VOICE should NOT exist in Frank ... Don't want it ANYWHERE NEAR my APP"): the system voice -- speechSynthesis on the Mac, AVSpeechSynthesizer on the phone -- is never
+     registered, so a chapter with no Frank voice is silent and Play says so ("Frank has no voice to read this with yet"). */
+  return;
   if(!window.SysVoice || !window.Transport) return;
   /* WHICH SYNTHESISER THIS PAGE HAS (D1(b), 13 Sep). One question, asked
      once, answered by `sysvoice.js::pickSynth`: the phone's own

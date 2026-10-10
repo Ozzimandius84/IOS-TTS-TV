@@ -2,7 +2,7 @@
   "added_here": [
     "index.html"
   ],
-  "bytes": 4146128,
+  "bytes": 4153180,
   "count": 106,
   "files": {
     "bar/askbar.css": {
@@ -106,8 +106,8 @@
       "sha256": "8c4738f0a990c29a79cc4a7d45b11e534e4adee809d436fdf0067d57d843d329"
     },
     "reader/cast.js": {
-      "bytes": 12068,
-      "sha256": "5f27a0605438050795f660b49160d3df11c5c41cdb074f6ccf071d27362fb0d7"
+      "bytes": 12251,
+      "sha256": "e7e20568c082bd5a3e88715794935e7cfd30693df7a8d7d524169fb34527daef"
     },
     "reader/chrome.css": {
       "bytes": 6851,
@@ -134,8 +134,8 @@
       "sha256": "f3695fc24f753ea0197841fefa41f37b92208443ec9cb434a2cdc7ca108fe1fc"
     },
     "reader/float.css": {
-      "bytes": 11050,
-      "sha256": "bc2dd1ff76e743ab1fb5cc376d2b89d54570d143b5ae84de9214dd2c7db66b26"
+      "bytes": 13992,
+      "sha256": "2247f5d09b554c341f7bf89923aca14f7357a1e684fc506fa39ee991d0635bcf"
     },
     "reader/float.design.json": {
       "bytes": 1104,
@@ -146,12 +146,12 @@
       "sha256": "3ef2393c6c24f0b02f6e69bd323d42880d56c18ba771643d6113acb793295abf"
     },
     "reader/float.js": {
-      "bytes": 45579,
-      "sha256": "778d43146699589e6918d71d3de4af7ef0d1c80f3c97ba27b95e77029d9e86c6"
+      "bytes": 47499,
+      "sha256": "8e7296a3d762ad891ec9b656f485c68b7cfcf785fc315aa5c43beb011137450e"
     },
     "reader/floatdoor.js": {
-      "bytes": 32685,
-      "sha256": "823b759825c872c87d53236e3052892e18f7e427dc1a9e9de77905c2ed61c3bf"
+      "bytes": 34004,
+      "sha256": "3d947606fe7a4a710205f2ecf6fc46f4597898e455962e517d65ef42efd09ad4"
     },
     "reader/follow.js": {
       "bytes": 18667,
@@ -246,8 +246,8 @@
       "sha256": "01d0599452f0583b677409bef75c8211aeee66c02d6033831ced4bace0fc37cd"
     },
     "reader/reader.html": {
-      "bytes": 186126,
-      "sha256": "b282ef34218e6f8fb4bcf33fd57e0902af21e77ba55bbcce8a2823ec1c428cb2"
+      "bytes": 186468,
+      "sha256": "4545dfc6f56eacdcc112765ca64ac009f696726fc62f7d524ea0c03ee12c1179"
     },
     "reader/scrub.css": {
       "bytes": 13348,
@@ -286,8 +286,8 @@
       "sha256": "3b2d5997e69aee63fdf9c4131e4195455f124e49d6ebcd71f0fa3a0c97bc8e99"
     },
     "reader/sw.js": {
-      "bytes": 29832,
-      "sha256": "bcb37f76daec7b799d0e05164cf715b5a53c10365f993d8224be0c1a85ffc405"
+      "bytes": 29798,
+      "sha256": "7a4f9a030ea1bbe461fc847578fd9d79176fcf041e0694bb43055791c4f29592"
     },
     "reader/sysvoice.js": {
       "bytes": 45964,
@@ -322,8 +322,8 @@
       "sha256": "7d4d1b5bcb294e93c77f63b34c1b2e02b5320231ea5f72e807dc1ae53dff6754"
     },
     "reader/voicepage.js": {
-      "bytes": 36425,
-      "sha256": "afaa103281f185ecba221524127dd9af1b616f6b7846a5198133fa76868f0acd"
+      "bytes": 36437,
+      "sha256": "da9a24e1bb68ce2fd25a01ffaf228b716f9df62c01ab7f6423b9a7c061670fff"
     },
     "reader/voicestore.js": {
       "bytes": 24605,
@@ -382,8 +382,8 @@
       "sha256": "0c55d57f09fe434f21bf4500733fecb86eb18224ce65d0cba9133aae40495a9e"
     },
     "voiceui/app.js": {
-      "bytes": 109092,
-      "sha256": "80c6b7834cc82e381b079af3df759a851add191e245ee52e456a7845f52980cd"
+      "bytes": 109093,
+      "sha256": "2416f9321ee882d6341054aca659bc63529f964c72a13e379eb6d77a3a5813bc"
     },
     "voiceui/asr.js": {
       "bytes": 2546,
@@ -426,15 +426,15 @@
       "sha256": "5e7d2903b261afbee8e9d672dfe07a928ef798ae19f0ec2b1166b7869af6f723"
     },
     "voiceui/tts.js": {
-      "bytes": 27728,
-      "sha256": "7e0f39143ec1861f39f65ef6f43f7bd3e6338536a1b358ad70444d0d542c0e12"
+      "bytes": 28095,
+      "sha256": "9a1fd0df30294ee365f72492c0a24c596966242488ebef030716b170a93710b2"
     }
   },
   "home_page": "library/library.html",
   "source": {
-    "commit": "1b283be",
-    "how": "design/export.py --shell --phone-shell into a scratch dir (10 Oct 02:57, board, after EXPORT 82737e7); 5 files differed (reader/listen.js, reader/book-nav.js, reader/reader.html, reader/floatdoor.js, reader/sw.js) and were copied over; index.html and library/library.json kept",
+    "commit": "9026043",
+    "how": "design/export.py --shell --phone-shell into a scratch dir (10 Oct 03:58, board, after float C db5a5ba + cache v78); copied: reader/voicepage.js, reader/float.css, reader/reader.html, reader/floatdoor.js, reader/float.js, reader/cast.js, reader/sw.js, voiceui/tts.js, voiceui/app.js; index.html and library/library.json kept",
     "repo": "/sessions/<vm>/mnt/TTSTV (= ~/Documents/RUNNERS/TTSTV/TTSTV)",
-    "shell_cache": "ttstv-shell-v77"
+    "shell_cache": "ttstv-shell-v78"
   }
 }
