@@ -334,7 +334,13 @@
         return { via: "quiet", arg: r.arg };
       case "transport":
         if (!doors.transport) return null;
-        if (r.arg === "toggle") { doors.transport.toggle(); return { via: "transport", arg: "toggle" }; }
+        if (r.arg === "toggle") {
+          /* FLOAT (10 Oct): THE TAP PLAYS FROM THE WORD ON THE FLOAT. A bare toggle on a transport that has no
+             chapter open -- the reader opened on a page, nothing pressed yet -- was silent (S1-night 9 Oct: "tap on
+             the word x2: nothing"). The reader's `play` door starts at its cursor, the word the float shows. */
+          if (typeof doors.play === "function") doors.play(); else doors.transport.toggle();
+          return { via: "transport", arg: "toggle" };
+        }
         if (typeof doors.transport.stepSentence !== "function") return null;
         doors.transport.stepSentence(r.arg === "prev" ? -1 : 1);
         return { via: "transport", arg: r.arg };
@@ -411,6 +417,12 @@
 
     function chapterNow() {
       var control = pick(controlIn);
+      /* FLOAT (10 Oct): the voice's chapter is the float's only while it is the reader's. A transport still holding
+         another chapter (opened by an earlier play) with its clock stopped is not where the reader stands -- the
+         cursor is, and the float opens on the cursor's word (position is sacred). */
+      var at0 = pick(cursorIn), bk0 = pick(bookIn), cIdx = -1;
+      if (control && control.map && bk0 && bk0.chapters) for (var c0 = 0; c0 < bk0.chapters.length; c0++) if (bk0.chapters[c0].id === control.map.id) { cIdx = c0; break; }
+      if (control && at0 && at0.chapter >= 0 && cIdx >= 0 && cIdx !== at0.chapter && (!control.clock || control.clock.paused)) control = null;
       if (control) {
         var bkT = pick(bookIn), chT = null;
         if (bkT && bkT.chapters && control.map) for (var c = 0; c < bkT.chapters.length; c++) if (bkT.chapters[c].id === control.map.id) { chT = bkT.chapters[c]; break; }
@@ -553,7 +565,7 @@
       return {
         voiceui: pick(d.voiceui), transport: pick(d.transport),
         define: d.define, defineText: d.defineText, translate: d.translate, close: d.close, said: d.said,
-        scrub: d.scrub,
+        scrub: d.scrub, play: d.play,
       };
     }
 

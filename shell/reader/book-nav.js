@@ -1572,12 +1572,25 @@ function mount(o){
   // word transparent so a lifted copy could sit on top of it. Nothing is
   // lifted now, so shell.css's rule for it is gone and this only marks which
   // word is current -- useful to anything that wants to know, invisible here.
+  // ONE HIGHLIGHT PER MARK, MOVED -- NEVER REPLACED (READER-FIX, 10 Oct). set(name, new Highlight(r)) on every
+  // cursor step left the OLD word painted in Frank's WebKit whenever the cursor crossed into another block (a
+  // paragraph's last word, a speaker name): that engine repaints only the new highlight's blocks on a set().
+  // clear() repaints what it drops and add() what it takes, in every engine. listen.js's moveMark is the same.
+  const hiMarks = {};
+  function moveMark(name, r){
+    let hl = hiMarks[name];
+    if(!r){ if(hl){ hl.clear(); if(CSS.highlights.get(name) === hl) CSS.highlights.delete(name); } return; }
+    if(!hl) hl = hiMarks[name] = new Highlight();
+    let held = null; if(hl.size === 1) for(const x of hl) held = x;
+    if(!(held && held.startContainer === r.startContainer && held.startOffset === r.startOffset
+         && held.endContainer === r.endContainer && held.endOffset === r.endOffset)){ hl.clear(); hl.add(r); }
+    if(CSS.highlights.get(name) !== hl) CSS.highlights.set(name, hl);
+  }
   function paintWordHighlight(){
     if(!wordHiOK) return;
     try{
       const r=currentWordRange();
-      if(r) CSS.highlights.set("word-target", new Highlight(r));
-      else CSS.highlights.delete("word-target");
+      moveMark("word-target", r);
     }catch(_){ wordHiOK=false; }
   }
   // ---------------------------------------------------------------- THE
@@ -3289,7 +3302,7 @@ function mount(o){
     if(!wordHiOK) return;
     const w = wordDomIndex[wordIdx], host = w && w.p;
     if(v <= 0 || !host){
-      if(wz.pvOn){ try{ CSS.highlights.delete("word-pivot"); }catch(_){} wz.pvOn = false; wz.pvKey = ""; }
+      if(wz.pvOn){ try{ moveMark("word-pivot", null); }catch(_){} wz.pvOn = false; wz.pvKey = ""; }
       if(wz.pvHost){ wz.pvHost.style.removeProperty("--wz-pv"); wz.pvHost = null; }
       wz.pvQ = -1;
       return;
@@ -3297,7 +3310,7 @@ function mount(o){
     const key = wordChapterIdx + ":" + wordIdx;
     if(!wz.pvOn || wz.pvKey !== key){
       const r = wzPivotRange();
-      try{ if(r) CSS.highlights.set("word-pivot", new Highlight(r)); }catch(_){ wordHiOK = false; return; }
+      try{ if(r) moveMark("word-pivot", r); }catch(_){ wordHiOK = false; return; }
       wz.pvOn = true; wz.pvKey = key; wz.pvQ = -1;
     }
     if(wz.pvHost && wz.pvHost !== host) wz.pvHost.style.removeProperty("--wz-pv");

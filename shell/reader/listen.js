@@ -630,10 +630,34 @@ function mount(o) {
       return;
     }
     if (!hiOK) return;
-    try {
-      if (range) CSS.highlights.set(name, new Highlight(range));
-      else CSS.highlights.delete(name);
-    } catch (e) { hiOK = false; }
+    try { moveMark(name, range); } catch (e) { hiOK = false; }
+  }
+  /* ONE HIGHLIGHT PER MARK, MOVED -- NEVER REPLACED (READER-FIX, 10 Oct; Osca 00:25 on Euthyphro: "WHY does it
+     leave these artifact boxes at the end of paragraphs ... it dirties the text"). This used to be
+     `CSS.highlights.set(name, new Highlight(range))` every frame. The WebKit Frank ships repaints only the NEW
+     highlight's blocks on a set() -- the one it replaces is not repainted (WebKit main has since added
+     `previousHighlight->repaint()` to HighlightRegistry::setFromMapLike). Inside one paragraph the new word's repaint
+     covers the old one; across a block boundary nothing does, so the last word of every paragraph and every speaker
+     name (`p.sp`, its own block) stayed tinted after the voice had passed, while CSS.highlights only ever held the
+     current ranges. Highlight.clear() repaints every range it drops and add() the one it takes, in every engine, so
+     the mark is one Highlight object per name, cleared and re-filled when its range changes, and left alone when it
+     has not (the frame loop no longer re-registers the same word sixty times a second). book-nav.js's word-target
+     and word-pivot do the same (its `moveMark`). */
+  const marks = {};
+  function sameRange(a, b) {
+    return a.startContainer === b.startContainer && a.startOffset === b.startOffset
+      && a.endContainer === b.endContainer && a.endOffset === b.endOffset;
+  }
+  function moveMark(name, range) {
+    let hl = marks[name];
+    if (!range) {
+      if (hl) { hl.clear(); if (CSS.highlights.get(name) === hl) CSS.highlights.delete(name); }
+      return;
+    }
+    if (!hl) hl = marks[name] = new Highlight();
+    let held = null; if (hl.size === 1) for (const r of hl) held = r;
+    if (!(held && sameRange(held, range))) { hl.clear(); hl.add(range); }
+    if (CSS.highlights.get(name) !== hl) CSS.highlights.set(name, hl);
   }
   function rangeOf(hit) {
     if (!hit) return null;

@@ -450,13 +450,31 @@ html[data-phone] #playnote{ bottom:calc(var(--safe-bottom, env(safe-area-inset-b
          rather than held: the system voice is registered further down this
          file, after this bar is built. */
       sysvoice: function () { return window.Transport ? Transport.system : null; },
-      cursor: function () { return lastCursor; },
+      /* FLOAT (10 Oct): a book reopened at yesterday's word announces no `ttstv:cursor` until it moves, and the float
+         opened on the front matter's first word ("AN") -- the cursor book-nav holds is the answer until one arrives */
+      cursor: function () { if (lastCursor) return lastCursor; try { return (typeof nav !== "undefined" && nav && nav.cursor) ? nav.cursor : null; } catch (_) { return null; } },
       /* ★ D7b: the book's own data, for unrendered chapters. Asked for, never
          held: OPEN_BOOK changes on every openBook(). */
       book: function () { try { return OPEN_BOOK; } catch (_) { return null; } },
       doors: {
         voiceui: function () { return window.VoiceUI && VoiceUI.instance; },
         transport: function () { return window.Transport; },
+        /* FLOAT (10 Oct): the tap on the floating word = play/pause, from the float's word. Nothing sounding: the
+           transport goes to the cursor's chapter and word first (the bar's ▶ does the same from the page, #187),
+           then plays; sounding: it pauses. */
+        play: function () {
+          var T = window.Transport; if (!T) return false;
+          var st = T.state ? T.state() : {};
+          if (st.playing) { T.toggle(); return true; }
+          var at = lastCursor;
+          try { if (!at && typeof nav !== "undefined" && nav && nav.cursor) at = nav.cursor; } catch (_) {}
+          if (at && at.chapter >= 0 && window.TTSTVBook && st.chapterIndex !== at.chapter) {
+            try { TTSTVBook.go(at.chapter, at.word | 0); } catch (_) {}
+            setTimeout(function () { T.toggle(); }, 350);
+            return true;
+          }
+          T.toggle(); return true;
+        },
         /* §10's scrub (stage 5): the one-word view's own word step, n times --
            the reader's cursor moves and the feed brings the word to the HUD */
         scrub: function (n) { var k = Math.abs(n | 0), d = n < 0 ? -1 : 1; while (k-- > 0) { try { nav.step(d); } catch (_) { break; } } },

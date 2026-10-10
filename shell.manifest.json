@@ -2,7 +2,7 @@
   "added_here": [
     "index.html"
   ],
-  "bytes": 4140995,
+  "bytes": 4146128,
   "count": 106,
   "files": {
     "bar/askbar.css": {
@@ -94,8 +94,8 @@
       "sha256": "e40ed97a7dbaada0cfc0d0c1552285c4a1fb4e33eda41a435f491e0978713294"
     },
     "reader/book-nav.js": {
-      "bytes": 364129,
-      "sha256": "3df87255cfb984f82c0fe6f6ab9ecd610a9332f9862cba3970467912e4a19356"
+      "bytes": 365050,
+      "sha256": "44896f7191d3a1955fdefa5f8bee251d20cc9e627f02f1d5fc05b1de270b71ba"
     },
     "reader/book.js": {
       "bytes": 6136,
@@ -150,8 +150,8 @@
       "sha256": "778d43146699589e6918d71d3de4af7ef0d1c80f3c97ba27b95e77029d9e86c6"
     },
     "reader/floatdoor.js": {
-      "bytes": 31549,
-      "sha256": "f7c403259c6900175f8b96f872b2a884e7dd0577f5a992e5a6ce034a5d313fb0"
+      "bytes": 32685,
+      "sha256": "823b759825c872c87d53236e3052892e18f7e427dc1a9e9de77905c2ed61c3bf"
     },
     "reader/follow.js": {
       "bytes": 18667,
@@ -186,8 +186,8 @@
       "sha256": "0d20c9bb1fbb13f2c63b25e66e9224feb44fe0a10e55da09bc2c30a32a2fbe68"
     },
     "reader/listen.js": {
-      "bytes": 39949,
-      "sha256": "b9b64f0e8306a5519a1a65edf6c1819b12758dc8de0e9cd8885ee4cf95c1de50"
+      "bytes": 41720,
+      "sha256": "f336bcd83916141cb94686a351cfa3c6bd534d5471de3daa3b568d9e6180fa6f"
     },
     "reader/lookup.js": {
       "bytes": 45225,
@@ -246,8 +246,8 @@
       "sha256": "01d0599452f0583b677409bef75c8211aeee66c02d6033831ced4bace0fc37cd"
     },
     "reader/reader.html": {
-      "bytes": 184849,
-      "sha256": "06126bd779006e32d5e4cb0a2f53c13a9d86d3a267466632f0841498ecd142be"
+      "bytes": 186126,
+      "sha256": "b282ef34218e6f8fb4bcf33fd57e0902af21e77ba55bbcce8a2823ec1c428cb2"
     },
     "reader/scrub.css": {
       "bytes": 13348,
@@ -286,8 +286,8 @@
       "sha256": "3b2d5997e69aee63fdf9c4131e4195455f124e49d6ebcd71f0fa3a0c97bc8e99"
     },
     "reader/sw.js": {
-      "bytes": 29804,
-      "sha256": "ffb716d7b61d0eb2a035ae97fe89ea03149d8c623952e2c123aca981ff63ed60"
+      "bytes": 29832,
+      "sha256": "bcb37f76daec7b799d0e05164cf715b5a53c10365f993d8224be0c1a85ffc405"
     },
     "reader/sysvoice.js": {
       "bytes": 45964,
@@ -432,9 +432,9 @@
   },
   "home_page": "library/library.html",
   "source": {
-    "commit": "8453827",
-    "how": "design/export.py --shell --phone-shell into a scratch dir (10 Oct, PHONE level-up v66->v76); 15 files differed (library/library.css, library/library.html, reader/book-nav.js, reader/float.css, reader/float.design.json, reader/float.html, reader/float.js, reader/lookup.js, reader/reader.html, reader/surface.css, reader/surface.js, reader/sw.js, reader/voicepage.js, reader/voicestore.js, reader/wordpane.js) and were copied over; index.html and library/library.json kept",
+    "commit": "1b283be",
+    "how": "design/export.py --shell --phone-shell into a scratch dir (10 Oct 02:57, board, after EXPORT 82737e7); 5 files differed (reader/listen.js, reader/book-nav.js, reader/reader.html, reader/floatdoor.js, reader/sw.js) and were copied over; index.html and library/library.json kept",
     "repo": "/sessions/<vm>/mnt/TTSTV (= ~/Documents/RUNNERS/TTSTV/TTSTV)",
-    "shell_cache": "ttstv-shell-v76"
+    "shell_cache": "ttstv-shell-v77"
   }
 }
