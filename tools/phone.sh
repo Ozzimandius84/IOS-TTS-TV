@@ -163,7 +163,7 @@ if [ "$SIM" = 1 ]; then
   if [ "$INSTALL" = 0 ]; then say "4/4  install: skipped (--no-install)"; exit 0; fi
   if [ -n "$SIMS" ]; then
     LOG="$REPO/scratch-probe/sims.log"; mkdir -p "$REPO/scratch-probe"
-    echo "== $(date '+%F %T') sims build of $(git -C "$REPO" rev-parse --short HEAD) ($(grep -o 'ttstv-shell-v[0-9][0-9]*' "$REPO/shell/reader/sw.js" | head -1))" >> "$LOG"
+    echo "== $(date '+%F %T') sims build of $(git -C "$REPO" rev-parse --short HEAD) ($(grep -o 'SHELL_CACHE = "ttstv-shell-v[0-9]*' "$REPO/shell/reader/sw.js" | grep -o 'ttstv-shell-v[0-9]*'))" >> "$LOG"
     IFS=',' read -r -a NAMES <<< "$SIMS"
     for N in "${NAMES[@]}"; do
       N="$(echo "$N" | sed 's/^ *//; s/ *$//')"
@@ -189,10 +189,13 @@ if [ "$SIM" = 1 ]; then
         mkdir -p "$(dirname "$DATA/$REL")" && cp -R "$KEEP" "$DATA/$REL"
         echo "put back $(ls "$DATA/$REL" | wc -l | tr -d ' ') books on $N" | tee -a "$LOG"
       fi
-      if xcrun simctl install "$N" "$SIM_APP" && xcrun simctl launch "$N" com.ttstv.frank; then
+      ERR="$(mktemp)"
+      if xcrun simctl install "$N" "$SIM_APP" 2>"$ERR" && xcrun simctl launch "$N" com.ttstv.frank 2>>"$ERR" >/dev/null; then
         echo "ok   $N" | tee -a "$LOG"
       else
-        echo "FAIL $N" | tee -a "$LOG"
+        # the reason goes into sims.log too -- the bridge can read the log,
+        # never the Terminal (1-SYNC, 10 Oct: "FAIL iPhone Air" with no why)
+        echo "FAIL $N: $(tr '\n' ' ' < "$ERR" | cut -c1-400)" | tee -a "$LOG"
       fi
     done
     open -g -a Simulator || true   # -g: Simulator stays behind what Osca is using (10 Oct)
