@@ -8,9 +8,9 @@ Written first, filled as it goes.
 - 00:25 proof the phone shell is TTSTV's APPROVED shell, not a lane's WIP: TTSTV `design/reader/book-nav.js` is dirty (another lane, mtime 23:18 UTC, after the 23:15 export). All **104/104** files common to phone `shell/` and TTSTV `HEAD:shell/` are identical once the GENERATED banner and the `../../`→`../` depth are normalised; `git diff 8453827 b924801 -- shell design/reader` is empty, so v76 at b924801 is the same tree.
 - 00:26 `python3 testkit/one_copy.py masters` → `ONE-COPY ok  masters`. `tools/phone.sh` now runs `one_copy fresh` on the built .app before any install and `one_copy installed` over every simulator after (verdict into `scratch-probe/sims.log`); `bash -n` ok.
 
-# 1·SYNC — 9 Oct (Cowork: bridge VM + computer use in the background on Frank and Simulator) · phone 79510db … · TTSTV 072b37b read only · 0 GPU-minutes · IN PROGRESS
+# 1·SYNC — 9 Oct (Cowork: bridge VM + computer use in the background on Frank and Simulator) · phone 79510db … 0774ab5 + this commit · TTSTV read only (one Stranger report committed there, c3aee85) · 0 GPU-minutes · DONE AS FAR AS IT CAN GO
 
-**Status line:** `phone · 1·SYNC · 9 Oct · STARTED 02:55 — build check pending (the computer is held by another session); the gate is a note + three highlights Mac → phone, one note phone → Mac, then a fresh simulator pull N/N`
+**Status line:** `phone · 1·SYNC · 10 Oct 12:40 · (2) ✅ fresh iPhone Air pulled 57/57 over LAN · (1) ❌ 0 of 3 highlights + 0 of 1 note reached the phone — two TTSTV faults, DESIGN rows below, none in this repo's Rust · (3) waits on PHONE-READ · Stranger c3aee85`
 
 Written first, filled as it goes. Rows below are appended live; the nine headings are completed at the end.
 
@@ -25,6 +25,48 @@ Written first, filled as it goes. Rows below are appended live; the nine heading
 - 08:19 Mac Frank rebuild finished (exit 0, 68 s). But **every Frank window (Library 1914, Euthyphro 1923, a third 1922) is held by another Claude session** — `computer_app_screenshot` refused. The paste has not been run yet (sims.log still ends 8 Oct 22:23). Both halves wait.
 - **11:03 UTC — Osca: "what's been happening is that it's been crashing my mac."** The timeline, all from this lane's own logs: 08:43 UTC my paste booted **three** iOS 26.5 simulators (iPhone 17, 17 Pro, Air) and ran a `tauri ios build` beside Frank (rebuilt by another lane minutes before), Chrome, VS Code, GitHub Desktop and the Cowork VM, on the M2 Air; 08:51 UTC the bridge lost the Mac; 09:25 UTC lost again with all three simulators still booted. After the restart (12:03 local) every pid is low and Simulator is not running. **I put three simulators on this Mac when the gate needs one at a time — the iPhone Air was my addition (to keep ONE-COPY green). That is this lane's fault, named.** No peak was measured first, against CLAUDE.md's PHONE TEST rule; a simulator cannot be measured in the container (no iOS runtime), so the honest number is the published one, ~1.5–2 GB per booted iOS simulator, plus several GB for the Xcode/rustc build.
 - 11:05 UTC `tools/phone.sh`: **ONE simulator at a time.** More than one `--sims` name exits 2 with the memory sentence unless `--many`; every other booted simulator is `simctl shutdown all`-ed before the named one boots. Nothing is booted or built by this lane until Osca says so.
+- 11:13 UTC Osca's paste: `== 2026-10-10 12:13:03 sims build of 0774ab5 (ttstv-shell-v78)` · `ok   iPhone Air` · `== done 12:13:32` — ONE simulator, no build.
+- 11:14–11:28 UTC **THE STRANGER** (fresh subagent, persona + D11 + POLISH.md only, `computer_app_*` only, on Frank + the Air). Report TTSTV `PROMPTS/testers/stranger-sync-10-oct.md`, **`c3aee85`**. Six screenshots sent to Osca.
+- 11:40 UTC Simulator quit (Simulator ▸ Quit Simulator, background) — RAM back to Osca.
+
+### 1. Built
+- `tools/phone.sh` — `fe1718f` `--empty "A,B"`; `e086884` a FAIL line carries simctl's reason into sims.log, version read off `SHELL_CACHE`; `0774ab5` **one simulator at a time** (`--many` to name more; every other booted simulator shut down first). Mode 100755 throughout.
+- No Rust touched: nothing in this repo broke.
+
+### 2. Verified — and how (the Stranger's numbers, its own words in c3aee85)
+- **(2) ✅ N/N.** Fresh iPhone Air, 0 books (*"Nothing on this iPhone yet."*) → paired by code (*"Paired with Oscars-MacBook-Air-2 Studio · by the code you typed"*) → Sync → *"Pulling 52 of 57 · The Time Machine · 29/37"* → *"Synced over LAN · 57 books · 12:21"*; Mac shelf 57 tiles. ~5 min. The pull is this repo's Rust (`pull.rs`) and it held.
+- **(1) ❌.** Book: The Bucolics and Eclogues (LA+EN). Mac: three highlights (yellow *"Ultima Cumaei venit iam carminis aetas;"*, green *"The iron shall cease, the golden race arise,"*, one more on *"With a new breed of men sent down from heaven."* carrying the note *"The new age line - read this one aloud"*). Phone, both LA+EN copies: *"Your notes and highlights show here. You have none yet."* while Sync reads *"LAN · up to date"*. 0/3 highlights, 0/1 note.
+- **(3)** not run — waits on PHONE-READ's phone highlight press (its add press is held as `scratch/phone-read/library-add.patch`, TTSTV `f1d89d1`).
+
+### 3. Judgment calls
+- One simulator does both gates: an EMPTY device that syncs proves N/N and the marks in one press, so the iPhone 17 was not booted.
+- The Stranger did the Mac's marks itself (as the brief says); I made none.
+
+### 4. Boundary check
+This repo only (tools/phone.sh, STATUS.md). TTSTV read only, except the Stranger's own report file, which is where Stranger reports live.
+
+### 5. Footprint
+Simulator iPhone Air now holds 57 books and a pairing with the Mac's Studio. `_to_delete/locks/` git locks. No VM scratch.
+
+### 6. Requests — DESIGN rows (all TTSTV served pages or studio; none is this repo's Rust)
+1. **The Mac's Sync dies on a position with an empty chapter, and with it the Mac's whole push.** *"`positions[dao-de-jing+tao-teh-king]` needs a `chapter`"*. Measured: `reader/cursor.js:165` writes `chapter: String(chapterId || "")` — an empty string when there is no chapter id — and `studio/readerlibrary.py:187` (`_flat(..., need=("chapter",))`) refuses the WHOLE `positions` body on that one entry. `settings.js::runSync` pushes marks first, then positions, then throws, so the run ends red for a book the person never touched. Fix: cursor.js never writes a position without a chapter, AND the check drops a bad entry instead of refusing every book.
+2. **The phone's Mine layer reads a store sync never writes.** The phone shows marks from `Layers` (`frank.mine.<slug>`, layers.js); sync carries `ttstv.reader.marginalia.<slug>` only; `marginalia.js::backfill` copies one into the other only for a chapter whose map is mounted. So a synced mark is invisible on the Mine layer until its chapter has been opened — and *"You have none yet."* is shown meanwhile. Whether the Mac's three marks reached Studio at all before fault 1 is NOT proved here (the Studio mirror lives in DATA_HOME, which this bridge does not mount).
+3. **"up to date" while every mark is missing** — the Sync line counts books, never marks; it should say how many marks came back.
+4. **The phone shelf stays empty after a 57-book sync** (*"Nothing on this iPhone yet."*) until a book is opened and left — library.html does not repaint on the pull's end.
+5. **Pairing page slides sideways** once a Mac is found: title clipped to "ync", the code's **Use** off the right edge, **Forget** as "Fo…".
+6. Smaller (the Stranger's list): "1 marks"/"1 notes"; Transfer (Mac) vs Sync (phone); Open Settings lands on General not Sync; project words on screen ("Studio", "LAN", "BUILD band (design)", IP:port, build stamp); Mac Settings window shrinks 995→537 px between tabs; four "The Bucolics and Eclogues" on the phone; the "1 OF 2" tip returns.
+
+### 7. Known gaps
+- Background typing into Simulator is still refused; the Stranger got the code in through I/O ▸ Keyboard ▸ Toggle Software Keyboard and tapping digits — that works and is the road for next time.
+- `FAIL iPhone Air` at 09:45 has no recorded reason (before `e086884`).
+- **This lane crashed Osca's Mac** (three simulators, 09:43) — §2 rows above; `0774ab5` is the guard.
+
+### 8. Next
+DESIGN takes rows 1–2; then a second Stranger re-runs (1) on ONE simulator (the Air, already paired). (3) after PHONE-READ lands the phone's highlight press.
+
+### 8b. Commit check
+This commit: `STATUS.md` only. Earlier: fe1718f, 3bf580e, e086884, 0774ab5 (this repo); c3aee85 (TTSTV, the Stranger's file only).
+
 - How the marks reach the phone (read, `shell/settings/settings.js` THE TRANSFER TAB): the Mac's Sync press reconciles its browser store with Studio's mirror; the phone's Sync pushes its marks to the Studio it paired with (`ttstv.sync.pair`, Bonjour `_ttstv._tcp` + a six-digit code typed once) and writes back the merged set. So on a simulator the gate needs the LAN pairing first — and typing the code into Simulator was refused in the background on 8 Oct (S0-5). If it still is, that is a row, not a full-screen takeover.
 - **09:43 local (08:43 UTC) Osca ran the paste.** `sims.log`: `== 2026-10-10 09:43:10 sims build of 3bf580e` — iPhone 17 `kept 12 … put back 12 … ok`; iPhone 17 Pro the same; `emptied iPhone Air: 12 books NOT kept (--empty)` then **`FAIL iPhone Air`** with no reason; `one-copy ok installed (2 booted)`; `== done 09:45:25`. `build/arm64-sim/Frank.app` dated 08:43:10 UTC. Shell in it: `SHELL_CACHE = "ttstv-shell-v78"` (the log's `(ttstv-shell-v36)` was the script grepping an old comment in sw.js).
 - 09:22 UTC `e086884` phone.sh: a FAIL line now carries simctl's stderr (400 chars) into sims.log, and the version is read off `SHELL_CACHE`. Mode 100755.
