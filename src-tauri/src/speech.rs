@@ -285,8 +285,18 @@ pub struct Voice {
 /// lock screen to survive.
 #[tauri::command]
 pub fn speech_available() -> bool {
-    cfg!(target_os = "ios")
+    !NO_SYSTEM_VOICE && cfg!(target_os = "ios")
 }
+
+/// NO APPLE VOICE IN FRANK (Osca, 9 Oct 21:44 and 10 Oct 02:59: "NO Apple
+/// built-in system voice anywhere in Frank ... don't want it ANYWHERE NEAR my
+/// APP"). The door stays compiled so nothing else has to move, but it is shut:
+/// `available()` is false and `speak()` refuses in words on the phone, so
+/// AVSpeechSynthesizer never reads a book or an answer. A chapter with no
+/// rendered Frank voice is silent and the page says so.
+pub const NO_SYSTEM_VOICE: bool = true;
+#[allow(dead_code)] // read only on iOS
+pub const NO_SYSTEM_VOICE_WHY: &str = "Frank has no system voice -- a book is read only in a rendered Frank voice";
 
 /// `TTSTVHost.speech.voices()`: every installed voice.
 ///
@@ -343,6 +353,9 @@ pub fn speech_speak(say: Say) -> Result<Queued, String> {
     }
     #[cfg(target_os = "ios")]
     {
+        if NO_SYSTEM_VOICE {
+            return Err(NO_SYSTEM_VOICE_WHY.into());
+        }
         use std::ffi::CString;
         let lang = say.lang.as_deref().filter(|s| !s.is_empty()).map(CString::new);
         let voice = say.voice.as_deref().filter(|s| !s.is_empty()).map(CString::new);
