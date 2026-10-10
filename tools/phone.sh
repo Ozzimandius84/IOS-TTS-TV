@@ -47,6 +47,9 @@
 #               ALL its saved state (first-run flag, prefs, WebKit storage) are
 #               uninstalled, but the device's books/ is kept aside first and
 #               put back, so the Library still holds them (Osca, 8 Oct 22:20).
+#   --empty "A,B"  with --fresh: these devices do NOT get their books back --
+#               a stranger's first run with an empty shelf, for the sync gate
+#               "a fresh simulator pulls every book N/N" (1-SYNC, 10 Oct).
 #   (0D) every --sim/--sims build runs TTSTV's testkit/one_copy.py: `fresh` on the
 #               .app before any install, `installed` over every simulator after.
 #   --sims "A,B,C"  ONE BUILD, SEVERAL SIMULATORS (0B ONE-PHONE, 8 Oct; Osca
@@ -77,6 +80,7 @@ SIM_NAME=""
 SIMS=""
 BUILD=1
 FRESH=0
+EMPTY=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --shell)      WITH_SHELL=1; shift ;;
@@ -87,6 +91,7 @@ while [ $# -gt 0 ]; do
     --sim)        SIM=1; shift; if [ $# -gt 0 ] && [ "${1#--}" = "$1" ]; then SIM_NAME="$1"; shift; fi ;;
     --no-build)   BUILD=0; shift ;;
     --fresh)      FRESH=1; shift ;;
+    --empty)      EMPTY="$2"; shift 2 ;;
     --sims)       SIM=1; SIMS="$2"; shift 2 ;;
     -h|--help)    sed -n '2,32p' "${BASH_SOURCE[0]}"; exit 0 ;;
     *)            echo "phone.sh: unknown argument $1 (try --help)" >&2; exit 2 ;;
@@ -169,7 +174,9 @@ if [ "$SIM" = 1 ]; then
       if [ "$FRESH" = 1 ]; then
         DATA="$(xcrun simctl get_app_container "$N" com.ttstv.frank data 2>/dev/null || true)"
         BOOKS="$( [ -n "$DATA" ] && find "$DATA/Library" -maxdepth 3 -type d -name books 2>/dev/null | head -1 || true)"
-        if [ -n "$BOOKS" ]; then
+        if [ -n "$BOOKS" ] && printf ',%s,' "$EMPTY" | sed 's/ *, */,/g' | grep -qF ",$N,"; then
+          echo "emptied $N: $(ls "$BOOKS" | wc -l | tr -d ' ') books NOT kept (--empty)" | tee -a "$LOG"
+        elif [ -n "$BOOKS" ]; then
           KEEP="$(mktemp -d)/books"; REL="${BOOKS#$DATA/}"
           cp -R "$BOOKS" "$KEEP"
           echo "kept $(ls "$KEEP" | wc -l | tr -d ' ') books from $N ($REL)" | tee -a "$LOG"
