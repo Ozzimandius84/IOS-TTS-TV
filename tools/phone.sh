@@ -217,7 +217,7 @@ fi
 
 if [ "$REGISTER" = 1 ]; then
   [ -n "$DEVICE" ] || DEVICE="$(xcrun devicectl list devices 2>/dev/null \
-    | awk '$0 ~ /connected/ { for (i=1;i<=NF;i++) if ($i ~ /^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$/) print $i }' | head -1)"
+    | awk '($0 ~ /connected/ || $0 ~ /available/) && $0 !~ /unavailable/ { for (i=1;i<=NF;i++) if ($i ~ /^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$/) print $i }' | head -1)"
   [ -n "$DEVICE" ] || { echo "phone.sh: --register needs a connected phone (or --device <udid>)" >&2; exit 1; }
   say "2b   register $DEVICE with the team and mint the profile (its own build is expected to fail)"
   ( cd "$APPLE" && xcodebuild -project frank.xcodeproj -scheme frank_iOS -configuration debug \
@@ -242,7 +242,7 @@ if [ -z "$DEVICE" ]; then
   # 11 Sep $(NF-1) handed devicectl the string "17". The identifier is the one
   # token shaped like a UUID; take that.
   DEVICE="$(xcrun devicectl list devices 2>/dev/null \
-            | awk '$0 ~ /connected/ { for (i=1;i<=NF;i++) if ($i ~ /^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$/) print $i }' | head -2)"
+            | awk '($0 ~ /connected/ || $0 ~ /available/) && $0 !~ /unavailable/ { for (i=1;i<=NF;i++) if ($i ~ /^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$/) print $i }' | head -2)"
   n="$(printf '%s\n' "$DEVICE" | grep -c . || true)"
   if [ "$n" -eq 0 ]; then
     echo "phone.sh: no connected device. Plug the phone in and unlock it, or pass --device <udid>." >&2
