@@ -180,7 +180,14 @@ if [ "$SIM" = 1 ]; then
       echo "phone.sh: ${#NAMES[@]} simulators named -- each booted iOS simulator costs ~1.5-2 GB of the Mac's memory, and three crashed this Mac (10 Oct). Name ONE, or add --many if you mean it." >&2
       exit 2
     fi
-    xcrun simctl shutdown all 2>/dev/null || true
+    # THE ONE YOU ARE LOOKING AT STAYS ON (Osca, 11 Oct 23:39: "It keeps crashing"; 12 Oct 00:12: "go ahead").
+    # `shutdown all` took the named simulator down too, every run, so the iPhone Air he was watching went dark and
+    # came back two minutes later. Now only the OTHER booted simulators are shut down (still one at a time on this
+    # Mac); a named one already booted is left running and only Frank in it is relaunched.
+    WANT="$(printf ',%s,' "${NAMES[@]}" | sed 's/ *, */,/g')"
+    xcrun simctl list devices booted 2>/dev/null | sed -n 's/^ *\(.*\) (\([0-9A-F-]\{36\}\)) (Booted).*/\1|\2/p' | while IFS='|' read -r BN BU; do
+      printf '%s' "$WANT" | grep -qF ",$BN," || xcrun simctl shutdown "$BU" 2>/dev/null || true
+    done
     for N in "${NAMES[@]}"; do
       N="$(echo "$N" | sed 's/^ *//; s/ *$//')"
       say "4/4  $N: boot, install, launch"
@@ -218,7 +225,8 @@ if [ "$SIM" = 1 ]; then
     # ONE COPY (0D), after: every simulator that holds a com.ttstv.frank must
     # hold THIS build's bytes -- one left on an older Frank is a person seeing
     # an older front. The verdict goes to sims.log too, for the bridge.
-    if one_copy installed --built "$SIM_APP" --sims "$HOME/Library/Developer/CoreSimulator/Devices"; then
+    ONLY=(); for N in "${NAMES[@]}"; do ONLY+=(--only "$(echo "$N" | sed 's/^ *//; s/ *$//')"); done
+    if one_copy installed --built "$SIM_APP" --sims "$HOME/Library/Developer/CoreSimulator/Devices" "${ONLY[@]}"; then
       echo "one-copy ok   installed ($(xcrun simctl listapps booted 2>/dev/null | grep -c com.ttstv.frank || true) booted)" | tee -a "$LOG"
     else
       echo "one-copy FAIL installed -- a simulator still has an older Frank (the line above says which)" | tee -a "$LOG"
