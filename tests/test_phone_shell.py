@@ -220,6 +220,8 @@ def test_the_shell_adds_exactly_one_name_of_its_own():
     and nothing else. Asserted rather than described, because "and nothing
     else" is the half that rots."""
     m = _manifest()
-    assert m["added_here"] == [INDEX_HTML]
+    # ...and, since PHONE-ADD (11 Oct), the parser's folder: TTSTV's tools/pyodide/build.py --app writes it, so the
+    # phone adds and merges books with the Mac off. It is a FOLDER TTSTV fills, not a file this repo names.
+    assert m["added_here"] in ([INDEX_HTML], [INDEX_HTML, "pyodide/"])
     assert INDEX_HTML in m["files"]
     assert (SHELL / HOME_PAGE).is_file()

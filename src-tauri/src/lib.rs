@@ -2332,6 +2332,10 @@ fn content_type(path: &Path) -> &'static str {
         // shelf on, and an octet-stream is what a browser offers to
         // download rather than draw. `parser/cover.py` writes one name.
         Some("jpg") => "image/jpeg",
+        // The parser the phone adds books with (PHONE-ADD, 11 Oct): Pyodide's runtime. `application/wasm` is what
+        // lets WebKit compile the 8.6 MB module while it streams; the zips are read as bytes.
+        Some("wasm") => "application/wasm",
+        Some("zip") | Some("whl") => "application/zip",
         _ => "application/octet-stream",
     }
 }

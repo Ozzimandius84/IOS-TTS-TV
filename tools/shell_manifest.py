@@ -102,7 +102,8 @@ def describe(shell: Path = SHELL) -> dict:
         "count": len(files),
         "bytes": sum(p.stat().st_size for p in files.values()),
         "home_page": HOME_PAGE,
-        "added_here": [INDEX_HTML],
+        # index.html always; `pyodide/` when the parser was carried (PHONE-ADD, 11 Oct -- import_shell.carry_parser)
+        "added_here": [INDEX_HTML] + (["pyodide/"] if (shell / "pyodide" / "frankparse.js").is_file() else []),
         "files": {
             rel: {"bytes": p.stat().st_size, "sha256": sha256(p)}
             for rel, p in files.items()

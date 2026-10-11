@@ -47,3 +47,8 @@ scratch-lookup/**/*.xcodeproj/
 scratch-lookup/*.log
 scratch-lookup/**/*.bak
 *.xcuserstate
+
+# The parser the phone adds and merges books with (PHONE-ADD, 11 Oct): ~33 MB of Pyodide runtime and wheels that
+# tools/import_shell.py has TTSTV's tools/pyodide/build.py --app write into shell/pyodide/. Binaries, rebuilt on
+# every import -- never committed (shell.manifest.json still names every file, so prebuild checks them).
+shell/pyodide/

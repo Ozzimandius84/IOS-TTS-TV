@@ -217,6 +217,32 @@ def carry_google(root: Path) -> str:
     return f"google: {cid} from {where} -- {what}"
 
 
+# ---------------------------------------------------------------- the parser
+# PHONE-ADD (Osca, 11 Oct 12:58, TTSTV design/surface-drafts/WHERE-IT-RUNS.md: "ANYTHING an iPhone 17 CAN do
+# locally, the phone app should do ... the phone must work with the Mac OFF"). Adding a book (download + split into
+# chapters) and merging two editions run ON THE PHONE: the Mac's own parser/, align/ and stitch/ in Pyodide. The app
+# carries that folder as `pyodide/` beside its pages, and what is in it is TTSTV's to say -- its
+# `tools/pyodide/build.py --app` writes it (runtime, eight wheels, code.zip cut from that checkout, the two page
+# scripts), exactly as `publish_shell` writes the rest; this file names none of it. ~33 MB on disk, ~26 MB in the
+# binary (Brotli). Its binaries are gitignored here (`shell/pyodide/`), like the dev shelf: a checkout re-imports.
+PARSER_DIR = "pyodide"
+
+
+def carry_parser(root: Path, out: Path) -> str:
+    """Write TTSTV's app copy of the parser into `out/pyodide/`. One line for the log. A TTSTV with no
+    runtime on this Mac (never built) is SAID, and the shell goes on without it: the phone's Add then says
+    "this copy of Frank has no parser on it" rather than every other lane's build stopping here."""
+    build = root / "tools" / "pyodide" / "build.py"
+    if not build.is_file():
+        return "NOT carried -- this TTSTV has no tools/pyodide/build.py"
+    r = subprocess.run([sys.executable, str(build), "--app", str(out / PARSER_DIR)],
+                       capture_output=True, text=True, timeout=600)
+    if r.returncode != 0:
+        last = (r.stderr.strip() or r.stdout.strip() or "no output").splitlines()[-1]
+        return f"NOT carried -- {last}"
+    return f"{PARSER_DIR}/ " + (r.stdout.strip().splitlines() or ["?"])[-1]
+
+
 def import_shell(ttstv: Path, out: Path = SHELL, bump: bool = False) -> dict:
     root = _ttstv(ttstv)
     sys.path.insert(0, str(root))
@@ -272,6 +298,7 @@ def import_shell(ttstv: Path, out: Path = SHELL, bump: bool = False) -> dict:
         print("clearing shell/:", clear_tree(out))
         ps.build_shell(out_dir=out, repo_root=root)
         (out / INDEX_HTML).write_text(INDEX, encoding="utf-8")
+        print("the parser:", carry_parser(root, out))
 
         # The manifest is taken HERE, with the shell exactly as TTSTV produced
         # it and nothing else in the tree. Restoring first would put every dev
