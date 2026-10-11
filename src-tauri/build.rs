@@ -159,6 +159,11 @@ fn main() {
                 // PHONE-SEARCH (11 Oct 2026): src/web.rs -- the book hosts tools/search
                 // asks, allowlisted per hop, so search and a book's download run with the Mac off.
                 "web_fetch",
+                // CLOUD (11 Oct 2026): src/cloud.rs -- a version made in Frank's cloud comes down
+                // file by file into versions/<slug>/<id>/ and is kept; one plays; they are listed.
+                "cloud_version_save",
+                "cloud_version_use",
+                "cloud_versions",
             ]),
         ),
     )

@@ -120,6 +120,9 @@ mod speech;
 // The book hosts (PHONE-SEARCH, 11 Oct 2026): search elsewhere and a book file's
 // download run on the phone with the Mac off -- one allowlisted fetch, `src/web.rs`.
 mod web;
+// The cloud's versions (CLOUD, 11 Oct 2026): a Make or a LibriVox reading done in Frank's cloud
+// comes down here, file by file, and is kept -- never overwritten (`src/cloud.rs`).
+mod cloud;
 
 /// The scheme. One word, and it is in three places that must agree: here, the
 /// window URL built by [`shell_url`], and `tauri.conf.json`'s CSP (which is
@@ -3108,6 +3111,10 @@ pub fn run() {
             kaggle::kaggle_key_state,
             // PHONE-SEARCH (11 Oct 2026): the book hosts, allowlisted -- src/web.rs.
             web::web_fetch,
+            // CLOUD (11 Oct 2026): a cloud version kept, played, listed -- src/cloud.rs.
+            cloud::cloud_version_save,
+            cloud::cloud_version_use,
+            cloud::cloud_versions,
         ])
         // The launch scheme (`frank-pair://`, NOT the asset scheme). The
         // plugin is what turns an OS open into an event on iOS, macOS and
@@ -3332,6 +3339,9 @@ pub fn run() {
             // note. Both run before the document's own scripts, so a page that
             // reads the key at load reads a key a link has already written.
             .initialization_script(PAIR_JS)
+            // The cloud's versions (CLOUD, 11 Oct): `TTSTVHost.cloudVersions`, its own script like
+            // KAGGLE_JS and for the same reason (HOST_JS's invokes are pinned by tests).
+            .initialization_script(cloud::CLOUD_JS)
             // ...and Google's two names (job 26b), which are absent -- not
             // inert -- until an id is pasted into `google.json`.
             .initialization_script(google_js())

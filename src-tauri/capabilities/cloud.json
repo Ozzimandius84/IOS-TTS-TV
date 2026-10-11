@@ -1,0 +1,11 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "cloud",
+  "description": "CLOUD (11 Oct 2026). Three commands in src/cloud.rs: cloud_version_save fetches one finished version (a Make, or a LibriVox reading) from the door the person paired in Settings > Transfer > Your door, file by file, into versions/<slug>/<id>/ in app data -- a new folder every time, never over another -- and places a chapter into the book only where it has no audio yet; cloud_version_use makes another kept version the one that plays, moving what played aside (never deleting); cloud_versions lists them. The door's pass is passed in by the page and sent in one Authorization header.",
+  "windows": ["main"],
+  "permissions": [
+    "allow-cloud-version-save",
+    "allow-cloud-version-use",
+    "allow-cloud-versions"
+  ]
+}
