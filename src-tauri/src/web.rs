@@ -17,6 +17,10 @@
 //! * `as: "bytes"` answers the raw body (an IPC `Response`, no base64) on a
 //!   2xx, and an error string otherwise -- this is what PHONE-ADD downloads a
 //!   book file with.
+//! * `form: {field: value}` (optional) sends the first hop as a form POST
+//!   (`application/x-www-form-urlencoded`) to the same allowlisted hosts --
+//!   Faded Page's own search (`csearc2.php`) reads only a POSTed form, and a
+//!   GET answers its whole 9,157-book catalogue. A redirect after it is a GET.
 //! * The error string starts with a word the page can branch on:
 //!   `refused:` (this address is not one Frank searches -- nothing was sent),
 //!   `no answer:` (timeout, DNS, TLS, connection -- the host did not answer),
@@ -178,16 +182,24 @@ pub struct Got {
 }
 
 /// The fetch itself, every hop checked. Blocking: called on the blocking pool.
-pub fn get(url: &str, timeout_ms: u64, limit: u64) -> Result<Got, String> {
+pub fn get(url: &str, timeout_ms: u64, limit: u64, form: Option<&[(String, String)]>) -> Result<Got, String> {
     let t = Duration::from_millis(timeout_ms.clamp(1_000, MAX_TIMEOUT_MS));
     let agent = ureq::AgentBuilder::new()
         .redirects(0)
         .timeout(t) // the whole call, connect to last byte
         .build();
     let mut at = url.to_string();
+    let mut form = form;
     for _ in 0..MAX_HOPS {
         allowed(&at)?;
-        let res = match agent.get(&at).set("User-Agent", ua_for(&at)).call() {
+        let sent = match form.take() {
+            Some(f) => {
+                let pairs: Vec<(&str, &str)> = f.iter().map(|(k, v)| (k.as_str(), v.as_str())).collect();
+                agent.post(&at).set("User-Agent", ua_for(&at)).send_form(&pairs)
+            }
+            None => agent.get(&at).set("User-Agent", ua_for(&at)).call(),
+        };
+        let res = match sent {
             Ok(r) => r,
             Err(ureq::Error::Status(_, r)) => r,
             Err(ureq::Error::Transport(e)) => return Err(format!("no answer: {e}")),
@@ -235,12 +247,14 @@ pub async fn web_fetch(
     url: String,
     r#as: Option<String>,
     timeout_ms: Option<u64>,
+    form: Option<std::collections::BTreeMap<String, String>>,
 ) -> Result<tauri::ipc::Response, String> {
     let bytes = matches!(r#as.as_deref(), Some("bytes"));
     allowed(&url)?; // refused before a thread is taken
     let timeout = timeout_ms.unwrap_or(DEFAULT_TIMEOUT_MS);
     let limit = if bytes { MAX_BYTES } else { MAX_TEXT };
-    let got = tauri::async_runtime::spawn_blocking(move || get(&url, timeout, limit))
+    let form: Option<Vec<(String, String)>> = form.map(|m| m.into_iter().collect());
+    let got = tauri::async_runtime::spawn_blocking(move || get(&url, timeout, limit, form.as_deref()))
         .await
         .map_err(|e| format!("no answer: {e}"))??;
     if bytes {
