@@ -156,6 +156,9 @@ fn main() {
                 // {present, username} and no key.
                 "kaggle_key_set",
                 "kaggle_key_state",
+                // PHONE-SEARCH (11 Oct 2026): src/web.rs -- the book hosts tools/search
+                // asks, allowlisted per hop, so search and a book's download run with the Mac off.
+                "web_fetch",
             ]),
         ),
     )

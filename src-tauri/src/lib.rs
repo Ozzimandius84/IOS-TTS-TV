@@ -117,6 +117,9 @@ mod search;
 // page already opens for `speechSynthesis` -- a QUEUE that goes on speaking
 // with this webview suspended, which is the whole of the lock screen.
 mod speech;
+// The book hosts (PHONE-SEARCH, 11 Oct 2026): search elsewhere and a book file's
+// download run on the phone with the Mac off -- one allowlisted fetch, `src/web.rs`.
+mod web;
 
 /// The scheme. One word, and it is in three places that must agree: here, the
 /// window URL built by [`shell_url`], and `tauri.conf.json`'s CSP (which is
@@ -3099,6 +3102,8 @@ pub fn run() {
             kaggle::fetch,
             kaggle::kaggle_key_set,
             kaggle::kaggle_key_state,
+            // PHONE-SEARCH (11 Oct 2026): the book hosts, allowlisted -- src/web.rs.
+            web::web_fetch,
         ])
         // The launch scheme (`frank-pair://`, NOT the asset scheme). The
         // plugin is what turns an OS open into an event on iOS, macOS and

@@ -1,0 +1,9 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "web",
+  "description": "PHONE-SEARCH (11 Oct 2026). One command, web_fetch (src/web.rs): an https GET on the hosts tools/search/sources asks -- Project Gutenberg and gutendex, the Internet Archive, LibriVox, Open Library, Wikisource and Wikidata, Standard Ebooks, Faded Page, Perseus, Google Books' /books/ -- every redirect hop checked against the same list, so a page cannot use the app as a proxy to anywhere else. Not on it: YouTube (a cloud job), Dokumen (never asked), Hugging Face, the Brave web search. It answers text with its status, or a book file's bytes; it writes nothing.",
+  "windows": ["main"],
+  "permissions": [
+    "allow-web-fetch"
+  ]
+}
