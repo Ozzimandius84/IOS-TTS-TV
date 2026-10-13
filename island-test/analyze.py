@@ -148,7 +148,7 @@ def clock(log_path, screen_path):
     alive = [r["detail"] for r in rows if r["event"] == "alive"]
     out = ["| side of the camera | what is there | seconds away | changes seen | changes a second | median gap | longest gap |",
            "|---|---|---|---|---|---|---|"]
-    sides = (((1, "left", "check: white square appears at 15 s"), (2, "right", "the words")) if word_window else
+    sides = (((1, "left", "check: truth at 15 s"), (2, "right", "the words")) if word_window else
              ((1, "left", "hundredths stopwatch"), (2, "right", "whole-second timer")))
     for col, label, clk in sides:
         thr = 0.2   # fixed: a clock changing every frame lifts a self-set threshold above itself (run 4)
@@ -179,7 +179,7 @@ def clock(log_path, screen_path):
                     ch.append(f[0])
                 last = f[0]
         gaps = [y - x for x, y in zip(ch, ch[1:])]
-        n_words = round((b - a) * 3)
+        n_words = round((b - a) * 3)   # run 18: 3 a second
         out.append("")
         out.append(f"**Words window {a:.0f}-{b:.0f} s ({n_words} words at 3 a second), right of the camera:** "
                    f"{len(ch)} changes seen"

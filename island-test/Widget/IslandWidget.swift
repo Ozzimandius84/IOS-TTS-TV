@@ -58,13 +58,14 @@ func wordLayer(_ t: Date, font: String, size: CGFloat) -> some View {
     }
 }
 
-/// Run 17, right of the camera: truth at 15 s, single at 18 s, man at 21 s --
-/// each one layer on the fast clock, landing on the hundredth, no app update.
+/// Run 18, right of the camera: the words of Widget/WordList.swift (30 at 3 a
+/// second from 15 s), each one layer on the fast clock in its own font. Run 17
+/// proved three; this asks whether 30 land on time and each covers the last.
 func countingWords(_ start: Date, size: CGFloat) -> some View {
     ZStack(alignment: .leading) {
-        wordLayer(start.addingTimeInterval(15), font: "IslandWord", size: size)
-        wordLayer(start.addingTimeInterval(18), font: "IslandWord2", size: size)
-        wordLayer(start.addingTimeInterval(21), font: "IslandWord3", size: size)
+        ForEach(0..<runWords.count, id: \.self) { i in
+            wordLayer(start.addingTimeInterval(runWords[i].at), font: runWords[i].font, size: size)
+        }
     }
     .frame(width: size * 4.6, alignment: .leading)
 }

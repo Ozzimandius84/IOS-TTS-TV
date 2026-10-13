@@ -159,6 +159,9 @@ final class IslandTest {
     /// island's own timer ticks, then end. The font covers 240 s from launch.
     private func runClock() {
         log("run_start", detail: "clock: no updates will be sent")
+        // run 18: the widget shows RunWords.count words at RunWords.perSecond from RunWords.lead s
+        log("info", detail: String(format: "word_window %.3f %.3f",
+                                   RunWords.lead, RunWords.lead + Double(RunWords.count) / RunWords.perSecond))
         log("phase_start", phase: "clock")
         logQ.async { self.phaseNow = "clock" }
         let endAt = clockStart.addingTimeInterval(225)

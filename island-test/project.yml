@@ -80,11 +80,74 @@ targets:
         buildPhase: resources
       - path: font/IslandDiagF.ttf
         buildPhase: resources
+      # run 18: one font per word (built by font/build_words.py)
+      # words-begin
+      - path: font/words/IslandW01.ttf
+        buildPhase: resources
+      - path: font/words/IslandW02.ttf
+        buildPhase: resources
+      - path: font/words/IslandW03.ttf
+        buildPhase: resources
+      - path: font/words/IslandW04.ttf
+        buildPhase: resources
+      - path: font/words/IslandW05.ttf
+        buildPhase: resources
+      - path: font/words/IslandW06.ttf
+        buildPhase: resources
+      - path: font/words/IslandW07.ttf
+        buildPhase: resources
+      - path: font/words/IslandW08.ttf
+        buildPhase: resources
+      - path: font/words/IslandW09.ttf
+        buildPhase: resources
+      - path: font/words/IslandW10.ttf
+        buildPhase: resources
+      - path: font/words/IslandW11.ttf
+        buildPhase: resources
+      - path: font/words/IslandW12.ttf
+        buildPhase: resources
+      - path: font/words/IslandW13.ttf
+        buildPhase: resources
+      - path: font/words/IslandW14.ttf
+        buildPhase: resources
+      - path: font/words/IslandW15.ttf
+        buildPhase: resources
+      - path: font/words/IslandW16.ttf
+        buildPhase: resources
+      - path: font/words/IslandW17.ttf
+        buildPhase: resources
+      - path: font/words/IslandW18.ttf
+        buildPhase: resources
+      - path: font/words/IslandW19.ttf
+        buildPhase: resources
+      - path: font/words/IslandW20.ttf
+        buildPhase: resources
+      - path: font/words/IslandW21.ttf
+        buildPhase: resources
+      - path: font/words/IslandW22.ttf
+        buildPhase: resources
+      - path: font/words/IslandW23.ttf
+        buildPhase: resources
+      - path: font/words/IslandW24.ttf
+        buildPhase: resources
+      - path: font/words/IslandW25.ttf
+        buildPhase: resources
+      - path: font/words/IslandW26.ttf
+        buildPhase: resources
+      - path: font/words/IslandW27.ttf
+        buildPhase: resources
+      - path: font/words/IslandW28.ttf
+        buildPhase: resources
+      - path: font/words/IslandW29.ttf
+        buildPhase: resources
+      - path: font/words/IslandW30.ttf
+        buildPhase: resources
+      # words-end
     info:
       path: Widget/Info.plist
       properties:
         CFBundleDisplayName: Island Test
-        UIAppFonts: [IslandCount.ttf, IslandDiagC.ttf, IslandWord.ttf, IslandWord2.ttf, IslandWord3.ttf, IslandCover.ttf]
+        UIAppFonts: [IslandCount.ttf, IslandDiagC.ttf, IslandWord.ttf, IslandWord2.ttf, IslandWord3.ttf, IslandCover.ttf, IslandW01.ttf, IslandW02.ttf, IslandW03.ttf, IslandW04.ttf, IslandW05.ttf, IslandW06.ttf, IslandW07.ttf, IslandW08.ttf, IslandW09.ttf, IslandW10.ttf, IslandW11.ttf, IslandW12.ttf, IslandW13.ttf, IslandW14.ttf, IslandW15.ttf, IslandW16.ttf, IslandW17.ttf, IslandW18.ttf, IslandW19.ttf, IslandW20.ttf, IslandW21.ttf, IslandW22.ttf, IslandW23.ttf, IslandW24.ttf, IslandW25.ttf, IslandW26.ttf, IslandW27.ttf, IslandW28.ttf, IslandW29.ttf, IslandW30.ttf]
         CFBundleShortVersionString: "1.0"
         CFBundleVersion: "1"
         NSExtension:
