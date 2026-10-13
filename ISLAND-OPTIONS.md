@@ -115,6 +115,14 @@ Every way of making the island change goes through one of two doors. Either the 
 
 **Verdict:** the only route found where the island itself shows the book moving while you're in another app. Unproven.
 
+### Can the clock tick faster than once a second? (Osca, 11:37: "the stopwatch shows milliseconds")
+
+- **Inside the Clock app,** the stopwatch shows hundredths because the app is in front, drawing itself.
+- **In the island,** Apple's own stopwatch shows "a small to-the-second timer", whole seconds only ([MacRumors](https://www.macrumors.com/2024/01/29/ios-17-4-stopwatch-live-activity/)). On an Always-On lock screen, the seconds even stop after the first minute ([iDB](https://www.idownloadblog.com/2024/08/16/ios-18-stopwatch-changes/)).
+- **What developers can ask for:** since iOS 18 the public stopwatch and timer text styles take a precision setting (`.stopwatch(startingAt:showsHours:maxFieldCount:maxPrecision:)`), and a "live" time source keeps them ticking inside a Live Activity ([Create with Swift](https://www.createwithswift.com/formatting-time-in-a-text-view-in-swiftui/), [Apple forum](https://developer.apple.com/forums/thread/763273)). Nobody has written about whether the island actually redraws tenths or hundredths. Apple's own island stopwatch showing only seconds suggests it may not.
+- **Why it matters:** if the island ticks tenths, the counting font can match "0:07.2", "0:07.3" and so on (blank glyphs for the digits, one drawing per tenth). That's up to 10 changes a second, enough for **one word at a time** in time with the voice. If it only ticks seconds, we're back to a phrase per second.
+- **Test:** in the same run as the counting font, show a stopwatch with tenths in the island and record whether the island redraws faster than once a second. The Mac recorder already times every change.
+
 ### Smaller or partial options
 
 - **iPhone Live Captions** (Settings → Accessibility) is Apple's own feature. It captions whatever audio the phone plays, Frank included, in a small floating panel over every app. Frank needs no code. But it's a panel, not the island, it transcribes rather than showing Frank's text, and the user has to turn it on. Since iOS 26 it's reported to work in all languages ([HearingTracker](https://forum.hearingtracker.com/t/live-captions-rolled-out-on-ios-26/107488)).
