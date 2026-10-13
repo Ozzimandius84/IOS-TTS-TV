@@ -67,6 +67,16 @@ func wordsStart(_ context: ActivityViewContext<IslandAttributes>) -> Date {
     context.attributes.mode == "windows" ? context.state.windowStart : context.attributes.start
 }
 
+/// Run 22: stacks A and B; the one whose turn it is (state.window) sits on top.
+/// zIndex changes do not recreate the views, so the other stack's timers run on.
+func twoStacks(_ context: ActivityViewContext<IslandAttributes>, size: CGFloat) -> some View {
+    ZStack(alignment: .leading) {
+        countingWords(context.state.startA, size: size).zIndex(context.state.window % 2 == 0 ? 1 : 0)
+        countingWords(context.state.startB, size: size).zIndex(context.state.window % 2 == 1 ? 1 : 0)
+    }
+    .frame(width: size * 4.6, alignment: .leading)
+}
+
 func countingWords(_ start: Date, size: CGFloat) -> some View {
     ZStack(alignment: .leading) {
         ForEach(0..<runWords.count, id: \.self) { i in
@@ -107,7 +117,7 @@ struct IslandLiveActivity: Widget {
             Group {
                 if context.attributes.mode == "clock" || context.attributes.mode == "windows" {
                     VStack(spacing: 6) {
-                        countingWords(wordsStart(context), size: 30)
+                        (context.attributes.mode == "windows" ? AnyView(twoStacks(context, size: 30)) : AnyView(countingWords(wordsStart(context), size: 30)))
                         tenthsClock(context.attributes.start, size: 30)
                     }
                 } else {
@@ -125,7 +135,7 @@ struct IslandLiveActivity: Widget {
                 DynamicIslandExpandedRegion(.center) {
                     if context.attributes.mode == "clock" || context.attributes.mode == "windows" {
                         VStack(spacing: 4) {
-                            countingWords(wordsStart(context), size: 26)
+                            (context.attributes.mode == "windows" ? AnyView(twoStacks(context, size: 26)) : AnyView(countingWords(wordsStart(context), size: 26)))
                             tenthsClock(context.attributes.start, size: 26)
                         }
                     } else {
@@ -142,13 +152,13 @@ struct IslandLiveActivity: Widget {
             } compactTrailing: {
                 if context.attributes.mode == "clock" || context.attributes.mode == "windows" {
                     // right of the camera: the counting font
-                    countingWords(wordsStart(context), size: 14)
+                    (context.attributes.mode == "windows" ? AnyView(twoStacks(context, size: 14)) : AnyView(countingWords(wordsStart(context), size: 14)))
                 } else {
                     pivotWord(context.state.word, size: 15)
                 }
             } minimal: {
                 if context.attributes.mode == "clock" || context.attributes.mode == "windows" {
-                    countingWords(wordsStart(context), size: 12)
+                    (context.attributes.mode == "windows" ? AnyView(twoStacks(context, size: 12)) : AnyView(countingWords(wordsStart(context), size: 12)))
                 } else {
                     Text(IslandWord.layout(context.state.word).2)
                         .font(islandFont(15)).foregroundColor(islandRed)

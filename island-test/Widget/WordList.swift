@@ -1,4 +1,4 @@
-// Built by font/build_words.py -- do not edit. Run 18: 60 words at 3 a second from 15 s.
+// Built by font/build_words.py -- do not edit. Run 18: 30 words at 3 a second from 15 s.
 let runWords: [(at: Double, font: String)] = [
     (15.0000, "IslandW01"),  // It
     (15.3333, "IslandW02"),  // is
@@ -30,37 +30,7 @@ let runWords: [(at: Double, font: String)] = [
     (24.0000, "IslandW28"),  // little
     (24.3333, "IslandW29"),  // known
     (24.6667, "IslandW30"),  // the
-    (25.0000, "IslandW31"),  // feel-
-    (25.3333, "IslandW32"),  // ings
-    (25.6667, "IslandW33"),  // or
-    (26.0000, "IslandW34"),  // views
-    (26.3333, "IslandW35"),  // of
-    (26.6667, "IslandW36"),  // such
-    (27.0000, "IslandW37"),  // a
-    (27.3333, "IslandW38"),  // man
-    (27.6667, "IslandW39"),  // may
-    (28.0000, "IslandW40"),  // be
-    (28.3333, "IslandW41"),  // on
-    (28.6667, "IslandW42"),  // his
-    (29.0000, "IslandW43"),  // first
-    (29.3333, "IslandW44"),  // ente-
-    (29.6667, "IslandW45"),  // ring
-    (30.0000, "IslandW46"),  // a
-    (30.3333, "IslandW47"),  // neigh-
-    (30.6667, "IslandW48"),  // bourh-
-    (31.0000, "IslandW49"),  // ood
-    (31.3333, "IslandW50"),  // this
-    (31.6667, "IslandW51"),  // truth
-    (32.0000, "IslandW52"),  // is
-    (32.3333, "IslandW53"),  // so
-    (32.6667, "IslandW54"),  // well
-    (33.0000, "IslandW55"),  // fixed
-    (33.3333, "IslandW56"),  // in
-    (33.6667, "IslandW57"),  // the
-    (34.0000, "IslandW58"),  // minds
-    (34.3333, "IslandW59"),  // of
-    (34.6667, "IslandW60"),  // the
 ]
 let runWordsPerSecond = 3
 let runWordLead = 15
-let runWordCount = 60
+let runWordCount = 30

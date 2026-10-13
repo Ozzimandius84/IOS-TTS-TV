@@ -752,6 +752,18 @@ One hundred words as 100 layers: the island stayed up and showed **97 of the 100
 
 So a chapter cannot be one stack; it has to be windows of about 60 words, each armed by an update from the app. Run 21 asks the deciding question: does one update every 30 s, sent from the background, get through? (Run 3's updates froze after about four, but those came every quarter-second.)
 
+### Run 21 (13 Oct 14:40): the background update gets through -- and re-dating every layer kills the island
+
+Five windows of 60 words; 10 s before each window the app, in the background, sent one update moving the window on. Phone log (`island-test/results/island-log-run21.csv`) and recording together:
+
+- Window 1 ran as set, 15–35 s (Osca swiped out at 22 s; words 24–60 are on the recording, the last one landing at 35 s).
+- The app sent its first update at 35.9 s, 32 s after going to the background. **It got through: the island was redrawn within a second** -- blank, because every one of the 60 layers now had a start in the future.
+- At 39 s the pill disappeared, and at 50.5 s iOS reported the activity **dismissed**. No later window showed.
+
+So the budget that froze run 3 (updates every quarter-second) does not bite one update every 30 s. What killed the island was tearing down and re-dating all 60 timer layers in one go, the same family of failure as 300 layers at launch (run 19). Contact sheet: `island-test/results/run21-sheet.png`.
+
+Run 22 arms a window without tearing anything down: two stacks, A and B, 30 words each; an update re-dates only the idle stack and raises it on top (a zIndex change, which does not recreate views), while the other stack keeps showing its last word. Windows 15–25, 30–40, 45–55, 60–70, 75–85 s; updates at 25, 40, 55, 70 s.
+
 ### Run on the phone, screen recorded — 13 Oct 2026 14:35
 
 | side of the camera | what is there | seconds away | changes seen | changes a second | median gap | longest gap |

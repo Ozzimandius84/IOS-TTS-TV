@@ -102,7 +102,8 @@ final class IslandTest {
         }
         do {
             clockStart = Date()
-            let first = IslandAttributes.ContentState(word: "ready", seq: 0, phase: "waiting", windowStart: clockStart, window: 0)
+            let first = IslandAttributes.ContentState(word: "ready", seq: 0, phase: "waiting", windowStart: clockStart, window: 0,
+                                                      startA: clockStart, startB: clockStart.addingTimeInterval(100_000))
             log("info", detail: String(format: "mode %@ clock_start %.4f", mode, clockStart.timeIntervalSince1970))
             var attrs = IslandAttributes(title: "Island test", start: clockStart, mode: mode)
             if mode == "words" {
@@ -177,19 +178,24 @@ final class IslandTest {
     /// background, sends ONE update moving windowStart on by 30 s, 10 s before
     /// that window's words are due. Which windows the island shows says whether
     /// a background update gets through (run 3 froze after ~4 rapid ones).
-    static let windowEvery = 30.0, windowCount = 5
+    static let windowEvery = 15.0, windowCount = 5   // run 22: 30-word windows, 10 s each, 5 s apart
+    private var lastState: IslandAttributes.ContentState?
     private func runWindows() {
         log("run_start", detail: "windows: \(Self.windowCount - 1) updates from the background, one every \(Int(Self.windowEvery)) s")
         log("info", detail: String(format: "word_window %.3f %.3f", RunWords.lead, RunWords.lead + Double(RunWords.count) / RunWords.perSecond))
         log("phase_start", phase: "windows")
         logQ.async { self.phaseNow = "windows" }
         for k in 1..<Self.windowCount {
-            let at = clockStart.addingTimeInterval(Double(k) * Self.windowEvery + 5)
+            let at = clockStart.addingTimeInterval(Double(k) * Self.windowEvery + RunWords.lead - 5)   // 5 s before the window's words
             Thread.sleep(until: at)
             guard let a = activity else { break }
             let ws = clockStart.addingTimeInterval(Double(k) * Self.windowEvery)
             let a0 = Double(k) * Self.windowEvery + RunWords.lead
-            let state = IslandAttributes.ContentState(word: "window\(k)", seq: k, phase: "windows", windowStart: ws, window: k)
+            var state = IslandAttributes.ContentState(word: "window\(k)", seq: k, phase: "windows", windowStart: ws, window: k)
+            // run 22: only the idle stack is re-dated; the other keeps its dates
+            state.startA = k % 2 == 0 ? ws : (lastState?.startA ?? clockStart)
+            state.startB = k % 2 == 1 ? ws : (lastState?.startB ?? clockStart.addingTimeInterval(100_000))
+            lastState = state
             log("sent", seq: k, phase: "windows", detail: String(format: "window %d words %.0f-%.0f s", k, a0, a0 + Double(RunWords.count) / RunWords.perSecond))
             log("info", detail: String(format: "word_window %.3f %.3f", a0, a0 + Double(RunWords.count) / RunWords.perSecond))
             logQ.async { self.nSent += 1 }

@@ -18,6 +18,11 @@ struct IslandAttributes: ActivityAttributes {
         /// background, 10 s before each window to see whether the update arrives.
         var windowStart: Date = .distantPast
         var window: Int = 0
+        /// Run 22: two stacks of words, A and B, 30 layers each. An update re-dates
+        /// only the idle stack and raises it on top (zIndex), so the stack that is
+        /// showing is never torn down (run 21: re-dating all 60 got the activity dismissed).
+        var startA: Date = .distantPast
+        var startB: Date = .distantPast
     }
     var title: String
     /// Run 4: when the island's own clock started, and which test this is
