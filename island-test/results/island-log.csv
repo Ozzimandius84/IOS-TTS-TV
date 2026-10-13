@@ -1,26 +1,39 @@
 ms,event,seq,phase,detail
-2,info,-1,,wall 1791901557.4162
+2,info,-1,,wall 1791902881.1435
 2,info,-1,,iPhone18 3 iOS 26.6.1
 3,info,-1,,live activities enabled=true
-114,info,-1,,audio playing
-116,info,-1,,mode clock clock_start 1791901557.5325
-131,info,-1,,activity started
-131,content,0,waiting,
-131,info,-1,,activity state active
-3635,state,-1,,background
-3635,run_start,-1,,clock: no updates will be sent
-3635,info,-1,,word_window 15.000 48.333
-3635,phase_start,-1,clock,
-6707,info,-1,,activity state dismissed
-8636,alive,-1,,tone playing=false
-13729,alive,-1,,tone playing=false
-18812,alive,-1,,tone playing=false
-23912,alive,-1,,tone playing=false
-29012,alive,-1,,tone playing=false
-34112,alive,-1,,tone playing=false
-248365,alive,-1,,tone playing=false
-248365,phase_end,-1,clock,
-248365,run_end,-1,,
-248365,state,-1,,foreground
-248366,info,-1,,activity ended
-251717,state,-1,,background
+880,info,-1,,audio playing
+883,info,-1,,mode clock clock_start 1791902882.0269
+896,info,-1,,activity started
+896,info,-1,,activity state active
+897,content,0,waiting,
+3786,state,-1,,background
+3786,run_start,-1,,clock: no updates will be sent
+3786,info,-1,,word_window 15.000 48.333
+3786,phase_start,-1,clock,
+8790,alive,-1,,tone playing=true
+10235,info,-1,,activity state dismissed
+13795,alive,-1,,tone playing=true
+18801,alive,-1,,tone playing=true
+23802,alive,-1,,tone playing=true
+26358,state,-1,,foreground
+28198,state,-1,,background
+28805,alive,-1,,tone playing=true
+33810,alive,-1,,tone playing=true
+38811,alive,-1,,tone playing=true
+43812,alive,-1,,tone playing=true
+48818,alive,-1,,tone playing=true
+53818,alive,-1,,tone playing=true
+58820,alive,-1,,tone playing=true
+61550,state,-1,,foreground
+63824,alive,-1,,tone playing=true
+63988,state,-1,,background
+68829,alive,-1,,tone playing=true
+73834,alive,-1,,tone playing=true
+78839,alive,-1,,tone playing=true
+83841,alive,-1,,tone playing=true
+88841,alive,-1,,tone playing=true
+93842,alive,-1,,tone playing=true
+93842,phase_end,-1,clock,
+93842,run_end,-1,,
+93845,info,-1,,activity ended
