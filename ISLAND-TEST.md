@@ -233,6 +233,24 @@ Look at results/screen/frames/ to see WHAT was drawn: words in Frank's red-lette
    44.7s  info activity ended
 ```
 
+
+### Run 7 (13 Oct 12:51): drawing a timer over something does not erase it
+
+- **What showed:**
+  - All three dots appeared at once. The green one was meant to stay erased until 15 s.
+  - All 30 words were drawn on top of each other from the start, red letters included.
+
+  So the island draws everything, but a timer drawn over with destination-out erases nothing.
+- **iOS closed the island at exactly 20 s,** the moment the first word was due. That's the third run in a row closed early. The cause is unknown, and these runs all used the countdown/count-up timer style rather than run 4's stopwatch.
+- **Picture:** `island-test/results/run7-12s-all-words-at-once.png`.
+
+**Run 8** uses only what run 4 proved: a live **stopwatch** drawn in our own font, with no masks and no erasing. Each word is three stopwatches stacked in one place, all starting at that word's moment and all reading zero (drawing nothing) until then:
+- one draws a **black block** that covers the word before it;
+- one draws the **word's ink**, from a strip font holding all 30 words in a row, shifted so the word's own window shows only that word;
+- one draws its **red letter**.
+
+The newest word is on top. A white square left of the camera should appear at 15 s, which proves that a stopwatch that hasn't started yet draws nothing. A preview of the strip windows is in `island-test/font/strip-preview.png`.
+
 ### Run on the phone, screen recorded — 13 Oct 2026 12:52
 
 | side of the camera | what is there | seconds away | changes seen | changes a second | median gap | longest gap |

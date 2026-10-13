@@ -96,49 +96,55 @@ func gate(after t: Date?, before u: Date?, size: CGFloat) -> some View {
     }
 }
 
-/// Every word stacked in one place; each one masked by its own two switches, so
-/// only the word whose moment it is can be seen. The clocks are never shown.
-func wordStream(_ a: IslandAttributes, size: CGFloat) -> some View {
-    ZStack(alignment: .leading) {
-        ForEach(Array(a.words.enumerated()), id: \.offset) { i, w in
-            let t0 = a.wordStart.addingTimeInterval(Double(i) / a.wps)
-            let t1 = a.wordStart.addingTimeInterval(Double(i + 1) / a.wps)
-            // run 7: no masks (run 6: a timer mask draws nothing). Each word is ERASED
-            // by two timers drawn over it (destination-out): one solid until its
-            // start, one solid from its end -- so it shows only between them.
-            pivotWord(w, size: size)
-                .overlay(alignment: .leading) {
-                    gate(after: nil, before: t0, size: size).foregroundColor(.black).blendMode(.destinationOut)
-                }
-                .overlay(alignment: .leading) {
-                    gate(after: t1, before: nil, size: size).foregroundColor(.black).blendMode(.destinationOut)
-                }
-                .compositingGroup()
-        }
-    }
-    .frame(width: size * 4.6, alignment: .leading)
+/// A live stopwatch from `t` drawn in one of the run-8 fonts. Before `t` it
+/// reads all zeros, which every one of those fonts draws as nothing.
+@available(iOS 18.0, *)
+func liveClock(_ t: Date, font: String, size: CGFloat, color: Color) -> some View {
+    Text(TimeDataSource<Date>.currentDate,
+         format: SystemFormatStyle.Stopwatch(startingAt: t, showsHours: false,
+                                             maxFieldCount: 4, maxPrecision: .milliseconds(10)))
+        .font(.custom(font, size: size))
+        .foregroundColor(color)
+        .fixedSize()
 }
 
-/// Diagnostics, left of the camera (run 7). Three dots, no masks anywhere:
-///  white -- nothing over it: the island is drawing;
-///  green -- erased by a timer drawn over it UNTIL 15 s after launch (appears at 15 s);
-///  blue  -- erased by a timer drawn over it FROM 25 s after launch (vanishes at 25 s).
-/// (Run 6's red dot, hidden by a timer MASK, never drew at all.)
+/// Run 8: every word is three live clocks starting at its own moment -- a black
+/// block (covers the word before it), the ink of the word strip, its red letters
+/// -- shifted so the slot-wide window shows only this word. Newest on top.
+/// No masks, no erasing: runs 6 and 7 showed the island allows neither.
+@ViewBuilder
+func wordStream(_ a: IslandAttributes, size: CGFloat) -> some View {
+    let slot = size * 4.6
+    if #available(iOS 18.0, *) {
+        ZStack(alignment: .topLeading) {
+            ForEach(0..<a.words.count, id: \.self) { i in
+                let t0 = a.wordStart.addingTimeInterval(Double(i) / a.wps)
+                ZStack(alignment: .topLeading) {
+                    liveClock(t0, font: "IslandGate", size: size, color: .black)
+                    liveClock(t0, font: "IslandStrip", size: size, color: islandInk)
+                        .offset(x: -CGFloat(i) * slot)
+                    liveClock(t0, font: "IslandStripRed", size: size, color: islandRed)
+                        .offset(x: -CGFloat(i) * slot)
+                }
+                .frame(width: slot, height: size * 1.3, alignment: .topLeading)
+                .clipped()
+            }
+        }
+        .frame(width: slot, height: size * 1.3, alignment: .topLeading)
+    }
+}
+
+/// Diagnostic, left of the camera (run 8): a white dot, and a white square drawn
+/// by a stopwatch that starts 15 s after launch in the block font -- it should
+/// APPEAR at 15 s (proves a clock that has not started yet draws nothing).
 func gateDots(_ a: IslandAttributes) -> some View {
     HStack(spacing: 4) {
         Circle().fill(Color.white).frame(width: 8, height: 8)
-        Circle().fill(Color.green).frame(width: 8, height: 8)
-            .overlay(alignment: .leading) {
-                gate(after: nil, before: a.start.addingTimeInterval(15), size: 10)
-                    .foregroundColor(.black).blendMode(.destinationOut)
-            }
-            .compositingGroup()
-        Circle().fill(Color.blue).frame(width: 8, height: 8)
-            .overlay(alignment: .leading) {
-                gate(after: a.start.addingTimeInterval(25), before: nil, size: 10)
-                    .foregroundColor(.black).blendMode(.destinationOut)
-            }
-            .compositingGroup()
+        if #available(iOS 18.0, *) {
+            liveClock(a.start.addingTimeInterval(15), font: "IslandGate", size: 8, color: .white)
+                .frame(width: 10, height: 10, alignment: .topLeading)
+                .clipped()
+        }
     }
 }
 

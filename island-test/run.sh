@@ -64,7 +64,7 @@ fi
 echo
 if [ "$MODE" = words ]; then
   echo "  >>> ON THE PHONE NOW: swipe up to the home screen STRAIGHT AWAY and watch the island for 1 minute. <<<"
-  echo "      The words start 20 s after the app opened and run for 10 s; check dots sit left of the camera (green appears at 15 s, blue goes at 25 s)."
+  echo "      The words start 20 s after the app opened and run for 10 s; a white square left of the camera should appear at 15 s."
 else
   echo "  >>> ON THE PHONE NOW: swipe up to the home screen and leave it alone for about 3 minutes. <<<"
 fi
