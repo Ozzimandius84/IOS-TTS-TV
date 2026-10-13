@@ -13,24 +13,24 @@ built
 built
 
 == 4/6 install, start recording the phone's screen, open the app ==
-11:11:41  Acquired tunnel connection to device.
-11:11:41  Enabling developer disk image services.
-11:11:41  Acquired usage assertion.
+11:55:22  Acquired tunnel connection to device.
+11:55:22  Enabling developer disk image services.
+11:55:22  Acquired usage assertion.
 App installed:
 • bundleID: com.ttstv.frank.islandtest
-• installationURL: file:///private/var/containers/Bundle/Application/E974160C-C604-4327-8644-BE34D5BE7788/IslandTest.app/
+• installationURL: file:///private/var/containers/Bundle/Application/BCFDAB24-8A4C-4F7F-96EE-58E0F7D147B5/IslandTest.app/
 • launchServicesIdentifier: unknown
 • databaseUUID: 56F5C8F6-E127-4A22-ACC3-08D2D8867034
-• databaseSequenceNumber: 3088
+• databaseSequenceNumber: 3096
 • options: 
   (if the Mac asks whether Terminal may use the Camera, click Allow -- it is the phone's screen feed)
 record: recording iPhone 2
-11:11:50  Acquired tunnel connection to device.
-11:11:50  Enabling developer disk image services.
-11:11:50  Acquired usage assertion.
+11:55:26  Acquired tunnel connection to device.
+11:55:26  Enabling developer disk image services.
+11:55:26  Acquired usage assertion.
 Launched application with com.ttstv.frank.islandtest bundle identifier.
 
-  >>> ON THE PHONE NOW: swipe up to the home screen and leave it alone for about 4 minutes. <<<
+  >>> ON THE PHONE NOW: swipe up to the home screen and leave it alone for about 3 minutes. <<<
       Don't tap the island -- it opens the app.
 
 
@@ -43,37 +43,41 @@ Launched application with com.ttstv.frank.islandtest bundle identifier.
   ...180 s
   ...210 s
   ...240 s
-finished after ~270 s
-11:16:26  Acquired tunnel connection to device.
-11:16:26  Enabling developer disk image services.
-11:16:26  Acquired usage assertion.
+  ...270 s
+  ...300 s
+  ...330 s
+  ...360 s
+  ...390 s
+  ...420 s
+  ...450 s
+  ...480 s
+  ...510 s
+  ...540 s
+12:04:36  Acquired tunnel connection to device.
+12:04:36  Enabling developer disk image services.
+12:04:36  Acquired usage assertion.
 File received from Device
 /Users/oscarwilson-brown/Documents/RUNNERS/TTSTV_IOS/IOS TTS TV/island-test/results/island-log.csv
-screen frames: 16108, island pictures: 267
+WARNING: the run had not finished; results are partial
+screen frames: 31902, island pictures: 4610
 
 == 6/6 results ==
-| rate | sent | changes seen in the island | median gap | longest gap | first froze (still > 2 s) | ActivityKit said updated | app open during it |
-|---|---|---|---|---|---|---|---|
-| 1 per sentence (every 4 s) | 10 | 4 (40%) | 4.30 s | 40.1 s | after 8 s | 9 | no |
-| 1 per second | 30 | 3 (10%) | 61.38 s | 120.6 s | after 0 s | 8 | 3 s |
-| 2 per second | 60 | 0 (0%) | – | 0.0 s | never | 10 | no |
-| 3 per second | 90 | 0 (0%) | – | 0.0 s | never | 16 | no |
-| 4 per second | 120 | 13 (10%) | 0.91 s | 58.4 s | after 0 s | 22 | 4 s |
+| side of the camera | clock | seconds away | changes seen | changes a second | median gap | longest gap |
+|---|---|---|---|---|---|---|
+| left | hundredths stopwatch | 543 | 2 | 0.00 | 180.00 s | 309.3 s |
+| right | whole-second timer | 543 | 233 | 0.43 | 1.00 s | 309.2 s |
 
-Screen frames recorded: 16108; change threshold 1.0. Gaps include about 0.1 s of cable-mirroring lag, the same for every word.
-Changes seen during the 10 s rests (should be 0 or 1 -- a late catch-up shows here): after sentence: 0, after 1/s: 0, after 2/s: 0, after 3/s: 0
-App state changes: 13.1s background, 64.7s foreground, 66.9s background, 70.5s foreground, 72.5s background, 193.3s foreground, 197.3s background, 262.8s foreground, 265.1s background
+Updates the app sent during the run: 0 (should be 0). Away: 6-549 s
+App state changes: 5.2s background
+Look at results/screen/frames/ to see WHAT was drawn: words in Frank's red-letter style mean the font worked; digits mean it did not match the clock's format.
 
 ```
-    0.0s  info wall 1791886311.6219
+    0.0s  info wall 1791888926.6354
     0.0s  info iPhone18 3 iOS 26.6.1
     0.0s  info live activities enabled=true
     0.1s  info audio playing
+    0.1s  info mode clock clock_start 1791888926.7580
     0.1s  info activity started
     0.1s  info activity state active
-   13.1s  run_start planned 310 updates
-  266.0s  run_end
-  266.0s  info activity ended
-  266.1s  info activity state dismissed
+    5.2s  run_start clock: no updates will be sent
 ```
-committed: e632edf

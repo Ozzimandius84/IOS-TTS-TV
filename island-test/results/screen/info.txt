@@ -1,1 +1,1 @@
-phone frame 1206x2622; strip x 241-964 y 20-170
+phone frame 1206x2622; strip x 96-1109 y 20-170

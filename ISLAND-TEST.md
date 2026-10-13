@@ -73,3 +73,25 @@ bash island-test/run.sh
 3. **Run 3 (11:11): measured.** The Mac recorded the phone's screen over the cable and timed every change, which gave the table above. Runs 1 and 2 are in git history (`b2d7d23`, `ff3ec1b`) if ever needed.
 
 The build folder, the 267 frame pictures and the generated project files from these runs were moved to `_to_delete/island-test-13oct/` for Osca to empty.
+
+### Run on the phone, screen recorded — 13 Oct 2026 12:04
+
+| side of the camera | clock | seconds away | changes seen | changes a second | median gap | longest gap |
+|---|---|---|---|---|---|---|
+| left | hundredths stopwatch | 543 | 2 | 0.00 | 180.00 s | 309.3 s |
+| right | whole-second timer | 543 | 233 | 0.43 | 1.00 s | 309.2 s |
+
+Updates the app sent during the run: 0 (should be 0). Away: 6-549 s
+App state changes: 5.2s background
+Look at results/screen/frames/ to see WHAT was drawn: words in Frank's red-letter style mean the font worked; digits mean it did not match the clock's format.
+
+```
+    0.0s  info wall 1791888926.6354
+    0.0s  info iPhone18 3 iOS 26.6.1
+    0.0s  info live activities enabled=true
+    0.1s  info audio playing
+    0.1s  info mode clock clock_start 1791888926.7580
+    0.1s  info activity started
+    0.1s  info activity state active
+    5.2s  run_start clock: no updates will be sent
+```
