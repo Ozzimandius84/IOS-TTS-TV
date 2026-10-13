@@ -1228,7 +1228,11 @@ Look at results/screen/frames/ to see WHAT was drawn: words in Frank's red-lette
 
 Same three windows, then refused. The scan was live (Bluetooth on, scanning, peripherals seen) and liveactivitiesd still treated the app as only playing media. Four ways round the rule tried today -- spacing, a UIKit background task, a stale date, Bluetooth scanning -- none counts. The lane stops here.
 
-## The decision (end of 13 Oct)
+## Osca's decision (13 Oct 19:20)
+
+**The float waits for the paid Apple developer account, and that account is bought once there are users on the browser and the Mac app.** Then push updates re-arm the island and the float is added. Nothing more is run on the island until then. Everything needed is proven and written here: the island draws the words itself (one font per chapter, 100-word windows, under both caps); the only missing piece is the re-arm, which push provides. What to do when the time comes, in order: a relay that pushes each window (the Modal endpoint is the natural place); measure the push rate over an hour at one push every ~30 s; the shared-folder font load; the design passes (Iowan Old Style, cover left / word right, the real status-bar cost from an on-phone screenshot, two-piece words).
+
+## The decision (end of 13 Oct) -- as it stood before Osca's call above
 
 **The island works as Frank's phone float in every respect but one.** Proven on the phone, with the app in the background: one word at a time in Frank's red-letter style, fixed slot, 3 a second, landing on the hundredth; windows of 30 words, two alive, 90 words running continuously across the joins; under the island's drawing cap (~2 MB) and the widget's memory limit (60 MB), both named in the phone's log.
 
