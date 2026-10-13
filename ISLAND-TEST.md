@@ -74,6 +74,19 @@ bash island-test/run.sh
 
 The build folder, the 267 frame pictures and the generated project files from these runs were moved to `_to_delete/island-test-13oct/` for Osca to empty.
 
+
+### Run 4 (13 Oct 11:59): the island's own clock — what it showed
+
+**The island's clock runs on its own, very fast.** With the app sending nothing at all, the hundredths stopwatch kept counting in the island for the whole 5 minutes ("00:29.92", "00:59.95", "01:00.90", "04:59.95"). The Mac's recording shows it redrawn about **50 times a second**, never pausing more than 0.09 s. The whole-second timer next to it ticked once a second until its 4-minute range ended. So the island isn't the limit: it can change many times a second with no updates.
+
+**But the font's word-swap was not applied.** The island used our font (the digits are its shapes), yet drew the clock one character at a time and showed digits instead of words. That held for both clocks. On a normal computer the same font draws "0:07" as a word. So the island draws clock text glyph by glyph, without the step that joins characters into one drawing.
+
+(The automatic table below reads "2 changes" for the left side. That's wrong. The stopwatch changed so constantly that the analyser's self-set threshold rose above it. With a fixed threshold, the left side changed 49.9 times a second and the right 1.00 time a second.)
+
+**The app went quiet early.** Its log stops 5 s after leaving, and it never wrote its "done" mark, so it was probably suspended or stopped while the island's clocks carried on. Not yet explained.
+
+Pictures: `island-test/results/run4-30s-stopwatch-and-timer.png`, `run4-61s.png`, `run4-300s.png`.
+
 ### Run on the phone, screen recorded — 13 Oct 2026 12:04
 
 | side of the camera | clock | seconds away | changes seen | changes a second | median gap | longest gap |

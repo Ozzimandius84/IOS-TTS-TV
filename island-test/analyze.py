@@ -146,12 +146,12 @@ def clock(log_path, screen_path):
     out = ["| side of the camera | clock | seconds away | changes seen | changes a second | median gap | longest gap |",
            "|---|---|---|---|---|---|---|"]
     for col, label, clk in ((1, "left", "hundredths stopwatch"), (2, "right", "whole-second timer")):
-        diffs = sorted(f[col] for f in frames)
-        thr = max(1.0, 4 * diffs[len(diffs) // 2])
+        # fixed threshold: a clock that changes every frame would lift a self-set one above itself (run 4)
+        thr = 0.2
         changes, last = [], -1e9
         for f in frames:
             if f[col] > thr:
-                if f[0] - last > 0.05:
+                if f[0] - last > 0.0:
                     changes.append(f[0])
                 last = f[0]
         seen, gaps, secs = 0, [], 0.0

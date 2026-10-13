@@ -115,6 +115,12 @@ Every way of making the island change goes through one of two doors. Either the 
 
 **Verdict:** the only route found where the island itself shows the book moving while you're in another app. Unproven.
 
+### Run 4 result (13 Oct 11:59)
+
+- **Answered yes:** the island's own clock keeps running with no updates, and the hundredths stopwatch is redrawn about 50 times a second.
+- **Answered no:** the island draws clock text one character at a time and ignores the font's word-swaps (ligatures), so the clock showed digits, not words. Details in `ISLAND-TEST.md`.
+- **What's left:** a way to turn "the clock's digits" into "one word" that doesn't depend on joining characters. The next idea is to have the clocks hide and reveal word pictures rather than swap characters.
+
 ### Can the clock tick faster than once a second? (Osca, 11:37: "the stopwatch shows milliseconds")
 
 - **Inside the Clock app,** the stopwatch shows hundredths because the app is in front, drawing itself.
