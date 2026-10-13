@@ -1222,6 +1222,18 @@ Look at results/screen/frames/ to see WHAT was drawn: words in Frank's red-lette
    70.9s  info activity state dismissed
 ```
 
+### Run 31 (16:14): Bluetooth does not count either
+
+Same three windows, then refused. The scan was live (Bluetooth on, scanning, peripherals seen) and liveactivitiesd still treated the app as only playing media. Four ways round the rule tried today -- spacing, a UIKit background task, a stale date, Bluetooth scanning -- none counts. The lane stops here.
+
+## The decision (end of 13 Oct)
+
+**The island works as Frank's phone float in every respect but one.** Proven on the phone, with the app in the background: one word at a time in Frank's red-letter style, fixed slot, 3 a second, landing on the hundredth; windows of 30 words, two alive, 90 words running continuously across the joins; under the island's drawing cap (~2 MB) and the widget's memory limit (60 MB), both named in the phone's log.
+
+**The one thing it cannot do: the app may not re-arm the island from the background.** An app running in the background only for audio is not permitted to update its Live Activity; iOS lends 30 seconds when the activity starts and that is all (liveactivitiesd, run 28's log). Nothing the app can hold without a user-facing permission changes that.
+
+**The route Apple permits is push.** A relay (the Modal endpoint already in Frank's architecture is the natural place, with an APNs key) sends each window's content through APNs; the island updates with the app asleep. The content per push is tiny (two dates). This is a product decision -- it puts a server in the float's path -- and it is Osca's to make. If it is made, the remaining work is the three steps already listed: windows by push, fonts for a chapter at runtime, the design passes.
+
 ### Run on the phone, screen recorded — 13 Oct 2026 16:15
 
 | side of the camera | what is there | seconds away | changes seen | changes a second | median gap | longest gap |
