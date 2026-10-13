@@ -41,7 +41,9 @@ func pivotWord(_ piece: String, size: CGFloat) -> some View {
 /// a fixed column. iOS ticks the clock itself, so the word moves with no update.
 /// Width: the font gives every word the same advance, 4.6 x the font size.
 func countingWords(_ start: Date, size: CGFloat) -> some View {
-    Text(timerInterval: start...start.addingTimeInterval(240), countsDown: false, showsHours: false)
+    // run 13, ONE change on this side: the timer starts 15 s in the FUTURE.
+    // Same font, same frame. Words appearing from 15 s = a future start is fine.
+    Text(timerInterval: start.addingTimeInterval(15)...start.addingTimeInterval(255), countsDown: false, showsHours: false)
         .font(.custom("IslandCount", size: size))
         .foregroundColor(islandInk)
         .lineLimit(1)
@@ -55,10 +57,12 @@ func countingWords(_ start: Date, size: CGFloat) -> some View {
 @ViewBuilder
 func tenthsClock(_ start: Date, size: CGFloat) -> some View {
     if #available(iOS 18.0, *) {
+        // run 13, ONE change on this side: the block font instead of the digit font.
+        // Same clock, same start, same frame. Blocks appearing = block fonts draw.
         Text(TimeDataSource<Date>.currentDate,
              format: SystemFormatStyle.Stopwatch(startingAt: start, showsHours: false,
                                                  maxFieldCount: 4, maxPrecision: .milliseconds(10)))
-            .font(.custom("IslandCount", size: size))
+            .font(.custom("IslandDiagC", size: size))
             .foregroundColor(islandInk)
             .lineLimit(1)
             .frame(width: size * 4.6, alignment: .leading)

@@ -69,7 +69,7 @@ elif [ "$MODE" = words ]; then
   echo "  >>> ON THE PHONE NOW: swipe up to the home screen STRAIGHT AWAY and watch the island for 1 minute. <<<"
   echo "      The words start 20 s after the app opened and run for 10 s."
 else
-  echo "  >>> ON THE PHONE NOW: swipe up to the home screen and leave it alone for about 3 minutes. <<<"
+  echo "  >>> ON THE PHONE NOW: swipe up to the home screen and leave it alone for about 1 minute. <<<"
 fi
 echo "      Don't tap the island -- it opens the app."
 echo

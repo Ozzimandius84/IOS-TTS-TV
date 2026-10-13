@@ -162,7 +162,7 @@ final class IslandTest {
         log("phase_start", phase: "clock")
         logQ.async { self.phaseNow = "clock" }
         let endAt = clockStart.addingTimeInterval(225)
-        let wanted = Date().addingTimeInterval(150)
+        let wanted = Date().addingTimeInterval(50)
         Thread.sleep(until: min(endAt, wanted))
         log("phase_end", phase: "clock")
         finish()

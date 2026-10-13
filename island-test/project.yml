@@ -76,7 +76,7 @@ targets:
       path: Widget/Info.plist
       properties:
         CFBundleDisplayName: Island Test
-        UIAppFonts: [IslandCount.ttf]
+        UIAppFonts: [IslandCount.ttf, IslandDiagC.ttf]
         CFBundleShortVersionString: "1.0"
         CFBundleVersion: "1"
         NSExtension:
