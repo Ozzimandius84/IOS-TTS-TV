@@ -976,6 +976,21 @@ Look at results/screen/frames/ to see WHAT was drawn: words in Frank's red-lette
   183.6s  info activity state dismissed
 ```
 
+### Run 26 (13 Oct 15:26): 100 layers is over the cap even drawn once
+
+100 layers in the compact slot only: dismissed at 6.7 s, the first reload. So the cap sits between 30 layers (run 25: 3 minutes, no refusal) and 100 (refused). **The window is 30 words** -- about 10 s of reading at 3 a second, armed by one update every 10 s, which is inside what runs 21–23 proved gets through. No further number-hunting: 30 is the design figure.
+
+Side-finding from the same run: the test app's 2-second looping tone stopped at about 35 s and iOS suspended the app (7 heartbeats, "tone playing=false", the run ended only when Osca opened it). That is the throwaway tone in this test app, not Frank's real audio, but a float that depends on the app sending updates must watch its own audio session.
+
+## Where this leaves the float (end of 13 Oct)
+
+Proven, all with the app in the background and no help from it between updates: one word at a time in Frank's red-letter style, in a fixed slot, at 3 a second, landing on the hundredth; 30 words from one arming living for minutes; one update every 10–30 s from the background arriving within a second. The thing that kept killing it was a size cap on the island's drawing (`archiveTooLarge`, about 2 MB), read from the phone's own log and now understood.
+
+What is left, in order, none of it research into whether the island can do it:
+1. **Windows of 30 words armed by an update**, the newest window last in the stack (stacking order, not zIndex -- the island ignores zIndex, run 22). One run.
+2. **Fonts for a whole chapter** without a font per word in the bundle: the widget loading fonts at runtime from a shared file. One run to prove the widget can.
+3. **Design passes:** Iowan Old Style; cover left, word right; the status-bar width ladder (see "What the island costs the status bar"); the two-piece word rule.
+
 ### Run on the phone, screen recorded — 13 Oct 2026 15:30
 
 | side of the camera | what is there | seconds away | changes seen | changes a second | median gap | longest gap |
