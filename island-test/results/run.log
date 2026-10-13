@@ -13,21 +13,21 @@ built
 built
 
 == 4/6 install, start recording the phone's screen, open the app ==
-15:19:20  Acquired tunnel connection to device.
-15:19:20  Enabling developer disk image services.
-15:19:20  Acquired usage assertion.
+15:25:53  Acquired tunnel connection to device.
+15:25:53  Enabling developer disk image services.
+15:25:53  Acquired usage assertion.
 App installed:
 • bundleID: com.ttstv.frank.islandtest
-• installationURL: file:///private/var/containers/Bundle/Application/75E2775C-FFC3-4012-96CC-FC405D4DAA38/IslandTest.app/
+• installationURL: file:///private/var/containers/Bundle/Application/BCD3795D-0DEE-4CBB-8721-578E2AF45B2E/IslandTest.app/
 • launchServicesIdentifier: unknown
 • databaseUUID: 56F5C8F6-E127-4A22-ACC3-08D2D8867034
-• databaseSequenceNumber: 3288
+• databaseSequenceNumber: 3296
 • options: 
   (if the Mac asks whether Terminal may use the Camera, click Allow -- it is the phone's screen feed)
 record: recording iPhone 2
-15:19:24  Acquired tunnel connection to device.
-15:19:24  Enabling developer disk image services.
-15:19:24  Acquired usage assertion.
+15:25:57  Acquired tunnel connection to device.
+15:25:57  Enabling developer disk image services.
+15:25:57  Acquired usage assertion.
 Launched application with com.ttstv.frank.islandtest bundle identifier.
 
   >>> ON THE PHONE NOW: swipe up to the home screen and leave it alone for about 1 minute. <<<
@@ -41,38 +41,40 @@ Launched application with com.ttstv.frank.islandtest bundle identifier.
   ...120 s
   ...150 s
   ...180 s
-finished after ~190 s
-15:22:38  Acquired tunnel connection to device.
-15:22:38  Enabling developer disk image services.
-15:22:38  Acquired usage assertion.
+  ...210 s
+  ...240 s
+finished after ~250 s
+15:30:12  Acquired tunnel connection to device.
+15:30:12  Enabling developer disk image services.
+15:30:12  Acquired usage assertion.
 File received from Device
 /Users/oscarwilson-brown/Documents/RUNNERS/TTSTV_IOS/IOS TTS TV/island-test/results/island-log.csv
-screen frames: 11184, island pictures: 148
+screen frames: 14886, island pictures: 154
 
 == 6/6 results ==
 | side of the camera | what is there | seconds away | changes seen | changes a second | median gap | longest gap |
 |---|---|---|---|---|---|---|
-| left | check: truth at 15 s | 179 | 25 | 0.14 | 0.52 s | 108.7 s |
-| right | the words | 179 | 60 | 0.33 | 0.33 s | 109.0 s |
+| left | check: truth at 15 s | 244 | 8 | 0.03 | 0.42 s | 239.3 s |
+| right | the words | 244 | 7 | 0.03 | 0.40 s | 239.3 s |
 
-**Window 0, 15-25 s (30 words at 3 a second), right of the camera:** 29 changes seen, median gap 0.33 s, longest 0.41 s.
+**Window 0, 15-48 s (100 words at 3 a second), right of the camera:** 0 changes seen.
 
-Updates the app sent during the run: 0. Away: 4-184 s
-App state changes: 3.5s background, 32.4s locked, 33.6s unlocked
-App heartbeats: 36 (every 5 s); last: tone playing=true
+Updates the app sent during the run: 0. Away: 5-248 s
+App state changes: 3.6s background, 248.4s foreground, 251.7s background
+App heartbeats: 7 (every 5 s); last: tone playing=false
 Look at results/screen/frames/ to see WHAT was drawn: words in Frank's red-letter style mean the font worked; digits mean it did not match the clock's format.
 
 ```
-    0.0s  info wall 1791901164.7418
+    0.0s  info wall 1791901557.4162
     0.0s  info iPhone18 3 iOS 26.6.1
     0.0s  info live activities enabled=true
-    0.9s  info audio playing
-    0.9s  info mode clock clock_start 1791901165.6176
-    0.9s  info activity started
-    0.9s  info activity state active
-    3.5s  run_start clock: no updates will be sent
-    3.5s  info word_window 15.000 25.000
-  183.6s  run_end
-  183.6s  info activity ended
-  183.6s  info activity state dismissed
+    0.1s  info audio playing
+    0.1s  info mode clock clock_start 1791901557.5325
+    0.1s  info activity started
+    0.1s  info activity state active
+    3.6s  run_start clock: no updates will be sent
+    3.6s  info word_window 15.000 48.333
+    6.7s  info activity state dismissed
+  248.4s  run_end
+  248.4s  info activity ended
 ```
