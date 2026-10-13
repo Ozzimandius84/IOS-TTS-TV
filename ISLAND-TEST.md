@@ -1070,6 +1070,12 @@ Look at results/screen/frames/ to see WHAT was drawn: words in Frank's red-lette
    93.8s  info activity ended
 ```
 
+### Run 28 (13 Oct 15:55): three windows back to back -- 90 words continuous
+
+Windows of 30 words, two alive at a time, the newest drawn last. The island ran **continuously from 15 s to 45 s**: window 1, then window 2 and window 3 armed by background updates at 20.9 and 30.9 s, with no gap and no change in rhythm across the joins (29, 32 and 30 changes seen; median gap 0.33 s). The updates at 40.9 and 50.9 s were accepted by ActivityKit but never reached the island: it stopped on window 3's last word at 45.6 s and stayed up, alive, until the app ended it at 70 s.
+
+So the whole mechanism works end to end; what is left is one number: how often iOS lets a background update through. Today's evidence -- 4 at 4 s apart then blocked (run 3), 3 at 15 s apart (run 22), 2 at 10 s apart then blocked (run 28) -- looks like a budget that refills over time. The phone's log records the budget decisions; that is the next read.
+
 ### Run on the phone, screen recorded — 13 Oct 2026 15:55
 
 | side of the camera | what is there | seconds away | changes seen | changes a second | median gap | longest gap |
