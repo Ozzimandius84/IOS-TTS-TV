@@ -1,37 +1,41 @@
 ms,event,seq,phase,detail
-2,info,-1,,wall 1791904479.8649
+2,info,-1,,wall 1791904898.4247
 2,info,-1,,iPhone18 3 iOS 26.6.1
 3,info,-1,,live activities enabled=true
-854,info,-1,,audio playing
-858,info,-1,,mode windows clock_start 1791904480.7231
-873,info,-1,,activity started
-873,info,-1,,activity state active
-873,content,0,waiting,
-883,info,-1,,background task begun id=2 remaining=1.7976931348623157e+308
-6309,info,-1,,bluetooth state 5
-6310,info,-1,,bluetooth scanning
-6372,info,-1,,bluetooth saw a peripheral
-6372,info,-1,,bluetooth saw a peripheral
-6621,info,-1,,bluetooth saw a peripheral
-9233,state,-1,,background
-9238,run_start,-1,,windows: 4 updates from the background  one every 10 s  reDate=false
-9238,info,-1,,word_window 15.000 25.000
-9238,phase_start,-1,windows,
-20863,sent,1,windows,window 1 words 25-35 s
-20863,info,-1,,word_window 25.000 35.000
-20866,acked,1,windows,stale at 28.5 s
-20877,content,1,windows,
-30863,sent,2,windows,window 2 words 35-45 s
-30863,info,-1,,word_window 35.000 45.000
-30865,acked,2,windows,stale at 38.5 s
-30874,content,2,windows,
-40863,sent,3,windows,window 3 words 45-55 s
-40863,info,-1,,word_window 45.000 55.000
-40864,acked,3,windows,stale at 48.5 s
-50863,sent,4,windows,window 4 words 55-65 s
-50863,info,-1,,word_window 55.000 65.000
-50865,acked,4,windows,stale at 58.5 s
-70859,phase_end,-1,windows,
-70859,run_end,-1,,
-70872,info,-1,,activity ended
-70873,info,-1,,activity state dismissed
+859,info,-1,,audio playing
+863,info,-1,,mode clock clock_start 1791904899.2876
+875,info,-1,,activity started
+876,info,-1,,activity state active
+876,content,0,waiting,
+887,info,-1,,background task begun id=2 remaining=1.7976931348623157e+308
+893,info,-1,,bluetooth state 5
+893,info,-1,,bluetooth scanning
+952,info,-1,,bluetooth saw a peripheral
+953,info,-1,,bluetooth saw a peripheral
+1098,info,-1,,bluetooth saw a peripheral
+4174,state,-1,,background
+4174,run_start,-1,,clock: no updates will be sent
+4174,info,-1,,word_window 15.000 48.333
+4174,phase_start,-1,clock,
+9179,alive,-1,,tone playing=true
+14180,alive,-1,,tone playing=true
+19182,alive,-1,,tone playing=true
+24182,alive,-1,,tone playing=true
+29186,alive,-1,,tone playing=true
+34188,alive,-1,,tone playing=true
+39193,alive,-1,,tone playing=true
+44194,alive,-1,,tone playing=true
+49196,alive,-1,,tone playing=true
+54196,alive,-1,,tone playing=true
+59197,alive,-1,,tone playing=true
+64202,alive,-1,,tone playing=true
+69207,alive,-1,,tone playing=true
+74211,alive,-1,,tone playing=true
+79217,alive,-1,,tone playing=true
+84222,alive,-1,,tone playing=true
+89226,alive,-1,,tone playing=true
+94228,alive,-1,,tone playing=true
+94228,phase_end,-1,clock,
+94228,run_end,-1,,
+94236,info,-1,,activity state dismissed
+94236,info,-1,,activity ended
