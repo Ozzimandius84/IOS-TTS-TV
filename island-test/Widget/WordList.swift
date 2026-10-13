@@ -1,36 +1,106 @@
-// Built by font/build_words.py -- do not edit. Run 18: 30 words at 3 a second from 15 s.
+// Run B (memory): 100 layers, only two fonts -- is the 60 MB in the fonts or in the clock views?
 let runWords: [(at: Double, font: String)] = [
-    (15.0000, "IslandW01"),  // It
-    (15.3333, "IslandW02"),  // is
-    (15.6667, "IslandW03"),  // a
-    (16.0000, "IslandW04"),  // truth
-    (16.3333, "IslandW05"),  // univer-
-    (16.6667, "IslandW06"),  // sally
-    (17.0000, "IslandW07"),  // acknow-
-    (17.3333, "IslandW08"),  // ledged
-    (17.6667, "IslandW09"),  // that
-    (18.0000, "IslandW10"),  // a
-    (18.3333, "IslandW11"),  // single
-    (18.6667, "IslandW12"),  // man
-    (19.0000, "IslandW13"),  // in
-    (19.3333, "IslandW14"),  // posse-
-    (19.6667, "IslandW15"),  // ssion
-    (20.0000, "IslandW16"),  // of
-    (20.3333, "IslandW17"),  // a
-    (20.6667, "IslandW18"),  // good
-    (21.0000, "IslandW19"),  // fortune
-    (21.3333, "IslandW20"),  // must
-    (21.6667, "IslandW21"),  // be
-    (22.0000, "IslandW22"),  // in
-    (22.3333, "IslandW23"),  // want
-    (22.6667, "IslandW24"),  // of
-    (23.0000, "IslandW25"),  // a
-    (23.3333, "IslandW26"),  // wife.
-    (23.6667, "IslandW27"),  // However
-    (24.0000, "IslandW28"),  // little
-    (24.3333, "IslandW29"),  // known
-    (24.6667, "IslandW30"),  // the
+    (15.0000, "IslandW01"),
+    (15.3333, "IslandW02"),
+    (15.6667, "IslandW01"),
+    (16.0000, "IslandW02"),
+    (16.3333, "IslandW01"),
+    (16.6667, "IslandW02"),
+    (17.0000, "IslandW01"),
+    (17.3333, "IslandW02"),
+    (17.6667, "IslandW01"),
+    (18.0000, "IslandW02"),
+    (18.3333, "IslandW01"),
+    (18.6667, "IslandW02"),
+    (19.0000, "IslandW01"),
+    (19.3333, "IslandW02"),
+    (19.6667, "IslandW01"),
+    (20.0000, "IslandW02"),
+    (20.3333, "IslandW01"),
+    (20.6667, "IslandW02"),
+    (21.0000, "IslandW01"),
+    (21.3333, "IslandW02"),
+    (21.6667, "IslandW01"),
+    (22.0000, "IslandW02"),
+    (22.3333, "IslandW01"),
+    (22.6667, "IslandW02"),
+    (23.0000, "IslandW01"),
+    (23.3333, "IslandW02"),
+    (23.6667, "IslandW01"),
+    (24.0000, "IslandW02"),
+    (24.3333, "IslandW01"),
+    (24.6667, "IslandW02"),
+    (25.0000, "IslandW01"),
+    (25.3333, "IslandW02"),
+    (25.6667, "IslandW01"),
+    (26.0000, "IslandW02"),
+    (26.3333, "IslandW01"),
+    (26.6667, "IslandW02"),
+    (27.0000, "IslandW01"),
+    (27.3333, "IslandW02"),
+    (27.6667, "IslandW01"),
+    (28.0000, "IslandW02"),
+    (28.3333, "IslandW01"),
+    (28.6667, "IslandW02"),
+    (29.0000, "IslandW01"),
+    (29.3333, "IslandW02"),
+    (29.6667, "IslandW01"),
+    (30.0000, "IslandW02"),
+    (30.3333, "IslandW01"),
+    (30.6667, "IslandW02"),
+    (31.0000, "IslandW01"),
+    (31.3333, "IslandW02"),
+    (31.6667, "IslandW01"),
+    (32.0000, "IslandW02"),
+    (32.3333, "IslandW01"),
+    (32.6667, "IslandW02"),
+    (33.0000, "IslandW01"),
+    (33.3333, "IslandW02"),
+    (33.6667, "IslandW01"),
+    (34.0000, "IslandW02"),
+    (34.3333, "IslandW01"),
+    (34.6667, "IslandW02"),
+    (35.0000, "IslandW01"),
+    (35.3333, "IslandW02"),
+    (35.6667, "IslandW01"),
+    (36.0000, "IslandW02"),
+    (36.3333, "IslandW01"),
+    (36.6667, "IslandW02"),
+    (37.0000, "IslandW01"),
+    (37.3333, "IslandW02"),
+    (37.6667, "IslandW01"),
+    (38.0000, "IslandW02"),
+    (38.3333, "IslandW01"),
+    (38.6667, "IslandW02"),
+    (39.0000, "IslandW01"),
+    (39.3333, "IslandW02"),
+    (39.6667, "IslandW01"),
+    (40.0000, "IslandW02"),
+    (40.3333, "IslandW01"),
+    (40.6667, "IslandW02"),
+    (41.0000, "IslandW01"),
+    (41.3333, "IslandW02"),
+    (41.6667, "IslandW01"),
+    (42.0000, "IslandW02"),
+    (42.3333, "IslandW01"),
+    (42.6667, "IslandW02"),
+    (43.0000, "IslandW01"),
+    (43.3333, "IslandW02"),
+    (43.6667, "IslandW01"),
+    (44.0000, "IslandW02"),
+    (44.3333, "IslandW01"),
+    (44.6667, "IslandW02"),
+    (45.0000, "IslandW01"),
+    (45.3333, "IslandW02"),
+    (45.6667, "IslandW01"),
+    (46.0000, "IslandW02"),
+    (46.3333, "IslandW01"),
+    (46.6667, "IslandW02"),
+    (47.0000, "IslandW01"),
+    (47.3333, "IslandW02"),
+    (47.6667, "IslandW01"),
+    (48.0000, "IslandW02"),
 ]
 let runWordsPerSecond = 3
 let runWordLead = 15
-let runWordCount = 30
+let runWordCount = 100

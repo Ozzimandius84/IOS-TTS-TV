@@ -10,7 +10,7 @@
 # The phone must be plugged in BY CABLE and UNLOCKED. When it says so, swipe
 # up to the home screen and leave the phone alone; don't tap the island.
 set -uo pipefail
-MODE="${1:-windows}"
+MODE="${1:-clock}"
 HERE="$(cd "$(dirname "$0")" && pwd)"
 REPO="$(cd "$HERE/.." && pwd)"
 BID=com.ttstv.frank.islandtest
