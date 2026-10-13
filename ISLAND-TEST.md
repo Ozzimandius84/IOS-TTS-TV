@@ -552,6 +552,20 @@ Look at results/screen/frames/ to see WHAT was drawn: words in Frank's red-lette
    53.7s  info activity state dismissed
 ```
 
+
+### Run 16 (13 Oct 13:42): the sequence works
+
+With no update from the app, the right of the island showed **truth**, then **single** cleanly replacing it, then **man** replacing that, each with Frank's red letter, each at its set moment plus the whole-second timer's one-second lag (19 s, 22 s, 23 s). The black cover under each new word hid the previous one completely. On the left, the hundredths clock put **truth** up at 15–16 s.
+
+So the island can show the words of a book one at a time, in time, while the app is in the background, driven only by clocks iOS runs itself. Pictures: `island-test/results/run16-*.png`.
+
+**What's left to make it the float:**
+1. **The fast clock for every layer** (the left side's clock), so each word lands at its moment rather than up to a second late.
+2. **Packing a chapter into fonts.** One font per word is fine for three words, not for 3,000. A font can carry many words: a timer string "00:12.34" has its non-zero digits at known positions, so different words can be hung on different digit characters and picked by the clock's start offset; or the lock-screen presentation can be rebuilt on each chapter from the app while it is open. To be designed and measured.
+3. **How many layers the island tolerates.** 5 worked; a chapter needs hundreds or a rolling window.
+4. **Pause and seek** need one real update each (a handful survive the freeze).
+5. **Layout** (Osca, 13 Oct 13:31): the word on the left of the camera, the book's icon on the right.
+
 ### Run on the phone, screen recorded — 13 Oct 2026 13:43
 
 | side of the camera | what is there | seconds away | changes seen | changes a second | median gap | longest gap |
