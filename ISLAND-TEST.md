@@ -897,6 +897,10 @@ Look at results/screen/frames/ to see WHAT was drawn: words in Frank's red-lette
    95.2s  info activity ended
 ```
 
+### Run 24 (13 Oct 15:10): 30 layers, no updates -- dismissed at 25.6 s, the moment the last word landed
+
+The same build as run 18 in every way that matters (30 words, 30 layers, no updates, app alive with a heartbeat every 5 s and the tone playing throughout). Run 18's island lived its whole 55 s; this one was dismissed by iOS at 25.6 s. So the island's lifetime is not a function of anything in the widget: 3 layers lived 6 minutes, 30 lived 55 s once and 25 s once, 60 died at 50, 70 and 76 s, 300 at 1.5 s. That shape -- unpredictable, worse with more layers -- is a process being killed for memory: the widget extension gets a few tens of MB, and 30 custom fonts plus 30 live clocks redrawn 50 times a second is heavy. The phone's own log records such kills; `island-test/phone-log.sh` pulls it over the cable and keeps the lines about our widget. That is the next step, before any more widget runs.
+
 ### Run on the phone, screen recorded — 13 Oct 2026 15:13
 
 | side of the camera | what is there | seconds away | changes seen | changes a second | median gap | longest gap |
