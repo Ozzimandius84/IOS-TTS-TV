@@ -25,6 +25,8 @@ The final run, from the Mac's recording of the phone's screen and the phone's ow
 
 Pictures: `island-test/results/island-22s-moving.png` shows a live word. `island-test/results/island-100s-frozen.png` shows the same word still there 80 s later, while the app sent 120 more.
 
+**Since then (runs 4–17, same day):** the island will show words with no updates at all, if the words are drawn by the island's own clocks. A stopwatch the island runs itself redraws 50 times a second for as long as you like; put it in a font whose digits draw a word, and that word appears at the moment you chose, while the app is in the background. Run 17 showed three words landing on the hundredth of a second, each one replacing the last. Details and what is still unproven are under "Run 16" and "Run 17" below.
+
 What else might work is in `ISLAND-OPTIONS.md`.
 
 ## What we made (kept, in `island-test/`)
@@ -615,6 +617,14 @@ Look at results/screen/frames/ to see WHAT was drawn: words in Frank's red-lette
    53.9s  info activity ended
    53.9s  info activity state dismissed
 ```
+
+### Run 17 (13 Oct 14:13): every word on the fast clock, one layer each
+
+Same three words, but now each word is a single layer: the island's hundredths stopwatch, in a font whose digits draw the word, with the black cover built into the word's own glyph as a colour layer (COLR: box, then ink, then the red letter). No separate cover views, no whole-second timer.
+
+The Mac's recording shows **truth** at 15.15 s on both sides, **single** at 18.14 s, **man** at 21.14 s -- each word set for 15, 18 and 21 s after the clock start, so each landed within 0.15 s of its moment (about 0.1 s of that is the cable mirroring). The app sent nothing for the whole 6½ minutes it was away; the island stayed up and the words stayed put. Pictures: `island-test/results/run17-*.png`.
+
+That settles item 1 of the list above: a word can land on the hundredth of a second, and the cost of a word is one Text view. Next: 30 words at 3 a second (run 18), then how many layers the island will take (run 19), then whether a real update from the background every minute or so gets through, which decides whether a whole chapter can be done this way.
 
 ### Run on the phone, screen recorded — 13 Oct 2026 14:13
 
