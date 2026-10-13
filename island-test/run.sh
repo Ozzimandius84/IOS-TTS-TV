@@ -64,7 +64,7 @@ fi
 echo
 if [ "$MODE" = diag ]; then
   echo "  >>> ON THE PHONE NOW: swipe up to the home screen STRAIGHT AWAY and watch the island for 40 s. <<<"
-  echo "      Small test clocks either side of the camera should appear at 15 s."
+  echo "      Small test clocks and dots either side of the camera; some change at 25 s."
 elif [ "$MODE" = words ]; then
   echo "  >>> ON THE PHONE NOW: swipe up to the home screen STRAIGHT AWAY and watch the island for 1 minute. <<<"
   echo "      The words start 20 s after the app opened and run for 10 s."

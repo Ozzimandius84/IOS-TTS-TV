@@ -148,38 +148,55 @@ func gateDots(_ a: IslandAttributes) -> some View {
     }
 }
 
-// MARK: run 10 -- the diagnostic: which kinds of digit drawing does the island allow?
+// MARK: run 11 -- the diagnostic again, with clocks that have ALREADY started
 
-/// Left of the camera: A = run 4's font (known to draw), B = the same in a
-/// small cropped box. Both are stopwatches starting 15 s after launch.
+/// Run 10 drew nothing at all -- not even run 4's own font -- and the only thing
+/// it shared with runs 5-9 is that every clock started in the FUTURE. Run 4's
+/// clock had already started. So now every clock starts at launch (a countdown
+/// runs from launch to a later moment), except E, which keeps a future start to
+/// confirm that rule.
+@available(iOS 18.0, *)
+func countdown(from a: Date, to b: Date, font: String, size: CGFloat, color: Color) -> some View {
+    Text(TimeDataSource<Date>.currentDate,
+         format: SystemFormatStyle.Timer(countingDownIn: a..<b, showsHours: false,
+                                         maxFieldCount: 4, maxPrecision: .milliseconds(10)))
+        .font(.custom(font, size: size))
+        .foregroundColor(color)
+        .fixedSize()
+}
+
+/// Left of the camera: A = run 4's font, stopwatch from launch (should run);
+/// E = the same, but starting 15 s after launch (expected: never drawn).
 @ViewBuilder
 func diagLeft(_ a: IslandAttributes) -> some View {
-    let t = a.start.addingTimeInterval(15)
     if #available(iOS 18.0, *) {
-        HStack(spacing: 4) {
-            liveClock(t, font: "IslandCount", size: 9, color: .white)
-            liveClock(t, font: "IslandCount", size: 9, color: .white)
-                .frame(width: 14, height: 12, alignment: .leading)
-                .clipped()
+        HStack(spacing: 6) {
+            liveClock(a.start, font: "IslandCount", size: 9, color: .white)
+            liveClock(a.start.addingTimeInterval(15), font: "IslandCount", size: 9, color: .yellow)
         }
     }
 }
 
-/// Right of the camera: four stopwatches starting 15 s after launch, each in a
-/// font whose digits 1-9 are solid blocks drawn a different way (font/build_diag.py):
-/// C white  = block inside the digit's own width
-/// D yellow = same block, digit given zero width
-/// E cyan   = block outside the digit's width, to the right
-/// F pink   = block outside the digit's width, to the left
+/// Right of the camera, all from a countdown that runs from launch to 25 s after:
+/// D (white blocks) = the countdown drawn in the block font: blocks until 25 s, then nothing;
+/// M (white dot)    = a dot MASKED by that countdown: there until 25 s, then gone;
+/// X (pink dot)     = a dot ERASED by that countdown drawn over it: hidden until 25 s, then appears.
 @ViewBuilder
 func diagRight(_ a: IslandAttributes) -> some View {
-    let t = a.start.addingTimeInterval(15)
+    let end = a.start.addingTimeInterval(25)
     if #available(iOS 18.0, *) {
-        HStack(spacing: 6) {
-            liveClock(t, font: "IslandDiagC", size: 8, color: .white)
-            liveClock(t, font: "IslandDiagD", size: 8, color: .yellow)
-            liveClock(t, font: "IslandDiagE", size: 8, color: .cyan)
-            liveClock(t, font: "IslandDiagF", size: 8, color: .pink)
+        HStack(spacing: 8) {
+            countdown(from: a.start, to: end, font: "IslandDiagC", size: 9, color: .white)
+            Circle().fill(Color.white).frame(width: 8, height: 8)
+                .mask(alignment: .trailing) {
+                    countdown(from: a.start, to: end, font: "IslandDiagC", size: 14, color: .white)
+                }
+            Circle().fill(Color.pink).frame(width: 8, height: 8)
+                .overlay(alignment: .trailing) {
+                    countdown(from: a.start, to: end, font: "IslandDiagC", size: 14, color: .black)
+                        .blendMode(.destinationOut)
+                }
+                .compositingGroup()
         }
     }
 }

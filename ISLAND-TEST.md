@@ -365,6 +365,28 @@ Look at results/screen/frames/ to see WHAT was drawn: words in Frank's red-lette
    45.3s  info activity ended
 ```
 
+
+### Run 10 (13 Oct 13:13): all black — the real rule
+
+- **What showed:** nothing at all, not even **A**, which is run 4's own font. That font drew perfectly in run 4.
+- **The one difference:** run 4's clock had **already started** when the island drew it. Every clock in runs 5–10 was set to start **in the future**, at its word's moment (or at 15 s for the checks).
+- **The rule, almost certainly:** the island never draws a live clock whose start is still in the future, not even once that moment arrives. That's the cause of six blank runs. It's my design again; I should have tested it first.
+- **Consequences:**
+  - "A clock per word that starts at the word's moment" is impossible.
+  - Runs 5–7's findings about masks and erasing are void: those clocks never drew in the first place.
+- **Picture:** `island-test/results/run10-26s-all-black.png`.
+
+**Run 11** uses only clocks that have **already started**: a countdown from launch to 25 s, which is the ordinary "arriving in 3:12" kind.
+- **Left of the camera:**
+  - **A:** run 4's font from launch, which should run.
+  - **E:** the same, but starting at 15 s, which should never draw. This confirms the rule.
+- **Right of the camera:**
+  - **D:** the countdown in the block font. Blocks until 25 s, then nothing.
+  - **M:** a white dot masked by the countdown. There until 25 s, then gone.
+  - **X:** a pink dot erased by the countdown. Hidden until 25 s, then appears.
+
+If M or X behaves, a running countdown can show and hide things, and the words idea can be rebuilt on countdowns.
+
 ### Run on the phone, screen recorded — 13 Oct 2026 13:14
 
 | side of the camera | what is there | seconds away | changes seen | changes a second | median gap | longest gap |
