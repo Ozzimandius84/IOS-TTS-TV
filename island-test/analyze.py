@@ -115,16 +115,17 @@ def clock(log_path, screen_path):
     Left of the camera = the hundredths stopwatch, right = the whole-second timer,
     both in the counting font."""
     rows = list(csv.DictReader(open(log_path, newline="")))
-    wall0, states, info, window, sent, word_window = None, [], [], None, 0, None
+    wall0, states, info, window, sent, word_window, windows = None, [], [], None, 0, None, []
     for r in rows:
         t, ev, det = int(r["ms"]) / 1000, r["event"], r["detail"]
         if ev == "info" and det.startswith("wall "):
             wall0 = float(det.split()[1])
         if ev == "info" and det.startswith("word_window "):
             word_window = tuple(float(x) for x in det.split()[1:3])
-        if ev == "phase_start" and r["phase"] in ("clock", "words"):
+            windows.append(word_window)
+        if ev == "phase_start" and r["phase"] in ("clock", "words", "windows"):
             window = [t, None]
-        if ev == "phase_end" and r["phase"] in ("clock", "words") and window:
+        if ev == "phase_end" and r["phase"] in ("clock", "words", "windows") and window:
             window[1] = t
         if ev == "state":
             states.append((t, det))
@@ -169,8 +170,7 @@ def clock(log_path, screen_path):
             longest = max([longest] + [y - x for x, y in zip(edges, edges[1:])])
         med = f"{statistics.median(gaps):.2f} s" if gaps else "–"
         out.append(f"| {label} | {clk} | {secs:.0f} | {seen} | {seen / max(secs, 1):.2f} | {med} | {longest:.1f} s |")
-    if word_window:
-        a, b = word_window
+    for wi, (a, b) in enumerate(windows):
         frames_in = [f for f in frames if a <= f[0] < b]
         ch, last = [], -1e9
         for f in frames_in:
@@ -181,11 +181,11 @@ def clock(log_path, screen_path):
         gaps = [y - x for x, y in zip(ch, ch[1:])]
         n_words = round((b - a) * 3)   # run 18: 3 a second
         out.append("")
-        out.append(f"**Words window {a:.0f}-{b:.0f} s ({n_words} words at 3 a second), right of the camera:** "
+        out.append(f"**Window {wi}, {a:.0f}-{b:.0f} s ({n_words} words at 3 a second), right of the camera:** "
                    f"{len(ch)} changes seen"
                    + (f", median gap {statistics.median(gaps):.2f} s, longest {max(gaps):.2f} s." if gaps else "."))
     out.append("")
-    out.append(f"Updates the app sent during the run: {sent} (should be 0). Away: "
+    out.append(f"Updates the app sent during the run: {sent}. Away: "
                + ", ".join(f"{a:.0f}-{b:.0f} s" for a, b in away))
     out.append("App state changes: " + (", ".join(f"{t:.1f}s {s}" for t, s in states) or "none"))
     if alive:
@@ -201,7 +201,7 @@ def clock(log_path, screen_path):
 
 if __name__ == "__main__":
     lp = sys.argv[1]
-    if any(r["phase"] in ("clock", "words") for r in csv.DictReader(open(lp, newline=""))):
+    if any(r["phase"] in ("clock", "words", "windows") for r in csv.DictReader(open(lp, newline=""))):
         clock(lp, sys.argv[2])
     else:
         main(lp, sys.argv[2] if len(sys.argv) > 2 else None)

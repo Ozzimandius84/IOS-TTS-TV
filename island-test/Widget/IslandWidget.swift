@@ -61,6 +61,12 @@ func wordLayer(_ t: Date, font: String, size: CGFloat) -> some View {
 /// Run 18, right of the camera: the words of Widget/WordList.swift (30 at 3 a
 /// second from 15 s), each one layer on the fast clock in its own font. Run 17
 /// proved three; this asks whether 30 land on time and each covers the last.
+/// Run 21: in "windows" mode the stack starts from the state's windowStart,
+/// which the app moves on with an update from the background every 30 s.
+func wordsStart(_ context: ActivityViewContext<IslandAttributes>) -> Date {
+    context.attributes.mode == "windows" ? context.state.windowStart : context.attributes.start
+}
+
 func countingWords(_ start: Date, size: CGFloat) -> some View {
     ZStack(alignment: .leading) {
         ForEach(0..<runWords.count, id: \.self) { i in
@@ -99,9 +105,9 @@ struct IslandLiveActivity: Widget {
     var body: some WidgetConfiguration {
         ActivityConfiguration(for: IslandAttributes.self) { context in
             Group {
-                if context.attributes.mode == "clock" {
+                if context.attributes.mode == "clock" || context.attributes.mode == "windows" {
                     VStack(spacing: 6) {
-                        countingWords(context.attributes.start, size: 30)
+                        countingWords(wordsStart(context), size: 30)
                         tenthsClock(context.attributes.start, size: 30)
                     }
                 } else {
@@ -117,9 +123,9 @@ struct IslandLiveActivity: Widget {
         } dynamicIsland: { context in
             DynamicIsland {
                 DynamicIslandExpandedRegion(.center) {
-                    if context.attributes.mode == "clock" {
+                    if context.attributes.mode == "clock" || context.attributes.mode == "windows" {
                         VStack(spacing: 4) {
-                            countingWords(context.attributes.start, size: 26)
+                            countingWords(wordsStart(context), size: 26)
                             tenthsClock(context.attributes.start, size: 26)
                         }
                     } else {
@@ -127,22 +133,22 @@ struct IslandLiveActivity: Widget {
                     }
                 }
             } compactLeading: {
-                if context.attributes.mode == "clock" {
+                if context.attributes.mode == "clock" || context.attributes.mode == "windows" {
                     // left of the camera: the hundredths stopwatch
                     tenthsClock(context.attributes.start, size: 14)
                 } else {
                     Text("F").font(islandFont(13)).foregroundColor(islandInk)
                 }
             } compactTrailing: {
-                if context.attributes.mode == "clock" {
+                if context.attributes.mode == "clock" || context.attributes.mode == "windows" {
                     // right of the camera: the counting font
-                    countingWords(context.attributes.start, size: 14)
+                    countingWords(wordsStart(context), size: 14)
                 } else {
                     pivotWord(context.state.word, size: 15)
                 }
             } minimal: {
-                if context.attributes.mode == "clock" {
-                    countingWords(context.attributes.start, size: 12)
+                if context.attributes.mode == "clock" || context.attributes.mode == "windows" {
+                    countingWords(wordsStart(context), size: 12)
                 } else {
                     Text(IslandWord.layout(context.state.word).2)
                         .font(islandFont(15)).foregroundColor(islandRed)

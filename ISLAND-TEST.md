@@ -746,6 +746,12 @@ Look at results/screen/frames/ to see WHAT was drawn: words in Frank's red-lette
   125.9s  info activity ended
 ```
 
+### Run 20 (13 Oct 14:35): 100 layers hold, with one hitch
+
+One hundred words as 100 layers: the island stayed up and showed **97 of the 100** at 3 a second from 15 s to 48 s. One hitch: at about 43 s it stalled for 2 s and skipped six words, then carried on in time. Thirty layers (run 18) had no such stall, so a hundred is near the edge of what the island redraws comfortably; the ceiling for being dismissed outright lies between 100 and 180. Pictures around the hitch: `island-test/results/run20-gap.png`.
+
+So a chapter cannot be one stack; it has to be windows of about 60 words, each armed by an update from the app. Run 21 asks the deciding question: does one update every 30 s, sent from the background, get through? (Run 3's updates froze after about four, but those came every quarter-second.)
+
 ### Run on the phone, screen recorded — 13 Oct 2026 14:35
 
 | side of the camera | what is there | seconds away | changes seen | changes a second | median gap | longest gap |

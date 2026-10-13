@@ -1,4 +1,4 @@
-// Built by font/build_words.py -- do not edit. Run 18: 100 words at 3 a second from 15 s.
+// Built by font/build_words.py -- do not edit. Run 18: 60 words at 3 a second from 15 s.
 let runWords: [(at: Double, font: String)] = [
     (15.0000, "IslandW01"),  // It
     (15.3333, "IslandW02"),  // is
@@ -60,47 +60,7 @@ let runWords: [(at: Double, font: String)] = [
     (34.0000, "IslandW58"),  // minds
     (34.3333, "IslandW59"),  // of
     (34.6667, "IslandW60"),  // the
-    (35.0000, "IslandW61"),  // surrou-
-    (35.3333, "IslandW62"),  // nding
-    (35.6667, "IslandW63"),  // fami-
-    (36.0000, "IslandW64"),  // lies
-    (36.3333, "IslandW65"),  // that
-    (36.6667, "IslandW66"),  // he
-    (37.0000, "IslandW67"),  // is
-    (37.3333, "IslandW68"),  // consi-
-    (37.6667, "IslandW69"),  // dered
-    (38.0000, "IslandW70"),  // the
-    (38.3333, "IslandW71"),  // righ-
-    (38.6667, "IslandW72"),  // tful
-    (39.0000, "IslandW73"),  // prop-
-    (39.3333, "IslandW74"),  // erty
-    (39.6667, "IslandW75"),  // of
-    (40.0000, "IslandW76"),  // some
-    (40.3333, "IslandW77"),  // one
-    (40.6667, "IslandW78"),  // or
-    (41.0000, "IslandW79"),  // other
-    (41.3333, "IslandW80"),  // of
-    (41.6667, "IslandW81"),  // their
-    (42.0000, "IslandW82"),  // daugh-
-    (42.3333, "IslandW83"),  // ters.
-    (42.6667, "IslandW84"),  // It
-    (43.0000, "IslandW85"),  // is
-    (43.3333, "IslandW86"),  // a
-    (43.6667, "IslandW87"),  // truth
-    (44.0000, "IslandW88"),  // univer-
-    (44.3333, "IslandW89"),  // sally
-    (44.6667, "IslandW90"),  // acknow-
-    (45.0000, "IslandW91"),  // ledged
-    (45.3333, "IslandW92"),  // that
-    (45.6667, "IslandW93"),  // a
-    (46.0000, "IslandW94"),  // single
-    (46.3333, "IslandW95"),  // man
-    (46.6667, "IslandW96"),  // in
-    (47.0000, "IslandW97"),  // posse-
-    (47.3333, "IslandW98"),  // ssion
-    (47.6667, "IslandW99"),  // of
-    (48.0000, "IslandW100"),  // a
 ]
 let runWordsPerSecond = 3
 let runWordLead = 15
-let runWordCount = 100
+let runWordCount = 60

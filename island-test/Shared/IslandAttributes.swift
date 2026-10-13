@@ -13,6 +13,11 @@ struct IslandAttributes: ActivityAttributes {
         var word: String
         var seq: Int
         var phase: String
+        /// Run 21 ("windows"): the words of Widget/WordList.swift run from
+        /// windowStart + lead; the app sends a new windowStart, from the
+        /// background, 10 s before each window to see whether the update arrives.
+        var windowStart: Date = .distantPast
+        var window: Int = 0
     }
     var title: String
     /// Run 4: when the island's own clock started, and which test this is

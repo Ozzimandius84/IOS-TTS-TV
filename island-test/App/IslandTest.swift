@@ -53,6 +53,7 @@ final class IslandTest {
         if args.contains("rates") { return "rates" }
         if args.contains("clock") { return "clock" }
         if args.contains("words") { return "words" }
+        if args.contains("windows") { return "windows" }
         return "diag"    // run 10, the default: the island's drawing rules
     }()
     /// Run 5: the island shows the words by its own switches at 3 a second, from 20 s after launch.
@@ -100,8 +101,8 @@ final class IslandTest {
             Task { await old.end(nil, dismissalPolicy: .immediate) }
         }
         do {
-            let first = IslandAttributes.ContentState(word: "ready", seq: 0, phase: "waiting")
             clockStart = Date()
+            let first = IslandAttributes.ContentState(word: "ready", seq: 0, phase: "waiting", windowStart: clockStart, window: 0)
             log("info", detail: String(format: "mode %@ clock_start %.4f", mode, clockStart.timeIntervalSince1970))
             var attrs = IslandAttributes(title: "Island test", start: clockStart, mode: mode)
             if mode == "words" {
@@ -149,7 +150,7 @@ final class IslandTest {
         guard !started, activity != nil else { return }
         started = true
         let th = Thread { [self] in
-            if self.mode == "clock" { self.runClock() } else if self.mode == "words" || self.mode == "diag" { self.runWords() } else { self.run() }
+            if self.mode == "clock" { self.runClock() } else if self.mode == "windows" { self.runWindows() } else if self.mode == "words" || self.mode == "diag" { self.runWords() } else { self.run() }
         }
         th.qualityOfService = .userInitiated
         th.start()
@@ -169,6 +170,39 @@ final class IslandTest {
         let wanted = clockStart.addingTimeInterval(RunWords.lead + Double(RunWords.count) / RunWords.perSecond + 10)
         Thread.sleep(until: min(endAt, wanted))
         log("phase_end", phase: "clock")
+        finish()
+    }
+
+    /// Run 21: window 0's words run from 15 s. Every 30 s the app, in the
+    /// background, sends ONE update moving windowStart on by 30 s, 10 s before
+    /// that window's words are due. Which windows the island shows says whether
+    /// a background update gets through (run 3 froze after ~4 rapid ones).
+    static let windowEvery = 30.0, windowCount = 5
+    private func runWindows() {
+        log("run_start", detail: "windows: \(Self.windowCount - 1) updates from the background, one every \(Int(Self.windowEvery)) s")
+        log("info", detail: String(format: "word_window %.3f %.3f", RunWords.lead, RunWords.lead + Double(RunWords.count) / RunWords.perSecond))
+        log("phase_start", phase: "windows")
+        logQ.async { self.phaseNow = "windows" }
+        for k in 1..<Self.windowCount {
+            let at = clockStart.addingTimeInterval(Double(k) * Self.windowEvery + 5)
+            Thread.sleep(until: at)
+            guard let a = activity else { break }
+            let ws = clockStart.addingTimeInterval(Double(k) * Self.windowEvery)
+            let a0 = Double(k) * Self.windowEvery + RunWords.lead
+            let state = IslandAttributes.ContentState(word: "window\(k)", seq: k, phase: "windows", windowStart: ws, window: k)
+            log("sent", seq: k, phase: "windows", detail: String(format: "window %d words %.0f-%.0f s", k, a0, a0 + Double(RunWords.count) / RunWords.perSecond))
+            log("info", detail: String(format: "word_window %.3f %.3f", a0, a0 + Double(RunWords.count) / RunWords.perSecond))
+            logQ.async { self.nSent += 1 }
+            let sem = DispatchSemaphore(value: 0)
+            Task {
+                await a.update(ActivityContent(state: state, staleDate: nil))
+                self.log("acked", seq: k, phase: "windows")
+                sem.signal()
+            }
+            _ = sem.wait(timeout: .now() + 20)
+        }
+        Thread.sleep(until: clockStart.addingTimeInterval(Double(Self.windowCount) * Self.windowEvery + RunWords.lead + 5))
+        log("phase_end", phase: "windows")
         finish()
     }
 
