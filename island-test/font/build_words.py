@@ -50,7 +50,7 @@ def main(base, wps=3.0, count=30, lead=15.0):
     open(f"{here}/../Widget/WordList.swift", "w").write(swift)
     open(f"{here}/../Shared/WordListMeta.swift", "w").write(
         "// Built by font/build_words.py -- do not edit.\n"
-        "enum RunWords { static let perSecond = %g; static let lead = %g; static let count = %d }\n"
+        "enum RunWords { static let perSecond: Double = %g; static let lead: Double = %g; static let count = %d }\n"
         % (wps, lead, len(words)))
     p = f"{here}/../project.yml"
     s = open(p).read()

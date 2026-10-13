@@ -30,10 +30,11 @@ say "1/6 xcodegen"
 ( cd "$HERE" && xcodegen generate ) || exit 1
 
 say "2/6 build the test app (signed with the same personal team as Frank)"
+APP="$HERE/build/Build/Products/Debug-iphoneos/IslandTest.app"
+rm -rf "$APP"   # run 18: a failed build must not leave the previous app to be installed
 ( cd "$HERE" && xcodebuild -project islandtest.xcodeproj -scheme IslandTest -configuration Debug \
     -destination "id=$DEVICE" -derivedDataPath build \
     -allowProvisioningUpdates -allowProvisioningDeviceRegistration build ) > "$RES/build.log" 2>&1
-APP="$HERE/build/Build/Products/Debug-iphoneos/IslandTest.app"
 if [ ! -d "$APP" ]; then echo "build failed -- last lines of results/build.log:"; grep -E "error:|BUILD FAILED" "$RES/build.log" | tail -20; exit 1; fi
 echo "built"
 
