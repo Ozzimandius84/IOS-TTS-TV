@@ -56,6 +56,10 @@ def build(base_path, words, out_path, family, which):
     base = TTFont(base_path)
     gs, cmap, hmtx = base.getGlyphSet(), base.getBestCmap(), base["hmtx"]
     sc = UPM / base["head"].unitsPerEm
+    # The period's width ("lead") is longer than the whole strip, so the digits
+    # BEFORE the period (minutes, seconds) draw their copy of the strip entirely
+    # out of the window, and only the hundredths digits after it count.
+    lead = (len(words) + 1) * SLOT * UPM
     pen = TTGlyphPen(None)
     for i, w in enumerate(words):
         piv = pivot_index(w)
@@ -76,7 +80,7 @@ def build(base_path, words, out_path, family, which):
             if (which == "red") == (j == piv):
                 rec = DecomposingRecordingPen(gs)
                 gs[g].draw(rec)
-                rec.replay(TransformPen(pen, (sc, 0, 0, sc, int(round(x)), 0)))
+                rec.replay(TransformPen(pen, (sc, 0, 0, sc, int(round(x - lead)), 0)))
             x += hmtx[g][0] * sc
     strip = pen.glyph()
 
@@ -101,7 +105,10 @@ def build(base_path, words, out_path, family, which):
     metrics = {}
     for n in names:
         glyf[n].recalcBounds(glyf)
-        metrics[n] = (0, getattr(glyf[n], "xMin", 0))   # zero width
+        # only the period has width (longer than the strip); see build_gate.py -- run 8 found
+        # zero-width text is not drawn. The strip is drawn that far to the LEFT of
+        # its origin so, after the period, word 0 lands at the text's left edge.
+        metrics[n] = (int(round((len(words) + 1) * SLOT * UPM)) if n == "period" else 0, getattr(glyf[n], "xMin", 0))
     fb.setupHorizontalMetrics(metrics)
     fb.setupHorizontalHeader(ascent=int(0.95 * UPM), descent=int(-0.3 * UPM))
     fb.setupNameTable({"familyName": family, "styleName": "Regular",

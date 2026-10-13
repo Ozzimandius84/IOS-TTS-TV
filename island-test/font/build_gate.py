@@ -6,8 +6,8 @@ updates, but draws it one character at a time (no ligatures). So the clock is
 never SHOWN here: it is used as an invisible switch.
 
 In IslandGate.ttf every digit 1-9 is one solid block covering a whole word
-slot, and 0, ':' and '.' draw nothing. Every glyph has zero width, so all the
-characters of a clock land on the same spot. A clock drawn in this font is
+slot, and 0, ':' and '.' draw nothing. Only the period has width (one word slot); the hundredths digits after it draw
+their block back across the text's own box. A clock drawn in this font is
 therefore a solid block while ANY of its digits is non-zero, and nothing once
 it reads all zeros. Used as a mask over a word:
 
@@ -25,7 +25,8 @@ from fontTools.pens.ttGlyphPen import TTGlyphPen
 
 UPM = 1000
 # the block: 6 em wide (wider than any word slot) and from below the descender to above the ascender
-X0, X1, Y0, Y1 = -500, 6000, -450, 1250
+SLOT = 4600   # the word slot, 4.6 em -- the period carries this width
+X0, X1, Y0, Y1 = -SLOT, 0, -450, 1250
 DIGITS = ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine"]
 
 
@@ -55,7 +56,11 @@ def main(out):
     for n in names:
         g = glyf[n]
         g.recalcBounds(glyf)
-        metrics[n] = (0, getattr(g, "xMin", 0))     # zero width: every character lands on the same spot
+        # Run 8 found zero-width text is not drawn at all. So only the PERIOD has width
+        # (one slot); every other character has none. In "00:12.34" the two digits
+        # after the period then sit at x = slot, and their blocks, drawn from -slot
+        # to 0 about their own origin, fill exactly the text's own box [0, slot].
+        metrics[n] = (SLOT if n == "period" else 0, getattr(g, "xMin", 0))
     fb.setupHorizontalMetrics(metrics)
     fb.setupHorizontalHeader(ascent=1000, descent=-250)
     fb.setupNameTable({"familyName": "IslandGate", "styleName": "Regular",

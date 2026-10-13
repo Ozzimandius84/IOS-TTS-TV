@@ -280,6 +280,18 @@ Look at results/screen/frames/ to see WHAT was drawn: words in Frank's red-lette
    43.7s  info activity ended
 ```
 
+
+### Run 8 (13 Oct 13:00), and a correction to runs 5–7
+
+- **What showed:** only the plain white dot. No words, and no check square at 15 s, even though that square was nothing more than a stopwatch drawn in our block font. The island was **not** closed early this time, so plain stopwatches are stable, as in run 4.
+- **The cause was my font design, not iOS.** To stack every character of a clock in one spot, I gave every character of the run-5-to-8 fonts **zero width**. Text with no width is simply not drawn. Run 4's font had normal widths and drew perfectly.
+- **Correction:** runs 5, 6 and 7 used the same zero-width fonts. So their findings ("a timer mask draws nothing", "a timer drawn over something erases nothing") are **not proven**. Those switches were probably empty for the same reason.
+- **Fix (run 9):** only the period has width; every other character has none.
+  - In "00:12.34" the two hundredths digits sit after the period. They're the only characters that draw inside the text's own box, and they're non-zero whenever the clock is running.
+  - The minutes and seconds digits draw their copy far out of the window.
+  - Checked on a normal computer (`island-test/font/window-preview.png`): a running clock shows the black block plus its one word and red letter, and a clock at zero shows nothing.
+- **Picture:** `island-test/results/run8-20s-nothing-drawn.png`.
+
 ### Run on the phone, screen recorded — 13 Oct 2026 13:02
 
 | side of the camera | what is there | seconds away | changes seen | changes a second | median gap | longest gap |
