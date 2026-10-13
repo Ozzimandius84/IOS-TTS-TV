@@ -188,6 +188,22 @@ Look at results/screen/frames/ to see WHAT was drawn: words in Frank's red-lette
    64.5s  info activity ended
 ```
 
+
+### Run 6 (13 Oct 12:48): masks made from timers draw nothing
+
+- **What showed:**
+  - The white dot (nothing over it) appeared, so the island was drawing.
+  - The red dot, hidden by a timer **mask**, never appeared. The words, which used the same masks, never appeared either.
+  - The blue dot, which has a timer **drawn over it**, appeared.
+- **Then iOS closed it again,** at 7 s this time, before the 25-second checks came round.
+- **Conclusion: a mask made from a live timer leaves nothing to draw, so masks are out.**
+- **Picture:** `island-test/results/run6-5s-dots.png`.
+
+**Run 7** uses no masks anywhere. Each word is erased by two timers drawn over it (destination-out): one solid until the word's start, one solid from its end. The check dots are:
+- **White:** nothing over it.
+- **Green:** erased until 15 s, so it should appear at 15 s.
+- **Blue:** erased from 25 s, so it should vanish at 25 s.
+
 ### Run on the phone, screen recorded — 13 Oct 2026 12:49
 
 | side of the camera | what is there | seconds away | changes seen | changes a second | median gap | longest gap |

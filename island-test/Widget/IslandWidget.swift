@@ -103,28 +103,40 @@ func wordStream(_ a: IslandAttributes, size: CGFloat) -> some View {
         ForEach(Array(a.words.enumerated()), id: \.offset) { i, w in
             let t0 = a.wordStart.addingTimeInterval(Double(i) / a.wps)
             let t1 = a.wordStart.addingTimeInterval(Double(i + 1) / a.wps)
+            // run 7: no masks (run 6: a timer mask draws nothing). Each word is ERASED
+            // by two timers drawn over it (destination-out): one solid until its
+            // start, one solid from its end -- so it shows only between them.
             pivotWord(w, size: size)
-                .mask(alignment: .leading) { gate(after: t0, before: nil, size: size) }
-                .mask(alignment: .leading) { gate(after: nil, before: t1, size: size) }
+                .overlay(alignment: .leading) {
+                    gate(after: nil, before: t0, size: size).foregroundColor(.black).blendMode(.destinationOut)
+                }
+                .overlay(alignment: .leading) {
+                    gate(after: t1, before: nil, size: size).foregroundColor(.black).blendMode(.destinationOut)
+                }
+                .compositingGroup()
         }
     }
     .frame(width: size * 4.6, alignment: .leading)
 }
 
-/// Diagnostics, left of the camera (run 6). Three dots:
-///  white -- no switch at all: if it shows, the island is drawing;
-///  red   -- hidden by a MASK made from a live timer, closes 25 s after launch;
-///  blue  -- erased by a live timer drawn over it (destination-out), from 25 s.
-/// Red or blue vanishing at 25 s tells which kind of switch the island obeys.
+/// Diagnostics, left of the camera (run 7). Three dots, no masks anywhere:
+///  white -- nothing over it: the island is drawing;
+///  green -- erased by a timer drawn over it UNTIL 15 s after launch (appears at 15 s);
+///  blue  -- erased by a timer drawn over it FROM 25 s after launch (vanishes at 25 s).
+/// (Run 6's red dot, hidden by a timer MASK, never drew at all.)
 func gateDots(_ a: IslandAttributes) -> some View {
-    let t = a.start.addingTimeInterval(25)
-    return HStack(spacing: 4) {
+    HStack(spacing: 4) {
         Circle().fill(Color.white).frame(width: 8, height: 8)
-        Circle().fill(islandRed).frame(width: 8, height: 8)
-            .mask(alignment: .leading) { gate(after: nil, before: t, size: 10) }
+        Circle().fill(Color.green).frame(width: 8, height: 8)
+            .overlay(alignment: .leading) {
+                gate(after: nil, before: a.start.addingTimeInterval(15), size: 10)
+                    .foregroundColor(.black).blendMode(.destinationOut)
+            }
+            .compositingGroup()
         Circle().fill(Color.blue).frame(width: 8, height: 8)
             .overlay(alignment: .leading) {
-                gate(after: t, before: nil, size: 10).foregroundColor(.black).blendMode(.destinationOut)
+                gate(after: a.start.addingTimeInterval(25), before: nil, size: 10)
+                    .foregroundColor(.black).blendMode(.destinationOut)
             }
             .compositingGroup()
     }
