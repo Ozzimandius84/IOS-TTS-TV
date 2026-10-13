@@ -2,6 +2,4 @@ build/
 *.xcodeproj/
 App/Info.plist
 Widget/Info.plist
-App/IslandTest.entitlements
-Widget/IslandWidget.entitlements
 results/screen/frames/
