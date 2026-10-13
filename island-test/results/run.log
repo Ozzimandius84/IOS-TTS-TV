@@ -1,0 +1,81 @@
+phone: A038DF4E-D58A-58C2-BB40-A5CA05413F03
+
+== 1/5 xcodegen ==
+⚙️  Generating plists...
+⚙️  Generating project...
+⚙️  Writing project...
+Created project at /Users/oscarwilson-brown/Documents/RUNNERS/TTSTV_IOS/IOS TTS TV/island-test/islandtest.xcodeproj
+
+== 2/5 build (signed with the same personal team as Frank) ==
+built
+
+== 3/5 install + open ==
+10:43:33  Acquired tunnel connection to device.
+10:43:33  Enabling developer disk image services.
+10:43:33  Acquired usage assertion.
+App installed:
+• bundleID: com.ttstv.frank.islandtest
+• installationURL: file:///private/var/containers/Bundle/Application/ADA25005-A4FA-4536-82D8-38B94D9DCB97/IslandTest.app/
+• launchServicesIdentifier: unknown
+• databaseUUID: 56F5C8F6-E127-4A22-ACC3-08D2D8867034
+• databaseSequenceNumber: 3064
+• options: 
+10:43:34  Acquired tunnel connection to device.
+10:43:34  Enabling developer disk image services.
+10:43:34  Acquired usage assertion.
+Launched application with com.ttstv.frank.islandtest bundle identifier.
+
+  >>> ON THE PHONE NOW: swipe up to the home screen and leave it alone for about 3 minutes. <<<
+      (the test starts when the app goes to the background; watch the word beside the camera)
+
+
+== 4/5 waiting for the run to finish ==
+  ...30 s
+  ...60 s
+  ...90 s
+  ...120 s
+  ...150 s
+  ...180 s
+finished after ~200 s
+10:46:58  Acquired tunnel connection to device.
+10:46:58  Enabling developer disk image services.
+10:46:58  Acquired usage assertion.
+File received from Device
+/Users/oscarwilson-brown/Documents/RUNNERS/TTSTV_IOS/IOS TTS TV/island-test/results/island-log.csv
+
+== 5/5 results ==
+### Dynamic Island (word beside the camera)
+
+| rate | sent | shown | median gap between shown words | longest gap | median delay sent → shown |
+|---|---|---|---|---|---|
+| 1 per second | 30 | 0 (0%) | – | 32.99 s | – |
+| 2 per second | 60 | 0 (0%) | – | 33.01 s | – |
+| 3 per second | 90 | 0 (0%) | – | 32.99 s | – |
+| 4 per second | 120 | 0 (0%) | – | 33.01 s | – |
+| 1 per sentence (every 4 s) | 10 | 0 (0%) | – | 40.00 s | – |
+
+### Lock screen / banner view
+
+| rate | sent | shown | median gap between shown words | longest gap | median delay sent → shown |
+|---|---|---|---|---|---|
+| 1 per second | 30 | 0 (0%) | – | 32.99 s | – |
+| 2 per second | 60 | 0 (0%) | – | 33.01 s | – |
+| 3 per second | 90 | 0 (0%) | – | 32.99 s | – |
+| 4 per second | 120 | 0 (0%) | – | 33.01 s | – |
+| 1 per sentence (every 4 s) | 10 | 0 (0%) | – | 40.00 s | – |
+
+Update calls returned: 310 of 310, median 2.0 ms, slowest 7 ms.
+Draw calls by region:   (c island compact, m island minimal, e island expanded, l lock screen)
+
+Phase windows (s since launch): 1/s 21.3–54.3, 2/s 54.3–87.3, 3/s 87.3–120.3, 4/s 120.3–153.3, sentence 153.3–193.3
+App state changes: 18.3s background, 127.9s foreground, 131.9s background, 138.4s foreground, 142.1s background, 186.8s foreground, 189.3s background, 201.0s foreground
+
+```
+    0.0s  info iPhone iOS 26.6.1
+    0.0s  info live activities enabled=true
+    0.8s  info audio playing
+    0.9s  info activity started
+   18.3s  run_start planned 310 updates
+  197.3s  run_end
+  197.3s  info activity ended
+```
