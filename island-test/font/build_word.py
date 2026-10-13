@@ -19,6 +19,8 @@ from fontTools.pens.ttGlyphPen import TTGlyphPen
 from fontTools.ttLib import TTFont
 
 RED = (1.0, 0x6a / 255, 0x5e / 255, 1.0)
+INK = (0xf3 / 255, 0xef / 255, 0xe6 / 255, 1.0)
+BLACK = (0.0, 0.0, 0.0, 1.0)
 DIGITS = ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine"]
 LETTER = re.compile(r"[A-Za-zÀ-ɏ0-9']")
 
@@ -58,7 +60,7 @@ def main(base_path, word, out, family="IslandWord"):
             x += hmtx[g][0] * sc
         return pen.glyph(), int(round(x))
 
-    names = [".notdef", "space", *DIGITS, "colon", "period", "w.ink", "w.red"]
+    names = [".notdef", "space", *DIGITS, "colon", "period", "w.box", "w.ink", "w.red"]
     glyphs = {n: TTGlyphPen(None).glyph() for n in names}
     metrics = {n: (0, 0) for n in names}
     metrics[".notdef"] = (500, 0)
@@ -70,7 +72,12 @@ def main(base_path, word, out, family="IslandWord"):
         glyphs[d], metrics[d] = draw("all")[0], (0, 0)
     glyphs["w.ink"], metrics["w.ink"] = draw("ink")[0], (0, 0)
     glyphs["w.red"], metrics["w.red"] = draw("red")[0], (0, 0)
-    colr = {d: [("w.ink", 0xFFFF), ("w.red", 0)] for d in DIGITS[1:]}
+    # run 17: the cover is a layer of the word itself -- a black box 4.6 em wide
+    # under the ink, so one Text per word hides the word before it.
+    box = TTGlyphPen(None)
+    box.moveTo((-200, -300)); box.lineTo((-200, 1000)); box.lineTo((4600, 1000)); box.lineTo((4600, -300)); box.closePath()
+    glyphs["w.box"], metrics["w.box"] = box.glyph(), (0, 0)
+    colr = {d: [("w.box", 2), ("w.ink", 1), ("w.red", 0)] for d in DIGITS[1:]}
 
     fb = FontBuilder(upm, isTTF=True)
     fb.setupGlyphOrder(names)
@@ -91,7 +98,7 @@ def main(base_path, word, out, family="IslandWord"):
                 usWinAscent=int(os2.usWinAscent * sc), usWinDescent=int(os2.usWinDescent * sc))
     fb.setupPost()
     fb.setupCOLR(colr)
-    fb.setupCPAL([[RED]])
+    fb.setupCPAL([[RED, INK, BLACK]])
     fb.save(f"{out}/{family}.ttf")
     print(f"{family}.ttf: digits 1-9 = {word!r}, red letter {word[piv]!r}, advance {adv}")
 
