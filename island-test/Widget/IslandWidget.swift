@@ -43,11 +43,14 @@ func pivotWord(_ piece: String, size: CGFloat) -> some View {
 func countingWords(_ start: Date, size: CGFloat) -> some View {
     // run 13, ONE change on this side: the timer starts 15 s in the FUTURE.
     // Same font, same frame. Words appearing from 15 s = a future start is fine.
+    // run 14, ONE change on this side vs run 13: the one-word font (digits 1-9 = "truth",
+    // red r by Frank's rule, 0 = nothing). Expect nothing until 15 s, then the word.
     Text(timerInterval: start.addingTimeInterval(15)...start.addingTimeInterval(255), countsDown: false, showsHours: false)
-        .font(.custom("IslandCount", size: size))
+        .font(.custom("IslandWord", size: size))
         .foregroundColor(islandInk)
         .lineLimit(1)
-        .frame(width: size * 4.6, alignment: .leading)
+        .frame(width: size * 2.7, alignment: .leading)
+        .clipped()
 }
 
 /// The same counting font on a stopwatch asking for hundredths (iOS 18's live
@@ -57,10 +60,10 @@ func countingWords(_ start: Date, size: CGFloat) -> some View {
 @ViewBuilder
 func tenthsClock(_ start: Date, size: CGFloat) -> some View {
     if #available(iOS 18.0, *) {
-        // run 13, ONE change on this side: the block font instead of the digit font.
-        // Same clock, same start, same frame. Blocks appearing = block fonts draw.
+        // run 14, ONE change on this side vs run 13: the stopwatch starts 15 s in the FUTURE.
+        // Expect nothing until 15 s (all zeros), then blocks moving at hundredths.
         Text(TimeDataSource<Date>.currentDate,
-             format: SystemFormatStyle.Stopwatch(startingAt: start, showsHours: false,
+             format: SystemFormatStyle.Stopwatch(startingAt: start.addingTimeInterval(15), showsHours: false,
                                                  maxFieldCount: 4, maxPrecision: .milliseconds(10)))
             .font(.custom("IslandDiagC", size: size))
             .foregroundColor(islandInk)
