@@ -12,6 +12,7 @@
     Documents/island-done.txt appears when the run is over.  */
 import ActivityKit
 import AVFoundation
+import CoreBluetooth
 import QuartzCore
 import UIKit
 
@@ -60,6 +61,7 @@ final class IslandTest {
     static let wordLead = 20.0, wordsPerSecond = 3.0, wordCount = 30   // run 6: 30 (run 5's 90 got the activity dismissed)
     private var clockStart = Date()
     private var bgTask: UIBackgroundTaskIdentifier = .invalid
+    private var bt: BTScan?
     private let logQ = DispatchQueue(label: "islandtest.log")
     private var handle: FileHandle?
     // touched only on logQ
@@ -99,6 +101,8 @@ final class IslandTest {
             // other background reason (iOS lends one for 30 s when the activity starts, which
             // is why every run froze after ~30 s). A UIKit background task is such a reason,
             // and while audio plays iOS gives it unlimited time. Held for the whole run.
+            // Run 31: Bluetooth scanning in the background -- a reason to run that is not media.
+            DispatchQueue.main.async { self.bt = BTScan { msg in self.log("info", detail: "bluetooth " + msg) } }
             DispatchQueue.main.async {
                 self.bgTask = UIApplication.shared.beginBackgroundTask(withName: "island-words") {
                     self.log("info", detail: "background task expired")
@@ -348,5 +352,30 @@ final class IslandTest {
         let url = FileManager.default.temporaryDirectory.appendingPathComponent("island-tone.wav")
         try? d.write(to: url)
         return url
+    }
+}
+
+
+/// Run 31: scans for any peripheral for the whole run (bluetooth-central background mode),
+/// so the process holds a background reason other than audio.
+final class BTScan: NSObject, CBCentralManagerDelegate {
+    private var central: CBCentralManager!
+    private let say: (String) -> Void
+    private var seen = 0
+    init(_ say: @escaping (String) -> Void) {
+        self.say = say
+        super.init()
+        central = CBCentralManager(delegate: self, queue: nil)
+    }
+    func centralManagerDidUpdateState(_ c: CBCentralManager) {
+        say("state \(c.state.rawValue)")
+        if c.state == .poweredOn {
+            c.scanForPeripherals(withServices: [CBUUID(string: "180A")], options: nil)   // device information service; background scans need a service
+            say("scanning")
+        }
+    }
+    func centralManager(_ c: CBCentralManager, didDiscover p: CBPeripheral, advertisementData: [String: Any], rssi: NSNumber) {
+        seen += 1
+        if seen <= 3 { say("saw a peripheral") }
     }
 }

@@ -1175,6 +1175,12 @@ Look at results/screen/frames/ to see WHAT was drawn: words in Frank's red-lette
    70.9s  info activity state dismissed
 ```
 
+### Run 30 (16:11): a stale date is not delivered to the app
+
+Same three windows, then refused. The app never received a "stale" state (iOS marks the content stale for the widget; it does not tell the app), so there is no delivery and no 30 s permission. Three ways round the rule are now closed: spacing, a UIKit background task, a stale date.
+
+Two doors remain. **Push updates** (the way Apple means it: a relay pushes each window through APNs; the app need not be awake) -- certain, needs a relay, which is a product decision. **Another background reason without a server**: Bluetooth. Run 31 adds the `bluetooth-central` background mode and scans for peripherals for the whole run; if liveactivitiesd counts that as "more than playing media", the updates go through with no server. Cost to a user: one "Allow Bluetooth" prompt.
+
 ### Run on the phone, screen recorded — 13 Oct 2026 16:12
 
 | side of the camera | what is there | seconds away | changes seen | changes a second | median gap | longest gap |

@@ -35,7 +35,8 @@ targets:
         CFBundleVersion: "1"
         UILaunchScreen: {}
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
-        UIBackgroundModes: [audio]
+        UIBackgroundModes: [audio, bluetooth-central]   # run 31: a second background reason
+        NSBluetoothAlwaysUsageDescription: Island test only -- a second background reason so the island can be updated while audio plays.
         NSSupportsLiveActivities: true
         UIFileSharingEnabled: true
         LSSupportsOpeningDocumentsInPlace: true
@@ -47,6 +48,7 @@ targets:
       - target: IslandWidget
       - sdk: ActivityKit.framework
       - sdk: AVFoundation.framework
+      - sdk: CoreBluetooth.framework
   IslandWidget:
     type: app-extension
     platform: iOS
