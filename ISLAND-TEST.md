@@ -1352,6 +1352,12 @@ Look at results/screen/frames/ to see WHAT was drawn: words in Frank's red-lette
    41.6s  info activity state dismissed
 ```
 
+### Run V (18:16): one font for all the words -- the island honours the axis
+
+Five words in one variable font, each layer the same font at a different axis value: **It, is, a, truth, single**, in order, one every 3 s from 15 s, nothing from the neighbours showing (they sit 42 pt above and below, outside the pill). Contact sheet: `island-test/results/runV-sheet.png`. (The first attempt ran in the old diag mode because the launch argument did not reach the app; the app now defaults to clock mode.)
+
+With run B this closes the memory gate: a chapter is one font, built on the Mac when the book is prepared, and a window can be 100 words (run B: 100 layers on 2 fonts lived). The fonts-at-runtime gate shrinks to: the widget loads one file the app put in a shared folder. The permission gate (push) is unchanged, but at 100-word windows it is one push every 30 s rather than every 10.
+
 ### Run on the phone, screen recorded — 13 Oct 2026 18:16
 
 | side of the camera | what is there | seconds away | changes seen | changes a second | median gap | longest gap |
