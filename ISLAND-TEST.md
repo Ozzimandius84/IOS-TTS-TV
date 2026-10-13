@@ -62,7 +62,9 @@ bash island-test/run.sh
 - **Camera prompt:** the first time, the Mac may ask whether Terminal may use the Camera. That's the phone's screen feed, so click Allow.
 - **On the phone:** when it prints **ON THE PHONE NOW**, swipe up to the home screen and leave the phone alone. Don't tap the island, because that opens the app.
 
-The order is slowest first: once every 4 s for 40 s, then 1, 2, 3 and 4 a second for 30 s each, with 10 s of rest between.
+`bash island-test/run.sh` now runs **run 4, the island's own clock**. The app sends no updates at all; the island shows two clocks drawn in the counting font (`island-test/font/`, built by `font/build_font.py`), in which a clock string such as "0:07" or "0:07.25" is drawn as the one word spoken at that moment, with its red letter on a fixed column. Left of the camera is a stopwatch asking for hundredths; right of it is the whole-second timer. The recorder times each side separately. The test speaks at a steady 3 words a second. The test font is DejaVu Serif, because that is what the build machine had.
+
+`bash island-test/run.sh rates` runs runs 1–3 again: words sent at set rates, slowest first (once every 4 s for 40 s, then 1, 2, 3 and 4 a second for 30 s each, with 10 s of rest between).
 
 ## How we got here (three runs, 13 Oct)
 

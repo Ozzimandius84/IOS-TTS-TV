@@ -1,6 +1,8 @@
 /*  The Live Activity: one word, the red pivot letter always in the same
     column, in a fixed-width slot so the island does not grow and shrink.
-    Font as the play-bar drafts draw it (Osca 13 Oct 11:16: the monospace was wrong).  */
+    Font as the play-bar drafts draw it (Osca 13 Oct 11:16: the monospace was wrong).
+    Run 4 (mode clock): the island's own timer drawn in the counting font right of
+    the camera, a hundredths stopwatch left of it -- no updates from the app at all.  */
 import ActivityKit
 import SwiftUI
 import WidgetKit
@@ -32,28 +34,93 @@ func pivotWord(_ piece: String, size: CGFloat) -> some View {
     .lineLimit(1)
 }
 
+// MARK: run 4 -- the island's own clock, with no updates from the app
+
+/// The counting font (font/IslandCount.ttf, built by font/build_font.py): the
+/// running clock "0:07" is drawn as the ONE word spoken at 7 s, its red letter on
+/// a fixed column. iOS ticks the clock itself, so the word moves with no update.
+/// Width: the font gives every word the same advance, 4.6 x the font size.
+func countingWords(_ start: Date, size: CGFloat) -> some View {
+    Text(timerInterval: start...start.addingTimeInterval(240), countsDown: false, showsHours: false)
+        .font(.custom("IslandCount", size: size))
+        .foregroundColor(islandInk)
+        .lineLimit(1)
+        .frame(width: size * 4.6, alignment: .leading)
+}
+
+/// The same counting font on a stopwatch asking for hundredths (iOS 18's live
+/// stopwatch style): if the island redraws it faster than once a second, the
+/// word changes in time with speech. If the font does not recognise the
+/// stopwatch's format, its digits show instead -- and the pictures tell us the format.
+@ViewBuilder
+func tenthsClock(_ start: Date, size: CGFloat) -> some View {
+    if #available(iOS 18.0, *) {
+        Text(TimeDataSource<Date>.currentDate,
+             format: SystemFormatStyle.Stopwatch(startingAt: start, showsHours: false,
+                                                 maxFieldCount: 4, maxPrecision: .milliseconds(10)))
+            .font(.custom("IslandCount", size: size))
+            .foregroundColor(islandInk)
+            .lineLimit(1)
+            .frame(width: size * 4.6, alignment: .leading)
+    } else {
+        Text(timerInterval: start...start.addingTimeInterval(3600), countsDown: false, showsHours: false)
+            .font(.system(size: size, weight: .semibold).monospacedDigit())
+            .foregroundColor(islandInk)
+    }
+}
+
 struct IslandLiveActivity: Widget {
     var body: some WidgetConfiguration {
         ActivityConfiguration(for: IslandAttributes.self) { context in
-            VStack(spacing: 4) {
-                pivotWord(context.state.word, size: 34)
-                Text("\(context.state.phase) · #\(context.state.seq)")
-                    .font(.caption).foregroundStyle(.secondary)
+            Group {
+                if context.attributes.mode == "clock" {
+                    VStack(spacing: 6) {
+                        countingWords(context.attributes.start, size: 30)
+                        tenthsClock(context.attributes.start, size: 30)
+                    }
+                } else {
+                    VStack(spacing: 4) {
+                        pivotWord(context.state.word, size: 34)
+                        Text("\(context.state.phase) · #\(context.state.seq)")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
+                }
             }
             .padding()
             .activityBackgroundTint(.black)
         } dynamicIsland: { context in
             DynamicIsland {
                 DynamicIslandExpandedRegion(.center) {
-                    pivotWord(context.state.word, size: 28)
+                    if context.attributes.mode == "clock" {
+                        VStack(spacing: 4) {
+                            countingWords(context.attributes.start, size: 26)
+                            tenthsClock(context.attributes.start, size: 26)
+                        }
+                    } else {
+                        pivotWord(context.state.word, size: 28)
+                    }
                 }
             } compactLeading: {
-                Text("F").font(islandFont(13)).foregroundColor(islandInk)
+                if context.attributes.mode == "clock" {
+                    // left of the camera: the hundredths stopwatch
+                    tenthsClock(context.attributes.start, size: 14)
+                } else {
+                    Text("F").font(islandFont(13)).foregroundColor(islandInk)
+                }
             } compactTrailing: {
-                pivotWord(context.state.word, size: 15)
+                if context.attributes.mode == "clock" {
+                    // right of the camera: the counting font
+                    countingWords(context.attributes.start, size: 14)
+                } else {
+                    pivotWord(context.state.word, size: 15)
+                }
             } minimal: {
-                Text(IslandWord.layout(context.state.word).2)
-                    .font(islandFont(15)).foregroundColor(islandRed)
+                if context.attributes.mode == "clock" {
+                    countingWords(context.attributes.start, size: 12)
+                } else {
+                    Text(IslandWord.layout(context.state.word).2)
+                        .font(islandFont(15)).foregroundColor(islandRed)
+                }
             }
         }
     }

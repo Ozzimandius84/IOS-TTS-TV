@@ -110,5 +110,77 @@ def main(log_path, screen_path):
     print("\n".join(out))
 
 
+def clock(log_path, screen_path):
+    """Run 4: the app sends nothing; does the island's own clock keep drawing words?
+    Left of the camera = the hundredths stopwatch, right = the whole-second timer,
+    both in the counting font."""
+    rows = list(csv.DictReader(open(log_path, newline="")))
+    wall0, states, info, window, sent = None, [], [], None, 0
+    for r in rows:
+        t, ev, det = int(r["ms"]) / 1000, r["event"], r["detail"]
+        if ev == "info" and det.startswith("wall "):
+            wall0 = float(det.split()[1])
+        if ev == "phase_start" and r["phase"] == "clock":
+            window = [t, None]
+        if ev == "phase_end" and r["phase"] == "clock" and window:
+            window[1] = t
+        if ev == "state":
+            states.append((t, det))
+        if ev == "sent":
+            sent += 1
+        if ev in ("info", "error", "run_start", "run_end"):
+            info.append(f"{t:7.1f}s  {ev} {det}".rstrip())
+    frames = [(float(r["wall"]) - wall0, float(r["left"]), float(r["right"]))
+              for r in csv.DictReader(open(screen_path))]
+    # the stretches the app was away (the island is only shown then)
+    away, since = [], None
+    for t, st in states:
+        if st == "background" and since is None:
+            since = t
+        elif st == "foreground" and since is not None:
+            away.append((since, t)); since = None
+    if since is not None:
+        away.append((since, window[1] if window and window[1] else frames[-1][0]))
+    away = [(a + 1.0, b) for a, b in away if b - a > 3]   # skip the island's own opening animation
+
+    out = ["| side of the camera | clock | seconds away | changes seen | changes a second | median gap | longest gap |",
+           "|---|---|---|---|---|---|---|"]
+    for col, label, clk in ((1, "left", "hundredths stopwatch"), (2, "right", "whole-second timer")):
+        diffs = sorted(f[col] for f in frames)
+        thr = max(1.0, 4 * diffs[len(diffs) // 2])
+        changes, last = [], -1e9
+        for f in frames:
+            if f[col] > thr:
+                if f[0] - last > 0.05:
+                    changes.append(f[0])
+                last = f[0]
+        seen, gaps, secs = 0, [], 0.0
+        longest = 0.0
+        for a, b in away:
+            c = [t for t in changes if a <= t < b]
+            seen += len(c)
+            secs += b - a
+            gaps += [y - x for x, y in zip(c, c[1:])]
+            edges = [a] + c + [b]
+            longest = max([longest] + [y - x for x, y in zip(edges, edges[1:])])
+        med = f"{statistics.median(gaps):.2f} s" if gaps else "–"
+        out.append(f"| {label} | {clk} | {secs:.0f} | {seen} | {seen / max(secs, 1):.2f} | {med} | {longest:.1f} s |")
+    out.append("")
+    out.append(f"Updates the app sent during the run: {sent} (should be 0). Away: "
+               + ", ".join(f"{a:.0f}-{b:.0f} s" for a, b in away))
+    out.append("App state changes: " + (", ".join(f"{t:.1f}s {s}" for t, s in states) or "none"))
+    out.append("Look at results/screen/frames/ to see WHAT was drawn: words in Frank's red-letter "
+               "style mean the font worked; digits mean it did not match the clock's format.")
+    out.append("")
+    out.append("```")
+    out.extend(info)
+    out.append("```")
+    print("\n".join(out))
+
+
 if __name__ == "__main__":
-    main(sys.argv[1], sys.argv[2] if len(sys.argv) > 2 else None)
+    lp = sys.argv[1]
+    if any(r["phase"] == "clock" for r in csv.DictReader(open(lp, newline=""))):
+        clock(lp, sys.argv[2])
+    else:
+        main(lp, sys.argv[2] if len(sys.argv) > 2 else None)

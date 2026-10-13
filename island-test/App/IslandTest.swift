@@ -45,6 +45,11 @@ final class IslandTest {
     private var activity: Activity<IslandAttributes>?
     private var player: AVAudioPlayer?
     private var started = false
+    /// "clock" (run 4, the default): the island runs its own timer in the counting
+    /// font and a hundredths stopwatch, and the app sends NO updates.
+    /// "rates" (runs 1-3): pass `rates` as a launch argument.
+    let mode = ProcessInfo.processInfo.arguments.contains("rates") ? "rates" : "clock"
+    private var clockStart = Date()
     private let logQ = DispatchQueue(label: "islandtest.log")
     private var handle: FileHandle?
     // touched only on logQ
@@ -88,7 +93,9 @@ final class IslandTest {
         }
         do {
             let first = IslandAttributes.ContentState(word: "ready", seq: 0, phase: "waiting")
-            let a = try Activity.request(attributes: IslandAttributes(title: "Island test"),
+            clockStart = Date()
+            log("info", detail: String(format: "mode %@ clock_start %.4f", mode, clockStart.timeIntervalSince1970))
+            let a = try Activity.request(attributes: IslandAttributes(title: "Island test", start: clockStart, mode: mode),
                                          content: ActivityContent(state: first, staleDate: nil),
                                          pushType: nil)
             activity = a
@@ -110,7 +117,7 @@ final class IslandTest {
             var s = "Island test\n\n"
             if !note.isEmpty { return s + note }
             switch phaseNow {
-            case "waiting": s += "Swipe up to the home screen now and leave the phone alone for about 4 minutes.\n\nDon't tap the island -- it opens this app."
+            case "waiting": s += "Swipe up to the home screen now and leave the phone alone for about 3 minutes.\n\nDon't tap the island -- it opens this app."
             case "done": s += "Finished. The log is saved."
             default: s += "Running: \(phaseNow)"
             }
@@ -125,9 +132,22 @@ final class IslandTest {
     func beginIfReady() {
         guard !started, activity != nil else { return }
         started = true
-        let th = Thread { [self] in self.run() }
+        let th = Thread { [self] in if self.mode == "clock" { self.runClock() } else { self.run() } }
         th.qualityOfService = .userInitiated
         th.start()
+    }
+
+    /// Run 4: send nothing; just stay alive (the tone keeps playing) while the
+    /// island's own timer ticks, then end. The font covers 240 s from launch.
+    private func runClock() {
+        log("run_start", detail: "clock: no updates will be sent")
+        log("phase_start", phase: "clock")
+        logQ.async { self.phaseNow = "clock" }
+        let endAt = clockStart.addingTimeInterval(225)
+        let wanted = Date().addingTimeInterval(150)
+        Thread.sleep(until: min(endAt, wanted))
+        log("phase_end", phase: "clock")
+        finish()
     }
 
     private func run() {

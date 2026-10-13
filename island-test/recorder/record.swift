@@ -4,7 +4,7 @@
 
         record <out dir> [max seconds]
 
-    <out dir>/screen.csv      wall_seconds,diff   one row per frame
+    <out dir>/screen.csv      wall_seconds,diff,left,right   one row per frame (left/right of the camera)
     <out dir>/info.txt        device, frame size, the strip measured
     <out dir>/full-start.png  one whole frame, to check the island is in the picture
     <out dir>/frames/<ms>.png   the island strip, whenever it changed (<= 10 a second)
@@ -68,7 +68,7 @@ final class Recorder: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate {
 
     init(_ dir: URL) {
         let url = dir.appendingPathComponent("screen.csv")
-        FileManager.default.createFile(atPath: url.path, contents: Data("wall,diff\n".utf8))
+        FileManager.default.createFile(atPath: url.path, contents: Data("wall,diff,left,right\n".utf8))
         csv = try! FileHandle(forWritingTo: url)
         csv.seekToEndOfFile()
     }
@@ -94,7 +94,9 @@ final class Recorder: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate {
         let y0 = Int(Double(h) * 0.008), y1 = Int(Double(h) * 0.065)
         let x0 = Int(Double(w) * 0.08), x1 = Int(Double(w) * 0.92)
         var cur = [Int32]()
+        var isLeft = [Bool]()   // run 4: left of the camera vs right of it, measured apart
         cur.reserveCapacity(((y1 - y0) / 3 + 1) * ((x1 - x0) / 3 + 1))
+        let mid = w / 2
         var y = y0
         while y < y1 {
             var x = x0
@@ -102,18 +104,25 @@ final class Recorder: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate {
             while x < x1 {
                 let p = row + x * 4
                 cur.append(Int32(p[0]) + Int32(p[1]) + Int32(p[2]))
+                isLeft.append(x < mid)
                 x += 3
             }
             y += 3
         }
-        var diff = 0.0
+        var diff = 0.0, left = 0.0, right = 0.0
         if prev.count == cur.count {
-            var s: Int64 = 0
-            for i in 0..<cur.count { s += Int64(abs(cur[i] - prev[i])) }
+            var s: Int64 = 0, sl: Int64 = 0, sr: Int64 = 0, nl = 0, nr = 0
+            for i in 0..<cur.count {
+                let d = Int64(abs(cur[i] - prev[i]))
+                s += d
+                if isLeft[i] { sl += d; nl += 1 } else { sr += d; nr += 1 }
+            }
             diff = Double(s) / Double(cur.count)
+            left = Double(sl) / Double(max(nl, 1))
+            right = Double(sr) / Double(max(nr, 1))
         }
         prev = cur
-        csv.write(Data(String(format: "%.4f,%.3f\n", wall, diff).utf8))
+        csv.write(Data(String(format: "%.4f,%.3f,%.3f,%.3f\n", wall, diff, left, right).utf8))
         frames += 1
 
         let full = CIImage(cvPixelBuffer: pb)

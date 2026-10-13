@@ -50,11 +50,17 @@ targets:
   IslandWidget:
     type: app-extension
     platform: iOS
-    sources: [Widget, Shared]
+    sources:
+      - Widget
+      - Shared
+      # run 4: the counting font (built by font/build_font.py)
+      - path: font/IslandCount.ttf
+        buildPhase: resources
     info:
       path: Widget/Info.plist
       properties:
         CFBundleDisplayName: Island Test
+        UIAppFonts: [IslandCount.ttf]
         CFBundleShortVersionString: "1.0"
         CFBundleVersion: "1"
         NSExtension:

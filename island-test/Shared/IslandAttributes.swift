@@ -15,6 +15,11 @@ struct IslandAttributes: ActivityAttributes {
         var phase: String
     }
     var title: String
+    /// Run 4: when the island's own clock started, and which test this is
+    /// ("clock" = the counting font and the tenths stopwatch, no updates at all;
+    /// "rates" = runs 1-3, words sent at set rates).
+    var start: Date
+    var mode: String
 }
 
 /// How a word is laid out in the island (Osca, 13 Oct 11:04): long words are
