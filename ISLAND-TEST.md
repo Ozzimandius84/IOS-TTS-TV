@@ -25,7 +25,7 @@ The final run, from the Mac's recording of the phone's screen and the phone's ow
 
 Pictures: `island-test/results/island-22s-moving.png` shows a live word. `island-test/results/island-100s-frozen.png` shows the same word still there 80 s later, while the app sent 120 more.
 
-**Since then (runs 4–17, same day):** the island will show words with no updates at all, if the words are drawn by the island's own clocks. A stopwatch the island runs itself redraws 50 times a second for as long as you like; put it in a font whose digits draw a word, and that word appears at the moment you chose, while the app is in the background. Run 17 showed three words landing on the hundredth of a second, each one replacing the last. Details and what is still unproven are under "Run 16" and "Run 17" below.
+**Since then (runs 4–17, same day):** the island will show words with no updates at all, if the words are drawn by the island's own clocks. A stopwatch the island runs itself redraws 50 times a second for as long as you like; put it in a font whose digits draw a word, and that word appears at the moment you chose, while the app is in the background. Run 17 showed three words landing on the hundredth of a second, each one replacing the last; run 18 showed thirty in a row at 3 a second, every one on time. Details and what is still unproven are under "Run 16" and "Run 17" below.
 
 What else might work is in `ISLAND-OPTIONS.md`.
 
@@ -675,6 +675,16 @@ Look at results/screen/frames/ to see WHAT was drawn: words in Frank's red-lette
    55.2s  info activity ended
    55.2s  info activity state dismissed
 ```
+
+### Run 18 (13 Oct 14:25): 30 words at 3 a second, all on time
+
+(The 14:22 block above is not a run: the run-18 build failed on a type error and the script installed the run-17 app again. The script now deletes the old app before building, so a failed build stops.)
+
+Thirty words (the opening of Pride and Prejudice, long words split in two), one font each, stacked as 30 layers on the hundredths stopwatch from 15 s. With the app in the background and sending nothing, the island showed **every one of the 30, in order, 3 a second**: 28 changes measured in the 15–25 s window, median gap 0.33 s, longest 0.55 s (two words were caught mid-crossfade, which merges two changes into one). Every word carried Frank's red letter, in a fixed-width slot, and each one covered the word before it. The left side's check word landed at 15.9 s as set. Thirty layers cost nothing visible. Contact sheet: `island-test/results/run18-sheet.png`.
+
+One thing to know: the island crossfades a changed Text over about 0.2 s, so at 3 a second each word is in transition for part of its life (the two smudged frames on the sheet). Whether that reads as motion or blur at reading speed is a question for the real font and the eye, not for the recorder.
+
+So: the island shows a run of words at reading speed with no help from the app. Next, run 19: how many layers the island will take before it refuses (300 words = 100 s of reading), then whether a background update every minute or so gets through to re-arm the next window.
 
 ### Run on the phone, screen recorded — 13 Oct 2026 14:25
 
