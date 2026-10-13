@@ -69,11 +69,62 @@ func tenthsClock(_ start: Date, size: CGFloat) -> some View {
     }
 }
 
+// MARK: run 5 -- words shown by the island's own switches, no clock visible
+
+/// An invisible switch: a live timer drawn in the gate font (font/IslandGate.ttf),
+/// which is a solid block while any digit is non-zero and nothing at all-zero.
+/// `after`: counts up from `t` -> solid only once `t` has passed.
+/// `before`: counts down to `t` -> solid only until `t`.
+@ViewBuilder
+func gate(after t: Date?, before u: Date?, size: CGFloat) -> some View {
+    if #available(iOS 18.0, *) {
+        if let t {
+            Text(TimeDataSource<Date>.currentDate,
+                 format: SystemFormatStyle.Timer(countingUpIn: t..<t.addingTimeInterval(36000), showsHours: false,
+                                                 maxFieldCount: 4, maxPrecision: .milliseconds(10)))
+                .font(.custom("IslandGate", size: size))
+                .fixedSize()
+        } else if let u {
+            Text(TimeDataSource<Date>.currentDate,
+                 format: SystemFormatStyle.Timer(countingDownIn: u.addingTimeInterval(-36000)..<u, showsHours: false,
+                                                 maxFieldCount: 4, maxPrecision: .milliseconds(10)))
+                .font(.custom("IslandGate", size: size))
+                .fixedSize()
+        }
+    } else {
+        Color.white
+    }
+}
+
+/// Every word stacked in one place; each one masked by its own two switches, so
+/// only the word whose moment it is can be seen. The clocks are never shown.
+func wordStream(_ a: IslandAttributes, size: CGFloat) -> some View {
+    ZStack(alignment: .leading) {
+        ForEach(Array(a.words.enumerated()), id: \.offset) { i, w in
+            let t0 = a.wordStart.addingTimeInterval(Double(i) / a.wps)
+            let t1 = a.wordStart.addingTimeInterval(Double(i + 1) / a.wps)
+            pivotWord(w, size: size)
+                .mask(alignment: .leading) { gate(after: t0, before: nil, size: size) }
+                .mask(alignment: .leading) { gate(after: nil, before: t1, size: size) }
+        }
+    }
+    .frame(width: size * 4.6, alignment: .leading)
+}
+
+/// Diagnostic, left of the camera: a small dot behind one switch that closes
+/// 25 s after launch. Seen then gone = switches work at all.
+func gateDot(_ a: IslandAttributes) -> some View {
+    Circle().fill(islandRed).frame(width: 10, height: 10)
+        .mask(alignment: .leading) { gate(after: nil, before: a.start.addingTimeInterval(25), size: 12) }
+}
+
 struct IslandLiveActivity: Widget {
     var body: some WidgetConfiguration {
         ActivityConfiguration(for: IslandAttributes.self) { context in
             Group {
-                if context.attributes.mode == "clock" {
+                if context.attributes.mode == "words" {
+                    wordStream(context.attributes, size: 30)
+                } else if context.attributes.mode == "clock" {
                     VStack(spacing: 6) {
                         countingWords(context.attributes.start, size: 30)
                         tenthsClock(context.attributes.start, size: 30)
@@ -91,7 +142,9 @@ struct IslandLiveActivity: Widget {
         } dynamicIsland: { context in
             DynamicIsland {
                 DynamicIslandExpandedRegion(.center) {
-                    if context.attributes.mode == "clock" {
+                    if context.attributes.mode == "words" {
+                        wordStream(context.attributes, size: 26)
+                    } else if context.attributes.mode == "clock" {
                         VStack(spacing: 4) {
                             countingWords(context.attributes.start, size: 26)
                             tenthsClock(context.attributes.start, size: 26)
@@ -101,21 +154,27 @@ struct IslandLiveActivity: Widget {
                     }
                 }
             } compactLeading: {
-                if context.attributes.mode == "clock" {
+                if context.attributes.mode == "words" {
+                    gateDot(context.attributes)
+                } else if context.attributes.mode == "clock" {
                     // left of the camera: the hundredths stopwatch
                     tenthsClock(context.attributes.start, size: 14)
                 } else {
                     Text("F").font(islandFont(13)).foregroundColor(islandInk)
                 }
             } compactTrailing: {
-                if context.attributes.mode == "clock" {
+                if context.attributes.mode == "words" {
+                    wordStream(context.attributes, size: 15)
+                } else if context.attributes.mode == "clock" {
                     // right of the camera: the counting font
                     countingWords(context.attributes.start, size: 14)
                 } else {
                     pivotWord(context.state.word, size: 15)
                 }
             } minimal: {
-                if context.attributes.mode == "clock" {
+                if context.attributes.mode == "words" {
+                    gateDot(context.attributes)
+                } else if context.attributes.mode == "clock" {
                     countingWords(context.attributes.start, size: 12)
                 } else {
                     Text(IslandWord.layout(context.state.word).2)

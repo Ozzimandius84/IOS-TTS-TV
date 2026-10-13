@@ -20,6 +20,11 @@ struct IslandAttributes: ActivityAttributes {
     /// "rates" = runs 1-3, words sent at set rates).
     var start: Date
     var mode: String
+    /// Run 5 ("words"): the words to show, one at a time, each for 1/wps seconds
+    /// from wordStart. The island shows them by itself -- the app sends nothing.
+    var words: [String] = []
+    var wordStart: Date = .distantPast
+    var wps: Double = 3
 }
 
 /// How a word is laid out in the island (Osca, 13 Oct 11:04): long words are

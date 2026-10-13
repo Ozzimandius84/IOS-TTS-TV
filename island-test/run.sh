@@ -3,13 +3,14 @@
 # phone's screen over the cable, pull the log, write the results into
 # ISLAND-TEST.md and commit them (by paths).
 #
-#   bash island-test/run.sh          run 4: the island's own clock in the counting font (~6 min)
+#   bash island-test/run.sh          run 5: words shown by the island's own switches (~4 min)
+#   bash island-test/run.sh clock    run 4: the island's own clock in the counting font (~6 min)
 #   bash island-test/run.sh rates    runs 1-3: words sent at 1-4 a second (~7 min)
 #
 # The phone must be plugged in BY CABLE and UNLOCKED. When it says so, swipe
 # up to the home screen and leave the phone alone; don't tap the island.
 set -uo pipefail
-MODE="${1:-clock}"
+MODE="${1:-words}"
 HERE="$(cd "$(dirname "$0")" && pwd)"
 REPO="$(cd "$HERE/.." && pwd)"
 BID=com.ttstv.frank.islandtest
@@ -54,14 +55,19 @@ for i in $(seq 1 90); do
 done
 cat "$RES/screen/record.log"
 grep -q "recording" "$RES/screen/record.log" || { echo "the screen recorder did not start -- stopping here (see the line above)"; kill $REC 2>/dev/null; exit 1; }
-if [ "$MODE" = rates ]; then
-  xcrun devicectl device process launch --device "$DEVICE" --terminate-existing "$BID" rates || { kill $REC; exit 1; }
+if [ "$MODE" != words ]; then
+  xcrun devicectl device process launch --device "$DEVICE" --terminate-existing "$BID" "$MODE" || { kill $REC; exit 1; }
 else
   xcrun devicectl device process launch --device "$DEVICE" --terminate-existing "$BID" || { kill $REC; exit 1; }
 fi
 
 echo
-echo "  >>> ON THE PHONE NOW: swipe up to the home screen and leave it alone for about 3 minutes. <<<"
+if [ "$MODE" = words ]; then
+  echo "  >>> ON THE PHONE NOW: swipe up to the home screen STRAIGHT AWAY and watch the island for 1 minute. <<<"
+  echo "      The words start 20 s after the app opened and run for 30 s."
+else
+  echo "  >>> ON THE PHONE NOW: swipe up to the home screen and leave it alone for about 3 minutes. <<<"
+fi
 echo "      Don't tap the island -- it opens the app."
 echo
 

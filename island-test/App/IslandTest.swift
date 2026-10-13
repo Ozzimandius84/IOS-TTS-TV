@@ -48,7 +48,14 @@ final class IslandTest {
     /// "clock" (run 4, the default): the island runs its own timer in the counting
     /// font and a hundredths stopwatch, and the app sends NO updates.
     /// "rates" (runs 1-3): pass `rates` as a launch argument.
-    let mode = ProcessInfo.processInfo.arguments.contains("rates") ? "rates" : "clock"
+    let mode: String = {
+        let args = ProcessInfo.processInfo.arguments
+        if args.contains("rates") { return "rates" }
+        if args.contains("clock") { return "clock" }
+        return "words"   // run 5, the default
+    }()
+    /// Run 5: the island shows the words by its own switches at 3 a second, from 20 s after launch.
+    static let wordLead = 20.0, wordsPerSecond = 3.0, wordCount = 90
     private var clockStart = Date()
     private let logQ = DispatchQueue(label: "islandtest.log")
     private var handle: FileHandle?
@@ -95,7 +102,15 @@ final class IslandTest {
             let first = IslandAttributes.ContentState(word: "ready", seq: 0, phase: "waiting")
             clockStart = Date()
             log("info", detail: String(format: "mode %@ clock_start %.4f", mode, clockStart.timeIntervalSince1970))
-            let a = try Activity.request(attributes: IslandAttributes(title: "Island test", start: clockStart, mode: mode),
+            var attrs = IslandAttributes(title: "Island test", start: clockStart, mode: mode)
+            if mode == "words" {
+                attrs.words = Array(Self.pieces.prefix(Self.wordCount))
+                attrs.wordStart = clockStart.addingTimeInterval(Self.wordLead)
+                attrs.wps = Self.wordsPerSecond
+                log("info", detail: String(format: "word_window %.3f %.3f",
+                                           Self.wordLead, Self.wordLead + Double(Self.wordCount) / Self.wordsPerSecond))
+            }
+            let a = try Activity.request(attributes: attrs,
                                          content: ActivityContent(state: first, staleDate: nil),
                                          pushType: nil)
             activity = a
@@ -132,7 +147,9 @@ final class IslandTest {
     func beginIfReady() {
         guard !started, activity != nil else { return }
         started = true
-        let th = Thread { [self] in if self.mode == "clock" { self.runClock() } else { self.run() } }
+        let th = Thread { [self] in
+            if self.mode == "clock" { self.runClock() } else if self.mode == "words" { self.runWords() } else { self.run() }
+        }
         th.qualityOfService = .userInitiated
         th.start()
     }
@@ -147,6 +164,22 @@ final class IslandTest {
         let wanted = Date().addingTimeInterval(150)
         Thread.sleep(until: min(endAt, wanted))
         log("phase_end", phase: "clock")
+        finish()
+    }
+
+    /// Run 5: send nothing; stay alive until the word window is over, noting every 5 s
+    /// whether the tone is still playing (run 4's app went quiet 5 s in).
+    private func runWords() {
+        log("run_start", detail: "words: no updates will be sent")
+        log("phase_start", phase: "words")
+        logQ.async { self.phaseNow = "words" }
+        let endAt = clockStart.addingTimeInterval(Self.wordLead + Double(Self.wordCount) / Self.wordsPerSecond + 10)
+        while Date() < endAt {
+            Thread.sleep(forTimeInterval: 5)
+            let playing = DispatchQueue.main.sync { self.player?.isPlaying ?? false }
+            log("alive", detail: "tone playing=\(playing)")
+        }
+        log("phase_end", phase: "words")
         finish()
     }
 

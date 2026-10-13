@@ -115,14 +115,16 @@ def clock(log_path, screen_path):
     Left of the camera = the hundredths stopwatch, right = the whole-second timer,
     both in the counting font."""
     rows = list(csv.DictReader(open(log_path, newline="")))
-    wall0, states, info, window, sent = None, [], [], None, 0
+    wall0, states, info, window, sent, word_window = None, [], [], None, 0, None
     for r in rows:
         t, ev, det = int(r["ms"]) / 1000, r["event"], r["detail"]
         if ev == "info" and det.startswith("wall "):
             wall0 = float(det.split()[1])
-        if ev == "phase_start" and r["phase"] == "clock":
+        if ev == "info" and det.startswith("word_window "):
+            word_window = tuple(float(x) for x in det.split()[1:3])
+        if ev == "phase_start" and r["phase"] in ("clock", "words"):
             window = [t, None]
-        if ev == "phase_end" and r["phase"] == "clock" and window:
+        if ev == "phase_end" and r["phase"] in ("clock", "words") and window:
             window[1] = t
         if ev == "state":
             states.append((t, det))
@@ -143,15 +145,17 @@ def clock(log_path, screen_path):
         away.append((since, window[1] if window and window[1] else frames[-1][0]))
     away = [(a + 1.0, b) for a, b in away if b - a > 3]   # skip the island's own opening animation
 
-    out = ["| side of the camera | clock | seconds away | changes seen | changes a second | median gap | longest gap |",
+    alive = [r["detail"] for r in rows if r["event"] == "alive"]
+    out = ["| side of the camera | what is there | seconds away | changes seen | changes a second | median gap | longest gap |",
            "|---|---|---|---|---|---|---|"]
-    for col, label, clk in ((1, "left", "hundredths stopwatch"), (2, "right", "whole-second timer")):
-        # fixed threshold: a clock that changes every frame would lift a self-set one above itself (run 4)
-        thr = 0.2
+    sides = (((1, "left", "red dot, switched off at 25 s"), (2, "right", "the words")) if word_window else
+             ((1, "left", "hundredths stopwatch"), (2, "right", "whole-second timer")))
+    for col, label, clk in sides:
+        thr = 0.2   # fixed: a clock changing every frame lifts a self-set threshold above itself (run 4)
         changes, last = [], -1e9
         for f in frames:
             if f[col] > thr:
-                if f[0] - last > 0.0:
+                if f[0] - last > 0.05:
                     changes.append(f[0])
                 last = f[0]
         seen, gaps, secs = 0, [], 0.0
@@ -165,10 +169,27 @@ def clock(log_path, screen_path):
             longest = max([longest] + [y - x for x, y in zip(edges, edges[1:])])
         med = f"{statistics.median(gaps):.2f} s" if gaps else "–"
         out.append(f"| {label} | {clk} | {secs:.0f} | {seen} | {seen / max(secs, 1):.2f} | {med} | {longest:.1f} s |")
+    if word_window:
+        a, b = word_window
+        frames_in = [f for f in frames if a <= f[0] < b]
+        ch, last = [], -1e9
+        for f in frames_in:
+            if f[2] > 0.2:
+                if f[0] - last > 0.1:
+                    ch.append(f[0])
+                last = f[0]
+        gaps = [y - x for x, y in zip(ch, ch[1:])]
+        n_words = round((b - a) * 3)
+        out.append("")
+        out.append(f"**Words window {a:.0f}-{b:.0f} s ({n_words} words at 3 a second), right of the camera:** "
+                   f"{len(ch)} changes seen"
+                   + (f", median gap {statistics.median(gaps):.2f} s, longest {max(gaps):.2f} s." if gaps else "."))
     out.append("")
     out.append(f"Updates the app sent during the run: {sent} (should be 0). Away: "
                + ", ".join(f"{a:.0f}-{b:.0f} s" for a, b in away))
     out.append("App state changes: " + (", ".join(f"{t:.1f}s {s}" for t, s in states) or "none"))
+    if alive:
+        out.append(f"App heartbeats: {len(alive)} (every 5 s); last: {alive[-1]}")
     out.append("Look at results/screen/frames/ to see WHAT was drawn: words in Frank's red-letter "
                "style mean the font worked; digits mean it did not match the clock's format.")
     out.append("")
@@ -180,7 +201,7 @@ def clock(log_path, screen_path):
 
 if __name__ == "__main__":
     lp = sys.argv[1]
-    if any(r["phase"] == "clock" for r in csv.DictReader(open(lp, newline=""))):
+    if any(r["phase"] in ("clock", "words") for r in csv.DictReader(open(lp, newline=""))):
         clock(lp, sys.argv[2])
     else:
         main(lp, sys.argv[2] if len(sys.argv) > 2 else None)

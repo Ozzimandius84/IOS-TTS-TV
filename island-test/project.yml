@@ -56,11 +56,14 @@ targets:
       # run 4: the counting font (built by font/build_font.py)
       - path: font/IslandCount.ttf
         buildPhase: resources
+      # run 5: the gate font (built by font/build_gate.py)
+      - path: font/IslandGate.ttf
+        buildPhase: resources
     info:
       path: Widget/Info.plist
       properties:
         CFBundleDisplayName: Island Test
-        UIAppFonts: [IslandCount.ttf]
+        UIAppFonts: [IslandCount.ttf, IslandGate.ttf]
         CFBundleShortVersionString: "1.0"
         CFBundleVersion: "1"
         NSExtension:
