@@ -40,7 +40,7 @@ def main(base, wps=3.0, count=30, lead=15.0):
     rows, res, fonts = [], [], []
     for i, w in enumerate(words, 1):
         fam = f"IslandW{i:02d}"
-        build_word.main(base, w, f"{here}/words", fam)
+        build_word.main(base, w, f"{here}/words", fam, words[i - 2] if i > 1 else None)   # run 27: cover = this word + the last
         rows.append(f'    ({lead + (i - 1) / wps:.4f}, "{fam}"),  // {w}')
         res.append(f"      - path: font/words/{fam}.ttf\n        buildPhase: resources")
         fonts.append(f"{fam}.ttf")  # xcodegen copies each file flat into the bundle

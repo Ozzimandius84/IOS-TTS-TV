@@ -40,7 +40,9 @@ def pivot_index(w):
     return min(k, len(w) - 1)
 
 
-def main(base_path, word, out, family="IslandWord"):
+def main(base_path, word, out, family="IslandWord", prev=None):
+    """prev: the word shown before this one (run 27): the cover box only needs to
+    hide THAT word and this one, not a 4.6 em slab."""
     base = TTFont(base_path)
     gs, cmap, hmtx = base.getGlyphSet(), base.getBestCmap(), base["hmtx"]
     upm = 1000
@@ -60,29 +62,33 @@ def main(base_path, word, out, family="IslandWord"):
             x += hmtx[g][0] * sc
         return pen.glyph(), int(round(x))
 
-    names = [".notdef", "space", *DIGITS, "colon", "period", "w.box", "w.ink", "w.red"]
+    # Run 27 (Osca, 15:43: "optimise"): the island pre-draws a picture of every glyph a
+    # clock can show. Nine identical digit glyphs were nine pictures per word; now
+    # digits 1-9 all map to ONE glyph "w", stored once.
+    names = [".notdef", "space", "zero", "colon", "period", "w", "w.box", "w.ink", "w.red"]
     glyphs = {n: TTGlyphPen(None).glyph() for n in names}
     metrics = {n: (0, 0) for n in names}
     metrics[".notdef"] = (500, 0)
     all_g, adv = draw("all")
     # Run 15: ZERO advance on the word glyphs, so every copy a timer draws lands on
-    # the same spot and the text is never wider than one word (run 14: two copies
-    # overflowed the box and SwiftUI truncated them to an ellipsis).
-    for d in DIGITS[1:]:
-        glyphs[d], metrics[d] = draw("all")[0], (0, 0)
+    # the same spot and the text is never wider than one word.
+    glyphs["w"], metrics["w"] = all_g, (0, 0)
     glyphs["w.ink"], metrics["w.ink"] = draw("ink")[0], (0, 0)
     glyphs["w.red"], metrics["w.red"] = draw("red")[0], (0, 0)
-    # run 17: the cover is a layer of the word itself -- a black box 4.6 em wide
-    # under the ink, so one Text per word hides the word before it.
+    # Run 17: the cover is a layer of the word itself. Run 27: it is only as wide as
+    # this word and the one before it (the black slab was most of every picture).
+    def width_of(w):
+        return sum(hmtx[cmap[ord(ch)]][0] * sc for ch in w if ord(ch) in cmap)
+    cover = max(adv, width_of(prev) if prev else 0)
     box = TTGlyphPen(None)
-    box.moveTo((-200, -300)); box.lineTo((-200, 1000)); box.lineTo((4600, 1000)); box.lineTo((4600, -300)); box.closePath()
+    box.moveTo((-60, -280)); box.lineTo((-60, 980)); box.lineTo((int(cover) + 60, 980)); box.lineTo((int(cover) + 60, -280)); box.closePath()
     glyphs["w.box"], metrics["w.box"] = box.glyph(), (0, 0)
-    colr = {d: [("w.box", 2), ("w.ink", 1), ("w.red", 0)] for d in DIGITS[1:]}
+    colr = {"w": [("w.box", 2), ("w.ink", 1), ("w.red", 0)]}
 
     fb = FontBuilder(upm, isTTF=True)
     fb.setupGlyphOrder(names)
-    cm = {32: "space", 58: "colon", 46: "period"}
-    cm.update({48 + i: DIGITS[i] for i in range(10)})
+    cm = {32: "space", 58: "colon", 46: "period", 48: "zero"}
+    cm.update({48 + i: "w" for i in range(1, 10)})
     fb.setupCharacterMap(cm)
     fb.setupGlyf(glyphs)
     glyf = fb.font["glyf"]
@@ -100,8 +106,8 @@ def main(base_path, word, out, family="IslandWord"):
     fb.setupCOLR(colr)
     fb.setupCPAL([[RED, INK, BLACK]])
     fb.save(f"{out}/{family}.ttf")
-    print(f"{family}.ttf: digits 1-9 = {word!r}, red letter {word[piv]!r}, advance {adv}")
+    print(f"{family}.ttf: digits 1-9 = {word!r}, red letter {word[piv]!r}, advance {adv}, cover {int(cover)}")
 
 
 if __name__ == "__main__":
-    main(sys.argv[1], sys.argv[2], sys.argv[3], *sys.argv[4:5])
+    main(sys.argv[1], sys.argv[2], sys.argv[3], *sys.argv[4:6])

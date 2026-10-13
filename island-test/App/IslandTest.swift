@@ -169,7 +169,7 @@ final class IslandTest {
         let endAt = clockStart.addingTimeInterval(225)
         // run 19: stay until the words are over (+10 s), at most 225 s
         // run 24: stay 180 s whatever the word count -- how long do N layers live? -- with a heartbeat
-        let wanted = clockStart.addingTimeInterval(max(180, RunWords.lead + Double(RunWords.count) / RunWords.perSecond + 10))
+        let wanted = clockStart.addingTimeInterval(max(90, RunWords.lead + Double(RunWords.count) / RunWords.perSecond + 10))   // run 27: 90 s is enough to see the first reloads
         while Date() < min(endAt, wanted) {
             Thread.sleep(forTimeInterval: 5)
             let playing = DispatchQueue.main.sync { self.player?.isPlaying ?? false }

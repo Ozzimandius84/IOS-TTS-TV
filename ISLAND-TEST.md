@@ -991,6 +991,16 @@ What is left, in order, none of it research into whether the island can do it:
 2. **Fonts for a whole chapter** without a font per word in the bundle: the widget loading fonts at runtime from a shared file. One run to prove the widget can.
 3. **Design passes:** Iowan Old Style; cover left, word right; the status-bar width ladder (see "What the island costs the status bar"); the two-piece word rule.
 
+### What a word costs the island, and run 27 (Osca, 15:43: "optimise")
+
+The island cannot run our font; at each render it pre-draws a picture of every glyph a clock view might show (0–9, colon, dot) so it can swap pictures by itself 50 times a second. So one word layer cost ten pictures, each of them the word **plus a black cover 4.6 em wide**, at 3x pixels -- and until run 25, in four presentations. Three cuts, the mechanism untouched:
+
+1. Four presentations → one (run 25, done): the 30 pt lock-screen copy alone was ~5x the compact one.
+2. Nine identical digit glyphs → **one shared glyph** for digits 1–9, stored once instead of nine times.
+3. The cover box → **the union of this word's and the previous word's bounds** (the previous word is known when the font is built), instead of a 4.6 em slab.
+
+Run 27: 100 words with the new fonts, compact slot only, 90 s. 100 was refused at the first reload this morning (run 26); if it lives now, the saving is at least 3x and the window grows accordingly.
+
 ### Run on the phone, screen recorded — 13 Oct 2026 15:30
 
 | side of the camera | what is there | seconds away | changes seen | changes a second | median gap | longest gap |
