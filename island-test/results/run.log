@@ -13,59 +13,61 @@ built
 built
 
 == 4/6 install, start recording the phone's screen, open the app ==
-13:17:26  Acquired tunnel connection to device.
-13:17:26  Enabling developer disk image services.
-13:17:26  Acquired usage assertion.
+13:20:42  Acquired tunnel connection to device.
+13:20:42  Enabling developer disk image services.
+13:20:42  Acquired usage assertion.
 App installed:
 • bundleID: com.ttstv.frank.islandtest
-• installationURL: file:///private/var/containers/Bundle/Application/9E170B6E-86BC-4FFE-9A7B-E8CB05F5FFD4/IslandTest.app/
+• installationURL: file:///private/var/containers/Bundle/Application/8A784EA3-DC42-4AA5-8B1E-80B26390AE69/IslandTest.app/
 • launchServicesIdentifier: unknown
 • databaseUUID: 56F5C8F6-E127-4A22-ACC3-08D2D8867034
-• databaseSequenceNumber: 3160
+• databaseSequenceNumber: 3168
 • options: 
   (if the Mac asks whether Terminal may use the Camera, click Allow -- it is the phone's screen feed)
 record: recording iPhone 2
-13:17:29  Acquired tunnel connection to device.
-13:17:29  Enabling developer disk image services.
-13:17:29  Acquired usage assertion.
+13:20:45  Acquired tunnel connection to device.
+13:20:45  Enabling developer disk image services.
+13:20:45  Acquired usage assertion.
 Launched application with com.ttstv.frank.islandtest bundle identifier.
 
-  >>> ON THE PHONE NOW: swipe up to the home screen STRAIGHT AWAY and watch the island for 40 s. <<<
-      Small test clocks and dots either side of the camera; some change at 25 s.
+  >>> ON THE PHONE NOW: swipe up to the home screen and leave it alone for about 3 minutes. <<<
       Don't tap the island -- it opens the app.
 
 
 == 5/6 waiting for the run to finish ==
   ...30 s
-finished after ~50 s
-13:18:20  Acquired tunnel connection to device.
-13:18:20  Enabling developer disk image services.
-13:18:20  Acquired usage assertion.
+  ...60 s
+  ...90 s
+  ...120 s
+  ...150 s
+finished after ~160 s
+13:23:28  Acquired tunnel connection to device.
+13:23:28  Enabling developer disk image services.
+13:23:28  Acquired usage assertion.
 File received from Device
 /Users/oscarwilson-brown/Documents/RUNNERS/TTSTV_IOS/IOS TTS TV/island-test/results/island-log.csv
-screen frames: 2993, island pictures: 47
+screen frames: 9417, island pictures: 1277
 
 == 6/6 results ==
 | side of the camera | what is there | seconds away | changes seen | changes a second | median gap | longest gap |
 |---|---|---|---|---|---|---|
-| left | hundredths stopwatch | 39 | 0 | 0.00 | – | 39.0 s |
-| right | whole-second timer | 39 | 1 | 0.03 | – | 37.2 s |
+| left | hundredths stopwatch | 149 | 307 | 2.06 | 0.50 s | 1.5 s |
+| right | whole-second timer | 149 | 155 | 1.04 | 1.00 s | 1.0 s |
 
-Updates the app sent during the run: 0 (should be 0). Away: 5-44 s
-App state changes: 3.5s background
-App heartbeats: 8 (every 5 s); last: tone playing=true
+Updates the app sent during the run: 0 (should be 0). Away: 5-154 s
+App state changes: 3.6s background
 Look at results/screen/frames/ to see WHAT was drawn: words in Frank's red-letter style mean the font worked; digits mean it did not match the clock's format.
 
 ```
-    0.0s  info wall 1791893849.8389
+    0.0s  info wall 1791894046.0564
     0.0s  info iPhone18 3 iOS 26.6.1
     0.0s  info live activities enabled=true
     0.9s  info audio playing
-    0.9s  info mode diag clock_start 1791893850.7063
+    0.9s  info mode clock clock_start 1791894046.9245
     0.9s  info activity started
     0.9s  info activity state active
-    3.5s  run_start diag: no updates will be sent
-   43.5s  run_end
-   43.6s  info activity ended
-   43.6s  info activity state dismissed
+    3.6s  run_start clock: no updates will be sent
+  153.6s  run_end
+  153.6s  info activity state dismissed
+  153.6s  info activity ended
 ```
