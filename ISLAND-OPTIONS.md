@@ -86,3 +86,38 @@ Each test is one run of the existing `island-test/run.sh` (about 7 minutes), wit
 - [Lyrical](https://lyricalmusic.app/) · [Pulse — App Store](https://apps.apple.com/app/id6755416222) · [Dynamic-Lyrics reviews — App Store](https://apps.apple.com/au/app/dynamic-lyrics/id6476125287?see-all=reviews&platform=iphone)
 - [Teleprompter Pro X (PiP text) — App Store](https://apps.apple.com/app/id6502788841)
 - [Live Activities essentials, WWDC26 — Apple](https://developer.apple.com/videos/play/wwdc2026/223/) (nothing new on update limits)
+
+## Bigger picture (Osca, 13 Oct 11:33: "anything else which could solve it?")
+
+Every way of making the island change goes through one of two doors. Either the app sends an update, which Apple freezes for a background audio app, or the phone changes it by itself. The phone changes only one kind of thing by itself: **timers and timer bars**. So the best remaining shot goes through the second door.
+
+### The counting font: the island's own clock draws the words
+
+**How it would work.** The island shows a running timer (`Text(timerInterval:)`). The phone ticks it every second with no update and no allowance. The timer is drawn in a font Frank makes for the chapter. Fonts can swap a run of characters for a single drawing (a "ligature", as "fi" becomes one shape). So in this font "0:07" is drawn as the words spoken in second 7, "0:08" as the words in second 8, and so on. The island shows the timer, and you see the book.
+
+**What it would give:**
+- **One change a second.** Speech is about 3½ words a second, so each tick would show the two to four words spoken in that second, in the piece-sized slot already designed, not a single word.
+- **Accurate time, coarse words.** The second is exact. Which words fall in it comes from Frank's own word timings.
+- **The red letter and font** still apply; the font is ours.
+- **No freeze.** It never needs the app to update while you listen. Pause, play and seek each need one real update to restart the timer from the right place. That's a handful, which the allowance survived in our test (it showed about 4).
+
+**What it would need:**
+- **A shared folder** between the app and the island, so the island can load the chapter's font. That's an App Group, which the personal team signed without trouble in run 2.
+- **A font made per chapter** from the word timings. That's simple font building (Python `fontTools`), and it could run on the Mac or on the phone inside the parser runtime Frank already carries.
+- **A 20-minute chapter is 1,200 seconds**, so 1,200 drawn phrases: a font of a few MB.
+
+**Unknowns, in order:**
+1. Does the island draw a timer in a custom font at all? Custom fonts are allowed in Live Activities, but nobody has written about using one on a timer.
+2. Does it apply the font's ligatures to timer text?
+3. Does the timer keep counting when the island is frozen for updates? It should, since that's the point of timers, but it's untested on our phone.
+
+**Test.** One run of the test app with a font built from the test sentence. If (1) and (2) hold, the island shows changing words with no updates for the whole run.
+
+**Verdict:** the only route found where the island itself shows the book moving while you're in another app. Unproven.
+
+### Smaller or partial options
+
+- **iPhone Live Captions** (Settings → Accessibility) is Apple's own feature. It captions whatever audio the phone plays, Frank included, in a small floating panel over every app. Frank needs no code. But it's a panel, not the island, it transcribes rather than showing Frank's text, and the user has to turn it on. Since iOS 26 it's reported to work in all languages ([HearingTracker](https://forum.hearingtracker.com/t/live-captions-rolled-out-on-ios-26/107488)).
+- **Apple Watch:** a watch app can show the word at full speed while the wrist is raised. Not the island.
+- **Not allowed:** keeping Frank awake with location or a workout session would unfreeze the island (location is reported to work), but App Review rejects either for a reading app, and both drain the battery.
+- **Ask Apple:** a paid developer account includes code-level support requests. Asking whether a background audio app can update its own Live Activity, and filing Feedback, costs nothing but time. The answer since 2022 has been no.
