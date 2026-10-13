@@ -13,21 +13,21 @@ built
 built
 
 == 4/6 install, start recording the phone's screen, open the app ==
-15:47:56  Acquired tunnel connection to device.
-15:47:56  Enabling developer disk image services.
-15:47:56  Acquired usage assertion.
+15:54:38  Acquired tunnel connection to device.
+15:54:38  Enabling developer disk image services.
+15:54:38  Acquired usage assertion.
 App installed:
 • bundleID: com.ttstv.frank.islandtest
-• installationURL: file:///private/var/containers/Bundle/Application/7E032FED-7F54-45A5-BA08-5E5147FBC2CE/IslandTest.app/
+• installationURL: file:///private/var/containers/Bundle/Application/3879DA2C-2D18-4D99-8438-3FD61C2C23BD/IslandTest.app/
 • launchServicesIdentifier: unknown
 • databaseUUID: 56F5C8F6-E127-4A22-ACC3-08D2D8867034
-• databaseSequenceNumber: 3304
+• databaseSequenceNumber: 3312
 • options: 
   (if the Mac asks whether Terminal may use the Camera, click Allow -- it is the phone's screen feed)
 record: recording iPhone 2
-15:48:00  Acquired tunnel connection to device.
-15:48:00  Enabling developer disk image services.
-15:48:00  Acquired usage assertion.
+15:54:41  Acquired tunnel connection to device.
+15:54:41  Enabling developer disk image services.
+15:54:41  Acquired usage assertion.
 Launched application with com.ttstv.frank.islandtest bundle identifier.
 
   >>> ON THE PHONE NOW: swipe up to the home screen and leave it alone for about 1 minute. <<<
@@ -37,39 +37,49 @@ Launched application with com.ttstv.frank.islandtest bundle identifier.
 == 5/6 waiting for the run to finish ==
   ...30 s
   ...60 s
-  ...90 s
-finished after ~100 s
-15:49:43  Acquired tunnel connection to device.
-15:49:43  Enabling developer disk image services.
-15:49:43  Acquired usage assertion.
+finished after ~70 s
+15:55:53  Acquired tunnel connection to device.
+15:55:53  Enabling developer disk image services.
+15:55:53  Acquired usage assertion.
 File received from Device
 /Users/oscarwilson-brown/Documents/RUNNERS/TTSTV_IOS/IOS TTS TV/island-test/results/island-log.csv
-screen frames: 5806, island pictures: 87
+screen frames: 3369, island pictures: 123
 
 == 6/6 results ==
 | side of the camera | what is there | seconds away | changes seen | changes a second | median gap | longest gap |
 |---|---|---|---|---|---|---|
-| left | check: truth at 15 s | 83 | 5 | 0.06 | 0.58 s | 32.4 s |
-| right | the words | 83 | 4 | 0.05 | 0.49 s | 32.4 s |
+| left | check: truth at 15 s | 66 | 7 | 0.11 | 0.20 s | 37.3 s |
+| right | the words | 66 | 99 | 1.50 | 0.33 s | 25.3 s |
 
-**Window 0, 15-48 s (100 words at 3 a second), right of the camera:** 3 changes seen, median gap 1.07 s, longest 1.09 s.
+**Window 0, 15-25 s (30 words at 3 a second), right of the camera:** 29 changes seen, median gap 0.33 s, longest 0.65 s.
 
-Updates the app sent during the run: 0. Away: 5-26 s, 29-62 s, 65-94 s
-App state changes: 3.8s background, 26.4s foreground, 28.2s background, 61.5s foreground, 64.0s background
-App heartbeats: 18 (every 5 s); last: tone playing=true
+**Window 1, 25-35 s (30 words at 3 a second), right of the camera:** 32 changes seen, median gap 0.33 s, longest 0.70 s.
+
+**Window 2, 35-45 s (30 words at 3 a second), right of the camera:** 30 changes seen, median gap 0.33 s, longest 0.40 s.
+
+**Window 3, 45-55 s (30 words at 3 a second), right of the camera:** 2 changes seen, median gap 0.34 s, longest 0.34 s.
+
+**Window 4, 55-65 s (30 words at 3 a second), right of the camera:** 0 changes seen.
+
+Updates the app sent during the run: 4. Away: 5-71 s
+App state changes: 3.9s background
 Look at results/screen/frames/ to see WHAT was drawn: words in Frank's red-letter style mean the font worked; digits mean it did not match the clock's format.
 
 ```
-    0.0s  info wall 1791902881.1435
+    0.0s  info wall 1791903281.7634
     0.0s  info iPhone18 3 iOS 26.6.1
     0.0s  info live activities enabled=true
-    0.9s  info audio playing
-    0.9s  info mode clock clock_start 1791902882.0269
+    0.8s  info audio playing
+    0.9s  info mode windows clock_start 1791903282.6172
     0.9s  info activity started
     0.9s  info activity state active
-    3.8s  run_start clock: no updates will be sent
-    3.8s  info word_window 15.000 48.333
-   10.2s  info activity state dismissed
-   93.8s  run_end
-   93.8s  info activity ended
+    3.9s  run_start windows: 4 updates from the background  one every 10 s  reDate=false
+    3.9s  info word_window 15.000 25.000
+   20.9s  info word_window 25.000 35.000
+   30.9s  info word_window 35.000 45.000
+   40.9s  info word_window 45.000 55.000
+   50.9s  info word_window 55.000 65.000
+   70.9s  run_end
+   70.9s  info activity ended
+   70.9s  info activity state dismissed
 ```

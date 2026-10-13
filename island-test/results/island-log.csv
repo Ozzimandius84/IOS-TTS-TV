@@ -1,39 +1,31 @@
 ms,event,seq,phase,detail
-2,info,-1,,wall 1791902881.1435
+2,info,-1,,wall 1791903281.7634
 2,info,-1,,iPhone18 3 iOS 26.6.1
 3,info,-1,,live activities enabled=true
-880,info,-1,,audio playing
-883,info,-1,,mode clock clock_start 1791902882.0269
-896,info,-1,,activity started
-896,info,-1,,activity state active
-897,content,0,waiting,
-3786,state,-1,,background
-3786,run_start,-1,,clock: no updates will be sent
-3786,info,-1,,word_window 15.000 48.333
-3786,phase_start,-1,clock,
-8790,alive,-1,,tone playing=true
-10235,info,-1,,activity state dismissed
-13795,alive,-1,,tone playing=true
-18801,alive,-1,,tone playing=true
-23802,alive,-1,,tone playing=true
-26358,state,-1,,foreground
-28198,state,-1,,background
-28805,alive,-1,,tone playing=true
-33810,alive,-1,,tone playing=true
-38811,alive,-1,,tone playing=true
-43812,alive,-1,,tone playing=true
-48818,alive,-1,,tone playing=true
-53818,alive,-1,,tone playing=true
-58820,alive,-1,,tone playing=true
-61550,state,-1,,foreground
-63824,alive,-1,,tone playing=true
-63988,state,-1,,background
-68829,alive,-1,,tone playing=true
-73834,alive,-1,,tone playing=true
-78839,alive,-1,,tone playing=true
-83841,alive,-1,,tone playing=true
-88841,alive,-1,,tone playing=true
-93842,alive,-1,,tone playing=true
-93842,phase_end,-1,clock,
-93842,run_end,-1,,
-93845,info,-1,,activity ended
+850,info,-1,,audio playing
+854,info,-1,,mode windows clock_start 1791903282.6172
+866,info,-1,,activity started
+866,content,0,waiting,
+866,info,-1,,activity state active
+3922,state,-1,,background
+3922,run_start,-1,,windows: 4 updates from the background  one every 10 s  reDate=false
+3922,info,-1,,word_window 15.000 25.000
+3922,phase_start,-1,windows,
+20854,sent,1,windows,window 1 words 25-35 s
+20854,info,-1,,word_window 25.000 35.000
+20856,acked,1,windows,
+20865,content,1,windows,
+30855,sent,2,windows,window 2 words 35-45 s
+30855,info,-1,,word_window 35.000 45.000
+30856,acked,2,windows,
+30861,content,2,windows,
+40854,sent,3,windows,window 3 words 45-55 s
+40854,info,-1,,word_window 45.000 55.000
+40855,acked,3,windows,
+50856,sent,4,windows,window 4 words 55-65 s
+50856,info,-1,,word_window 55.000 65.000
+50858,acked,4,windows,
+70858,phase_end,-1,windows,
+70858,run_end,-1,,
+70868,info,-1,,activity ended
+70869,info,-1,,activity state dismissed
