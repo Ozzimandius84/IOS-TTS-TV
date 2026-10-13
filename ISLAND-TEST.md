@@ -439,6 +439,19 @@ Look at results/screen/frames/ to see WHAT was drawn: words in Frank's red-lette
    43.6s  info activity state dismissed
 ```
 
+
+### Runs 12–15 (13 Oct 13:20–13:35): one change at a time — and the first word
+
+- **Run 12:** run 4's code restored byte for byte. It drew again. So the phone was fine all along and every blank run since run 4 was my code.
+- **Run 13:** on run 4's file, one change per side. Block-shaped digits draw (left). A timer set to start 15 s in the future draws "0:00" until then, and counts after (right). So the earlier claim that the island won't draw a future-start clock was wrong.
+- **Run 14:** the hundredths stopwatch also works with a future start: nothing until 15 s, then blocks moving at hundredths (left). The one-word font drew "…" instead of the word (right): the timer text was two word-copies wide, overflowed its one-word box, and SwiftUI truncates overflow to an ellipsis rather than clipping it.
+- **Run 15: the first word.** The island was empty until 15 s, and from 17 s it showed **truth** with a red r, on the right, with the app having sent nothing. The word is one glyph of a font (every non-zero digit draws it, zero draws nothing) with zero advance, so copies stack and nothing overflows. On the left, the same future-start clock laid out with `fixedSize` went blank: **that layout rule was what killed runs 8–11.** Rule: always `lineLimit(1)` + a fixed-width frame, never `fixedSize`.
+- Pictures: `island-test/results/run15-13s-empty.png`, `island-test/results/run15-17s-truth.png`.
+
+**What this amounts to:** a word, in Frank's style, appearing in the island at a chosen moment, with no update from the app, driven by a clock iOS redraws 50 times a second. It appeared about 2 s after its set moment (the whole-second timer flips a second after its start, and the island opened late); the hundredths clock should cut that to a fraction of a second.
+
+**Still to do before this is the float:** one word is one font glyph. A book needs a word *sequence*: each word switched on at its moment and the previous one covered. The pieces are now all proven separately (future-start clocks, block fonts for covers, word glyphs with red letters, stacking) and go together next, one change at a time.
+
 ### Run on the phone, screen recorded — 13 Oct 2026 13:23
 
 | side of the camera | what is there | seconds away | changes seen | changes a second | median gap | longest gap |
