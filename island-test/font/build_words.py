@@ -56,7 +56,7 @@ def main(base, wps=3.0, count=30, lead=15.0):
     p = f"{here}/../project.yml"
     s = open(p).read()
     s = re.sub(r"(      # words-begin\n).*?(      # words-end\n)", lambda m: m.group(1) + "\n".join(res) + "\n" + m.group(2), s, flags=re.S)
-    s = re.sub(r"(UIAppFonts: \[)([^\]]*)\]", lambda m: m.group(1) + ", ".join([x.strip() for x in m.group(2).split(",") if x.strip() and not re.match(r"IslandW\d\d\.ttf", x.strip())] + fonts) + "]", s)
+    s = re.sub(r"(UIAppFonts: \[)([^\]]*)\]", lambda m: m.group(1) + ", ".join([x.strip() for x in m.group(2).split(",") if x.strip() and not re.match(r"IslandW\d+\.ttf", x.strip())] + fonts) + "]", s)
     open(p, "w").write(s)
     print(f"{len(words)} words: {' '.join(words)}")
 
