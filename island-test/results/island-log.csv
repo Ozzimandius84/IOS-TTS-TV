@@ -1,41 +1,30 @@
 ms,event,seq,phase,detail
-2,info,-1,,wall 1791904898.4247
+2,info,-1,,wall 1791911568.5973
 2,info,-1,,iPhone18 3 iOS 26.6.1
 3,info,-1,,live activities enabled=true
-859,info,-1,,audio playing
-863,info,-1,,mode clock clock_start 1791904899.2876
-875,info,-1,,activity started
-876,info,-1,,activity state active
-876,content,0,waiting,
-887,info,-1,,background task begun id=2 remaining=1.7976931348623157e+308
-893,info,-1,,bluetooth state 5
-893,info,-1,,bluetooth scanning
-952,info,-1,,bluetooth saw a peripheral
-953,info,-1,,bluetooth saw a peripheral
-1098,info,-1,,bluetooth saw a peripheral
-4174,state,-1,,background
-4174,run_start,-1,,clock: no updates will be sent
-4174,info,-1,,word_window 15.000 48.333
-4174,phase_start,-1,clock,
-9179,alive,-1,,tone playing=true
-14180,alive,-1,,tone playing=true
-19182,alive,-1,,tone playing=true
-24182,alive,-1,,tone playing=true
-29186,alive,-1,,tone playing=true
-34188,alive,-1,,tone playing=true
-39193,alive,-1,,tone playing=true
-44194,alive,-1,,tone playing=true
-49196,alive,-1,,tone playing=true
-54196,alive,-1,,tone playing=true
-59197,alive,-1,,tone playing=true
-64202,alive,-1,,tone playing=true
-69207,alive,-1,,tone playing=true
-74211,alive,-1,,tone playing=true
-79217,alive,-1,,tone playing=true
-84222,alive,-1,,tone playing=true
-89226,alive,-1,,tone playing=true
-94228,alive,-1,,tone playing=true
-94228,phase_end,-1,clock,
-94228,run_end,-1,,
-94236,info,-1,,activity state dismissed
-94236,info,-1,,activity ended
+49,info,-1,,audio playing
+55,info,-1,,mode diag clock_start 1791911568.6520
+66,info,-1,,activity started
+73,content,0,waiting,
+73,info,-1,,activity state active
+78,info,-1,,background task begun id=3 remaining=1.7976931348623157e+308
+87,info,-1,,bluetooth state 5
+87,info,-1,,bluetooth scanning
+1547,state,-1,,background
+1547,run_start,-1,,diag: no updates will be sent
+1547,phase_start,-1,words,
+6552,alive,-1,,tone playing=true
+11555,alive,-1,,tone playing=true
+16556,alive,-1,,tone playing=true
+21561,alive,-1,,tone playing=true
+26566,alive,-1,,tone playing=true
+31567,alive,-1,,tone playing=true
+35631,state,-1,,foreground
+36572,alive,-1,,tone playing=true
+37787,state,-1,,background
+41573,alive,-1,,tone playing=true
+41573,phase_end,-1,words,
+41573,run_end,-1,,
+41592,info,-1,,activity ended
+41592,info,-1,,activity state dismissed
+45046,state,-1,,foreground
