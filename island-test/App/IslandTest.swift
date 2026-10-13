@@ -55,7 +55,7 @@ final class IslandTest {
         return "words"   // run 5, the default
     }()
     /// Run 5: the island shows the words by its own switches at 3 a second, from 20 s after launch.
-    static let wordLead = 20.0, wordsPerSecond = 3.0, wordCount = 90
+    static let wordLead = 20.0, wordsPerSecond = 3.0, wordCount = 30   // run 6: 30 (run 5's 90 got the activity dismissed)
     private var clockStart = Date()
     private let logQ = DispatchQueue(label: "islandtest.log")
     private var handle: FileHandle?

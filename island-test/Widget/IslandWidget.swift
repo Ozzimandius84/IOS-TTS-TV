@@ -111,11 +111,23 @@ func wordStream(_ a: IslandAttributes, size: CGFloat) -> some View {
     .frame(width: size * 4.6, alignment: .leading)
 }
 
-/// Diagnostic, left of the camera: a small dot behind one switch that closes
-/// 25 s after launch. Seen then gone = switches work at all.
-func gateDot(_ a: IslandAttributes) -> some View {
-    Circle().fill(islandRed).frame(width: 10, height: 10)
-        .mask(alignment: .leading) { gate(after: nil, before: a.start.addingTimeInterval(25), size: 12) }
+/// Diagnostics, left of the camera (run 6). Three dots:
+///  white -- no switch at all: if it shows, the island is drawing;
+///  red   -- hidden by a MASK made from a live timer, closes 25 s after launch;
+///  blue  -- erased by a live timer drawn over it (destination-out), from 25 s.
+/// Red or blue vanishing at 25 s tells which kind of switch the island obeys.
+func gateDots(_ a: IslandAttributes) -> some View {
+    let t = a.start.addingTimeInterval(25)
+    return HStack(spacing: 4) {
+        Circle().fill(Color.white).frame(width: 8, height: 8)
+        Circle().fill(islandRed).frame(width: 8, height: 8)
+            .mask(alignment: .leading) { gate(after: nil, before: t, size: 10) }
+        Circle().fill(Color.blue).frame(width: 8, height: 8)
+            .overlay(alignment: .leading) {
+                gate(after: t, before: nil, size: 10).foregroundColor(.black).blendMode(.destinationOut)
+            }
+            .compositingGroup()
+    }
 }
 
 struct IslandLiveActivity: Widget {
@@ -155,7 +167,7 @@ struct IslandLiveActivity: Widget {
                 }
             } compactLeading: {
                 if context.attributes.mode == "words" {
-                    gateDot(context.attributes)
+                    gateDots(context.attributes)
                 } else if context.attributes.mode == "clock" {
                     // left of the camera: the hundredths stopwatch
                     tenthsClock(context.attributes.start, size: 14)
@@ -173,7 +185,7 @@ struct IslandLiveActivity: Widget {
                 }
             } minimal: {
                 if context.attributes.mode == "words" {
-                    gateDot(context.attributes)
+                    gateDots(context.attributes)
                 } else if context.attributes.mode == "clock" {
                     countingWords(context.attributes.start, size: 12)
                 } else {

@@ -139,6 +139,26 @@ Look at results/screen/frames/ to see WHAT was drawn: words in Frank's red-lette
   110.0s  info activity ended
 ```
 
+
+### Run 5 (13 Oct 12:44): nothing drawn, then dismissed by iOS
+
+- **Nothing drawn at all.** The island opened as a wide, empty black pill: no words, and not even the red check dot.
+- **Then iOS closed it.** At 18 s it ended the Live Activity itself ("activity state dismissed").
+- **The app was fine:** it stayed alive the whole time, with the tone playing at every 5-second check.
+- **Two possible causes:**
+  - 90 words with two live switches each (180 live timers) was more than the island's drawing part could take.
+  - Or a mask made from a live timer doesn't draw at all.
+
+  One run can't separate them.
+- **Picture:** `island-test/results/run5-17s-empty-island.png`.
+
+**Run 6 separates them.** It shows 30 words instead of 90, plus three check dots left of the camera:
+- **White:** no switch at all.
+- **Red:** hidden by a timer mask.
+- **Blue:** erased by a timer drawn over it.
+
+Red and blue should vanish 25 s after launch.
+
 ### Run on the phone, screen recorded — 13 Oct 2026 12:46
 
 | side of the camera | what is there | seconds away | changes seen | changes a second | median gap | longest gap |
