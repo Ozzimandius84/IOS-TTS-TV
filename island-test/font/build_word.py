@@ -4,8 +4,8 @@
 Digits 1-9 all draw the SAME word (here "truth"), ink + Frank's red letter via
 colour layers; 0, ':' and '.' draw nothing. A timer "0:00" shows nothing; from
 "0:01" on, its first non-zero digit shows the word (a one-word-wide frame clips
-any second copy). Ordinary advance widths -- no zero-width tricks (run 13 drew
-blocks laid out exactly like run 4; runs 8-11 died of layout, not fonts).
+any second copy). The word glyphs have ZERO advance (run 15), so a timer's
+several copies stack on one spot and nothing overflows the one-word box.
 
     python3 build_word.py <base serif .ttf> <word> <out dir>
 """
@@ -63,10 +63,13 @@ def main(base_path, word, out):
     metrics = {n: (0, 0) for n in names}
     metrics[".notdef"] = (500, 0)
     all_g, adv = draw("all")
+    # Run 15: ZERO advance on the word glyphs, so every copy a timer draws lands on
+    # the same spot and the text is never wider than one word (run 14: two copies
+    # overflowed the box and SwiftUI truncated them to an ellipsis).
     for d in DIGITS[1:]:
-        glyphs[d], metrics[d] = draw("all")[0], (adv, 0)
-    glyphs["w.ink"], metrics["w.ink"] = draw("ink")[0], (adv, 0)
-    glyphs["w.red"], metrics["w.red"] = draw("red")[0], (adv, 0)
+        glyphs[d], metrics[d] = draw("all")[0], (0, 0)
+    glyphs["w.ink"], metrics["w.ink"] = draw("ink")[0], (0, 0)
+    glyphs["w.red"], metrics["w.red"] = draw("red")[0], (0, 0)
     colr = {d: [("w.ink", 0xFFFF), ("w.red", 0)] for d in DIGITS[1:]}
 
     fb = FontBuilder(upm, isTTF=True)

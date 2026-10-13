@@ -43,8 +43,8 @@ func pivotWord(_ piece: String, size: CGFloat) -> some View {
 func countingWords(_ start: Date, size: CGFloat) -> some View {
     // run 13, ONE change on this side: the timer starts 15 s in the FUTURE.
     // Same font, same frame. Words appearing from 15 s = a future start is fine.
-    // run 14, ONE change on this side vs run 13: the one-word font (digits 1-9 = "truth",
-    // red r by Frank's rule, 0 = nothing). Expect nothing until 15 s, then the word.
+    // run 15, ONE change on this side vs run 14: the word glyphs now have zero advance, so the
+    // timer's copies stack and nothing overflows (run 14 overflowed and was truncated to an ellipsis).
     Text(timerInterval: start.addingTimeInterval(15)...start.addingTimeInterval(255), countsDown: false, showsHours: false)
         .font(.custom("IslandWord", size: size))
         .foregroundColor(islandInk)
@@ -67,8 +67,9 @@ func tenthsClock(_ start: Date, size: CGFloat) -> some View {
                                                  maxFieldCount: 4, maxPrecision: .milliseconds(10)))
             .font(.custom("IslandDiagC", size: size))
             .foregroundColor(islandInk)
-            .lineLimit(1)
-            .frame(width: size * 4.6, alignment: .leading)
+            // run 15, ONE change on this side vs run 14: fixedSize instead of lineLimit+frame
+            // (every blank run 8-11 used fixedSize; this says whether it was the cause).
+            .fixedSize()
     } else {
         Text(timerInterval: start...start.addingTimeInterval(3600), countsDown: false, showsHours: false)
             .font(.system(size: size, weight: .semibold).monospacedDigit())
