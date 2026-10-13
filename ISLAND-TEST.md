@@ -70,7 +70,9 @@ bash island-test/run.sh
 
 `bash island-test/run.sh rates` runs runs 1–3 again: words sent at set rates, slowest first (once every 4 s for 40 s, then 1, 2, 3 and 4 a second for 30 s each, with 10 s of rest between).
 
-## What the island costs the status bar (Osca, 13 Oct 14:57)
+## What the island costs the status bar (Osca, 13 Oct 14:57) -- WRONG, see the note
+
+**Correction (18:18, Osca):** every frame of the recording shows "9:41", full signal and full battery, because iOS swaps in a demo status bar whenever the screen is captured over the cable. The island in the recording is real; the status bar around it is not. So the figures below were measured against a fake bar and must not be built on. The real bar (the real time, e.g. "18:17", is wider than "9:41") can only be seen in a screenshot taken on the phone itself (side button + volume up) while the island shows a word; that is how this section gets re-measured. The pill widths are real (the pill is the island's); what is lost beside it is not yet known.
 
 Measured on the recordings (402 pt screen; the recorder sees the whole top bar):
 
