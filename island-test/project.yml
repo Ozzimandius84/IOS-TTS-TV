@@ -142,12 +142,152 @@ targets:
         buildPhase: resources
       - path: font/words/IslandW30.ttf
         buildPhase: resources
+      - path: font/words/IslandW31.ttf
+        buildPhase: resources
+      - path: font/words/IslandW32.ttf
+        buildPhase: resources
+      - path: font/words/IslandW33.ttf
+        buildPhase: resources
+      - path: font/words/IslandW34.ttf
+        buildPhase: resources
+      - path: font/words/IslandW35.ttf
+        buildPhase: resources
+      - path: font/words/IslandW36.ttf
+        buildPhase: resources
+      - path: font/words/IslandW37.ttf
+        buildPhase: resources
+      - path: font/words/IslandW38.ttf
+        buildPhase: resources
+      - path: font/words/IslandW39.ttf
+        buildPhase: resources
+      - path: font/words/IslandW40.ttf
+        buildPhase: resources
+      - path: font/words/IslandW41.ttf
+        buildPhase: resources
+      - path: font/words/IslandW42.ttf
+        buildPhase: resources
+      - path: font/words/IslandW43.ttf
+        buildPhase: resources
+      - path: font/words/IslandW44.ttf
+        buildPhase: resources
+      - path: font/words/IslandW45.ttf
+        buildPhase: resources
+      - path: font/words/IslandW46.ttf
+        buildPhase: resources
+      - path: font/words/IslandW47.ttf
+        buildPhase: resources
+      - path: font/words/IslandW48.ttf
+        buildPhase: resources
+      - path: font/words/IslandW49.ttf
+        buildPhase: resources
+      - path: font/words/IslandW50.ttf
+        buildPhase: resources
+      - path: font/words/IslandW51.ttf
+        buildPhase: resources
+      - path: font/words/IslandW52.ttf
+        buildPhase: resources
+      - path: font/words/IslandW53.ttf
+        buildPhase: resources
+      - path: font/words/IslandW54.ttf
+        buildPhase: resources
+      - path: font/words/IslandW55.ttf
+        buildPhase: resources
+      - path: font/words/IslandW56.ttf
+        buildPhase: resources
+      - path: font/words/IslandW57.ttf
+        buildPhase: resources
+      - path: font/words/IslandW58.ttf
+        buildPhase: resources
+      - path: font/words/IslandW59.ttf
+        buildPhase: resources
+      - path: font/words/IslandW60.ttf
+        buildPhase: resources
+      - path: font/words/IslandW61.ttf
+        buildPhase: resources
+      - path: font/words/IslandW62.ttf
+        buildPhase: resources
+      - path: font/words/IslandW63.ttf
+        buildPhase: resources
+      - path: font/words/IslandW64.ttf
+        buildPhase: resources
+      - path: font/words/IslandW65.ttf
+        buildPhase: resources
+      - path: font/words/IslandW66.ttf
+        buildPhase: resources
+      - path: font/words/IslandW67.ttf
+        buildPhase: resources
+      - path: font/words/IslandW68.ttf
+        buildPhase: resources
+      - path: font/words/IslandW69.ttf
+        buildPhase: resources
+      - path: font/words/IslandW70.ttf
+        buildPhase: resources
+      - path: font/words/IslandW71.ttf
+        buildPhase: resources
+      - path: font/words/IslandW72.ttf
+        buildPhase: resources
+      - path: font/words/IslandW73.ttf
+        buildPhase: resources
+      - path: font/words/IslandW74.ttf
+        buildPhase: resources
+      - path: font/words/IslandW75.ttf
+        buildPhase: resources
+      - path: font/words/IslandW76.ttf
+        buildPhase: resources
+      - path: font/words/IslandW77.ttf
+        buildPhase: resources
+      - path: font/words/IslandW78.ttf
+        buildPhase: resources
+      - path: font/words/IslandW79.ttf
+        buildPhase: resources
+      - path: font/words/IslandW80.ttf
+        buildPhase: resources
+      - path: font/words/IslandW81.ttf
+        buildPhase: resources
+      - path: font/words/IslandW82.ttf
+        buildPhase: resources
+      - path: font/words/IslandW83.ttf
+        buildPhase: resources
+      - path: font/words/IslandW84.ttf
+        buildPhase: resources
+      - path: font/words/IslandW85.ttf
+        buildPhase: resources
+      - path: font/words/IslandW86.ttf
+        buildPhase: resources
+      - path: font/words/IslandW87.ttf
+        buildPhase: resources
+      - path: font/words/IslandW88.ttf
+        buildPhase: resources
+      - path: font/words/IslandW89.ttf
+        buildPhase: resources
+      - path: font/words/IslandW90.ttf
+        buildPhase: resources
+      - path: font/words/IslandW91.ttf
+        buildPhase: resources
+      - path: font/words/IslandW92.ttf
+        buildPhase: resources
+      - path: font/words/IslandW93.ttf
+        buildPhase: resources
+      - path: font/words/IslandW94.ttf
+        buildPhase: resources
+      - path: font/words/IslandW95.ttf
+        buildPhase: resources
+      - path: font/words/IslandW96.ttf
+        buildPhase: resources
+      - path: font/words/IslandW97.ttf
+        buildPhase: resources
+      - path: font/words/IslandW98.ttf
+        buildPhase: resources
+      - path: font/words/IslandW99.ttf
+        buildPhase: resources
+      - path: font/words/IslandW100.ttf
+        buildPhase: resources
       # words-end
     info:
       path: Widget/Info.plist
       properties:
         CFBundleDisplayName: Island Test
-        UIAppFonts: [IslandCount.ttf, IslandDiagC.ttf, IslandWord.ttf, IslandWord2.ttf, IslandWord3.ttf, IslandCover.ttf, IslandW01.ttf, IslandW02.ttf, IslandW03.ttf, IslandW04.ttf, IslandW05.ttf, IslandW06.ttf, IslandW07.ttf, IslandW08.ttf, IslandW09.ttf, IslandW10.ttf, IslandW11.ttf, IslandW12.ttf, IslandW13.ttf, IslandW14.ttf, IslandW15.ttf, IslandW16.ttf, IslandW17.ttf, IslandW18.ttf, IslandW19.ttf, IslandW20.ttf, IslandW21.ttf, IslandW22.ttf, IslandW23.ttf, IslandW24.ttf, IslandW25.ttf, IslandW26.ttf, IslandW27.ttf, IslandW28.ttf, IslandW29.ttf, IslandW30.ttf]
+        UIAppFonts: [IslandCount.ttf, IslandDiagC.ttf, IslandWord.ttf, IslandWord2.ttf, IslandWord3.ttf, IslandCover.ttf, IslandW01.ttf, IslandW02.ttf, IslandW03.ttf, IslandW04.ttf, IslandW05.ttf, IslandW06.ttf, IslandW07.ttf, IslandW08.ttf, IslandW09.ttf, IslandW10.ttf, IslandW11.ttf, IslandW12.ttf, IslandW13.ttf, IslandW14.ttf, IslandW15.ttf, IslandW16.ttf, IslandW17.ttf, IslandW18.ttf, IslandW19.ttf, IslandW20.ttf, IslandW21.ttf, IslandW22.ttf, IslandW23.ttf, IslandW24.ttf, IslandW25.ttf, IslandW26.ttf, IslandW27.ttf, IslandW28.ttf, IslandW29.ttf, IslandW30.ttf, IslandW31.ttf, IslandW32.ttf, IslandW33.ttf, IslandW34.ttf, IslandW35.ttf, IslandW36.ttf, IslandW37.ttf, IslandW38.ttf, IslandW39.ttf, IslandW40.ttf, IslandW41.ttf, IslandW42.ttf, IslandW43.ttf, IslandW44.ttf, IslandW45.ttf, IslandW46.ttf, IslandW47.ttf, IslandW48.ttf, IslandW49.ttf, IslandW50.ttf, IslandW51.ttf, IslandW52.ttf, IslandW53.ttf, IslandW54.ttf, IslandW55.ttf, IslandW56.ttf, IslandW57.ttf, IslandW58.ttf, IslandW59.ttf, IslandW60.ttf, IslandW61.ttf, IslandW62.ttf, IslandW63.ttf, IslandW64.ttf, IslandW65.ttf, IslandW66.ttf, IslandW67.ttf, IslandW68.ttf, IslandW69.ttf, IslandW70.ttf, IslandW71.ttf, IslandW72.ttf, IslandW73.ttf, IslandW74.ttf, IslandW75.ttf, IslandW76.ttf, IslandW77.ttf, IslandW78.ttf, IslandW79.ttf, IslandW80.ttf, IslandW81.ttf, IslandW82.ttf, IslandW83.ttf, IslandW84.ttf, IslandW85.ttf, IslandW86.ttf, IslandW87.ttf, IslandW88.ttf, IslandW89.ttf, IslandW90.ttf, IslandW91.ttf, IslandW92.ttf, IslandW93.ttf, IslandW94.ttf, IslandW95.ttf, IslandW96.ttf, IslandW97.ttf, IslandW98.ttf, IslandW99.ttf, IslandW100.ttf]
         CFBundleShortVersionString: "1.0"
         CFBundleVersion: "1"
         NSExtension:

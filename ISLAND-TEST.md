@@ -25,7 +25,7 @@ The final run, from the Mac's recording of the phone's screen and the phone's ow
 
 Pictures: `island-test/results/island-22s-moving.png` shows a live word. `island-test/results/island-100s-frozen.png` shows the same word still there 80 s later, while the app sent 120 more.
 
-**Since then (runs 4–17, same day):** the island will show words with no updates at all, if the words are drawn by the island's own clocks. A stopwatch the island runs itself redraws 50 times a second for as long as you like; put it in a font whose digits draw a word, and that word appears at the moment you chose, while the app is in the background. Run 17 showed three words landing on the hundredth of a second, each one replacing the last; run 18 showed thirty in a row at 3 a second, every one on time. Details and what is still unproven are under "Run 16" and "Run 17" below.
+**Since then (runs 4–25, same day):** the island will show words with no updates at all, if the words are drawn by the island's own clocks. A stopwatch the island runs itself redraws 50 times a second for as long as you like; put it in a font whose digits draw a word, and that word appears at the moment you chose, while the app is in the background. Run 17 showed three words landing on the hundredth of a second, each one replacing the last; run 18 showed thirty in a row at 3 a second, every one on time. Runs 19–24 kept dying, and the phone's own log said why: iOS refuses the island's drawing when it is over about 2 MB (`archiveTooLarge`); with the word stack drawn once instead of in every presentation (run 25), 30 words lived for 3 minutes. A background update every 15–30 s arrives within a second (runs 21–22), so a chapter can be fed in windows. Details and what is still unproven are under "Run 16" and "Run 17" below.
 
 What else might work is in `ISLAND-OPTIONS.md`.
 
@@ -940,6 +940,12 @@ Look at results/screen/frames/ to see WHAT was drawn: words in Frank's red-lette
   184.1s  run_end
   184.1s  info activity ended
 ```
+
+### Run 25 (13 Oct 15:22): under the cap, 30 layers live for 3 minutes
+
+The same 30 layers, with the stack only in the compact slot. The island lived the whole 3 minutes (dismissed only when the app ended it at 183.6 s), and the phone's log for the run has no `archiveTooLarge` at all. The size cap was the whole story from run 19 on.
+
+Run 26: 100 layers, compact slot only, 3 minutes -- how many layers fit under the cap, which sets the window size for a chapter.
 
 ### Run on the phone, screen recorded — 13 Oct 2026 15:22
 
