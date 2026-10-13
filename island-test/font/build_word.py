@@ -7,7 +7,7 @@ colour layers; 0, ':' and '.' draw nothing. A timer "0:00" shows nothing; from
 any second copy). The word glyphs have ZERO advance (run 15), so a timer's
 several copies stack on one spot and nothing overflows the one-word box.
 
-    python3 build_word.py <base serif .ttf> <word> <out dir>
+    python3 build_word.py <base serif .ttf> <word> <out dir> [family]
 """
 import re
 import sys
@@ -38,7 +38,7 @@ def pivot_index(w):
     return min(k, len(w) - 1)
 
 
-def main(base_path, word, out):
+def main(base_path, word, out, family="IslandWord"):
     base = TTFont(base_path)
     gs, cmap, hmtx = base.getGlyphSet(), base.getBestCmap(), base["hmtx"]
     upm = 1000
@@ -85,16 +85,16 @@ def main(base_path, word, out):
     fb.setupHorizontalMetrics(metrics)
     hh, os2 = base["hhea"], base["OS/2"]
     fb.setupHorizontalHeader(ascent=int(hh.ascent * sc), descent=int(hh.descent * sc))
-    fb.setupNameTable({"familyName": "IslandWord", "styleName": "Regular",
-                       "psName": "IslandWord-Regular", "fullName": "IslandWord Regular"})
+    fb.setupNameTable({"familyName": family, "styleName": "Regular",
+                       "psName": family + "-Regular", "fullName": family + " Regular"})
     fb.setupOS2(sTypoAscender=int(os2.sTypoAscender * sc), sTypoDescender=int(os2.sTypoDescender * sc),
                 usWinAscent=int(os2.usWinAscent * sc), usWinDescent=int(os2.usWinDescent * sc))
     fb.setupPost()
     fb.setupCOLR(colr)
     fb.setupCPAL([[RED]])
-    fb.save(f"{out}/IslandWord.ttf")
-    print(f"IslandWord.ttf: digits 1-9 = {word!r}, red letter {word[piv]!r}, advance {adv}")
+    fb.save(f"{out}/{family}.ttf")
+    print(f"{family}.ttf: digits 1-9 = {word!r}, red letter {word[piv]!r}, advance {adv}")
 
 
 if __name__ == "__main__":
-    main(sys.argv[1], sys.argv[2], sys.argv[3])
+    main(sys.argv[1], sys.argv[2], sys.argv[3], *sys.argv[4:5])

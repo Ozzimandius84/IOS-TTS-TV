@@ -40,17 +40,29 @@ func pivotWord(_ piece: String, size: CGFloat) -> some View {
 /// running clock "0:07" is drawn as the ONE word spoken at 7 s, its red letter on
 /// a fixed column. iOS ticks the clock itself, so the word moves with no update.
 /// Width: the font gives every word the same advance, 4.6 x the font size.
-func countingWords(_ start: Date, size: CGFloat) -> some View {
-    // run 13, ONE change on this side: the timer starts 15 s in the FUTURE.
-    // Same font, same frame. Words appearing from 15 s = a future start is fine.
-    // run 15, ONE change on this side vs run 14: the word glyphs now have zero advance, so the
-    // timer's copies stack and nothing overflows (run 14 overflowed and was truncated to an ellipsis).
-    Text(timerInterval: start.addingTimeInterval(15)...start.addingTimeInterval(255), countsDown: false, showsHours: false)
-        .font(.custom("IslandWord", size: size))
-        .foregroundColor(islandInk)
+/// One layer of the word stream (run 16): a timer that starts at `t`, drawn in
+/// `font` -- nothing before t ("0:00"), the font's word/block from t on.
+/// Layout rule from runs 13-15: lineLimit(1) + fixed-width frame, never fixedSize.
+func layer(_ t: Date, font: String, size: CGFloat, color: Color) -> some View {
+    Text(timerInterval: t...t.addingTimeInterval(600), countsDown: false, showsHours: false)
+        .font(.custom(font, size: size))
+        .foregroundColor(color)
         .lineLimit(1)
-        .frame(width: size * 2.7, alignment: .leading)
-        .clipped()
+        .frame(width: size * 4.6, alignment: .leading)
+}
+
+/// Run 16, right of the camera: three words in sequence with no app update.
+/// "truth" from 15 s; at 18 s a black cover and "single" on top of it; at 21 s
+/// another cover and "man". Each word is one font (digits 1-9 = the word).
+func countingWords(_ start: Date, size: CGFloat) -> some View {
+    ZStack(alignment: .leading) {
+        layer(start.addingTimeInterval(15), font: "IslandWord", size: size, color: islandInk)
+        layer(start.addingTimeInterval(18), font: "IslandCover", size: size, color: .black)
+        layer(start.addingTimeInterval(18), font: "IslandWord2", size: size, color: islandInk)
+        layer(start.addingTimeInterval(21), font: "IslandCover", size: size, color: .black)
+        layer(start.addingTimeInterval(21), font: "IslandWord3", size: size, color: islandInk)
+    }
+    .frame(width: size * 4.6, alignment: .leading)
 }
 
 /// The same counting font on a stopwatch asking for hundredths (iOS 18's live
@@ -62,14 +74,15 @@ func tenthsClock(_ start: Date, size: CGFloat) -> some View {
     if #available(iOS 18.0, *) {
         // run 14, ONE change on this side vs run 13: the stopwatch starts 15 s in the FUTURE.
         // Expect nothing until 15 s (all zeros), then blocks moving at hundredths.
+        // run 16, left: the hundredths stopwatch (future start, proven run 14) in the one-word
+        // font -- "truth" should appear at 15.0 s sharp, not a second late like the whole-second timer.
         Text(TimeDataSource<Date>.currentDate,
              format: SystemFormatStyle.Stopwatch(startingAt: start.addingTimeInterval(15), showsHours: false,
                                                  maxFieldCount: 4, maxPrecision: .milliseconds(10)))
-            .font(.custom("IslandDiagC", size: size))
+            .font(.custom("IslandWord", size: size))
             .foregroundColor(islandInk)
-            // run 15, ONE change on this side vs run 14: fixedSize instead of lineLimit+frame
-            // (every blank run 8-11 used fixedSize; this says whether it was the cause).
-            .fixedSize()
+            .lineLimit(1)
+            .frame(width: size * 4.6, alignment: .leading)
     } else {
         Text(timerInterval: start...start.addingTimeInterval(3600), countsDown: false, showsHours: false)
             .font(.system(size: size, weight: .semibold).monospacedDigit())

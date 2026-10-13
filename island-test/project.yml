@@ -68,6 +68,12 @@ targets:
         buildPhase: resources
       - path: font/IslandWord.ttf
         buildPhase: resources
+      - path: font/IslandWord2.ttf
+        buildPhase: resources
+      - path: font/IslandWord3.ttf
+        buildPhase: resources
+      - path: font/IslandCover.ttf
+        buildPhase: resources
       - path: font/IslandDiagD.ttf
         buildPhase: resources
       - path: font/IslandDiagE.ttf
@@ -78,7 +84,7 @@ targets:
       path: Widget/Info.plist
       properties:
         CFBundleDisplayName: Island Test
-        UIAppFonts: [IslandCount.ttf, IslandDiagC.ttf, IslandWord.ttf]
+        UIAppFonts: [IslandCount.ttf, IslandDiagC.ttf, IslandWord.ttf, IslandWord2.ttf, IslandWord3.ttf, IslandCover.ttf]
         CFBundleShortVersionString: "1.0"
         CFBundleVersion: "1"
         NSExtension:
