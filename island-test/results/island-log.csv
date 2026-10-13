@@ -1,24 +1,24 @@
 ms,event,seq,phase,detail
-2,info,-1,,wall 1791893629.6902
+2,info,-1,,wall 1791893849.8389
 2,info,-1,,iPhone18 3 iOS 26.6.1
 3,info,-1,,live activities enabled=true
-853,info,-1,,audio playing
-857,info,-1,,mode diag clock_start 1791893630.5473
-870,info,-1,,activity started
-870,content,0,waiting,
-870,info,-1,,activity state active
-4226,state,-1,,background
-4228,run_start,-1,,diag: no updates will be sent
-4228,phase_start,-1,words,
-9229,alive,-1,,tone playing=true
-14235,alive,-1,,tone playing=true
-19236,alive,-1,,tone playing=true
-24238,alive,-1,,tone playing=true
-29239,alive,-1,,tone playing=true
-34240,alive,-1,,tone playing=true
-39245,alive,-1,,tone playing=true
-44247,alive,-1,,tone playing=true
-44247,phase_end,-1,words,
-44247,run_end,-1,,
-44262,info,-1,,activity ended
-44263,info,-1,,activity state dismissed
+863,info,-1,,audio playing
+867,info,-1,,mode diag clock_start 1791893850.7063
+878,info,-1,,activity started
+879,content,0,waiting,
+879,info,-1,,activity state active
+3522,state,-1,,background
+3523,run_start,-1,,diag: no updates will be sent
+3523,phase_start,-1,words,
+8524,alive,-1,,tone playing=true
+13525,alive,-1,,tone playing=true
+18530,alive,-1,,tone playing=true
+23535,alive,-1,,tone playing=true
+28536,alive,-1,,tone playing=true
+33538,alive,-1,,tone playing=true
+38539,alive,-1,,tone playing=true
+43540,alive,-1,,tone playing=true
+43540,phase_end,-1,words,
+43540,run_end,-1,,
+43558,info,-1,,activity ended
+43559,info,-1,,activity state dismissed
