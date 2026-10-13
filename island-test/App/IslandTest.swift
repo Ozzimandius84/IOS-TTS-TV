@@ -55,7 +55,7 @@ final class IslandTest {
         if args.contains("clock") { return "clock" }
         if args.contains("words") { return "words" }
         if args.contains("windows") { return "windows" }
-        return "diag"    // run 10, the default: the island's drawing rules
+        return "clock"   // run V: the default is the real thing (diag was a one-day diagnostic)
     }()
     /// Run 5: the island shows the words by its own switches at 3 a second, from 20 s after launch.
     static let wordLead = 20.0, wordsPerSecond = 3.0, wordCount = 30   // run 6: 30 (run 5's 90 got the activity dismissed)
