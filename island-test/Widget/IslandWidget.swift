@@ -148,6 +148,42 @@ func gateDots(_ a: IslandAttributes) -> some View {
     }
 }
 
+// MARK: run 10 -- the diagnostic: which kinds of digit drawing does the island allow?
+
+/// Left of the camera: A = run 4's font (known to draw), B = the same in a
+/// small cropped box. Both are stopwatches starting 15 s after launch.
+@ViewBuilder
+func diagLeft(_ a: IslandAttributes) -> some View {
+    let t = a.start.addingTimeInterval(15)
+    if #available(iOS 18.0, *) {
+        HStack(spacing: 4) {
+            liveClock(t, font: "IslandCount", size: 9, color: .white)
+            liveClock(t, font: "IslandCount", size: 9, color: .white)
+                .frame(width: 14, height: 12, alignment: .leading)
+                .clipped()
+        }
+    }
+}
+
+/// Right of the camera: four stopwatches starting 15 s after launch, each in a
+/// font whose digits 1-9 are solid blocks drawn a different way (font/build_diag.py):
+/// C white  = block inside the digit's own width
+/// D yellow = same block, digit given zero width
+/// E cyan   = block outside the digit's width, to the right
+/// F pink   = block outside the digit's width, to the left
+@ViewBuilder
+func diagRight(_ a: IslandAttributes) -> some View {
+    let t = a.start.addingTimeInterval(15)
+    if #available(iOS 18.0, *) {
+        HStack(spacing: 6) {
+            liveClock(t, font: "IslandDiagC", size: 8, color: .white)
+            liveClock(t, font: "IslandDiagD", size: 8, color: .yellow)
+            liveClock(t, font: "IslandDiagE", size: 8, color: .cyan)
+            liveClock(t, font: "IslandDiagF", size: 8, color: .pink)
+        }
+    }
+}
+
 struct IslandLiveActivity: Widget {
     var body: some WidgetConfiguration {
         ActivityConfiguration(for: IslandAttributes.self) { context in
@@ -184,7 +220,9 @@ struct IslandLiveActivity: Widget {
                     }
                 }
             } compactLeading: {
-                if context.attributes.mode == "words" {
+                if context.attributes.mode == "diag" {
+                    diagLeft(context.attributes)
+                } else if context.attributes.mode == "words" {
                     gateDots(context.attributes)
                 } else if context.attributes.mode == "clock" {
                     // left of the camera: the hundredths stopwatch
@@ -193,7 +231,9 @@ struct IslandLiveActivity: Widget {
                     Text("F").font(islandFont(13)).foregroundColor(islandInk)
                 }
             } compactTrailing: {
-                if context.attributes.mode == "words" {
+                if context.attributes.mode == "diag" {
+                    diagRight(context.attributes)
+                } else if context.attributes.mode == "words" {
                     wordStream(context.attributes, size: 15)
                 } else if context.attributes.mode == "clock" {
                     // right of the camera: the counting font

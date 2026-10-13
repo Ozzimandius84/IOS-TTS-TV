@@ -52,7 +52,8 @@ final class IslandTest {
         let args = ProcessInfo.processInfo.arguments
         if args.contains("rates") { return "rates" }
         if args.contains("clock") { return "clock" }
-        return "words"   // run 5, the default
+        if args.contains("words") { return "words" }
+        return "diag"    // run 10, the default: the island's drawing rules
     }()
     /// Run 5: the island shows the words by its own switches at 3 a second, from 20 s after launch.
     static let wordLead = 20.0, wordsPerSecond = 3.0, wordCount = 30   // run 6: 30 (run 5's 90 got the activity dismissed)
@@ -148,7 +149,7 @@ final class IslandTest {
         guard !started, activity != nil else { return }
         started = true
         let th = Thread { [self] in
-            if self.mode == "clock" { self.runClock() } else if self.mode == "words" { self.runWords() } else { self.run() }
+            if self.mode == "clock" { self.runClock() } else if self.mode == "words" || self.mode == "diag" { self.runWords() } else { self.run() }
         }
         th.qualityOfService = .userInitiated
         th.start()
@@ -170,7 +171,7 @@ final class IslandTest {
     /// Run 5: send nothing; stay alive until the word window is over, noting every 5 s
     /// whether the tone is still playing (run 4's app went quiet 5 s in).
     private func runWords() {
-        log("run_start", detail: "words: no updates will be sent")
+        log("run_start", detail: "\(mode): no updates will be sent")
         log("phase_start", phase: "words")
         logQ.async { self.phaseNow = "words" }
         let endAt = clockStart.addingTimeInterval(Self.wordLead + Double(Self.wordCount) / Self.wordsPerSecond + 10)

@@ -64,11 +64,19 @@ targets:
         buildPhase: resources
       - path: font/IslandStripRed.ttf
         buildPhase: resources
+      - path: font/IslandDiagC.ttf
+        buildPhase: resources
+      - path: font/IslandDiagD.ttf
+        buildPhase: resources
+      - path: font/IslandDiagE.ttf
+        buildPhase: resources
+      - path: font/IslandDiagF.ttf
+        buildPhase: resources
     info:
       path: Widget/Info.plist
       properties:
         CFBundleDisplayName: Island Test
-        UIAppFonts: [IslandCount.ttf, IslandGate.ttf, IslandStrip.ttf, IslandStripRed.ttf]
+        UIAppFonts: [IslandCount.ttf, IslandGate.ttf, IslandStrip.ttf, IslandStripRed.ttf, IslandDiagC.ttf, IslandDiagD.ttf, IslandDiagE.ttf, IslandDiagF.ttf]
         CFBundleShortVersionString: "1.0"
         CFBundleVersion: "1"
         NSExtension:

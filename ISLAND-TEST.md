@@ -62,7 +62,7 @@ bash island-test/run.sh
 - **Camera prompt:** the first time, the Mac may ask whether Terminal may use the Camera. That's the phone's screen feed, so click Allow.
 - **On the phone:** when it prints **ON THE PHONE NOW**, swipe up to the home screen and leave the phone alone. Don't tap the island, because that opens the app.
 
-`bash island-test/run.sh` now runs **run 5: words only, no clock visible**. Every word is drawn as ordinary text (Frank's island style: Iowan Old Style, red letter by Frank's rule, fixed column), all stacked in one place. Each word sits behind two invisible switches made from the island's own live timers, drawn in the gate font (`font/IslandGate.ttf`, built by `font/build_gate.py`), in which every non-zero digit is a solid block and zeros are nothing. A timer counting up from the word's start is solid only after it; a timer counting down to the word's end is solid only before it. So each word shows only in its own third of a second, and the app sends nothing. 90 words at 3 a second, from 20 s after launch. A red dot left of the camera is a plain check that switches work at all: it should vanish 25 s after launch.
+`bash island-test/run.sh` now runs **run 10, the drawing-rules diagnostic** (below); `bash island-test/run.sh words` runs **run 5–9: words only, no clock visible**. Every word is drawn as ordinary text (Frank's island style: Iowan Old Style, red letter by Frank's rule, fixed column), all stacked in one place. Each word sits behind two invisible switches made from the island's own live timers, drawn in the gate font (`font/IslandGate.ttf`, built by `font/build_gate.py`), in which every non-zero digit is a solid block and zeros are nothing. A timer counting up from the word's start is solid only after it; a timer counting down to the word's end is solid only before it. So each word shows only in its own third of a second, and the app sends nothing. 90 words at 3 a second, from 20 s after launch. A red dot left of the camera is a plain check that switches work at all: it should vanish 25 s after launch.
 
 `bash island-test/run.sh clock` runs **run 4, the island's own clock**. The app sends no updates at all; the island shows two clocks drawn in the counting font (`island-test/font/`, built by `font/build_font.py`), in which a clock string such as "0:07" or "0:07.25" is drawn as the one word spoken at that moment, with its red letter on a fixed column. Left of the camera is a stopwatch asking for hundredths; right of it is the whole-second timer. The recorder times each side separately. The test speaks at a steady 3 words a second. The test font is DejaVu Serif, because that is what the build machine had.
 
@@ -320,6 +320,21 @@ Look at results/screen/frames/ to see WHAT was drawn: words in Frank's red-lette
    43.7s  info activity state dismissed
    43.7s  info activity ended
 ```
+
+
+### Run 9 (13 Oct 13:05): same — nothing from my fonts
+
+The period-wide fonts also drew nothing, not even the check square. So zero width was at best part of the cause. Every font whose digits are not ordinary digit-shaped, digit-wide glyphs has drawn nothing (runs 5–9). Run 4's ordinary digits drew fine.
+
+**Run 10 is purely a diagnostic,** to find the island's rule instead of guessing. Several stopwatches sit side by side, all starting at 15 s, each changing ONE thing (`island-test/font/build_diag.py`):
+- **Left of the camera:**
+  - **A:** run 4's font (control).
+  - **B:** the same font in a small cropped box.
+- **Right of the camera**, in fonts whose digits 1–9 are solid blocks:
+  - **C (white):** the block inside the digit's own width.
+  - **D (yellow):** the same block with the digit given zero width.
+  - **E (cyan):** the block drawn outside its width, to the right.
+  - **F (pink):** the block drawn outside its width, to the left.
 
 ### Run on the phone, screen recorded — 13 Oct 2026 13:06
 

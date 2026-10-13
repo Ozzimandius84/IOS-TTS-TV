@@ -10,7 +10,7 @@
 # The phone must be plugged in BY CABLE and UNLOCKED. When it says so, swipe
 # up to the home screen and leave the phone alone; don't tap the island.
 set -uo pipefail
-MODE="${1:-words}"
+MODE="${1:-diag}"
 HERE="$(cd "$(dirname "$0")" && pwd)"
 REPO="$(cd "$HERE/.." && pwd)"
 BID=com.ttstv.frank.islandtest
@@ -55,16 +55,19 @@ for i in $(seq 1 90); do
 done
 cat "$RES/screen/record.log"
 grep -q "recording" "$RES/screen/record.log" || { echo "the screen recorder did not start -- stopping here (see the line above)"; kill $REC 2>/dev/null; exit 1; }
-if [ "$MODE" != words ]; then
+if [ "$MODE" != diag ]; then
   xcrun devicectl device process launch --device "$DEVICE" --terminate-existing "$BID" "$MODE" || { kill $REC; exit 1; }
 else
   xcrun devicectl device process launch --device "$DEVICE" --terminate-existing "$BID" || { kill $REC; exit 1; }
 fi
 
 echo
-if [ "$MODE" = words ]; then
+if [ "$MODE" = diag ]; then
+  echo "  >>> ON THE PHONE NOW: swipe up to the home screen STRAIGHT AWAY and watch the island for 40 s. <<<"
+  echo "      Small test clocks either side of the camera should appear at 15 s."
+elif [ "$MODE" = words ]; then
   echo "  >>> ON THE PHONE NOW: swipe up to the home screen STRAIGHT AWAY and watch the island for 1 minute. <<<"
-  echo "      The words start 20 s after the app opened and run for 10 s; a white square left of the camera should appear at 15 s."
+  echo "      The words start 20 s after the app opened and run for 10 s."
 else
   echo "  >>> ON THE PHONE NOW: swipe up to the home screen and leave it alone for about 3 minutes. <<<"
 fi
