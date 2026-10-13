@@ -1,32 +1,37 @@
 ms,event,seq,phase,detail
-2,info,-1,,wall 1791904286.0163
+2,info,-1,,wall 1791904479.8649
 2,info,-1,,iPhone18 3 iOS 26.6.1
 3,info,-1,,live activities enabled=true
-859,info,-1,,audio playing
-861,info,-1,,mode windows clock_start 1791904286.8776
-874,info,-1,,activity started
-874,info,-1,,activity state active
-874,content,0,waiting,
+854,info,-1,,audio playing
+858,info,-1,,mode windows clock_start 1791904480.7231
+873,info,-1,,activity started
+873,info,-1,,activity state active
+873,content,0,waiting,
 883,info,-1,,background task begun id=2 remaining=1.7976931348623157e+308
-7506,state,-1,,background
-7506,run_start,-1,,windows: 4 updates from the background  one every 10 s  reDate=false
-7506,info,-1,,word_window 15.000 25.000
-7506,phase_start,-1,windows,
+6309,info,-1,,bluetooth state 5
+6310,info,-1,,bluetooth scanning
+6372,info,-1,,bluetooth saw a peripheral
+6372,info,-1,,bluetooth saw a peripheral
+6621,info,-1,,bluetooth saw a peripheral
+9233,state,-1,,background
+9238,run_start,-1,,windows: 4 updates from the background  one every 10 s  reDate=false
+9238,info,-1,,word_window 15.000 25.000
+9238,phase_start,-1,windows,
 20863,sent,1,windows,window 1 words 25-35 s
 20863,info,-1,,word_window 25.000 35.000
-20865,acked,1,windows,stale at 28.5 s
-20873,content,1,windows,
-30866,sent,2,windows,window 2 words 35-45 s
-30866,info,-1,,word_window 35.000 45.000
-30868,acked,2,windows,stale at 38.5 s
+20866,acked,1,windows,stale at 28.5 s
+20877,content,1,windows,
+30863,sent,2,windows,window 2 words 35-45 s
+30863,info,-1,,word_window 35.000 45.000
+30865,acked,2,windows,stale at 38.5 s
 30874,content,2,windows,
-40866,sent,3,windows,window 3 words 45-55 s
-40866,info,-1,,word_window 45.000 55.000
-40867,acked,3,windows,stale at 48.5 s
-50866,sent,4,windows,window 4 words 55-65 s
-50866,info,-1,,word_window 55.000 65.000
-50868,acked,4,windows,stale at 58.5 s
-70866,phase_end,-1,windows,
-70866,run_end,-1,,
-70876,info,-1,,activity ended
-70881,info,-1,,activity state dismissed
+40863,sent,3,windows,window 3 words 45-55 s
+40863,info,-1,,word_window 45.000 55.000
+40864,acked,3,windows,stale at 48.5 s
+50863,sent,4,windows,window 4 words 55-65 s
+50863,info,-1,,word_window 55.000 65.000
+50865,acked,4,windows,stale at 58.5 s
+70859,phase_end,-1,windows,
+70859,run_end,-1,,
+70872,info,-1,,activity ended
+70873,info,-1,,activity state dismissed
