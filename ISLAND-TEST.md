@@ -1280,6 +1280,14 @@ Look at results/screen/frames/ to see WHAT was drawn: words in Frank's red-lette
    70.9s  info activity state dismissed
 ```
 
+### Run B (16:23): the widget's memory is the font files, not the layers
+
+100 layers on only two fonts: lived the whole 94 s, 97 of 100 words seen, no kill. So the 60 MB that killed runs 26–27 was 100 separate font files, not 100 clock views. The island does not mind the layers; it minds the fonts.
+
+### Run V: one font for all the words
+
+If a chapter is one font, the memory gate and the fonts-at-runtime gate go away together, and windows can be 100 words. `font/build_var.py` builds a variable font: all the words stacked in one glyph 3 em apart (at 14 pt the neighbours sit 42 pt above and below, outside the 36 pt pill), and an axis WORD that slides word k onto the baseline. Each layer is the same font at a different axis value. Built on the Mac at book-prep time, one file per chapter; nothing generated on the phone. Run V: five words, one font, one every 3 s from 15 s -- does the island honour the axis when it draws?
+
 ### Run on the phone, screen recorded — 13 Oct 2026 16:23
 
 | side of the camera | what is there | seconds away | changes seen | changes a second | median gap | longest gap |

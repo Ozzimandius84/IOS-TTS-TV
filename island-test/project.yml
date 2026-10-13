@@ -82,6 +82,9 @@ targets:
         buildPhase: resources
       - path: font/IslandDiagF.ttf
         buildPhase: resources
+      # run V: one font for many words (built by font/build_var.py)
+      - path: font/IslandVar.ttf
+        buildPhase: resources
       # run 18: one font per word (built by font/build_words.py)
       # words-begin
       - path: font/words/IslandW01.ttf
@@ -149,7 +152,7 @@ targets:
       path: Widget/Info.plist
       properties:
         CFBundleDisplayName: Island Test
-        UIAppFonts: [IslandCount.ttf, IslandDiagC.ttf, IslandWord.ttf, IslandWord2.ttf, IslandWord3.ttf, IslandCover.ttf, IslandW01.ttf, IslandW02.ttf, IslandW03.ttf, IslandW04.ttf, IslandW05.ttf, IslandW06.ttf, IslandW07.ttf, IslandW08.ttf, IslandW09.ttf, IslandW10.ttf, IslandW11.ttf, IslandW12.ttf, IslandW13.ttf, IslandW14.ttf, IslandW15.ttf, IslandW16.ttf, IslandW17.ttf, IslandW18.ttf, IslandW19.ttf, IslandW20.ttf, IslandW21.ttf, IslandW22.ttf, IslandW23.ttf, IslandW24.ttf, IslandW25.ttf, IslandW26.ttf, IslandW27.ttf, IslandW28.ttf, IslandW29.ttf, IslandW30.ttf]
+        UIAppFonts: [IslandVar.ttf, IslandCount.ttf, IslandDiagC.ttf, IslandWord.ttf, IslandWord2.ttf, IslandWord3.ttf, IslandCover.ttf, IslandW01.ttf, IslandW02.ttf, IslandW03.ttf, IslandW04.ttf, IslandW05.ttf, IslandW06.ttf, IslandW07.ttf, IslandW08.ttf, IslandW09.ttf, IslandW10.ttf, IslandW11.ttf, IslandW12.ttf, IslandW13.ttf, IslandW14.ttf, IslandW15.ttf, IslandW16.ttf, IslandW17.ttf, IslandW18.ttf, IslandW19.ttf, IslandW20.ttf, IslandW21.ttf, IslandW22.ttf, IslandW23.ttf, IslandW24.ttf, IslandW25.ttf, IslandW26.ttf, IslandW27.ttf, IslandW28.ttf, IslandW29.ttf, IslandW30.ttf]
         CFBundleShortVersionString: "1.0"
         CFBundleVersion: "1"
         NSExtension:

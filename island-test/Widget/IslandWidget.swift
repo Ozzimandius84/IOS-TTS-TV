@@ -6,6 +6,8 @@
 import ActivityKit
 import SwiftUI
 import WidgetKit
+import UIKit
+import CoreText
 
 @main
 struct IslandWidgetBundle: WidgetBundle {
@@ -56,6 +58,38 @@ func wordLayer(_ t: Date, font: String, size: CGFloat) -> some View {
             .lineLimit(1)
             .frame(width: size * 4.6, alignment: .leading)
     }
+}
+
+/// Run V: ONE font for all the words. The words are stacked in one glyph; the axis
+/// WORD slides word k onto the baseline, the others fall outside the pill. Each layer
+/// is the same font at a different axis value, so a chapter costs one font, not one per
+/// word (run B: 100 font files were the widget's 60 MB; 100 layers on 2 fonts were fine).
+let wordAxis = 0x574F5244   // 'WORD'
+func varFont(_ k: Int, size: CGFloat) -> Font {
+    let variation = UIFontDescriptor.AttributeName(rawValue: kCTFontVariationAttribute as String)
+    let d = UIFontDescriptor(fontAttributes: [.name: "IslandVar-Regular", variation: [wordAxis: k]])
+    return Font(UIFont(descriptor: d, size: size))
+}
+@ViewBuilder
+func varLayer(_ t: Date, k: Int, size: CGFloat) -> some View {
+    if #available(iOS 18.0, *) {
+        Text(TimeDataSource<Date>.currentDate,
+             format: SystemFormatStyle.Stopwatch(startingAt: t, showsHours: false,
+                                                 maxFieldCount: 4, maxPrecision: .milliseconds(10)))
+            .font(varFont(k, size: size))
+            .foregroundColor(islandInk)
+            .lineLimit(1)
+            .frame(width: size * 4.6, alignment: .leading)
+    }
+}
+let varWords = ["It", "is", "a", "truth", "single"]   // the words in font/IslandVar.ttf, in axis order
+func varStack(_ start: Date, size: CGFloat) -> some View {
+    ZStack(alignment: .leading) {
+        ForEach(0..<varWords.count, id: \.self) { k in
+            varLayer(start.addingTimeInterval(15 + Double(k) * 3), k: k, size: size)   // one every 3 s from 15 s
+        }
+    }
+    .frame(width: size * 4.6, alignment: .leading)
 }
 
 /// Run 18, right of the camera: the words of Widget/WordList.swift (30 at 3 a
@@ -151,7 +185,7 @@ struct IslandLiveActivity: Widget {
             } compactTrailing: {
                 if context.attributes.mode == "clock" || context.attributes.mode == "windows" {
                     // right of the camera: the counting font
-                    (context.attributes.mode == "windows" ? AnyView(twoStacks(context, size: 14)) : AnyView(countingWords(wordsStart(context), size: 14)))
+                    (context.attributes.mode == "windows" ? AnyView(twoStacks(context, size: 14)) : AnyView(varStack(context.attributes.start, size: 14)))   // run V
                 } else {
                     pivotWord(context.state.word, size: 15)
                 }
