@@ -7,6 +7,8 @@
 #
 # Question it answers: how often can a Live Activity in the Dynamic Island
 # show a new word while the app plays audio in the background?
+# The Mac side (recorder/record.swift) records the phone's screen over the
+# cable and times every change in the island -- the widget cannot report it.
 name: islandtest
 options:
   bundleIdPrefix: com.ttstv.frank.islandtest
@@ -37,13 +39,6 @@ targets:
         NSSupportsLiveActivities: true
         UIFileSharingEnabled: true
         LSSupportsOpeningDocumentsInPlace: true
-    # Run 2: a shared folder so the widget can write down every word it draws
-    # (run 1's Darwin notifications never arrived). If the personal team cannot
-    # sign an App Group, the build stops here and says so in results/build.log.
-    entitlements:
-      path: App/IslandTest.entitlements
-      properties:
-        com.apple.security.application-groups: [group.com.ttstv.frank.islandtest]
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.ttstv.frank.islandtest
@@ -64,10 +59,6 @@ targets:
         CFBundleVersion: "1"
         NSExtension:
           NSExtensionPointIdentifier: com.apple.widgetkit-extension
-    entitlements:
-      path: Widget/IslandWidget.entitlements
-      properties:
-        com.apple.security.application-groups: [group.com.ttstv.frank.islandtest]
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.ttstv.frank.islandtest.widget

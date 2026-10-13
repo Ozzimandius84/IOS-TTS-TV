@@ -1,115 +1,108 @@
 #!/usr/bin/env python3
-"""Island Test: turn the phone's island-log.csv into the per-rate table.
+"""Island Test: line the phone's log up with the Mac's recording of the
+phone's screen and print the per-rate table.
 
-    python3 analyze.py results/island-log.csv  > results/summary.md
+    python3 analyze.py results/island-log.csv results/screen/screen.csv > results/summary.md
 
-"shown" = the widget drew that word in the island's compact region (the
-word beside the camera). The lock-screen column is the same for the lock
-screen / banner view. A word counts once, at the first time it was drawn.
+"changes seen" = moments the island strip of the screen visibly changed
+(a burst of changing frames counts once; a new burst needs 0.15 s of
+stillness before it). That is what a person would see as "the word moved".
 """
 import csv
+import os
 import statistics
 import sys
-from collections import defaultdict
 
-ORDER = ["1/s", "2/s", "3/s", "4/s", "sentence"]
+ORDER = ["sentence", "1/s", "2/s", "3/s", "4/s"]
+NAMES = {"sentence": "1 per sentence (every 4 s)", "1/s": "1 per second", "2/s": "2 per second",
+         "3/s": "3 per second", "4/s": "4 per second"}
+QUIET = 0.15     # seconds of stillness that separate two changes
+STILL = 2.0      # "froze" = no change for longer than this (or 2 intervals, if longer) while words were being sent
+INTERVAL = {"sentence": 4.0, "1/s": 1.0, "2/s": 0.5, "3/s": 1 / 3, "4/s": 0.25}
 
 
-def main(path):
-    rows = list(csv.DictReader(open(path, newline="")))
-    sent = {}                       # seq -> (ms, phase)
-    acked = {}                      # seq -> ms
-    first = defaultdict(dict)       # region -> seq -> ms
-    draws = defaultdict(int)        # region -> total draw calls
-    darwin = defaultdict(int)       # region -> Darwin notifications heard (cross-check)
-    window = {}                     # phase -> [start, end]
-    states, info = [], []
+def main(log_path, screen_path):
+    rows = list(csv.DictReader(open(log_path, newline="")))
+    wall0 = None
+    sent, content, window, states, info = {}, {}, {}, [], []
     for r in rows:
-        ms, ev, seq, ph = int(r["ms"]), r["event"], int(r["seq"]), r["phase"]
+        ms, ev, seq, ph, det = int(r["ms"]), r["event"], int(r["seq"]), r["phase"], r["detail"]
+        t = ms / 1000
+        if ev == "info" and det.startswith("wall "):
+            wall0 = float(det.split()[1])
         if ev == "sent":
-            sent[seq] = (ms, ph)
-        elif ev == "acked":
-            acked[seq] = ms
-        elif ev.startswith("darwin_"):
-            darwin[ev[7:]] += 1
-        elif ev.startswith("drawn_"):
-            reg = ev[6:]
-            draws[reg] += 1
-            first[reg].setdefault(seq, ms)
+            sent[seq] = (t, ph)
+        elif ev == "content":
+            content.setdefault(seq, t)
         elif ev == "phase_start":
-            window[ph] = [ms, None]
+            window[ph] = [t, None]
         elif ev == "phase_end" and ph in window:
-            window[ph][1] = ms
+            window[ph][1] = t
         elif ev == "state":
-            states.append((ms, r["detail"]))
+            states.append((t, det))
         elif ev in ("info", "error", "run_start", "run_end"):
-            info.append(f"{ms/1000:7.1f}s  {ev} {r['detail']}".rstrip())
+            info.append(f"{t:7.1f}s  {ev} {det}".rstrip())
 
-    # seconds the app was in front during each phase (tapping the island opens the app)
-    def in_front(phase):
-        w = window.get(phase)
-        if not w or w[1] is None:
-            return 0.0
-        front, last, tot = False, 0, 0
-        for ms, st in states + [(w[1], "_end")]:
+    # screen: wall seconds -> seconds since the phone's launch
+    changes, thr, nframes = [], None, 0
+    if screen_path and os.path.exists(screen_path) and wall0 is not None:
+        frames = [(float(r["wall"]) - wall0, float(r["diff"])) for r in csv.DictReader(open(screen_path))]
+        nframes = len(frames)
+        diffs = sorted(d for _, d in frames)
+        if diffs:
+            floor = diffs[len(diffs) // 2]
+            thr = max(1.0, 4 * floor)
+            last_change = -1e9
+            for t, d in frames:
+                if d > thr:
+                    if t - last_change > QUIET:
+                        changes.append(t)
+                    last_change = t
+
+    def in_front(a, b):
+        front, since, tot = False, 0.0, 0.0
+        for t, s in states + [(b, "_end")]:
             if front:
-                a, b = max(last, w[0]), min(ms, w[1])
-                tot += max(0, b - a)
-            if st == "foreground":
-                front, last = True, ms
-            elif st == "background":
+                tot += max(0.0, min(t, b) - max(since, a))
+            if s == "foreground":
+                front, since = True, t
+            elif s == "background":
                 front = False
-            if ms >= w[1]:
-                break
-        return tot / 1000
-
-    def ms_s(v):
-        return "–" if v is None else f"{v/1000:.2f} s"
-
-    def stats_for(region, phase):
-        seqs = sorted(s for s, (_, p) in sent.items() if p == phase)
-        shown = sorted(first[region][s] for s in seqs if s in first[region])
-        gaps = [b - a for a, b in zip(shown, shown[1:])]
-        # longest gap also counts phase start -> first shown and last shown -> phase end,
-        # so a word that froze for the rest of the phase is not hidden
-        w = window.get(phase, [None, None])
-        edges = ([w[0]] if w[0] is not None else []) + shown + ([w[1]] if w[1] is not None else [])
-        all_gaps = [b - a for a, b in zip(edges, edges[1:])]
-        lat = [first[region][s] - sent[s][0] for s in seqs if s in first[region]]
-        return dict(sent=len(seqs), shown=len(shown),
-                    med_gap=statistics.median(gaps) if gaps else None,
-                    max_gap=max(all_gaps) if all_gaps else None,
-                    med_lat=statistics.median(lat) if lat else None)
+        return tot
 
     out = []
-    if not any(draws.values()):
-        out.append("**No widget draws were recorded, so this run measured nothing about the island.** "
-                   "The info lines at the bottom say whether the widget could not write its file or never drew at all.\n")
-    for region, label in (("c", "Dynamic Island (word beside the camera)"),
-                          ("l", "Lock screen / banner view")):
-        out.append(f"### {label}\n")
-        out.append("| rate | sent | shown | median gap between shown words | longest gap | median delay sent → shown | app open during it |")
-        out.append("|---|---|---|---|---|---|---|")
-        for ph in ORDER:
-            st = stats_for(region, ph)
-            if not st["sent"]:
-                continue
-            name = "1 per sentence (every 4 s)" if ph == "sentence" else f"{ph[0]} per second"
-            out.append(f"| {name} | {st['sent']} | {st['shown']} ({100*st['shown']//max(st['sent'],1)}%) | "
-                       f"{ms_s(st['med_gap'])} | {ms_s(st['max_gap'])} | {ms_s(st['med_lat'])} | "
-                       f"{'%.0f s' % in_front(ph) if in_front(ph) >= 0.5 else 'no'} |")
-        out.append("")
-
-    lat_ack = [acked[s] - sent[s][0] for s in sent if s in acked]
-    out.append(f"Update calls returned: {len(lat_ack)} of {len(sent)}"
-               + (f", median {statistics.median(lat_ack)} ms, slowest {max(lat_ack)} ms." if lat_ack else "."))
-    out.append(f"Draw calls by region: " + ", ".join(f"{k}={v}" for k, v in sorted(draws.items()))
-               + "  (c island compact, m island minimal, e island expanded, l lock screen)")
-    out.append("Darwin notifications heard (cross-check): " + (", ".join(f"{k}={v}" for k, v in sorted(darwin.items())) or "none"))
+    if not changes:
+        out.append("**The screen recording gave no changes, so the island was not measured.** "
+                   "See results/run.log for what the recorder said.\n")
+    out.append("| rate | sent | changes seen in the island | median gap | longest gap | first froze (still > 2 s) | ActivityKit said updated | app open during it |")
+    out.append("|---|---|---|---|---|---|---|---|")
+    for ph in ORDER:
+        if ph not in window or window[ph][1] is None:
+            continue
+        a, b = window[ph]
+        n_sent = sum(1 for _, p in sent.values() if p == ph)
+        seen = [t for t in changes if a <= t < b + 0.5]
+        gaps = [y - x for x, y in zip(seen, seen[1:])]
+        edges = [a] + seen + [b]
+        longest = max(y - x for x, y in zip(edges, edges[1:]))
+        froze = next((x - a for x, y in zip(edges, edges[1:]) if y - x > max(STILL, 2 * INTERVAL[ph])), None)
+        n_content = sum(1 for s, t in content.items() if s in sent and sent[s][1] == ph)
+        front = in_front(a, b)
+        med = f"{statistics.median(gaps):.2f} s" if gaps else "–"
+        fz = "never" if froze is None else f"after {froze:.0f} s"
+        fr = f"{front:.0f} s" if front >= 0.5 else "no"
+        out.append(f"| {NAMES[ph]} | {n_sent} | {len(seen)} ({100 * len(seen) // max(n_sent, 1)}%) | {med} | "
+                   f"{longest:.1f} s | {fz} | {n_content} | {fr} |")
     out.append("")
-    out.append("Phase windows (s since launch): " + ", ".join(
-        f"{p} {w[0]/1000:.1f}–{(w[1] or 0)/1000:.1f}" for p, w in window.items()))
-    out.append("App state changes: " + (", ".join(f"{ms/1000:.1f}s {s}" for ms, s in states) or "none"))
+    out.append(f"Screen frames recorded: {nframes}; change threshold {thr if thr is None else round(thr, 2)}. "
+               "Gaps include about 0.1 s of cable-mirroring lag, the same for every word.")
+    rests = []
+    for p, q in zip(ORDER, ORDER[1:]):
+        if p in window and q in window and window[p][1] is not None:
+            n = sum(1 for t in changes if window[p][1] + 0.5 <= t < window[q][0])
+            rests.append(f"after {p}: {n}")
+    out.append("Changes seen during the 10 s rests (should be 0 or 1 -- a late catch-up shows here): " + ", ".join(rests))
+    out.append("App state changes: " + (", ".join(f"{t:.1f}s {s}" for t, s in states) or "none"))
     out.append("")
     out.append("```")
     out.extend(info)
@@ -118,4 +111,4 @@ def main(path):
 
 
 if __name__ == "__main__":
-    main(sys.argv[1])
+    main(sys.argv[1], sys.argv[2] if len(sys.argv) > 2 else None)

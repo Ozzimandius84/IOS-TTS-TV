@@ -1,13 +1,13 @@
-/*  The measurement. Writes Documents/island-log.csv:
+/*  The phone half of the measurement. Writes Documents/island-log.csv:
 
         ms,event,seq,phase,detail
 
-    ms is milliseconds since launch on one monotonic clock (CACurrentMediaTime).
-      sent      the app called activity.update for word `seq`
+    ms is milliseconds since launch (CACurrentMediaTime); an `info` line
+    "wall <unix seconds>" says what wall-clock time ms=0 was, so the Mac's
+    screen recording can be lined up with it.
+      sent      the app called activity.update for piece `seq`
       acked     that update call returned
-      drawn_X   the widget drew word `seq` in region X (c/m/e/l, see IslandSignal),
-                read from the widget's own drawn.csv at the end of the run
-      darwin_X  the same, heard as a Darwin notification (run 1 heard none)
+      content   ActivityKit reported the activity's content changed to `seq`
       state     the app went background / foreground / locked / unlocked
     Documents/island-done.txt appears when the run is over.  */
 import ActivityKit
@@ -15,24 +15,21 @@ import AVFoundation
 import QuartzCore
 import UIKit
 
-private let darwinCallback: CFNotificationCallback = { _, _, name, _, _ in
-    guard let cf = name?.rawValue else { return }
-    IslandTest.shared.heard(cf as String)
-}
-
 final class IslandTest {
     static let shared = IslandTest()
 
     struct Phase { let name: String; let interval: Double; let seconds: Double }
+    /// Slowest first (run 2's island froze ~30 s in and the later steps
+    /// inherited it), with 10 s of rest between steps to see if it recovers.
     static let phases: [Phase] = [
+        Phase(name: "sentence", interval: 4.0, seconds: 40),
         Phase(name: "1/s", interval: 1.0, seconds: 30),
         Phase(name: "2/s", interval: 0.5, seconds: 30),
         Phase(name: "3/s", interval: 1.0 / 3.0, seconds: 30),
         Phase(name: "4/s", interval: 0.25, seconds: 30),
-        Phase(name: "sentence", interval: 4.0, seconds: 40),
     ]
     static let settle = 3.0    // quiet seconds after leaving the app
-    static let between = 3.0   // quiet seconds between phases
+    static let between = 10.0  // quiet seconds between steps
 
     static let text = """
     It is a truth universally acknowledged that a single man in possession of a good fortune must be in want of a wife. \
@@ -40,12 +37,9 @@ final class IslandTest {
     so well fixed in the minds of the surrounding families that he is considered the rightful property of some one or \
     other of their daughters.
     """
-    static let words = text.split(separator: " ").map(String.init)
-    static let sentences = [
-        "It is a truth", "However little known", "My dear Mr. Bennet", "Mr. Bennet replied",
-        "But it is", "This was invitation", "Why my dear", "What is his name",
-        "Is he married", "How so?",
-    ]
+    /// The words, long ones broken into pieces -- one piece per update.
+    static let pieces = text.split(separator: " ").flatMap { IslandWord.pieces(String($0)) }
+    static let sentenceStarts = ["It", "However", "My", "Mr.", "But", "This", "Why", "What", "Is", "How"]
 
     private let t0 = CACurrentMediaTime()
     private var activity: Activity<IslandAttributes>?
@@ -54,7 +48,7 @@ final class IslandTest {
     private let logQ = DispatchQueue(label: "islandtest.log")
     private var handle: FileHandle?
     // touched only on logQ
-    private var nSent = 0, nDrawn = 0, phaseNow = "waiting", note = ""
+    private var nSent = 0, phaseNow = "waiting", note = ""
 
     private var docs: URL { FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0] }
 
@@ -68,19 +62,12 @@ final class IslandTest {
         handle = try? FileHandle(forWritingTo: logURL)
         handle?.seekToEndOfFile()
 
-        let d = UIDevice.current
+        let wallAtT0 = Date().timeIntervalSince1970 - (CACurrentMediaTime() - t0)
+        log("info", detail: String(format: "wall %.4f", wallAtT0))
         var u = utsname(); uname(&u)
         let machine = withUnsafeBytes(of: &u.machine) { String(decoding: $0.prefix { $0 != 0 }, as: UTF8.self) }
-        log("info", detail: "\(machine) iOS \(d.systemVersion)")
-        log("info", detail: String(format: "t0 %.4f", t0))
-        if let url = IslandSignal.drawnURL {
-            try? fm.removeItem(at: url)
-            log("info", detail: "shared folder ok")
-        } else {
-            log("error", detail: "shared folder (app group) not available to the app")
-        }
-        let enabled = ActivityAuthorizationInfo().areActivitiesEnabled
-        log("info", detail: "live activities enabled=\(enabled)")
+        log("info", detail: "\(machine) iOS \(UIDevice.current.systemVersion)")
+        log("info", detail: "live activities enabled=\(ActivityAuthorizationInfo().areActivitiesEnabled)")
 
         // the background-audio half: same pairing Frank uses (Playback + UIBackgroundModes audio)
         do {
@@ -96,25 +83,22 @@ final class IslandTest {
             log("error", detail: "audio: \(error.localizedDescription)")
         }
 
-        let center = CFNotificationCenterGetDarwinNotifyCenter()
-        let me = Unmanaged.passUnretained(self).toOpaque()
-        for r in IslandSignal.regions {
-            for s in 0...IslandSignal.maxSeq {
-                CFNotificationCenterAddObserver(center, me, darwinCallback,
-                                                IslandSignal.name(r, s) as CFString, nil, .deliverImmediately)
-            }
-        }
-        CFNotificationCenterAddObserver(center, me, darwinCallback, IslandSignal.noGroup as CFString, nil, .deliverImmediately)
-
         for old in Activity<IslandAttributes>.activities {
             Task { await old.end(nil, dismissalPolicy: .immediate) }
         }
         do {
             let first = IslandAttributes.ContentState(word: "ready", seq: 0, phase: "waiting")
-            activity = try Activity.request(attributes: IslandAttributes(title: "Island test"),
-                                            content: ActivityContent(state: first, staleDate: nil),
-                                            pushType: nil)
+            let a = try Activity.request(attributes: IslandAttributes(title: "Island test"),
+                                         content: ActivityContent(state: first, staleDate: nil),
+                                         pushType: nil)
+            activity = a
             log("info", detail: "activity started")
+            Task {
+                for await c in a.contentUpdates { self.log("content", seq: c.state.seq, phase: c.state.phase) }
+            }
+            Task {
+                for await s in a.activityStateUpdates { self.log("info", detail: "activity state \(s)") }
+            }
         } catch {
             log("error", detail: "activity: \(error.localizedDescription)")
             logQ.async { self.note = "Could not start the Live Activity: \(error.localizedDescription)\n\nSettings → Island Test → Live Activities must be on." }
@@ -126,11 +110,11 @@ final class IslandTest {
             var s = "Island test\n\n"
             if !note.isEmpty { return s + note }
             switch phaseNow {
-            case "waiting": s += "Swipe up to the home screen now and leave the phone alone for 3 minutes.\n\nThe word beside the camera is the test."
+            case "waiting": s += "Swipe up to the home screen now and leave the phone alone for about 4 minutes.\n\nDon't tap the island -- it opens this app."
             case "done": s += "Finished. The log is saved."
             default: s += "Running: \(phaseNow)"
             }
-            return s + "\n\nsent \(nSent) · drawn \(nDrawn)"
+            return s + "\n\nsent \(nSent)"
         }
     }
 
@@ -157,28 +141,33 @@ final class IslandTest {
         let start = CACurrentMediaTime()
         log("run_start", detail: "planned \(plan.count) updates")
         var lastPhase = ""
-        var sentenceIx = 0
+        var sentenceIx = 0, pieceIx = 0
         for (i, step) in plan.enumerated() {
+            if step.phase != lastPhase, !lastPhase.isEmpty {
+                // the phase ends one interval after its last update
+                let prev = Self.phases.first(where: { $0.name == lastPhase })!
+                let endAt = start + plan[i - 1].at + prev.interval - CACurrentMediaTime()
+                if endAt > 0 { Thread.sleep(forTimeInterval: endAt) }
+                log("phase_end", phase: lastPhase)
+            }
             let wait = start + step.at - CACurrentMediaTime()
             if wait > 0 { Thread.sleep(forTimeInterval: wait) }
             if step.phase != lastPhase {
-                if !lastPhase.isEmpty { log("phase_end", phase: lastPhase) }
                 log("phase_start", phase: step.phase)
                 lastPhase = step.phase
                 logQ.async { self.phaseNow = step.phase }
             }
-            let seq = i + 1
             let word: String
             if step.phase == "sentence" {
-                word = Self.sentences[sentenceIx % Self.sentences.count]; sentenceIx += 1
+                word = Self.sentenceStarts[sentenceIx % Self.sentenceStarts.count]; sentenceIx += 1
             } else {
-                word = Self.words[(seq - 1) % Self.words.count]
+                word = Self.pieces[pieceIx % Self.pieces.count]; pieceIx += 1
             }
-            send(seq: seq, phase: step.phase, word: word)
+            send(seq: i + 1, phase: step.phase, word: word)
         }
         Thread.sleep(forTimeInterval: Self.phases.last!.interval)
         log("phase_end", phase: lastPhase)
-        Thread.sleep(forTimeInterval: 4)   // let late draws arrive
+        Thread.sleep(forTimeInterval: 3)
         finish()
     }
 
@@ -201,45 +190,12 @@ final class IslandTest {
             await a?.end(ActivityContent(state: last, staleDate: nil), dismissalPolicy: .immediate)
             self.log("info", detail: "activity ended")
             DispatchQueue.main.async { self.player?.stop() }
-            Thread.sleep(forTimeInterval: 2)
-            self.mergeDrawn()
             self.logQ.async {
                 self.phaseNow = "done"
                 try? self.handle?.synchronize()
                 try? Data("done\n".utf8).write(to: self.docs.appendingPathComponent("island-done.txt"))
             }
         }
-    }
-
-    // MARK: the widget's "drew word N"
-
-    func heard(_ name: String) {
-        if name == IslandSignal.noGroup { log("error", detail: "widget cannot open the shared folder"); return }
-        guard name.hasPrefix(IslandSignal.prefix) else { return }
-        let parts = name.dropFirst(IslandSignal.prefix.count).split(separator: ".")
-        guard parts.count == 2, let seq = Int(parts[1]) else { return }
-        log("darwin_\(parts[0])", seq: seq)
-        logQ.async { self.nDrawn += 1 }
-    }
-
-    /// Copies the widget's drawn.csv into the log, on the app's clock.
-    private func mergeDrawn() {
-        guard let url = IslandSignal.drawnURL else { return }
-        guard let text = try? String(contentsOf: url, encoding: .utf8) else {
-            log("info", detail: "widget wrote no drawn.csv (it drew nothing)")
-            return
-        }
-        var lines = ""
-        var n = 0
-        for row in text.split(separator: "\n") {
-            let f = row.split(separator: ",")
-            guard f.count == 3, let seq = Int(f[1]), let t = Double(f[2]) else { continue }
-            lines += "\(Int(((t - t0) * 1000).rounded())),drawn_\(f[0]),\(seq),,\n"
-            n += 1
-        }
-        let all = lines
-        logQ.async { self.handle?.write(Data(all.utf8)) }
-        log("info", detail: "merged \(n) widget draws")
     }
 
     // MARK: plumbing
