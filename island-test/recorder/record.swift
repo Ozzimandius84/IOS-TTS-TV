@@ -7,7 +7,7 @@
     <out dir>/screen.csv      wall_seconds,diff   one row per frame
     <out dir>/info.txt        device, frame size, the strip measured
     <out dir>/full-start.png  one whole frame, to check the island is in the picture
-    <out dir>/frames/*.png    the island strip, whenever it changed (<= 10 a second)
+    <out dir>/frames/<ms>.png   the island strip, whenever it changed (<= 10 a second)
                               and once every 2 s otherwise -- named by wall ms
 
     No window, no Dock icon; Terminal may ask once for Camera access, which is
