@@ -62,7 +62,7 @@ say "5/5 results"
 python3 "$HERE/analyze.py" "$RES/island-log.csv" > "$RES/summary.md" || exit 1
 cat "$RES/summary.md"
 
-{ echo; echo "## Measured on the phone — $(date '+%d %b %Y %H:%M')"; echo; cat "$RES/summary.md"; } >> "$REPO/ISLAND-TEST.md"
+{ echo; echo "### Run on the phone — $(date '+%d %b %Y %H:%M')"; echo; cat "$RES/summary.md"; } >> "$REPO/ISLAND-TEST.md"
 cd "$REPO"
 git add -- ISLAND-TEST.md island-test/results/island-log.csv island-test/results/summary.md island-test/results/run.log
 git commit -q -m "Island test: measured on the phone ($(date '+%d %b %H:%M'))" -- \

@@ -2,6 +2,7 @@
     draw a region, that region's body runs and posts "drew word N" to the app.
     That is the closest an app can get to "the island showed it".  */
 import ActivityKit
+import QuartzCore
 import SwiftUI
 import WidgetKit
 
@@ -12,10 +13,19 @@ struct IslandWidgetBundle: WidgetBundle {
 
 @discardableResult
 func markDrawn(_ region: String, _ seq: Int) -> Bool {
-    CFNotificationCenterPostNotification(
-        CFNotificationCenterGetDarwinNotifyCenter(),
-        CFNotificationName(IslandSignal.name(region, seq) as CFString),
-        nil, nil, true)
+    let now = CACurrentMediaTime()
+    let center = CFNotificationCenterGetDarwinNotifyCenter()
+    if let url = IslandSignal.drawnURL {
+        let line = Data(String(format: "%@,%d,%.4f\n", region, seq, now).utf8)
+        if let h = try? FileHandle(forWritingTo: url) {
+            h.seekToEndOfFile(); h.write(line); try? h.close()
+        } else {
+            try? line.write(to: url)   // first draw: the file does not exist yet
+        }
+    } else {
+        CFNotificationCenterPostNotification(center, CFNotificationName(IslandSignal.noGroup as CFString), nil, nil, true)
+    }
+    CFNotificationCenterPostNotification(center, CFNotificationName(IslandSignal.name(region, seq) as CFString), nil, nil, true)
     return true
 }
 

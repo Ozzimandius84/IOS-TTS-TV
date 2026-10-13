@@ -5,7 +5,9 @@
     ms is milliseconds since launch on one monotonic clock (CACurrentMediaTime).
       sent      the app called activity.update for word `seq`
       acked     that update call returned
-      drawn_X   the widget drew word `seq` in region X (c/m/e/l, see IslandSignal)
+      drawn_X   the widget drew word `seq` in region X (c/m/e/l, see IslandSignal),
+                read from the widget's own drawn.csv at the end of the run
+      darwin_X  the same, heard as a Darwin notification (run 1 heard none)
       state     the app went background / foreground / locked / unlocked
     Documents/island-done.txt appears when the run is over.  */
 import ActivityKit
@@ -67,7 +69,16 @@ final class IslandTest {
         handle?.seekToEndOfFile()
 
         let d = UIDevice.current
-        log("info", detail: "\(d.model) iOS \(d.systemVersion)")
+        var u = utsname(); uname(&u)
+        let machine = withUnsafeBytes(of: &u.machine) { String(decoding: $0.prefix { $0 != 0 }, as: UTF8.self) }
+        log("info", detail: "\(machine) iOS \(d.systemVersion)")
+        log("info", detail: String(format: "t0 %.4f", t0))
+        if let url = IslandSignal.drawnURL {
+            try? fm.removeItem(at: url)
+            log("info", detail: "shared folder ok")
+        } else {
+            log("error", detail: "shared folder (app group) not available to the app")
+        }
         let enabled = ActivityAuthorizationInfo().areActivitiesEnabled
         log("info", detail: "live activities enabled=\(enabled)")
 
@@ -93,6 +104,7 @@ final class IslandTest {
                                                 IslandSignal.name(r, s) as CFString, nil, .deliverImmediately)
             }
         }
+        CFNotificationCenterAddObserver(center, me, darwinCallback, IslandSignal.noGroup as CFString, nil, .deliverImmediately)
 
         for old in Activity<IslandAttributes>.activities {
             Task { await old.end(nil, dismissalPolicy: .immediate) }
@@ -189,6 +201,8 @@ final class IslandTest {
             await a?.end(ActivityContent(state: last, staleDate: nil), dismissalPolicy: .immediate)
             self.log("info", detail: "activity ended")
             DispatchQueue.main.async { self.player?.stop() }
+            Thread.sleep(forTimeInterval: 2)
+            self.mergeDrawn()
             self.logQ.async {
                 self.phaseNow = "done"
                 try? self.handle?.synchronize()
@@ -200,11 +214,32 @@ final class IslandTest {
     // MARK: the widget's "drew word N"
 
     func heard(_ name: String) {
+        if name == IslandSignal.noGroup { log("error", detail: "widget cannot open the shared folder"); return }
         guard name.hasPrefix(IslandSignal.prefix) else { return }
         let parts = name.dropFirst(IslandSignal.prefix.count).split(separator: ".")
         guard parts.count == 2, let seq = Int(parts[1]) else { return }
-        log("drawn_\(parts[0])", seq: seq)
+        log("darwin_\(parts[0])", seq: seq)
         logQ.async { self.nDrawn += 1 }
+    }
+
+    /// Copies the widget's drawn.csv into the log, on the app's clock.
+    private func mergeDrawn() {
+        guard let url = IslandSignal.drawnURL else { return }
+        guard let text = try? String(contentsOf: url, encoding: .utf8) else {
+            log("info", detail: "widget wrote no drawn.csv (it drew nothing)")
+            return
+        }
+        var lines = ""
+        var n = 0
+        for row in text.split(separator: "\n") {
+            let f = row.split(separator: ",")
+            guard f.count == 3, let seq = Int(f[1]), let t = Double(f[2]) else { continue }
+            lines += "\(Int(((t - t0) * 1000).rounded())),drawn_\(f[0]),\(seq),,\n"
+            n += 1
+        }
+        let all = lines
+        logQ.async { self.handle?.write(Data(all.utf8)) }
+        log("info", detail: "merged \(n) widget draws")
     }
 
     // MARK: plumbing

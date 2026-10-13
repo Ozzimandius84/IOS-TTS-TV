@@ -37,6 +37,13 @@ targets:
         NSSupportsLiveActivities: true
         UIFileSharingEnabled: true
         LSSupportsOpeningDocumentsInPlace: true
+    # Run 2: a shared folder so the widget can write down every word it draws
+    # (run 1's Darwin notifications never arrived). If the personal team cannot
+    # sign an App Group, the build stops here and says so in results/build.log.
+    entitlements:
+      path: App/IslandTest.entitlements
+      properties:
+        com.apple.security.application-groups: [group.com.ttstv.frank.islandtest]
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.ttstv.frank.islandtest
@@ -57,6 +64,10 @@ targets:
         CFBundleVersion: "1"
         NSExtension:
           NSExtensionPointIdentifier: com.apple.widgetkit-extension
+    entitlements:
+      path: Widget/IslandWidget.entitlements
+      properties:
+        com.apple.security.application-groups: [group.com.ttstv.frank.islandtest]
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.ttstv.frank.islandtest.widget

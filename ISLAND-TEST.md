@@ -26,15 +26,25 @@ From the `IOS TTS TV` folder, with the iPhone plugged in and unlocked:
 bash island-test/run.sh
 ```
 
-It takes about 6 minutes. Stop it with Ctrl-C if nothing has printed for 12 minutes. When it prints **"ON THE PHONE NOW"**, swipe up to the home screen and leave the phone alone for about 3 minutes. The script builds the app, installs and opens it, waits, copies the log back, adds the results table below and commits it.
+It takes about 6 minutes. Stop it with Ctrl-C if nothing has printed for 12 minutes. When it prints **"ON THE PHONE NOW"**, swipe up to the home screen and leave the phone alone for about 3 minutes. **Don't tap the island during the run**: tapping it opens the app, and while the app is open the island is hidden. The script builds the app, installs and opens it, waits, copies the log back, adds the results table below and commits it.
 
 If the phone has no Dynamic Island, the island columns will read 0 and the lock-screen table is the answer instead.
 
 ## Results
 
-Not measured yet. The run appends the tables below this line.
+### Run 1 (13 Oct 10:43): measured nothing about the island
 
-## Measured on the phone — 13 Oct 2026 10:46
+The app side worked. On an iPhone running iOS 26.6.1 with Live Activities on, the tone played, the activity started, and all 310 updates were sent and accepted. Each update call returned in about 2 ms and the slowest took 7 ms.
+
+The other half failed: **the app heard nothing back from the widget, not even once.** So the zeros in the tables below mean "not measured", not "the island showed nothing". The widget was built and embedded correctly. Either its signals (Darwin notifications) never reach the app, or it never drew. This log alone can't tell the two apart.
+
+The app was also opened four times during the run (at 128 s, 138 s, 187 s and 201 s), which affects the 4-per-second and once-per-sentence steps.
+
+What changed for run 2: the widget now writes every word it draws to a file in a folder shared with the app (an App Group), stamped on the phone's single clock. At the end of the run the app copies that file into its log. The old signal is kept as a cross-check. If Osca's personal team can't sign an App Group, the build stops and says so in `island-test/results/build.log`.
+
+The run-1 tables follow, kept unedited.
+
+### Run 1 raw output — 13 Oct 2026 10:46
 
 ### Dynamic Island (word beside the camera)
 
