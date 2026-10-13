@@ -180,8 +180,9 @@ final class IslandTest {
     /// a background update gets through (run 3 froze after ~4 rapid ones).
     static let windowEvery = 15.0, windowCount = 5   // run 22: 30-word windows, 10 s each, 5 s apart
     private var lastState: IslandAttributes.ContentState?
+    static let reDate = false
     private func runWindows() {
-        log("run_start", detail: "windows: \(Self.windowCount - 1) updates from the background, one every \(Int(Self.windowEvery)) s")
+        log("run_start", detail: "windows: \(Self.windowCount - 1) updates from the background, one every \(Int(Self.windowEvery)) s, reDate=\(Self.reDate)")
         log("info", detail: String(format: "word_window %.3f %.3f", RunWords.lead, RunWords.lead + Double(RunWords.count) / RunWords.perSecond))
         log("phase_start", phase: "windows")
         logQ.async { self.phaseNow = "windows" }
@@ -193,8 +194,15 @@ final class IslandTest {
             let a0 = Double(k) * Self.windowEvery + RunWords.lead
             var state = IslandAttributes.ContentState(word: "window\(k)", seq: k, phase: "windows", windowStart: ws, window: k)
             // run 22: only the idle stack is re-dated; the other keeps its dates
-            state.startA = k % 2 == 0 ? ws : (lastState?.startA ?? clockStart)
-            state.startB = k % 2 == 1 ? ws : (lastState?.startB ?? clockStart.addingTimeInterval(100_000))
+            // run 23: reDate = false -- the updates change only the label and window number,
+            // no timer gets a new date. Does the island survive 4 such updates with 60 layers?
+            if Self.reDate {
+                state.startA = k % 2 == 0 ? ws : (lastState?.startA ?? clockStart)
+                state.startB = k % 2 == 1 ? ws : (lastState?.startB ?? clockStart.addingTimeInterval(100_000))
+            } else {
+                state.startA = clockStart
+                state.startB = clockStart.addingTimeInterval(100_000)
+            }
             lastState = state
             log("sent", seq: k, phase: "windows", detail: String(format: "window %d words %.0f-%.0f s", k, a0, a0 + Double(RunWords.count) / RunWords.perSecond))
             log("info", detail: String(format: "word_window %.3f %.3f", a0, a0 + Double(RunWords.count) / RunWords.perSecond))

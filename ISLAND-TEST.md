@@ -792,6 +792,12 @@ Look at results/screen/frames/ to see WHAT was drawn: words in Frank's red-lette
    59.2s  info activity ended
 ```
 
+### Run 22 (13 Oct 14:54): stacks A and B -- the island ignores zIndex, and the third update got it dismissed
+
+Window 1 (stack A, 30 words) ran as set, 15–25 s. The four updates were sent at 25.9, 40.9, 55.9 and 70.9 s; the recording shows the island re-rendered at each of the first three (a crossfade ghost of stack A's words for a frame), stack A's last word staying put, and stack B -- re-dated by the update and raised with zIndex -- never appearing: the island does not honour zIndex, so B stayed under A's black box. At 69.8 s, 14 s after the third update (the same 14 s as run 21), iOS dismissed the activity. Contact sheet: `island-test/results/run22-sheet.png`.
+
+Run 23 separates the two possible killers: the same 60 layers, four updates every 15 s that change nothing but a label. If it survives, re-dating timers is the killer and the design must never do it; if it dies, any update to an island with many timer layers is fatal and the chapter has to be done another way.
+
 ### Run on the phone, screen recorded — 13 Oct 2026 14:55
 
 | side of the camera | what is there | seconds away | changes seen | changes a second | median gap | longest gap |
