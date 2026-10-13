@@ -1,30 +1,30 @@
 ms,event,seq,phase,detail
-2,info,-1,,wall 1791899608.1745
+2,info,-1,,wall 1791900034.0490
 2,info,-1,,iPhone18 3 iOS 26.6.1
-3,info,-1,,live activities enabled=true
-870,info,-1,,audio playing
-874,info,-1,,mode windows clock_start 1791899609.0485
-891,info,-1,,activity started
-891,content,0,waiting,
-891,info,-1,,activity state active
-4094,state,-1,,background
-4095,run_start,-1,,windows: 4 updates from the background  one every 15 s
-4095,info,-1,,word_window 15.000 25.000
-4095,phase_start,-1,windows,
-25879,sent,1,windows,window 1 words 30-40 s
-25879,info,-1,,word_window 30.000 40.000
-25880,acked,1,windows,
-25887,content,1,windows,
-40879,sent,2,windows,window 2 words 45-55 s
-40879,info,-1,,word_window 45.000 55.000
-40880,acked,2,windows,
-55875,sent,3,windows,window 3 words 60-70 s
-55875,info,-1,,word_window 60.000 70.000
-55877,acked,3,windows,
-69799,info,-1,,activity state dismissed
-70879,sent,4,windows,window 4 words 75-85 s
-70879,info,-1,,word_window 75.000 85.000
-70880,acked,4,windows,
-95878,phase_end,-1,windows,
-95878,run_end,-1,,
-95880,info,-1,,activity ended
+4,info,-1,,live activities enabled=true
+112,info,-1,,audio playing
+114,info,-1,,mode windows clock_start 1791900034.1632
+129,info,-1,,activity started
+129,content,0,waiting,
+130,info,-1,,activity state active
+2661,state,-1,,background
+2663,run_start,-1,,windows: 4 updates from the background  one every 15 s  reDate=false
+2663,info,-1,,word_window 15.000 25.000
+2663,phase_start,-1,windows,
+25119,sent,1,windows,window 1 words 30-40 s
+25119,info,-1,,word_window 30.000 40.000
+25120,acked,1,windows,
+25126,content,1,windows,
+76129,sent,2,windows,window 2 words 45-55 s
+76129,info,-1,,word_window 45.000 55.000
+76130,acked,2,windows,
+76130,info,-1,,activity state dismissed
+76130,sent,3,windows,window 3 words 60-70 s
+76130,info,-1,,word_window 60.000 70.000
+76130,acked,3,windows,
+76130,sent,4,windows,window 4 words 75-85 s
+76130,info,-1,,word_window 75.000 85.000
+76131,acked,4,windows,
+95199,phase_end,-1,windows,
+95199,run_end,-1,,
+95201,info,-1,,activity ended
