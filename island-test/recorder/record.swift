@@ -90,9 +90,9 @@ final class Recorder: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate {
         let bpr = CVPixelBufferGetBytesPerRow(pb)
         guard let base = CVPixelBufferGetBaseAddress(pb)?.assumingMemoryBound(to: UInt8.self) else { return }
 
-        // the island's strip: top 0.8%..6.5% of the screen, middle 60% of the width
+        // the island's strip: top 0.8%..6.5% of the screen, middle 84% of the width (run 3's 60% cut the end of the word off)
         let y0 = Int(Double(h) * 0.008), y1 = Int(Double(h) * 0.065)
-        let x0 = Int(Double(w) * 0.20), x1 = Int(Double(w) * 0.80)
+        let x0 = Int(Double(w) * 0.08), x1 = Int(Double(w) * 0.92)
         var cur = [Int32]()
         cur.reserveCapacity(((y1 - y0) / 3 + 1) * ((x1 - x0) / 3 + 1))
         var y = y0

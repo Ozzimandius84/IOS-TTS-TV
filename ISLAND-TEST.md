@@ -2,6 +2,33 @@
 
 **Question.** The play-bar drafts (TTSTV `design/playbar/playbar-drafts.html`, commit 0c5d294) show the word being spoken in the Dynamic Island when you leave Frank. Apple slows down Live Activity updates and publishes no number. This test measures it on Osca's iPhone.
 
+## The answer (run 3, 13 Oct 11:11, whole 4½-minute recording checked)
+
+**Once you leave the app, iOS shows about 4 more words in the island and then stops. It stays frozen until you open the app again.** The rate makes no difference: even one word every 4 s froze after 4 words. Nothing an app sends from the background gets past this.
+
+What happened, from the recording of the screen and the phone's own log, five seconds at a time:
+
+| when (s after launch) | what you did | island changes seen |
+|---|---|---|
+| 13 | left the app | — |
+| 16–28 | away | 4 words (one every 4 s), then **nothing** |
+| 28–64 | away | **0** (the app sent 6 more) |
+| 64–73 | opened it twice | 3: it caught up |
+| 73–193 | away | **0 for 2 minutes** (the app sent 250 more) |
+| 193–197 | opened it | 5: it caught up (a burst of old words, then live at 4 a second while open) |
+| 197–262 | away | **0** |
+| 262–270 | opened it | 15: caught up again |
+
+- **The app is not the problem.** It sent all 310 updates on time, and every one was accepted in under 15 ms.
+- **The words are held back, not lost.** ActivityKit's own record shows them held and then released in one burst at the moment you opened the app, which is the "catches up" you saw.
+- **While the app is open, the island keeps up with 4 words a second.** It's only while you're away, which is the moment the drafts use it, that it freezes.
+
+So the island can't follow the spoken word when the update comes from the app itself. Even once per sentence doesn't hold for more than about 15 seconds.
+
+Not tested: updates sent by Apple's push service from a server. That needs a paid developer account and a server, and Apple says those have a budget too.
+
+Pictures: `island-test/results/island-22s-moving.png` shows a live word. `island-test/results/island-100s-frozen.png` shows the same word still there 80 s later while the app sent 120 more.
+
 ## What was built (current version, run 3)
 
 A tiny throwaway app, **Island Test**, in `island-test/` — not Frank.
@@ -12,10 +39,11 @@ A tiny throwaway app, **Island Test**, in `island-test/` — not Frank.
   - once every 4 s for 40 s (standing in for "once per sentence");
   - then 1, 2, 3 and 4 a second for 30 s each.
   - That makes 310 updates in about 3½ minutes.
-- **How the word looks in the island** (Osca, 13 Oct 11:04):
-  - The word sits in a fixed-width slot seven letters wide, so the island no longer grows and shrinks with each word.
+- **How the word looks in the island** (Osca, 13 Oct 11:04 and 11:18):
+  - The word sits in a fixed-width slot, so the island no longer grows and shrinks with each word.
   - Words longer than seven letters are broken into pieces of up to six, for example "acknow-" then "ledged".
-  - The pivot letter is red, as in Frank's one-word view (42% of the way in), and always sits in the same column.
+  - It uses the drafts' font, Iowan Old Style. Run 3 used a monospace, which was wrong.
+  - The red letter follows **Frank's own rule, copied from `reader/wordview.js`**: letter 1, 2, 3, 4 or 5 (counting letters only) for words of 1, 2–5, 6–9, 10–13 and 14+ letters, so "My" → y, "Mr." → r, "He" → e. Run 3 used an invented rule, which was wrong. It always sits in the same column.
 - **How "shown" is measured.** The Mac records the phone's screen over the cable, the same feed QuickTime uses, with `island-test/recorder/record.swift`. It writes down how much the island's strip of the screen changed in every frame and saves a picture of the strip each time it changes. A burst of changing frames counts as one change, which is what a person sees as "the word moved". The phone's log carries its wall-clock time, so the two line up.
 - **Also logged on the phone:** every update sent, when the call returned, and when ActivityKit says the activity's content changed.
 

@@ -19,12 +19,10 @@ struct IslandAttributes: ActivityAttributes {
 
 /// How a word is laid out in the island (Osca, 13 Oct 11:04): long words are
 /// broken into short pieces so the island stays small and does not grow and
-/// shrink with every word; the pivot letter is red (Frank's one-word view,
-/// 42%) and always sits in the same column, so the eye does not move.
+/// shrink with every word; the pivot letter is red, chosen by Frank's own rule
+/// (below), and always sits in the same column, so the eye does not move.
 enum IslandWord {
     static let maxPiece = 6      // letters per piece before a word is broken
-    static let pivotColumn = 2   // 0-based column the red letter sits in
-    static let columns = 7       // fixed width of the island word, in letters
 
     /// "acknowledged" -> ["acknow-", "ledged"]; words of 7 letters or fewer stay whole.
     static func pieces(_ word: String) -> [String] {
@@ -42,13 +40,41 @@ enum IslandWord {
         return out
     }
 
-    /// (left padding, before the pivot, the pivot letter, after it)
+    /// Frank's red-letter rule, the same as TTSTV reader/wordview.js orp() + pivotIndex(),
+    /// so it is one rule on every surface: counting letters only, the pivot is
+    /// letter 0 / 1 / 2 / 3 / 4 for words of 1 / 2-5 / 6-9 / 10-13 / 14+ letters
+    /// ("My" -> y, "Mr." -> r, "He" -> e); punctuation in front is skipped.
+    static func isLetter(_ c: Character) -> Bool {
+        guard let u = c.unicodeScalars.first?.value else { return false }
+        return (u >= 0x41 && u <= 0x5A) || (u >= 0x61 && u <= 0x7A) || (u >= 0xC0 && u <= 0x24F)
+            || (u >= 0x30 && u <= 0x39) || u == 0x27
+    }
+    static func orp(_ w: String) -> Int {
+        let letters = w.filter(isLetter).count
+        let n = letters > 0 ? letters : w.count
+        if n <= 1 { return 0 }
+        if n <= 5 { return 1 }
+        if n <= 9 { return 2 }
+        if n <= 13 { return 3 }
+        return 4
+    }
+    static func pivotIndex(_ w: String) -> Int {
+        let chars = Array(w)
+        if chars.isEmpty { return 0 }
+        let k = orp(w)
+        var seen = -1
+        for (i, c) in chars.enumerated() where isLetter(c) {
+            seen += 1
+            if seen == k { return i }
+        }
+        return min(k, chars.count - 1)
+    }
+
+    /// (unused padding, before the pivot, the pivot letter, after it)
     static func layout(_ piece: String) -> (String, String, String, String) {
         let chars = Array(piece)
         guard !chars.isEmpty else { return ("", "", "", "") }
-        let letters = chars.last == "-" ? chars.count - 1 : chars.count
-        let p = min(max(letters - 1, 0), Int(Double(letters) * 0.42))
-        let pad = String(repeating: " ", count: max(0, pivotColumn - p))
-        return (pad, String(chars[0..<p]), String(chars[p]), String(chars[(p + 1)...]))
+        let p = pivotIndex(piece)
+        return ("", String(chars[0..<p]), String(chars[p]), String(chars[(p + 1)...]))
     }
 }
