@@ -59,6 +59,7 @@ final class IslandTest {
     /// Run 5: the island shows the words by its own switches at 3 a second, from 20 s after launch.
     static let wordLead = 20.0, wordsPerSecond = 3.0, wordCount = 30   // run 6: 30 (run 5's 90 got the activity dismissed)
     private var clockStart = Date()
+    private var bgTask: UIBackgroundTaskIdentifier = .invalid
     private let logQ = DispatchQueue(label: "islandtest.log")
     private var handle: FileHandle?
     // touched only on logQ
@@ -93,6 +94,17 @@ final class IslandTest {
             p.play()
             player = p
             log("info", detail: "audio playing")
+            // Run 29: the phone's log for run 28 says a process that is ONLY playing background
+            // media "is not permitted to update activity"; it is permitted while it holds any
+            // other background reason (iOS lends one for 30 s when the activity starts, which
+            // is why every run froze after ~30 s). A UIKit background task is such a reason,
+            // and while audio plays iOS gives it unlimited time. Held for the whole run.
+            DispatchQueue.main.async {
+                self.bgTask = UIApplication.shared.beginBackgroundTask(withName: "island-words") {
+                    self.log("info", detail: "background task expired")
+                }
+                self.log("info", detail: "background task begun id=\(self.bgTask.rawValue) remaining=\(UIApplication.shared.backgroundTimeRemaining)")
+            }
         } catch {
             log("error", detail: "audio: \(error.localizedDescription)")
         }

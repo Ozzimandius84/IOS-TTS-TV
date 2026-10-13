@@ -1076,6 +1076,18 @@ Windows of 30 words, two alive at a time, the newest drawn last. The island ran 
 
 So the whole mechanism works end to end; what is left is one number: how often iOS lets a background update through. Today's evidence -- 4 at 4 s apart then blocked (run 3), 3 at 15 s apart (run 22), 2 at 10 s apart then blocked (run 28) -- looks like a budget that refills over time. The phone's log records the budget decisions; that is the next read.
 
+### The phone's log for run 28 (16:05): it is a permission, not a budget
+
+    15:55:02  liveactivitiesd: Process is doing more than playing background media so is permitted to update activity   (update 1, shown)
+    15:55:12  liveactivitiesd: Process is doing more than playing background media so is permitted to update activity   (update 2, shown)
+    15:55:12.612  runningboardd: Assertion did invalidate due to timeout: "Activity change delivery" (granted at 15:54:42 when the activity started; 30 s)
+    15:55:22  liveactivitiesd: Client is not permitted to update activity   (update 3)
+    15:55:32  liveactivitiesd: Client is not permitted to update activity   (update 4)
+
+**An app whose only reason for running in the background is audio is not allowed to update its Live Activity.** It is allowed while it holds any other background reason. iOS lends one for free when the activity starts -- a 30-second "activity change delivery" assertion -- which is why day 1's runs showed about four words and froze, why run 22 got three updates 15 s apart, and why run 28 got two 10 s apart and lost the third 22 ms after that assertion expired. The budget itself is not the limit: chronod marks each local update "overridden for budget exempt reason: free".
+
+So the fix is a second background reason held for the whole read. Run 29 is run 28 plus one line in the app: a UIKit background task begun at launch and never ended (while audio plays, iOS reports unlimited background time, so it does not expire). Nothing changes in the widget.
+
 ### Run on the phone, screen recorded — 13 Oct 2026 15:55
 
 | side of the camera | what is there | seconds away | changes seen | changes a second | median gap | longest gap |
