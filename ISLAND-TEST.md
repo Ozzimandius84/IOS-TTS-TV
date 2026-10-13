@@ -1128,6 +1128,12 @@ Look at results/screen/frames/ to see WHAT was drawn: words in Frank's red-lette
    70.9s  info activity state dismissed
 ```
 
+### Run 29 (16:08): a UIKit background task does not count
+
+Run 28 plus a background task held for the whole run. The app's log says iOS gave it unlimited time ("remaining=1.8e308"), and the island did exactly what it did in run 28: three windows, 90 words, then updates 3 and 4 refused. So a UIKit background task is not "more than playing background media" in liveactivitiesd's eyes (while audio plays, UIKit does not even raise a process assertion for it).
+
+Run 30 uses the door the log actually showed: the 30 s permission was an "activity change delivery". A **stale date** on every piece of content makes iOS deliver a change to the app ("your activity is stale") when it passes -- with that 30 s permission -- and inside it the app sends the next window with its own stale date. Self-renewing, every 10 s, by the mechanism as designed.
+
 ### Run on the phone, screen recorded — 13 Oct 2026 16:09
 
 | side of the camera | what is there | seconds away | changes seen | changes a second | median gap | longest gap |

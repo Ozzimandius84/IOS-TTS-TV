@@ -125,8 +125,13 @@ final class IslandTest {
                 log("info", detail: String(format: "word_window %.3f %.3f",
                                            Self.wordLead, Self.wordLead + Double(Self.wordCount) / Self.wordsPerSecond))
             }
+            // Run 30: a stale date on every piece of content. When it passes, iOS tells the app
+            // (an "activity change delivery", with the 30 s permission that came with it), and
+            // inside that window the app may send the next one -- run 28's log showed the
+            // permission is exactly that delivery, and runs 28/29 lost it 30 s after the start.
+            let firstStale = mode == "windows" ? clockStart.addingTimeInterval(Self.windowEvery + RunWords.lead - 5 - 1.5) : nil
             let a = try Activity.request(attributes: attrs,
-                                         content: ActivityContent(state: first, staleDate: nil),
+                                         content: ActivityContent(state: first, staleDate: firstStale),
                                          pushType: nil)
             activity = a
             log("info", detail: "activity started")
@@ -220,9 +225,11 @@ final class IslandTest {
             log("info", detail: String(format: "word_window %.3f %.3f", a0, a0 + Double(RunWords.count) / RunWords.perSecond))
             logQ.async { self.nSent += 1 }
             let sem = DispatchSemaphore(value: 0)
+            // run 30: this content goes stale 1.5 s before the next update is due
+            let stale = clockStart.addingTimeInterval(Double(k + 1) * Self.windowEvery + RunWords.lead - 5 - 1.5)
             Task {
-                await a.update(ActivityContent(state: state, staleDate: nil))
-                self.log("acked", seq: k, phase: "windows")
+                await a.update(ActivityContent(state: state, staleDate: stale))
+                self.log("acked", seq: k, phase: "windows", detail: String(format: "stale at %.1f s", stale.timeIntervalSince(self.clockStart)))
                 sem.signal()
             }
             _ = sem.wait(timeout: .now() + 20)
