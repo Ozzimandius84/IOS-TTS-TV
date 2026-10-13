@@ -1,0 +1,74 @@
+# Island Test -- a standalone throwaway app, deliberately NOT Frank.
+#
+# THE FLAG: this folder is its own Xcode project with its own bundle id
+# (com.ttstv.frank.islandtest). Frank's project.yml never names it, phone.sh
+# never builds it, and nothing in Frank imports it -- so it cannot ship with
+# Frank by accident. It is built only by `island-test/run.sh`.
+#
+# Question it answers: how often can a Live Activity in the Dynamic Island
+# show a new word while the app plays audio in the background?
+name: islandtest
+options:
+  bundleIdPrefix: com.ttstv.frank.islandtest
+  deploymentTarget:
+    iOS: "16.2"    # ActivityContent / update(_:) are 16.2
+settings:
+  base:
+    DEVELOPMENT_TEAM: DC5G53NN4R   # Osca's personal team, same as Frank's project.yml
+    CODE_SIGN_STYLE: Automatic
+    SWIFT_VERSION: "5.0"
+    TARGETED_DEVICE_FAMILY: "1"
+    MARKETING_VERSION: "1.0"
+    CURRENT_PROJECT_VERSION: "1"
+targets:
+  IslandTest:
+    type: application
+    platform: iOS
+    sources: [App, Shared]
+    info:
+      path: App/Info.plist
+      properties:
+        CFBundleDisplayName: Island Test
+        CFBundleShortVersionString: "1.0"
+        CFBundleVersion: "1"
+        UILaunchScreen: {}
+        UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
+        UIBackgroundModes: [audio]
+        NSSupportsLiveActivities: true
+        UIFileSharingEnabled: true
+        LSSupportsOpeningDocumentsInPlace: true
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.ttstv.frank.islandtest
+        PRODUCT_NAME: IslandTest
+    dependencies:
+      - target: IslandWidget
+      - sdk: ActivityKit.framework
+      - sdk: AVFoundation.framework
+  IslandWidget:
+    type: app-extension
+    platform: iOS
+    sources: [Widget, Shared]
+    info:
+      path: Widget/Info.plist
+      properties:
+        CFBundleDisplayName: Island Test
+        CFBundleShortVersionString: "1.0"
+        CFBundleVersion: "1"
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.ttstv.frank.islandtest.widget
+        PRODUCT_NAME: IslandWidget
+        SKIP_INSTALL: YES
+    dependencies:
+      - sdk: WidgetKit.framework
+      - sdk: SwiftUI.framework
+      - sdk: ActivityKit.framework
+schemes:
+  IslandTest:
+    build:
+      targets:
+        IslandTest: all
+        IslandWidget: all
