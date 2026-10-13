@@ -1,55 +1,55 @@
 ms,event,seq,phase,detail
-1,info,-1,,wall 1791900630.4254
+2,info,-1,,wall 1791901164.7418
 2,info,-1,,iPhone18 3 iOS 26.6.1
 3,info,-1,,live activities enabled=true
-853,info,-1,,audio playing
-856,info,-1,,mode clock clock_start 1791900631.2809
-869,info,-1,,activity started
-869,content,0,waiting,
-869,info,-1,,activity state active
-3994,state,-1,,background
-3994,run_start,-1,,clock: no updates will be sent
-3994,info,-1,,word_window 15.000 25.000
-3994,phase_start,-1,clock,
-8995,alive,-1,,tone playing=true
-13996,alive,-1,,tone playing=true
-19000,alive,-1,,tone playing=true
-24005,alive,-1,,tone playing=true
-25654,info,-1,,activity state dismissed
-29009,alive,-1,,tone playing=true
-34014,alive,-1,,tone playing=true
-39020,alive,-1,,tone playing=true
-44025,alive,-1,,tone playing=true
-45043,state,-1,,foreground
-46840,state,-1,,background
-49025,alive,-1,,tone playing=true
-54029,alive,-1,,tone playing=true
-59034,alive,-1,,tone playing=true
-64039,alive,-1,,tone playing=true
-69044,alive,-1,,tone playing=true
-74049,alive,-1,,tone playing=true
-79054,alive,-1,,tone playing=true
-84059,alive,-1,,tone playing=true
-89064,alive,-1,,tone playing=true
-94066,alive,-1,,tone playing=true
-99068,alive,-1,,tone playing=true
-104071,alive,-1,,tone playing=true
-109073,alive,-1,,tone playing=true
-114078,alive,-1,,tone playing=true
-119080,alive,-1,,tone playing=true
-124084,alive,-1,,tone playing=true
-129090,alive,-1,,tone playing=true
-134095,alive,-1,,tone playing=true
-139100,alive,-1,,tone playing=true
-144102,alive,-1,,tone playing=true
-149103,alive,-1,,tone playing=true
-154105,alive,-1,,tone playing=true
-159107,alive,-1,,tone playing=true
-164108,alive,-1,,tone playing=true
-169111,alive,-1,,tone playing=true
-174115,alive,-1,,tone playing=true
-179117,alive,-1,,tone playing=true
-184122,alive,-1,,tone playing=true
-184122,phase_end,-1,clock,
-184122,run_end,-1,,
-184124,info,-1,,activity ended
+872,info,-1,,audio playing
+876,info,-1,,mode clock clock_start 1791901165.6176
+889,info,-1,,activity started
+891,content,0,waiting,
+892,info,-1,,activity state active
+3457,state,-1,,background
+3458,run_start,-1,,clock: no updates will be sent
+3458,info,-1,,word_window 15.000 25.000
+3458,phase_start,-1,clock,
+8460,alive,-1,,tone playing=true
+13462,alive,-1,,tone playing=true
+18466,alive,-1,,tone playing=true
+23470,alive,-1,,tone playing=true
+28472,alive,-1,,tone playing=true
+32353,state,-1,,locked
+33477,alive,-1,,tone playing=true
+33598,state,-1,,unlocked
+38480,alive,-1,,tone playing=true
+43485,alive,-1,,tone playing=true
+48490,alive,-1,,tone playing=true
+53491,alive,-1,,tone playing=true
+58493,alive,-1,,tone playing=true
+63497,alive,-1,,tone playing=true
+68499,alive,-1,,tone playing=true
+73504,alive,-1,,tone playing=true
+78508,alive,-1,,tone playing=true
+83512,alive,-1,,tone playing=true
+88512,alive,-1,,tone playing=true
+93514,alive,-1,,tone playing=true
+98518,alive,-1,,tone playing=true
+103520,alive,-1,,tone playing=true
+108520,alive,-1,,tone playing=true
+113526,alive,-1,,tone playing=true
+118530,alive,-1,,tone playing=true
+123530,alive,-1,,tone playing=true
+128534,alive,-1,,tone playing=true
+133539,alive,-1,,tone playing=true
+138542,alive,-1,,tone playing=true
+143544,alive,-1,,tone playing=true
+148549,alive,-1,,tone playing=true
+153550,alive,-1,,tone playing=true
+158555,alive,-1,,tone playing=true
+163558,alive,-1,,tone playing=true
+168563,alive,-1,,tone playing=true
+173568,alive,-1,,tone playing=true
+178572,alive,-1,,tone playing=true
+183577,alive,-1,,tone playing=true
+183577,phase_end,-1,clock,
+183577,run_end,-1,,
+183588,info,-1,,activity ended
+183595,info,-1,,activity state dismissed
