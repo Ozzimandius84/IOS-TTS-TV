@@ -76,6 +76,8 @@ echo "      Don't tap the island -- it opens the app."
 echo
 
 say "5/6 waiting for the run to finish"
+# Ctrl-C here: stop the recorder and still pull the phone's log, so a cancelled run can be read.
+trap 'echo; echo "cancelled -- pulling the log"; kill $REC 2>/dev/null; xcrun devicectl device copy from --device "$DEVICE" --domain-type appDataContainer --domain-identifier "$BID" --source Documents/island-log.csv --destination "$RES/island-log.csv" >/dev/null && echo "log pulled to results/island-log.csv"; exit 130' INT
 TMP="$(mktemp -d)"
 for i in $(seq 1 54); do       # up to 9 minutes
   sleep 10
