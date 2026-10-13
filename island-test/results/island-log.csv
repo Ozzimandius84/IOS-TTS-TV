@@ -1,19 +1,17 @@
 ms,event,seq,phase,detail
-2,info,-1,,wall 1791898164.0226
+2,info,-1,,wall 1791898485.0485
 2,info,-1,,iPhone18 3 iOS 26.6.1
 3,info,-1,,live activities enabled=true
-864,info,-1,,audio playing
-868,info,-1,,mode clock clock_start 1791898164.8910
-880,info,-1,,activity started
-880,content,0,waiting,
-880,info,-1,,activity state active
-4400,state,-1,,background
-4400,run_start,-1,,clock: no updates will be sent
-4400,info,-1,,word_window 15.000 115.000
-4400,phase_start,-1,clock,
-5863,info,-1,,activity state dismissed
-66637,state,-1,,foreground
-68411,state,-1,,background
-125871,phase_end,-1,clock,
-125871,run_end,-1,,
-125873,info,-1,,activity ended
+883,info,-1,,audio playing
+887,info,-1,,mode clock clock_start 1791898485.9358
+900,info,-1,,activity started
+900,content,0,waiting,
+900,info,-1,,activity state active
+3679,state,-1,,background
+3681,run_start,-1,,clock: no updates will be sent
+3681,info,-1,,word_window 15.000 48.333
+3681,phase_start,-1,clock,
+59222,phase_end,-1,clock,
+59222,run_end,-1,,
+59231,info,-1,,activity state dismissed
+59231,info,-1,,activity ended
