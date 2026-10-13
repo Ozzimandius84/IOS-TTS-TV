@@ -34,7 +34,8 @@ def pieces(word):
 
 def main(base, wps=3.0, count=30, lead=15.0):
     here = os.path.dirname(os.path.abspath(__file__))
-    words = [p for w in TEXT.split() for p in pieces(w)][:count]
+    base_words = [p for w in TEXT.split() for p in pieces(w)]
+    words = (base_words * (count // len(base_words) + 1))[:count]   # run 19: the text repeats to reach the count
     os.makedirs(f"{here}/words", exist_ok=True)
     rows, res, fonts = [], [], []
     for i, w in enumerate(words, 1):

@@ -165,7 +165,8 @@ final class IslandTest {
         log("phase_start", phase: "clock")
         logQ.async { self.phaseNow = "clock" }
         let endAt = clockStart.addingTimeInterval(225)
-        let wanted = Date().addingTimeInterval(50)
+        // run 19: stay until the words are over (+10 s), at most 225 s
+        let wanted = clockStart.addingTimeInterval(RunWords.lead + Double(RunWords.count) / RunWords.perSecond + 10)
         Thread.sleep(until: min(endAt, wanted))
         log("phase_end", phase: "clock")
         finish()
