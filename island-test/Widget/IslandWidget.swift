@@ -116,10 +116,10 @@ struct IslandLiveActivity: Widget {
         ActivityConfiguration(for: IslandAttributes.self) { context in
             Group {
                 if context.attributes.mode == "clock" || context.attributes.mode == "windows" {
-                    VStack(spacing: 6) {
-                        (context.attributes.mode == "windows" ? AnyView(twoStacks(context, size: 30)) : AnyView(countingWords(wordsStart(context), size: 30)))
-                        tenthsClock(context.attributes.start, size: 30)
-                    }
+                    // run 25: the word stack lives ONLY in the compact slot. The island's archive
+                    // holds every presentation, and 30 layers drawn four times was 2 MB -- over
+                    // the cap (archiveTooLarge in the phone's log), which is what dismissed runs 19-24.
+                    Text("Frank · island test").font(islandFont(20)).foregroundColor(islandInk)
                 } else {
                     VStack(spacing: 4) {
                         pivotWord(context.state.word, size: 34)
@@ -134,10 +134,7 @@ struct IslandLiveActivity: Widget {
             DynamicIsland {
                 DynamicIslandExpandedRegion(.center) {
                     if context.attributes.mode == "clock" || context.attributes.mode == "windows" {
-                        VStack(spacing: 4) {
-                            (context.attributes.mode == "windows" ? AnyView(twoStacks(context, size: 26)) : AnyView(countingWords(wordsStart(context), size: 26)))
-                            tenthsClock(context.attributes.start, size: 26)
-                        }
+                        Text("Frank · island test").font(islandFont(18)).foregroundColor(islandInk)   // run 25: no stack here
                     } else {
                         pivotWord(context.state.word, size: 28)
                     }
@@ -158,7 +155,7 @@ struct IslandLiveActivity: Widget {
                 }
             } minimal: {
                 if context.attributes.mode == "clock" || context.attributes.mode == "windows" {
-                    (context.attributes.mode == "windows" ? AnyView(twoStacks(context, size: 12)) : AnyView(countingWords(wordsStart(context), size: 12)))
+                    Text("F").font(islandFont(13)).foregroundColor(islandRed)   // run 25: no stack here
                 } else {
                     Text(IslandWord.layout(context.state.word).2)
                         .font(islandFont(15)).foregroundColor(islandRed)

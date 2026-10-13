@@ -3,3 +3,4 @@ build/
 App/Info.plist
 Widget/Info.plist
 results/screen/frames/
+results/*.logarchive/
