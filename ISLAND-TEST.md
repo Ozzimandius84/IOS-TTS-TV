@@ -714,6 +714,10 @@ Look at results/screen/frames/ to see WHAT was drawn: words in Frank's red-lette
    53.6s  info activity ended
 ```
 
+### Run 19 (13 Oct 14:31): 300 layers -- iOS dismissed the island at once
+
+Three hundred words as 300 layers. The phone's log says it all: the app went to the background at 4.4 s and at 5.9 s iOS reported the activity **dismissed** -- before the first word was due. The recording shows nothing in the island for the whole run. So 30 layers are fine (run 18) and 300 are refused outright (as 180 were in run 5). Run 20 tries 100.
+
 ### Run on the phone, screen recorded — 13 Oct 2026 14:31
 
 | side of the camera | what is there | seconds away | changes seen | changes a second | median gap | longest gap |
