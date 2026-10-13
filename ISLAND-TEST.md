@@ -1030,6 +1030,17 @@ Look at results/screen/frames/ to see WHAT was drawn: words in Frank's red-lette
   248.4s  info activity ended
 ```
 
+### Run 27 and the phone's log (15:48–15:52): the second wall is the widget's memory
+
+100 words with the small fonts: dismissed at 10.2 s, same as run 26. The phone's log for both runs says, three times each within 3 s of launch:
+
+    com.ttstv.frank.islandtest.widget exited with exit reason JETSAM_REASON_MEMORY_PERPROCESSLIMIT
+    Memory Limits: active 60
+
+and no `archiveTooLarge` anywhere. So there are two walls, both now named: the **drawing cap (~2 MB)**, hit when the stack was drawn in four presentations and fixed by drawing it once; and the **widget process's 60 MB memory limit**, hit while SwiftUI stands up 100 live clock views (the fonts' pictures are not where the memory is -- shrinking them changed nothing). 60 layers passed the memory wall (runs 21–23 ran 50–76 s with no memory kill; their deaths were the drawing cap); 30 passed both for minutes.
+
+Design figure: **windows of 30 words, at most two windows alive** (the one showing and the next), so never more than 60 layers; the newest window is drawn last, so it sits on top. Run 28 is that: five windows back to back, 15–65 s, one update every 10 s from the background.
+
 ### Run on the phone, screen recorded — 13 Oct 2026 15:49
 
 | side of the camera | what is there | seconds away | changes seen | changes a second | median gap | longest gap |

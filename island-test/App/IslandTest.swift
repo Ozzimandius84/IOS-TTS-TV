@@ -103,7 +103,7 @@ final class IslandTest {
         do {
             clockStart = Date()
             let first = IslandAttributes.ContentState(word: "ready", seq: 0, phase: "waiting", windowStart: clockStart, window: 0,
-                                                      startA: clockStart, startB: clockStart.addingTimeInterval(100_000))
+                                                      startA: clockStart, startB: clockStart.addingTimeInterval(100_000), windowStarts: [clockStart])
             log("info", detail: String(format: "mode %@ clock_start %.4f", mode, clockStart.timeIntervalSince1970))
             var attrs = IslandAttributes(title: "Island test", start: clockStart, mode: mode)
             if mode == "words" {
@@ -183,7 +183,7 @@ final class IslandTest {
     /// background, sends ONE update moving windowStart on by 30 s, 10 s before
     /// that window's words are due. Which windows the island shows says whether
     /// a background update gets through (run 3 froze after ~4 rapid ones).
-    static let windowEvery = 15.0, windowCount = 5   // run 22: 30-word windows, 10 s each, 5 s apart
+    static let windowEvery = 10.0, windowCount = 5   // run 28: 30-word windows back to back, 10 s each
     private var lastState: IslandAttributes.ContentState?
     static let reDate = false
     private func runWindows() {
@@ -201,13 +201,8 @@ final class IslandTest {
             // run 22: only the idle stack is re-dated; the other keeps its dates
             // run 23: reDate = false -- the updates change only the label and window number,
             // no timer gets a new date. Does the island survive 4 such updates with 60 layers?
-            if Self.reDate {
-                state.startA = k % 2 == 0 ? ws : (lastState?.startA ?? clockStart)
-                state.startB = k % 2 == 1 ? ws : (lastState?.startB ?? clockStart.addingTimeInterval(100_000))
-            } else {
-                state.startA = clockStart
-                state.startB = clockStart.addingTimeInterval(100_000)
-            }
+            // run 28: the window showing and the next one, nothing else
+            state.windowStarts = [clockStart.addingTimeInterval(Double(k - 1) * Self.windowEvery), ws]
             lastState = state
             log("sent", seq: k, phase: "windows", detail: String(format: "window %d words %.0f-%.0f s", k, a0, a0 + Double(RunWords.count) / RunWords.perSecond))
             log("info", detail: String(format: "word_window %.3f %.3f", a0, a0 + Double(RunWords.count) / RunWords.perSecond))

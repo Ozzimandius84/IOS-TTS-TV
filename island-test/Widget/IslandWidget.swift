@@ -70,9 +70,11 @@ func wordsStart(_ context: ActivityViewContext<IslandAttributes>) -> Date {
 /// Run 22: stacks A and B; the one whose turn it is (state.window) sits on top.
 /// zIndex changes do not recreate the views, so the other stack's timers run on.
 func twoStacks(_ context: ActivityViewContext<IslandAttributes>, size: CGFloat) -> some View {
+    // run 28: one stack per live window, oldest first; the newest is drawn last and so on top.
     ZStack(alignment: .leading) {
-        countingWords(context.state.startA, size: size).zIndex(context.state.window % 2 == 0 ? 1 : 0)
-        countingWords(context.state.startB, size: size).zIndex(context.state.window % 2 == 1 ? 1 : 0)
+        ForEach(0..<context.state.windowStarts.count, id: \.self) { i in
+            countingWords(context.state.windowStarts[i], size: size)
+        }
     }
     .frame(width: size * 4.6, alignment: .leading)
 }

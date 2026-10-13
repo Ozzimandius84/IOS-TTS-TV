@@ -23,6 +23,11 @@ struct IslandAttributes: ActivityAttributes {
         /// showing is never torn down (run 21: re-dating all 60 got the activity dismissed).
         var startA: Date = .distantPast
         var startB: Date = .distantPast
+        /// Run 28: the windows alive, oldest first -- at most two (the one showing and
+        /// the next), so at most 60 layers exist (the widget's 60 MB limit killed 100;
+        /// the drawing cap killed 60 only when drawn in four presentations). The last
+        /// one is drawn last, so it sits on top: stacking order, not zIndex (run 22).
+        var windowStarts: [Date] = []
     }
     var title: String
     /// Run 4: when the island's own clock started, and which test this is
