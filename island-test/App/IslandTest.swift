@@ -168,8 +168,13 @@ final class IslandTest {
         logQ.async { self.phaseNow = "clock" }
         let endAt = clockStart.addingTimeInterval(225)
         // run 19: stay until the words are over (+10 s), at most 225 s
-        let wanted = clockStart.addingTimeInterval(RunWords.lead + Double(RunWords.count) / RunWords.perSecond + 10)
-        Thread.sleep(until: min(endAt, wanted))
+        // run 24: stay 180 s whatever the word count -- how long do N layers live? -- with a heartbeat
+        let wanted = clockStart.addingTimeInterval(max(180, RunWords.lead + Double(RunWords.count) / RunWords.perSecond + 10))
+        while Date() < min(endAt, wanted) {
+            Thread.sleep(forTimeInterval: 5)
+            let playing = DispatchQueue.main.sync { self.player?.isPlaying ?? false }
+            log("alive", detail: "tone playing=\(playing)")
+        }
         log("phase_end", phase: "clock")
         finish()
     }

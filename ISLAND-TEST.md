@@ -70,6 +70,15 @@ bash island-test/run.sh
 
 `bash island-test/run.sh rates` runs runs 1–3 again: words sent at set rates, slowest first (once every 4 s for 40 s, then 1, 2, 3 and 4 a second for 30 s each, with 10 s of rest between).
 
+## What the island costs the status bar (Osca, 13 Oct 14:57)
+
+Measured on the recordings (402 pt screen; the recorder sees the whole top bar):
+
+- **Pill width with a 14 pt word each side of the camera (4.6 em slots): 265 pt.** The island at the moment of opening is 258 pt; the bare camera cutout about 125 pt; the two slots add about 140 pt.
+- **Lost:** the signal bars and Wi-Fi on the right, and the silent-mode bell on the left. **Kept:** the battery, and the clock -- but clipped: the pill starts 36 pt in and "09:41" shows as "9:41".
+- **Word pieces:** the splitting rule (`IslandWord.pieces`, pieces of at most 6 letters plus a hyphen) splits "neighbourhood" into three; it should be at most two (7 + 6). The slot could come down from 4.6 em to about 3.8 em at 14 pt before the longest piece is cut.
+- **Cover left, word right** (the layout Osca wants once it is stable) should bring the pill to about 225 pt: the clock then fits whole; whether the signal and Wi-Fi come back depends on the right slot's width. To measure: a width ladder (3.0, 3.6, 4.6 em on the right, a 20 pt icon on the left), counting which status icons survive at each step.
+
 ## How we got here (three runs, 13 Oct)
 
 1. **Run 1 (10:43): measured nothing.** The widget was meant to report each word it drew back to the app. It never did. Osca saw the words change, then stop.
@@ -837,6 +846,16 @@ Look at results/screen/frames/ to see WHAT was drawn: words in Frank's red-lette
    95.9s  run_end
    95.9s  info activity ended
 ```
+
+### Run 23 (13 Oct 15:02): the updates are not the killer
+
+Same 60 layers, updates meant to change only a label. Only one went out (25.1 s): the app's background thread then slept through the next two and woke at 76.1 s, when it sent the rest in a burst -- and at that moment iOS dismissed the activity. Meanwhile the recording shows the island **re-rendering itself at 47 s and 62 s with no update at all** (the same crossfade ghost seen after every update in run 22, and the same ~15 s spacing): iOS re-archives the activity about every 15 s on its own. So:
+
+- an island with 60 timer layers dies at 70–76 s whether it is updated or not (runs 21, 22, 23);
+- 3 layers lived 6 minutes (run 17); 30 layers lived the 50 s they were given (run 18) and were never tested longer;
+- the app's own thread stalled 51 s in the background once, which the chapter design must survive (heartbeats are now logged in every mode).
+
+Run 24: 30 layers, no updates, 3 minutes -- how many layers live for minutes?
 
 ### Run on the phone, screen recorded — 13 Oct 2026 15:02
 
