@@ -56,6 +56,7 @@
       0 ok · 1 no pointer · 2 not a UIView · 3 no superview · 4 no window
 */
 #import <UIKit/UIKit.h>
+#import <WebKit/WebKit.h>
 #import <objc/runtime.h>
 
 /// The shell's `--bg`, both schemes: #fcfcfb light, #131316 dark. Dynamic
@@ -215,4 +216,38 @@ int frank_webview_no_accessory(void *webview) {
         }
     }
     return patched;
+}
+
+/*  THE NATIVE SCROLL INDICATOR (P11, Osca's iPhone list, 14 Oct 2026, 14:48:
+    "YOU have not gotten rid of the Native IOS scroll bar which is now in the
+    frank library" -- and at 14:21: "NO other scrollbars, not the IOS native
+    one ... JUST the alphaet in the library please").
+
+    On the phone the Library's page is the scroller (html: overflow auto,
+    scrollHeight 4332 against 912 measured at 420x912), so the bar iOS draws
+    is the WKWebView's own UIScrollView's indicator -- not a CSS scrollbar,
+    and WebKit gives the main frame's indicator no CSS switch. It is turned
+    off here, on the webview's scrollView, both directions. App-wide by
+    construction (one webview): the reader has its own rail, the Library its
+    A-Z, and Osca asked for no native bar at all. Overflow ELEMENTS inside the
+    page are WebKit's own scroll views and are hidden from CSS
+    (`scrollbar-width: none` + `::-webkit-scrollbar { display: none }`).
+
+    Returns 0 ok, -1 no pointer, -2 not a WKWebView (or no scrollView).
+*/
+int frank_webview_no_indicators(void *webview) {
+    if (webview == NULL) {
+        return -1;
+    }
+    UIView *view = (__bridge UIView *)webview;
+    if (![view isKindOfClass:[WKWebView class]]) {
+        return -2;
+    }
+    UIScrollView *sv = ((WKWebView *)view).scrollView;
+    if (sv == nil) {
+        return -2;
+    }
+    sv.showsVerticalScrollIndicator = NO;
+    sv.showsHorizontalScrollIndicator = NO;
+    return 0;
 }

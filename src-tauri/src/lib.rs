@@ -2796,6 +2796,10 @@ extern "C" {
     // keyboard, gone app-wide -- ONLY our pill above the keys, as in Safari.
     // `ios/FrankWebView.m` holds the why. Answers how many classes it patched.
     fn frank_webview_no_accessory(webview: *mut std::ffi::c_void) -> i32;
+    // P11 (14 Oct 2026): the webview's own UIScrollView draws no indicator --
+    // the Library's one scroll bar is its A-Z (Osca: "NO other scrollbars, not
+    // the IOS native one"). `ios/FrankWebView.m` holds the why. 0 is success.
+    fn frank_webview_no_indicators(webview: *mut std::ffi::c_void) -> i32;
 }
 
 /// How many doubles [`frank_webview_fill`] writes: root w,h after; webview
@@ -2855,6 +2859,12 @@ fn fill_root_view(window: &tauri::WebviewWindow<Wry>) {
                 "frank: keyboard accessory bar NOT removed -- no WKContentView found ({patched})"
             ));
         }
+        // SAFETY: as above -- this window's WKWebView, on the UI thread.
+        let ind = unsafe { frank_webview_no_indicators(platform.inner()) };
+        probe_note(&format!(
+            "frank: native scroll indicators {} ({ind})",
+            if ind == 0 { "off" } else { "NOT turned off" }
+        ));
     });
     if let Err(why) = sent {
         log::error!("frank: could not reach the webview to fill it -- {why}");
