@@ -2792,6 +2792,10 @@ pub const NOW_PLAYING_JS: &str = r#"(function () {
 #[cfg(target_os = "ios")]
 extern "C" {
     fn frank_webview_fill(webview: *mut std::ffi::c_void, out: *mut f64) -> i32;
+    // P2 (14 Oct 2026): WebKit's grey form-assistant bar (^ v done) over the
+    // keyboard, gone app-wide -- ONLY our pill above the keys, as in Safari.
+    // `ios/FrankWebView.m` holds the why. Answers how many classes it patched.
+    fn frank_webview_no_accessory(webview: *mut std::ffi::c_void) -> i32;
 }
 
 /// How many doubles [`frank_webview_fill`] writes: root w,h after; webview
@@ -2839,6 +2843,17 @@ fn fill_root_view(window: &tauri::WebviewWindow<Wry>) {
             ));
         } else {
             probe_note(&format!("frank: webview NOT filled -- {}", webview_fill_why(code)));
+        }
+        // SAFETY: as above -- this window's WKWebView, on the UI thread.
+        let patched = unsafe { frank_webview_no_accessory(platform.inner()) };
+        if patched > 0 {
+            probe_note(&format!(
+                "frank: keyboard accessory bar removed ({patched} WKContentView class(es))"
+            ));
+        } else {
+            probe_note(&format!(
+                "frank: keyboard accessory bar NOT removed -- no WKContentView found ({patched})"
+            ));
         }
     });
     if let Err(why) = sent {

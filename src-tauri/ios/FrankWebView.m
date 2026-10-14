@@ -56,6 +56,7 @@
       0 ok · 1 no pointer · 2 not a UIView · 3 no superview · 4 no window
 */
 #import <UIKit/UIKit.h>
+#import <objc/runtime.h>
 
 /// The shell's `--bg`, both schemes: #fcfcfb light, #131316 dark. Dynamic
 /// rather than one colour because Frank follows the system and a light strip
@@ -138,4 +139,80 @@ int frank_webview_fill(void *webview, double *out) {
 
     [root setNeedsLayout];
     return 0;
+}
+
+/*  THE GREY BAR OVER THE KEYBOARD (P2, Osca's iPhone list, 14 Oct 2026:
+    "I'd prefer, in surface, for it not exist at all, so ONLY our pill, the
+    search bar, as in safari").
+
+    When a field in the page takes focus, WebKit gives the keyboard an input
+    accessory view: the grey ^ v (done) form-assistant strip. It is the
+    `inputAccessoryView` of WKWebView's private content view (class
+    `WKContentView`, a subview of the webview's scroll view), and WebKit
+    offers no public switch for it. The well-worn fix is to make that getter
+    answer nil. It is done on the CLASS, once, so it is app-wide (Safari's
+    address field has no such strip either) and it holds for every field the
+    webview ever focuses, the content views it makes later included.
+
+    The class is found two ways: by name, and by walking the given webview's
+    subviews for any class whose name STARTS with "WKContentView" (a WebKit
+    that renames or subclasses it keeps working). Every class found gets the
+    nil getter; a class that is not found is simply not touched.
+
+    Returns how many classes were patched (0 means nothing was found -- the
+    bar will still show and the log says so), or -1 for no pointer.
+*/
+static id frank_no_accessory(id self_, SEL cmd) {
+    (void)self_; (void)cmd;
+    return nil;
+}
+
+static int frank_patch_class(Class c) {
+    if (c == Nil) { return 0; }
+    SEL sel = @selector(inputAccessoryView);
+    /* class_replaceMethod ADDS the method when the class does not define it
+       itself and REPLACES it when it does -- either way this class answers
+       nil and its superclass (UIView) is left alone. */
+    class_replaceMethod(c, sel, (IMP)frank_no_accessory, "@@:");
+    return 1;
+}
+
+static void frank_find_content_views(UIView *v, NSMutableSet *out, int depth) {
+    if (v == nil || depth > 4) { return; }
+    if ([NSStringFromClass([v class]) hasPrefix:@"WKContentView"]) {
+        [out addObject:[v class]];
+    }
+    for (UIView *sub in v.subviews) {
+        frank_find_content_views(sub, out, depth + 1);
+    }
+}
+
+int frank_webview_no_accessory(void *webview) {
+    if (webview == NULL) {
+        return -1;
+    }
+    NSMutableSet *classes = [NSMutableSet set];
+    Class named = NSClassFromString(@"WKContentView");
+    if (named != Nil) { [classes addObject:named]; }
+    UIView *view = (__bridge UIView *)webview;
+    if ([view isKindOfClass:[UIView class]]) {
+        frank_find_content_views(view, classes, 0);
+    }
+    int patched = 0;
+    for (id c in classes) {
+        patched += frank_patch_class((Class)c);
+    }
+    /* A field already focused keeps the bar it was given until the keyboard
+       asks again; reloadInputViews on the content view makes it ask now. */
+    if ([view isKindOfClass:[UIView class]]) {
+        NSMutableArray *stack = [NSMutableArray arrayWithObject:view];
+        while (stack.count) {
+            UIView *v = stack.lastObject; [stack removeLastObject];
+            if ([NSStringFromClass([v class]) hasPrefix:@"WKContentView"] && v.isFirstResponder) {
+                [v reloadInputViews];
+            }
+            [stack addObjectsFromArray:v.subviews];
+        }
+    }
+    return patched;
 }
