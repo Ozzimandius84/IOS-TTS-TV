@@ -86,6 +86,15 @@ fn main() {
         // below and in `gen/apple/project.yml` since FrankAudio.m -- so this
         // file adds no `sdk:` line to that spec, which is the link-time trap
         // job 8b wrote down.
+        // ios/FrankBonjour.m -> `frank_bonjour_browse` (P3, 14 Oct): the phone finds its Mac through
+        // Foundation's NSNetServiceBrowser instead of mdns-sd's own multicast socket, which a real iPhone refuses
+        // without the multicast entitlement. Foundation only -- no new `sdk:` line in project.yml.
+        println!("cargo:rerun-if-changed=ios/FrankBonjour.m");
+        cc::Build::new()
+            .file("ios/FrankBonjour.m")
+            .flag("-fobjc-arc")
+            .flag("-fmodules")
+            .compile("frankbonjour");
         println!("cargo:rerun-if-changed=ios/FrankSpeech.m");
         cc::Build::new()
             .file("ios/FrankSpeech.m")

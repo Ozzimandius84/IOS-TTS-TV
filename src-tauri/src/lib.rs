@@ -271,6 +271,16 @@ pub struct Discovery {
 #[tauri::command]
 fn sync_discover(ms: Option<u64>) -> Result<Discovery, String> {
     let wait = Duration::from_millis(ms.unwrap_or(SYNC_BROWSE_MS).clamp(500, 3 * SYNC_BROWSE_MS));
+    // ON THE iPHONE, APPLE'S BONJOUR (P3, Osca 14 Oct: "DOESN'T WORK on my actual phone"). `mdns-sd` below opens
+    // its own multicast socket, which a real iPhone refuses without the restricted multicast entitlement (a free
+    // team cannot have it); the Simulator runs on the Mac's stack, which is why it only ever worked there.
+    // `ios/FrankBonjour.m` asks the system's mDNSResponder instead -- needs only NSBonjourServices + the Local
+    // Network prompt, both already in Info.plist.
+    #[cfg(target_os = "ios")]
+    {
+        return Ok(bonjour_discover(wait));
+    }
+    #[allow(unreachable_code)]
     let daemon = match mdns_sd::ServiceDaemon::new() {
         Ok(d) => d,
         // The refusal this lane exists for. On a real iPhone the multicast
@@ -319,6 +329,61 @@ fn sync_discover(ms: Option<u64>) -> Result<Discovery, String> {
     }
     let _ = daemon.shutdown();
     Ok(Discovery { studios: found.into_values().collect(), allowed: true, why: None })
+}
+
+#[cfg(target_os = "ios")]
+extern "C" {
+    fn frank_bonjour_browse(types: *const *const std::os::raw::c_char, ntypes: i32, seconds: f64,
+                            out: *mut std::os::raw::c_char, cap: i32) -> i32;
+}
+
+/// `SYNC_SERVICES` as Foundation spells a type: no `local.` domain (`_frank._tcp.`).
+pub fn bonjour_types() -> Vec<String> {
+    SYNC_SERVICES.iter().map(|t| t.trim_end_matches("local.").to_string()).collect()
+}
+
+/// `FrankBonjour.m`'s JSON -> the card's [`Discovery`]. Pure, so it is tested off the phone.
+pub fn bonjour_discovery(json: &str) -> Discovery {
+    let v: serde_json::Value = match serde_json::from_str(json) {
+        Ok(v) => v,
+        Err(e) => return Discovery { studios: vec![], allowed: false, why: Some(cannot_look(&e.to_string())) },
+    };
+    let studios = v["rows"].as_array().map(|rows| rows.iter().filter_map(|r| Some(Studio {
+        name: studio_name(r["name"].as_str().unwrap_or(""), r["name"].as_str()),
+        host: r["host"].as_str()?.to_string(),
+        port: u16::try_from(r["port"].as_u64()?).ok()?,
+    })).collect()).unwrap_or_default();
+    match v["error"].as_str() {
+        Some(why) if !why.is_empty() => Discovery { studios, allowed: false, why: Some(why.to_string()) },
+        _ => Discovery { studios, allowed: true, why: None },
+    }
+}
+
+#[cfg(test)]
+mod bonjour_tests {
+    use super::*;
+    #[test]
+    fn bonjour_json_becomes_the_cards_discovery() {
+        assert_eq!(bonjour_types(), vec!["_frank._tcp.", "_ttstv._tcp."]);
+        let d = bonjour_discovery(r#"{"rows":[{"name":"Air Studio","host":"192.168.1.5","port":41499},{"name":"x","host":"h","port":99999}],"error":null}"#);
+        assert_eq!(d, Discovery { studios: vec![Studio { name: "Air Studio".into(), host: "192.168.1.5".into(), port: 41499 }], allowed: true, why: None });
+        let r = bonjour_discovery(r#"{"rows":[],"error":"Frank is not allowed"}"#);
+        assert!(!r.allowed && r.why.as_deref() == Some("Frank is not allowed"));
+        assert!(!bonjour_discovery("nope").allowed);
+    }
+}
+
+#[cfg(target_os = "ios")]
+fn bonjour_discover(wait: Duration) -> Discovery {
+    let types: Vec<std::ffi::CString> = bonjour_types().into_iter().filter_map(|t| std::ffi::CString::new(t).ok()).collect();
+    let ptrs: Vec<*const std::os::raw::c_char> = types.iter().map(|c| c.as_ptr()).collect();
+    let mut buf = vec![0 as std::os::raw::c_char; 64 * 1024];
+    let n = unsafe { frank_bonjour_browse(ptrs.as_ptr(), ptrs.len() as i32, wait.as_secs_f64(), buf.as_mut_ptr(), buf.len() as i32) };
+    if n < 0 {
+        return Discovery { studios: vec![], allowed: false, why: Some(cannot_look("the answer did not fit")) };
+    }
+    let bytes: Vec<u8> = buf[..n as usize].iter().map(|c| *c as u8).collect();
+    bonjour_discovery(&String::from_utf8_lossy(&bytes))
 }
 
 /// The one sentence the card prints when the browse could not look. It names
