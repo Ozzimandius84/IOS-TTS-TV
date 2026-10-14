@@ -70,6 +70,12 @@ targets:
         # AVPictureInPictureVideoCallLayer wants, and App Review rejects it
         # for an app that is not a phone (scratch-float/ANSWER.md §3).
         UIBackgroundModes: [audio]
+        # 120 Hz (Osca, 14 Oct 2026 13:38: "Frank native should have a very high frame rate, if my screen doesn't
+        # pick up all those frames that's fine ... Iphone 17"). On a ProMotion iPhone an app's Core Animation is
+        # held to 60 Hz unless it says otherwise; this key is Apple's switch ("Optimizing ProMotion refresh rates
+        # for iPhone 13 Pro and iPad Pro"). It lets the system run the app's scrolling and animations up to the
+        # screen's rate; an idle screen still drops to its low rate. PROMPTS/osca-asks/14-oct/04-smoothness-findings.md.
+        CADisableMinimumFrameDuration: true
         NSMicrophoneUsageDescription: Frank listens for the hands-free trigger and for the phrase after it. Nothing is recorded or sent anywhere; the audio is used on this phone and discarded.
         NSSpeechRecognitionUsageDescription: Frank turns what you say into text on this phone so it can act on it -- "read on", "what?", the name of a chapter.
         # Sync (job 26, 6 Sep). iOS 14+ asks once before an app may look at the
